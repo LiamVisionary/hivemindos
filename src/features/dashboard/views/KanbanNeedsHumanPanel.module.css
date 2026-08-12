@@ -912,30 +912,30 @@
 
 /* ---------- warm-paper hive-light theme ---------- */
 :global(:root[data-theme="hive-light"]) .wrc {
-  --wrc-panel: #fbf8f1;
-  --wrc-bg-0: #f1ede3;
-  --wrc-bg-1: #f6f2e9;
-  --wrc-bg-3: #f4efe4;
-  --wrc-field: #fffdf8;
+  --wrc-panel: #f8f4ee;
+  --wrc-bg-0: #f5efe6;
+  --wrc-bg-1: #f0e8d8;
+  --wrc-bg-3: #f0e8d8;
+  --wrc-field: #f8f4ee;
 
-  --wrc-fg: #221d14;
-  --wrc-fg-2: #5e574b;
-  --wrc-fg-3: #5e574b;
-  --wrc-fg-4: #6f6657;
+  --wrc-fg: #4a3a2a;
+  --wrc-fg-2: #8a7a6a;
+  --wrc-fg-3: #8a7a6a;
+  --wrc-fg-4: #a09080;
 
-  --wrc-line: rgba(54, 46, 30, 0.1);
-  --wrc-line-2: rgba(54, 46, 30, 0.16);
-  --wrc-line-3: rgba(54, 46, 30, 0.26);
+  --wrc-line: rgba(74, 58, 42, 0.1);
+  --wrc-line-2: rgba(74, 58, 42, 0.16);
+  --wrc-line-3: rgba(74, 58, 42, 0.26);
 
-  --wrc-honey: #936811; --wrc-honey-fill: #e6bb5c;
-  --wrc-honey-2: #936811;
-  --wrc-honey-soft: rgba(176, 127, 28, 0.12);
-  --wrc-honey-line: rgba(176, 127, 28, 0.34);
-  --wrc-on-honey: #fff7df;
+  --wrc-honey: #8a5a2a; --wrc-honey-fill: #f0e8d8;
+  --wrc-honey-2: #8a5a2a;
+  --wrc-honey-soft: rgba(138, 90, 42, 0.12);
+  --wrc-honey-line: rgba(138, 90, 42, 0.34);
+  --wrc-on-honey: #f7fbff;
 
-  --wrc-live: #4f7d4b;
-  --wrc-live-soft: rgba(79, 125, 75, 0.14);
-  --wrc-danger: #c0524d;
+  --wrc-live: #6b8f5e;
+  --wrc-live-soft: rgba(107, 143, 94, 0.14);
+  --wrc-danger: #b5483b;
 
   --wrc-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 18px 40px -28px rgba(74, 60, 30, 0.35);
   --wrc-shadow-pop: 0 16px 40px rgba(74, 60, 30, 0.18);

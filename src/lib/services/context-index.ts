@@ -40,7 +40,7 @@ import {
 } from "@/lib/config/veil-cash";
 import { RUNTIME_DEFINITIONS } from "@/lib/types/agent-runtime";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
-import { applyAppPreferences, readAppPreferences, type AppModelPreference } from "@/lib/services/fleet/app-preferences";
+import { applyAppPreferences, readAppPreferences, type AppMcpVideoDescriptor, type AppModelPreference } from "@/lib/services/fleet/app-preferences";
 import { connectorManifestContextIndexItems } from "@/lib/services/integrations/connector-context-index";
 import { githubCapabilityContextIndexItems } from "@/lib/services/github-capability-catalog";
 import { actionIntegrationConnected } from "@/lib/services/integrations/hive-action-connection";
@@ -86,6 +86,7 @@ export type ContextIndexItem = {
   retrievalText?: string;
   path?: string;
   route?: string;
+  machineName?: string;
   methods?: string[];
   load: ContextIndexLoadHint;
   updatedAt?: number;
@@ -148,6 +149,7 @@ export type ContextConnectedApp = {
   priority?: boolean;
   usageNotes?: string;
   capabilities?: string[];
+  mcpVideo?: AppMcpVideoDescriptor;
   preferredModels?: AppModelPreference[];
 };
 
@@ -289,6 +291,8 @@ function baseConnectedAppAliases(app: ContextConnectedApp) {
     "remote app",
     app.kind,
     app.serviceKind,
+    ...(app.capabilities ?? []),
+    ...(app.mcpVideo ? ["mcp", "video mcp", "generative media mcp", "mcp video generation"] : []),
     app.interactive ? "interactive app" : "api service",
     app.apiRoutes?.length ? "api endpoint catalog" : undefined,
     ...(app.kind === "creative" ? [
@@ -1146,6 +1150,8 @@ function connectedAppItems(apps: ContextConnectedApp[] | undefined): ContextInde
       app.machineName ? `Machine: ${app.machineName}.` : "",
       app.serviceKind ? `Service kind: ${app.serviceKind}.` : "",
       app.kind ? `App kind: ${app.kind}.` : "",
+      app.capabilities?.length ? `App capabilities: ${app.capabilities.join(", ")}.` : "",
+      app.mcpVideo ? "MCP video generation configured." : "",
       app.apiRoutes?.length ? `${app.apiRoutes.length} discovered API endpoint${app.apiRoutes.length === 1 ? "" : "s"}.` : "",
       aliases.length ? `Capability aliases: ${aliases.join(", ")}.` : "",
     ].filter(Boolean).join(" ");
@@ -1164,6 +1170,7 @@ function connectedAppItems(apps: ContextConnectedApp[] | undefined): ContextInde
         `routes: ${(app.apiRoutes ?? []).map((route) => `${route.method ?? "GET"} ${route.path ?? "/"}`).join("; ")}`,
       ]),
       route: app.openUrl,
+      machineName: app.machineName,
       load: {
         type: app.openUrl ? "api" : "none",
         target: app.openUrl || app.apiBaseUrl,
@@ -1196,6 +1203,7 @@ function connectedAppItems(apps: ContextConnectedApp[] | undefined): ContextInde
           `url: ${url || path}`,
         ]),
         route: url || path,
+        machineName: app.machineName,
         methods: [method],
         load: {
           type: "api",

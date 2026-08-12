@@ -56,34 +56,34 @@
 }
 
 :global([data-theme="hive-light"]) .root {
-  --hm-bg-0: #f1ede3;
-  --hm-bg-1: #f6f2e9;
-  --hm-bg-2: #fbf8f1;
-  --hm-bg-3: #f4efe4;
+  --hm-bg-0: #f5efe6;
+  --hm-bg-1: #f0e8d8;
+  --hm-bg-2: #f8f4ee;
+  --hm-bg-3: #f0e8d8;
   --hm-bg-4: #ffffff;
-  --hm-panel: #fbf8f1;
-  --hm-field: #fffdf8;
-  --hm-fg: #221d14;
-  --hm-fg-2: #5e574b;
-  --hm-fg-3: #5e574b;
-  --hm-fg-4: #6f6657;
-  --hm-line: rgba(54, 46, 30, 0.1);
-  --hm-line-2: rgba(54, 46, 30, 0.16);
-  --hm-line-3: rgba(54, 46, 30, 0.26);
-  --hm-honey: #936811; --hm-honey-fill: #e6bb5c;
-  --hm-honey-2: #936811;
-  --hm-honey-soft: rgba(176, 127, 28, 0.12);
-  --hm-honey-line: rgba(176, 127, 28, 0.34);
-  --hm-on-honey: #fff7df;
+  --hm-panel: #f8f4ee;
+  --hm-field: #f8f4ee;
+  --hm-fg: #4a3a2a;
+  --hm-fg-2: #8a7a6a;
+  --hm-fg-3: #8a7a6a;
+  --hm-fg-4: #a09080;
+  --hm-line: rgba(74, 58, 42, 0.1);
+  --hm-line-2: rgba(74, 58, 42, 0.16);
+  --hm-line-3: rgba(74, 58, 42, 0.26);
+  --hm-honey: #8a5a2a; --hm-honey-fill: #f0e8d8;
+  --hm-honey-2: #8a5a2a;
+  --hm-honey-soft: rgba(138, 90, 42, 0.12);
+  --hm-honey-line: rgba(138, 90, 42, 0.34);
+  --hm-on-honey: #f7fbff;
   --hm-live: #88926e;
   --hm-live-2: #6f7a54;
   --hm-live-soft: rgba(136, 146, 110, 0.12);
-  --hm-danger: #c0524d;
-  --hm-danger-soft: rgba(192, 82, 77, 0.12);
-  --hm-danger-line: color-mix(in srgb, #c0524d 45%, transparent);
-  --hm-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 14px 40px -30px rgba(54, 46, 30, 0.5);
-  --hm-shadow-panel: 0 24px 70px rgba(54, 46, 30, 0.16);
-  --hm-shadow-pop: 0 14px 34px rgba(54, 46, 30, 0.18);
+  --hm-danger: #b5483b;
+  --hm-danger-soft: rgba(181, 72, 59, 0.12);
+  --hm-danger-line: color-mix(in srgb, #b5483b 45%, transparent);
+  --hm-shadow-card: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 14px 40px -30px rgba(74, 58, 42, 0.5);
+  --hm-shadow-panel: 0 24px 70px rgba(74, 58, 42, 0.16);
+  --hm-shadow-pop: 0 14px 34px rgba(74, 58, 42, 0.18);
 }
 
 /* ---------- header ---------- */
@@ -746,7 +746,7 @@
   border-top: 1px solid var(--hm-line);
 }
 
-/* ---------- buttons (honey-primary pills, warm variants) ---------- */
+/* ---------- buttons (Hivemind accent primary pills, warm variants) ---------- */
 .btn {
   display: inline-flex;
   align-items: center;

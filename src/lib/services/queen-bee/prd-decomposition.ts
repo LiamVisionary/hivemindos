@@ -4,7 +4,10 @@ import type { QueenBeeOptions, QueenBeeFleetMachine } from "@/lib/services/queen
 import { chooseQueenBeeDelegate } from "@/lib/services/queen-bee/router";
 import { readQueenBeeOutcomeStats } from "@/lib/services/queen-bee/outcome-stats";
 import { readProjectRegistry } from "@/lib/services/projects/project-registry";
+import { buildQueenBeePrdTaskLoop, queenBeeLoopSkills, prdLoopTemplateForSkills } from "@/lib/services/queen-bee/task-loop-policy";
 import type { KanbanPriority } from "@/lib/types/kanban";
+
+const PRD_EVIDENCE_POLICY_VERSION = 1;
 
 export type QueenBeePrdDecompositionInput = QueenBeeOptions & {
   prd: string;
@@ -70,10 +73,13 @@ function bulletText(line: string) {
 
 function candidateRequirements(prd: string, maxTasks: number) {
   const sections = sectionMap(prd);
-  const preferred = [
-    ...matchingSection(sections, [/requirement/, /scope/, /feature/, /user stor/, /milestone/, /task/]),
-    ...matchingSection(sections, [/acceptance/, /success/, /deliverable/]),
-  ];
+  const implementation = matchingSection(sections, [/requirement/, /scope/, /feature/, /user stor/, /milestone/, /task/]);
+  // Acceptance/success bullets are completion criteria for each implementation
+  // child, not duplicate work items. Use them as a fallback only when a PRD has
+  // no implementation-oriented section at all.
+  const preferred = implementation.length
+    ? implementation
+    : matchingSection(sections, [/acceptance/, /success/, /deliverable/]);
   const bulletCandidates = (preferred.length ? preferred : cleanLines(prd))
     .filter((line) => /^([-*+]|\d+[.)]|\[[ xX]\])\s+/.test(line))
     .map(bulletText)
@@ -208,7 +214,7 @@ export async function createQueenBeePrdTasks(input: QueenBeePrdDecompositionInpu
     priority: input.priority || "normal",
     projectId: input.projectId?.trim() || undefined,
     skills: ["prd-decomposition", "planning"],
-    idempotencyKey: `queen-bee:prd:${decomposition.title.toLowerCase()}:${decomposition.drafts.length}`,
+    idempotencyKey: `queen-bee:prd:evidence-v${PRD_EVIDENCE_POLICY_VERSION}:${decomposition.title.toLowerCase()}:${decomposition.drafts.length}`,
   }, input);
 
   const createdTasks: Array<{ id: string; title: string; created: boolean }> = [];
@@ -219,6 +225,7 @@ export async function createQueenBeePrdTasks(input: QueenBeePrdDecompositionInpu
       title: draft.title,
       body: draft.body,
       skills: draft.skills,
+      projectId: input.projectId?.trim() || undefined,
       projectRegistry,
     }, input.fleetSnapshot ?? [], { outcomes });
     const parentIds = draft.dependsOnDraftIndexes.flatMap((draftIndex) => {
@@ -243,9 +250,10 @@ export async function createQueenBeePrdTasks(input: QueenBeePrdDecompositionInpu
         name: delegation.machine.device?.name || delegation.machine.key || "Unknown machine",
         collectorUrl: delegation.machine.device?.collectorUrl,
       } : null,
-      skills: draft.skills,
+      skills: [...new Set([...draft.skills, ...queenBeeLoopSkills(prdLoopTemplateForSkills(draft.skills))])],
+      loop: buildQueenBeePrdTaskLoop(draft),
       parents: parentIds,
-      idempotencyKey: `queen-bee:prd:${decomposition.title.toLowerCase()}:task:${index}:${draft.title.toLowerCase()}`,
+      idempotencyKey: `queen-bee:prd:evidence-v${PRD_EVIDENCE_POLICY_VERSION}:${decomposition.title.toLowerCase()}:task:${index}:${draft.title.toLowerCase()}`,
     }, input);
     draftIdByIndex.set(index, taskResult.task.id);
     createdTasks.push({ id: taskResult.task.id, title: taskResult.task.title, created: taskResult.created });

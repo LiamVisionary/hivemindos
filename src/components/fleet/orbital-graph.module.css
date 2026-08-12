@@ -8,7 +8,7 @@
   --orb-scanline: rgba(140, 190, 255, 0.025);
   --orb-cap: #6f8fc4;
   --orb-title-accent: #a9c9f5;
-  --orb-value: #cfe4ff;
+  --orb-value: #5eead4;
   --orb-bar-bg: rgba(110, 160, 230, 0.16);
   --orb-bar-fill: linear-gradient(90deg, rgba(120, 180, 255, 0.55), rgba(170, 215, 255, 0.95));
   --orb-marker: #8fb4e8;
@@ -86,7 +86,7 @@
   --orb-agent-dot-border: rgba(231, 180, 92, 0.58);
   --orb-agent-dot-working: rgba(240, 200, 121, 0.95);
   --orb-agent-dot-failed: rgba(229, 142, 133, 0.86);
-  --orb-agent-dot-idle: rgba(128, 105, 62, 0.42);
+  --orb-agent-dot-idle: rgba(138, 90, 42, 0.42);
   --orb-diagnostic-time: #7e6b45;
   --orb-task-doing: #f0c879;
   --orb-task-blocked: #e58e85;

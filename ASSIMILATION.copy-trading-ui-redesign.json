@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-08-10T23:56:19.824564+00:00",
+  "request": "replace the copy trading UI with this completely.",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "user-pinned-copytrading-redesign",
+      "source_path": "Copytrading Redesign.dc.html",
+      "target_path": "src/components/trade/CopyTradingPanel.tsx",
+      "reuse_type": "translated_code",
+      "note": "translated the paired race, evidence comparison, disagreements, and add-rail interactions into live React"
+    },
+    {
+      "source_repo": "user-pinned-copytrading-redesign",
+      "source_path": "Copytrading Redesign.dc.html",
+      "target_path": "src/components/trade/CopyTradingPanel.module.css",
+      "reuse_type": "style_adapted",
+      "note": "scoped dark/light race layout and responsive styling"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/components/trade/CopyTradingPanel.tsx",
+      "target_path": "src/components/trade/CopyTradingPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "retained live polling, daemon installation, mutations, and detailed data paths"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/copy-trading/evolution.ts",
+      "target_path": "src/components/trade/CopyTradingPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "canonical original-versus-agent evidence and metrics"
+    }
+  ]
+}

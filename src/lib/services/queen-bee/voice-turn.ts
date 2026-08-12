@@ -23,7 +23,6 @@ import {
   submitQueenBeeMessage,
   type QueenBeeFleetMachine,
 } from "@/lib/services/queen-bee/control-plane";
-import { formatQueenBeePersonalityInstruction } from "@/lib/config/queen-bee-personality";
 import { queenModelTransparencyNote } from "@/lib/services/queen-bee/model-transparency";
 import { runConfiguredQueenProviderFallback } from "@/lib/services/queen-bee/provider-fallback";
 import {
@@ -37,7 +36,10 @@ import {
   openAICompatibleInferenceCacheHints,
   openAICompatibleMessageCacheControlSupported,
 } from "@/lib/services/chat/inference-cache-hints";
-import { createVoiceSpeechEmitter } from "@/lib/services/queen-bee/voice-speech-stream";
+import {
+  createVoiceSpeechEmitter,
+  sanitizeSpokenVoiceText,
+} from "@/lib/services/queen-bee/voice-speech-stream";
 import {
   noteQueenVoiceBrainFailure,
   noteQueenVoiceBrainSuccess,
@@ -47,14 +49,7 @@ import {
   voiceTaskApprovalPrompt,
   voiceTaskSubmissionAuthorized,
 } from "@/lib/services/queen-bee/voice-task-approval";
-import { runXAccountReadTool } from "@/lib/services/x-latest-post";
-import {
-  coerceXAccountReadToolInput,
-  X_ACCOUNT_CAPABILITY_INSTRUCTION,
-  X_ACCOUNT_READ_TOOL_NAME,
-} from "@/lib/services/x-account-tool-contract";
-import { isHivemindFastContextCommand, queenPipelineChatTools } from "@/lib/services/queen-bee/queen-brain";
-import { readQueenVoiceBrainContext } from "@/lib/services/queen-bee/voice-brain-reads";
+import { queenPipelineChatTools } from "@/lib/services/queen-bee/queen-brain";
 import {
   applyOpenAiChatChunk,
   createQueenChatStreamState,
@@ -64,17 +59,49 @@ import {
   isXaiOAuthProvider,
   xaiOAuthVoiceRequestOptions,
 } from "@/lib/services/xai-oauth-inference-contract";
-
-// The persisted session every Queen agent-turn shares; multi-step rail flows (a
-// swap/send/Bankr DRAFT prepared on one turn, then a confirmation on the next)
-// thread their draft through it because the agent-turn is otherwise stateless.
+import { resilientHttpsFetch } from "@/lib/net/resilient-https-fetch";
+import {
+  voiceInferenceUsageFields,
+  voiceReasoningEffort,
+  voiceToolAcknowledgement,
+  voiceTurnHiveContextKinds,
+  voiceTurnNeedsHiveContext,
+  voiceTurnShouldOfferTools,
+} from "@/lib/services/queen-bee/voice-conversation-policy";
+import {
+  buildRuntimeVoiceMessages,
+  buildRuntimeVoiceSystemText,
+  buildRuntimeVoiceUserText,
+  queenVoiceSystemPrompt,
+  scheduledCallPreparationInstruction,
+  spokenVoicePreferenceFromTranscript,
+  type QueenVoiceHistoryTurn,
+} from "@/lib/services/queen-bee/voice-runtime-prompt";
+import { runPersistedRuntimeVoiceTurn } from "@/lib/services/queen-bee/voice-runtime-conversation";
+import { OPEN_LOCAL_APP_CHAT_TOOL } from "@/lib/services/queen-bee/local-app-tool";
+import { executeQueenVoiceServerTool } from "@/lib/services/queen-bee/voice-tool-executor";
+export {
+  voiceReasoningEffort,
+  voiceToolAcknowledgement,
+  voiceTurnHiveContextKinds,
+  voiceTurnNeedsHiveContext,
+  voiceTurnShouldOfferTools,
+};
+export {
+  buildRuntimeVoiceMessages,
+  buildRuntimeVoiceSystemText,
+  buildRuntimeVoiceUserText,
+  spokenVoicePreferenceFromTranscript,
+};
+export type { QueenVoiceHistoryTurn };
+export { runtimeVoicePersistedReply } from "@/lib/services/queen-bee/voice-runtime-conversation";
+// Shared session retains multi-step rail drafts for later confirmation turns.
 const QUEEN_VOICE_SESSION_ID = "queen-bee-voice";
-const QUEEN_PIPELINE_CHAT_TOOLS = queenPipelineChatTools();
+const QUEEN_PIPELINE_CHAT_TOOLS = [...queenPipelineChatTools(), OPEN_LOCAL_APP_CHAT_TOOL];
 // A bare confirmation token ("CONFIRM_SWAP", "confirm", ...) carries no request of
 // its own — it points at a draft prepared on the previous turn. Used to decide when
 // to strip the FAB's screen-context wrapper + thread the prior draft.
 const CONFIRMATION_REQUEST = /^(?:confirm|confirmed|yes|yes,?\s*confirm|go ahead|run it|execute|send it|(?:CONFIRM|SEND|APPROVE)_[A-Z]+)$/i;
-
 // Spoken turns need tight budgets: a slow runtime attempt costs silence —
 // but the budget must fit the brain it times. A hermes CLI turn on an OAuth
 // provider (openai-codex) takes 8-13s warm end-to-end through
@@ -98,57 +125,40 @@ const MAX_HISTORY_TURNS = 8;
 // dead-end the request.
 const MAX_AGENT_FALLBACK_ATTEMPTS = 3;
 const OPENAI_VOICE_CHAT_FALLBACK_MODEL = "gpt-4o-mini";
-
 type ProviderConversationTextBlock = {
   type: "text";
   text: string;
   cache_control?: { type: "ephemeral" };
 };
-
 type ProviderConversationMessage = {
   role: "system" | "assistant" | "user";
   content: string | ProviderConversationTextBlock[];
 };
-
 type ConversationMessagesOptions = {
   systemPreamble?: string;
   stableSystemAddendum?: string;
   personality?: string | null;
   cacheControl?: { provider: string; model: string };
 };
-
 type ProviderInferenceEvidence = {
   model?: string;
   usage?: Record<string, unknown>;
 };
-
 type ProviderConversationToolCall = {
   id: string;
   name: string;
   arguments: string;
 };
-
 type ProviderConversationTurn = {
   text: string;
   toolCalls: ProviderConversationToolCall[];
   evidence: ProviderInferenceEvidence;
 };
+const VOICE_BRAIN_PROMPT_WARM_MS = 4 * 60_000;
+const voiceBrainWarmAt = new Map<string, number>();
 
-function voiceInferenceUsageFields(usage: Record<string, unknown> | undefined) {
-  const promptDetails = usage?.prompt_tokens_details;
-  const completionDetails = usage?.completion_tokens_details;
-  return {
-    inputTokens: Number(usage?.prompt_tokens) || null,
-    cachedPromptTokens:
-      promptDetails && typeof promptDetails === "object"
-        ? Number((promptDetails as { cached_tokens?: unknown }).cached_tokens) || 0
-        : null,
-    outputTokens: Number(usage?.completion_tokens) || null,
-    reasoningTokens:
-      completionDetails && typeof completionDetails === "object"
-        ? Number((completionDetails as { reasoning_tokens?: unknown }).reasoning_tokens) || 0
-        : null,
-  };
+function voiceBrainWarmKey(provider: string, model: string) {
+  return `${provider.trim().toLowerCase()}::${model.trim().toLowerCase()}`;
 }
 
 function recordQueenVoiceInference(input: {
@@ -157,6 +167,10 @@ function recordQueenVoiceInference(input: {
   evidence?: ProviderInferenceEvidence;
   elapsedMs: number;
 }) {
+  voiceBrainWarmAt.set(
+    voiceBrainWarmKey(input.provider, input.requestedModel),
+    Date.now(),
+  );
   void import("@/lib/services/telemetry/local-telemetry")
     .then(({ recordTelemetryBatch }) => recordTelemetryBatch([{
       source: "route",
@@ -175,6 +189,63 @@ function recordQueenVoiceInference(input: {
 /** The model the OpenAI fallback lane actually answers with. */
 export function voiceFallbackModelName() {
   return process.env.OPENAI_VOICE_CHAT_MODEL || OPENAI_VOICE_CHAT_FALLBACK_MODEL;
+}
+
+/** Prime OpenAI's reusable prompt cache with the exact stable Queen voice
+ * contract while the call is connecting. This is deliberately tiny, deduped,
+ * and direct-provider-only; it never changes the selected brain or speaks its
+ * throwaway completion. */
+export async function prewarmQueenVoiceBrain(plan: VoiceChatBrainPlan) {
+  if (
+    plan.kind !== "direct"
+    || (plan.provider !== "openai" && plan.provider !== "openai-api")
+  ) {
+    return { ok: true, warmed: false };
+  }
+  const warmKey = voiceBrainWarmKey(plan.provider, plan.model);
+  const lastWarm = voiceBrainWarmAt.get(warmKey) ?? 0;
+  if (Date.now() - lastWarm < VOICE_BRAIN_PROMPT_WARM_MS) {
+    return { ok: true, warmed: false };
+  }
+  const endpoint = await resolveProviderChatEndpoint(plan.provider);
+  if (!endpoint) return { ok: false, warmed: false };
+  const queenDefaults = await readQueenBeeBrainDefaults().catch(() => null);
+  const cacheHints = openAICompatibleInferenceCacheHints({
+    provider: plan.provider,
+    model: plan.model,
+    cacheScope: `queen-voice:${plan.provider}:${plan.model}`,
+  });
+  const messages = conversationMessages("Confirm readiness briefly.", [], {
+    stableSystemAddendum: queenModelTransparencyNote(plan.model, plan.provider),
+    personality: queenDefaults?.soulPrompt,
+    cacheControl: { provider: plan.provider, model: plan.model },
+  });
+  const reasoningModel = /^(o\d|gpt-5)/i.test(plan.model.trim());
+  const response = await resilientHttpsFetch(endpoint.url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${endpoint.key}`,
+      "content-type": "application/json",
+      ...cacheHints.headers,
+    },
+    body: JSON.stringify({
+      model: plan.model,
+      messages,
+      ...cacheHints.body,
+      ...(reasoningModel
+        ? {
+            max_completion_tokens: 24,
+            reasoning_effort: voiceReasoningEffort(plan.model),
+          }
+        : { max_tokens: 24, temperature: 0.6 }),
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(10_000),
+  });
+  await response.body?.cancel().catch(() => undefined);
+  if (!response.ok) return { ok: false, warmed: false, status: response.status };
+  voiceBrainWarmAt.set(warmKey, Date.now());
+  return { ok: true, warmed: true, status: response.status };
 }
 
 export function runtimeConversationTurnTimeoutMs(agent: Pick<AgentProfile, "provider">) {
@@ -221,8 +292,6 @@ export type VoiceChatBrainPlan =
       statusAgent: { id: string; name?: string; runtime?: string; provider?: string; model?: string };
     };
 
-export type QueenVoiceHistoryTurn = { who: "you" | "queen"; text: string };
-
 export type QueenVoiceTurnResult = {
   reply: string;
   brainLabel?: string;
@@ -233,126 +302,11 @@ export type QueenVoiceTurnResult = {
   route?: unknown;
 };
 
-const QUEEN_VOICE_TURN_INSTRUCTIONS = [
-  "You are Queen Bee, the single coordinator voice of HivemindOS, in a live spoken conversation with the user.",
-  'Reply with STRICT JSON only, no markdown fences, matching: {"speech": string, "task": null | {"title": string, "message": string}}.',
-  "speech: one or two short, natural spoken sentences. No markdown, no lists, no reasoning preambles.",
-  "You are MID-conversation: never greet again, never reintroduce yourself, never restart the conversation - answer the latest message directly in context.",
-  "Set task ONLY when the user clearly asks for work to be done (a job, build, fix, research, automation, reminder, or delegation to the hive).",
-  "When an offered tool can fulfill the user's request during this turn, call it and answer now with task null. Do not turn immediate read-only retrieval or capability use into Work Board work.",
-  X_ACCOUNT_CAPABILITY_INSTRUCTION,
-  "When no more-specific offered tool fully covers the request, call use_hive_capability with the user's complete goal and needed conversation context. It performs full capability search and governed execution across registered skills, MCP tools, connected app APIs, Hive Actions, runtime tools, and specialty agents. Never guess or claim a capability is unavailable merely because it is not named as a direct tool here.",
-  "If you choose a next step after an open-ended prompt like 'you tell me', keep task null and ask for approval. Only set task after the user's latest message asks for specific work or confirms your immediately previous task proposal.",
-  "Greetings, questions, status chat, and thinking-out-loud get task: null and a conversational speech reply.",
-  "When you do create a task, make title a short imperative summary, message the full work request in the user's words, and have speech briefly confirm what you are kicking off.",
-];
-
-function queenVoiceSystemPrompt(personality?: string | null) {
-  return [
-    formatQueenBeePersonalityInstruction(personality),
-    ...QUEEN_VOICE_TURN_INSTRUCTIONS,
-  ].join(" ");
-}
-
-export function spokenVoicePreferenceFromTranscript(transcript: string) {
-  const trimmed = transcript.replace(/\s+/g, " ").trim();
-  if (!trimmed || /\?\s*$/.test(trimmed)) return "";
-  const addressMatch = trimmed.match(
-    /^(?:please\s+)?(?:remember\s+(?:to|that\s+you\s+should)\s+)?(?:always\s+)?(?:call|address)\s+me\s+(?:as\s+)?["“”']?([a-z][a-z0-9 _.-]{0,40}?)(?:["“”']?\s*(?:from now on|going forward|please)?[.!]?)?$/i,
-  );
-  if (!addressMatch) return "";
-  const name = addressMatch[1]?.trim().replace(/[.!?]+$/, "");
-  if (!name || /\b(?:that|when|if|because|why|what|where|who|how)\b/i.test(name)) return "";
-  return `Address the user as "${name}".`;
-}
-
 async function captureSpokenVoicePreference(transcript: string) {
   const preference = spokenVoicePreferenceFromTranscript(transcript);
   if (!preference) return "";
   await addQueenBeeVoicePreference(preference);
   return preference;
-}
-
-export function buildRuntimeVoiceSystemText(
-  systemPreamble?: string,
-  personality?: string | null,
-) {
-  return [
-    "Queen Bee live voice override: for this voice turn, answer as Queen Bee. These instructions override the selected runtime profile's agent identity, soul, addressing, and speech format.",
-    queenVoiceSystemPrompt(personality),
-    systemPreamble?.trim() || "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-/**
- * One self-contained prompt for runtime (CLI/gateway) agents. The agent-runtime
- * route reduces a messages[] array to the LATEST user message for most
- * runtimes, which silently dropped the system prompt and conversation history -
- * the runtime brain saw a bare "What do you think?" with no context and
- * re-greeted like a fresh session. Everything the turn needs rides in the one
- * user message instead.
- */
-export function buildRuntimeVoiceUserText(
-  transcript: string,
-  history: QueenVoiceHistoryTurn[],
-  systemPreamble?: string,
-  personality?: string | null,
-) {
-  const recent = history.slice(-MAX_HISTORY_TURNS);
-  const transcriptBlock = recent.length
-    ? [
-        "Conversation so far (most recent last):",
-        ...recent.map(
-          (turn) => `${turn.who === "queen" ? "Queen Bee" : "User"}: ${turn.text.slice(0, 600)}`,
-        ),
-        "",
-      ].join("\n")
-    : "";
-  return [
-    // Keep the full voice contract in the latest user message too: several
-    // runtime adapters only read `message`/latest-user and ignore messages[].
-    buildRuntimeVoiceSystemText(systemPreamble, personality),
-    "",
-    transcriptBlock,
-    `User's latest spoken message: ${transcript}`,
-    "",
-    "Respond now as Queen Bee with the STRICT JSON object only.",
-  ]
-    .filter((part) => part !== "")
-    .join("\n");
-}
-
-export function buildRuntimeVoiceMessages(
-  transcript: string,
-  history: QueenVoiceHistoryTurn[],
-  systemPreamble?: string,
-  personality?: string | null,
-) {
-  return [
-    {
-      role: "system" as const,
-      content: buildRuntimeVoiceSystemText(undefined, personality),
-    },
-    {
-      role: "user" as const,
-      content: "Apply these standing Queen Bee voice instructions to the current turn and wait for the user's live message.",
-    },
-    {
-      role: "assistant" as const,
-      content: "Understood. I will apply the Queen Bee voice contract to the current turn.",
-    },
-    {
-      role: "user" as const,
-      content: buildRuntimeVoiceUserText(
-        transcript,
-        history,
-        systemPreamble,
-        personality,
-      ),
-    },
-  ];
 }
 
 /**
@@ -383,11 +337,20 @@ export async function runQueenBeeVoiceTurn(options: {
   onSpeechDelta?: (text: string) => void;
   /** A failed attempt's already-emitted speech must be discarded downstream. */
   onSpeechReset?: () => void;
+  /** Short non-canonical line spoken when a runtime actually starts a tool. */
+  onStatusSpeech?: (text: string) => void;
   /** Which brain answers the conversation (resolved by the route from the
    *  Queen's Calls prefs). Defaults to the fleet-agent lane. */
   voiceBrain?: VoiceChatBrainPlan;
+  scheduledCallPreparation?: boolean;
 }): Promise<QueenVoiceTurnResult> {
   let brainMetadata: Pick<QueenVoiceTurnResult, "brainLabel" | "brainFallback"> = {};
+  let statusSpeechSent = false;
+  const statusSpeech = (text: string) => {
+    if (statusSpeechSent || !text.trim()) return;
+    statusSpeechSent = true;
+    options.onStatusSpeech?.(text);
+  };
   const emitter = options.onSpeechDelta
     ? createVoiceSpeechEmitter(options.onSpeechDelta)
     : null;
@@ -395,12 +358,14 @@ export async function runQueenBeeVoiceTurn(options: {
   // delegation receipt) is emitted before the result returns, so the client
   // always hears the same text the buffered turn would have spoken.
   const finish = (result: QueenVoiceTurnResult) => {
-    const complete = { ...result, ...brainMetadata };
+    const spokenReply = sanitizeSpokenVoiceText(result.reply) || "I'm here.";
+    const complete = { ...result, reply: spokenReply, ...brainMetadata };
     emitter?.finalize(complete.reply);
     return complete;
   };
   const text = await conversationTurnText({
     ...options,
+    onStatusSpeech: statusSpeech,
     onTextDelta: emitter ? (chunk) => emitter.onTextDelta(chunk) : undefined,
     onAttemptStart: emitter
       ? () => {
@@ -412,6 +377,7 @@ export async function runQueenBeeVoiceTurn(options: {
   if (text) {
     const parsed = parseVoiceTurnJson(text);
     if (parsed?.task) {
+      if (options.scheduledCallPreparation) return finish({ reply: parsed.speech });
       if (!voiceTaskSubmissionAuthorized(options.transcript, options.history)) {
         if (emitter?.attemptReset()) options.onSpeechReset?.();
         return finish({ reply: voiceTaskApprovalPrompt(parsed.task) });
@@ -493,7 +459,9 @@ async function conversationTurnText(options: {
   onTextDelta?: (chunk: string) => void;
   /** Called before every attempt so delta consumers can reset between them. */
   onAttemptStart?: () => void;
+  onStatusSpeech?: (text: string) => void;
   voiceBrain?: VoiceChatBrainPlan;
+  scheduledCallPreparation?: boolean;
   onBrainFallback?: (metadata: Pick<QueenVoiceTurnResult, "brainLabel" | "brainFallback">) => void;
 }) {
   await captureSpokenVoicePreference(options.transcript).catch(() => "");
@@ -501,27 +469,33 @@ async function conversationTurnText(options: {
   // both the runtime brain and the OpenAI fallback honor them every turn. Note
   // the pipeline also captures simple spoken preference utterances itself,
   // because it does not run the realtime session's remember_preference tool.
-  const preferencePreamble = await queenVoicePreferencePreamble();
-  const queenDefaults = await readQueenBeeBrainDefaults().catch(() => null);
+  // Independent reads run together. Recent call history is already passed to
+  // every brain below; the heavier hive snapshot only belongs on turns that
+  // reference the user's own state, memory, work, or briefing.
+  const contextKinds = voiceTurnHiveContextKinds(options.transcript);
+  const [preferencePreamble, queenDefaults, brainContext] = await Promise.all([
+    queenVoicePreferencePreamble(),
+    readQueenBeeBrainDefaults().catch(() => null),
+    voiceTurnNeedsHiveContext(options.transcript)
+      ? (async () => {
+          try {
+            const { queenVoiceBrainContext } = await import(
+              "@/lib/services/queen-bee/voice-brain-context"
+            );
+            return await queenVoiceBrainContext(options.transcript, {
+              vaultPath: options.vaultPath,
+              includeMemories: contextKinds.memories,
+              includeBoard: contextKinds.board,
+              includeBusiness: contextKinds.business,
+            });
+          } catch {
+            return "";
+          }
+        })()
+      : Promise.resolve(""),
+  ]);
   const queenPersonality = queenDefaults?.soulPrompt;
-  // Best-effort hive context (shared-brain recall + open work digest) rides
-  // the system preamble so EVERY brain lane can answer "check my hive brain"
-  // and "what's on our to-do list" in conversation mode. Lazy import keeps
-  // the hermetic node suites' import graph clean; the module enforces a hard
-  // time budget so a slow index never stalls a spoken turn.
-  const brainContext = await (async () => {
-    try {
-      const { queenVoiceBrainContext } = await import(
-        "@/lib/services/queen-bee/voice-brain-context"
-      );
-      return await queenVoiceBrainContext(options.transcript, {
-        vaultPath: options.vaultPath,
-      });
-    } catch {
-      return "";
-    }
-  })();
-  const systemPreamble = [preferencePreamble, brainContext]
+  const systemPreamble = [scheduledCallPreparationInstruction(options.scheduledCallPreparation === true), preferencePreamble, brainContext]
     .filter((part) => part && part.trim())
     .join("\n\n");
   const plan = options.voiceBrain ?? { kind: "fleet-agent" as const };
@@ -540,6 +514,7 @@ async function conversationTurnText(options: {
         options.onTextDelta,
         queenPersonality,
         options.origin,
+        options.onStatusSpeech,
       );
       if (options.marks) options.marks.directTurnMs = Date.now() - directStartedAt;
       if (text.trim()) {
@@ -576,6 +551,7 @@ async function conversationTurnText(options: {
           options.onTextDelta,
           queenPersonality,
           options.origin,
+          options.onStatusSpeech,
         );
       },
       (fallback, error) => {
@@ -616,6 +592,7 @@ async function conversationTurnText(options: {
         options.progress,
         options.onTextDelta,
         queenPersonality,
+        options.onStatusSpeech,
       );
       if (options.marks)
         options.marks.agentTurnMs = Date.now() - agentStartedAt;
@@ -657,6 +634,7 @@ async function conversationTurnText(options: {
       systemPreamble,
       options.onTextDelta,
       queenPersonality,
+      options.onStatusSpeech,
     );
   } catch (fallbackError) {
     console.warn(
@@ -728,6 +706,7 @@ async function runOpenAiConversationTurn(
   systemPreamble?: string,
   onTextDelta?: (chunk: string) => void,
   personality?: string | null,
+  onStatusSpeech?: (text: string) => void,
 ) {
   const route = await resolvePreferredOpenAiChatRoute(voiceFallbackModelName());
   return runProviderConversationTurn(
@@ -742,6 +721,7 @@ async function runOpenAiConversationTurn(
     onTextDelta,
     personality,
     origin,
+    onStatusSpeech,
   );
 }
 
@@ -780,26 +760,62 @@ async function runProviderConversationTurn(
   onTextDelta?: (chunk: string) => void,
   personality?: string | null,
   origin = "",
+  onStatusSpeech?: (text: string) => void,
 ) {
   const providerStartedAt = Date.now();
-  const providerTurnSignal = AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS);
+  const executeTool = (call: ProviderConversationToolCall) => executeQueenVoiceServerTool({
+    call,
+    runCapability: (message) => runQueenBeeAgentTurn(origin, message, undefined, {
+      preferBuiltInCapability: true,
+    }),
+  });
   // Every provider-direct lane invokes target.model itself, so the injected
   // identity is exact — "which model are you?" gets a real answer per lane.
   const stableSystemAddendum = queenModelTransparencyNote(target.model, target.provider);
   if (target.provider === "openai-oauth") {
-    // The user's ChatGPT subscription credentials (shared hive env), via the
-    // Responses backend. Lazy import: server-only module, and the hermetic
-    // node suites import this file directly.
-    const { runOpenAiOAuthChatTurn } = await import("@/lib/services/openai-oauth");
-    return runOpenAiOAuthChatTurn(
+    // Lazy server-only import keeps OAuth out of the hermetic node suites.
+    const { runOpenAiOAuthChatTurnDetailed } = await import("@/lib/services/openai-oauth");
+    const oauthMessages = conversationStringMessages(transcript, history, {
+      systemPreamble,
+      stableSystemAddendum,
+      personality,
+    });
+    let turn = await runOpenAiOAuthChatTurnDetailed(
       target.model,
-      conversationStringMessages(transcript, history, {
-        systemPreamble,
-        stableSystemAddendum,
-        personality,
-      }),
-      { onTextDelta, timeoutMs: OPENAI_TURN_TIMEOUT_MS },
+      oauthMessages,
+      {
+        onTextDelta,
+        timeoutMs: OPENAI_TURN_TIMEOUT_MS,
+        tools: voiceTurnShouldOfferTools(transcript)
+          ? QUEEN_PIPELINE_CHAT_TOOLS
+          : undefined,
+      },
     );
+    if (turn.toolCalls.length) {
+      onStatusSpeech?.(voiceToolAcknowledgement(transcript));
+      const toolResults = await Promise.all(
+        turn.toolCalls.map(async (call) => ({
+          ...call,
+          output: await executeTool(call),
+        })),
+      );
+      turn = await runOpenAiOAuthChatTurnDetailed(
+        target.model,
+        oauthMessages,
+        {
+          onTextDelta,
+          timeoutMs: OPENAI_TURN_TIMEOUT_MS,
+          assistantText: turn.text,
+          toolResults,
+        },
+      );
+    }
+    recordQueenVoiceInference({
+      provider: target.provider,
+      requestedModel: target.model,
+      elapsedMs: Date.now() - providerStartedAt,
+    });
+    return turn.text;
   }
   const endpoint = await resolveProviderChatEndpoint(target.provider);
   if (!endpoint) {
@@ -818,12 +834,15 @@ async function runProviderConversationTurn(
     personality,
     cacheControl: { provider: target.provider, model: target.model },
   });
+  const providerFetch = new URL(endpoint.url).hostname === "api.openai.com"
+    ? resilientHttpsFetch
+    : fetch;
   const post = (
     params: Record<string, unknown>,
     messages: Array<Record<string, unknown>> = initialMessages as Array<Record<string, unknown>>,
     offerTools = true,
   ) =>
-    fetch(endpoint.url, {
+    providerFetch(endpoint.url, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${endpoint.key}`,
@@ -836,7 +855,11 @@ async function runProviderConversationTurn(
         // Streamed turns feed the fused converse+speak pipeline; the buffered
         // legacy action keeps the plain JSON response.
         ...(onTextDelta ? { stream: true } : {}),
-        ...(onTextDelta && isXaiOAuthProvider(target.provider)
+        ...(onTextDelta && (
+          isXaiOAuthProvider(target.provider)
+          || target.provider === "openai"
+          || target.provider === "openai-api"
+        )
           ? { stream_options: { include_usage: true } }
           : {}),
         ...(offerTools ? { tools: QUEEN_PIPELINE_CHAT_TOOLS, tool_choice: "auto" } : {}),
@@ -844,7 +867,10 @@ async function runProviderConversationTurn(
         ...params,
       }),
       cache: "no-store",
-      signal: providerTurnSignal,
+      // Each model hop owns a fresh budget. A capability may legitimately
+      // take 30-45s; reusing the initial hop's already-expired signal made the
+      // result-continuation abort instantly after the action had succeeded.
+      signal: AbortSignal.timeout(OPENAI_TURN_TIMEOUT_MS),
     });
   // Reasoning-era OpenAI models (gpt-5*, o*) reject max_tokens/temperature and
   // burn completion budget on thinking — they get max_completion_tokens plus
@@ -856,9 +882,17 @@ async function runProviderConversationTurn(
   const requestOptions = isXaiOAuthProvider(target.provider)
     ? xaiOAuthVoiceRequestOptions(target.model)
     : reasoningModel
-      ? { max_completion_tokens: 700, reasoning_effort: "low" }
+      ? {
+          max_completion_tokens: 700,
+          reasoning_effort: voiceReasoningEffort(target.model),
+        }
       : { max_tokens: 300, temperature: 0.6 };
-  let response = await post(requestOptions);
+  const offerTools = voiceTurnShouldOfferTools(transcript);
+  let response = await post(
+    requestOptions,
+    initialMessages as Array<Record<string, unknown>>,
+    offerTools,
+  );
   if (!response.ok) {
     const data = (await response.json().catch(() => null)) as {
       error?: { message?: string } | string;
@@ -880,6 +914,8 @@ async function runProviderConversationTurn(
         reasoningModel
           ? { max_completion_tokens: 700 }
           : { max_completion_tokens: 300 },
+        initialMessages as Array<Record<string, unknown>>,
+        offerTools,
       );
     }
     if (!response.ok) {
@@ -921,43 +957,17 @@ async function runProviderConversationTurn(
   };
   let turn = await readTurn(response);
   if (turn.toolCalls.length) {
+    onStatusSpeech?.(voiceToolAcknowledgement(transcript));
     const assistantToolCalls = turn.toolCalls.map((call) => ({
       id: call.id,
       type: "function",
       function: { name: call.name, arguments: call.arguments },
     }));
-    const toolMessages = await Promise.all(turn.toolCalls.map(async (call) => {
-      let content: string;
-      try {
-        const args = JSON.parse(call.arguments || "{}") as Record<string, unknown>;
-        if (call.name === X_ACCOUNT_READ_TOOL_NAME) {
-          content = await runXAccountReadTool(coerceXAccountReadToolInput(args));
-        } else if (call.name === "read_hivemind_context") {
-          const query = typeof args.query === "string" ? args.query.trim() : "";
-          if (!query) throw new Error("A read-only Brain query is required.");
-          content = await readQueenVoiceBrainContext(query);
-        } else if (call.name === "use_hive_capability") {
-          const message = typeof args.message === "string" ? args.message.trim() : "";
-          if (!message) throw new Error("A capability goal is required.");
-          if (isHivemindFastContextCommand(message)) {
-            content = await readQueenVoiceBrainContext(message);
-          } else {
-            content = JSON.stringify({
-              ok: true,
-              ...(await runQueenBeeAgentTurn(origin, message, undefined, { preferBuiltInCapability: true })),
-            });
-          }
-        } else {
-          throw new Error(`Unknown Queen voice tool: ${call.name}.`);
-        }
-      } catch (error) {
-        content = JSON.stringify({
-          ok: false,
-          error: error instanceof Error ? error.message : "Queen capability tool failed.",
-        });
-      }
-      return { role: "tool", tool_call_id: call.id, content };
-    }));
+    const toolMessages = await Promise.all(turn.toolCalls.map(async (call) => ({
+      role: "tool",
+      tool_call_id: call.id,
+      content: await executeTool(call),
+    })));
     const continuationMessages: Array<Record<string, unknown>> = [
       ...(initialMessages as Array<Record<string, unknown>>),
       { role: "assistant", content: turn.text || null, tool_calls: assistantToolCalls },
@@ -1386,27 +1396,19 @@ async function runRuntimeConversationTurn(
   onActivity?: (label: string) => void,
   onTextDelta?: (chunk: string) => void,
   personality?: string | null,
+  onStatusSpeech?: (text: string) => void,
 ) {
-  // One flattened user message (persona + history + latest): most runtime
-  // adapters only see the latest user message, so a messages[] history array
-  // never reached them - see buildRuntimeVoiceUserText. Also send the same
-  // Queen contract as an actual system message for adapters that do honor
-  // messages[], so the runtime profile's own soul does not outrank Queen.
   const messages = buildRuntimeVoiceMessages(transcript, history, systemPreamble, personality);
-  const response = await fetch(new URL("/api/chat/agent-runtime", origin), {
-    method: "POST",
-    headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
-    body: JSON.stringify({
-      agent: voiceOptimizedAgent(agent),
-      messages,
-      runtimeSessionId: "queen-bee-voice",
-      agentMode: "act",
-      latencyMode: "voice",
-    }),
-    cache: "no-store",
-    signal: AbortSignal.timeout(runtimeConversationTurnTimeoutMs(agent)),
+  return runPersistedRuntimeVoiceTurn({
+    origin,
+    agent,
+    messages,
+    timeoutMs: runtimeConversationTurnTimeoutMs(agent),
+    statusSpeech: voiceToolAcknowledgement(transcript),
+    onActivity,
+    onTextDelta,
+    onStatusSpeech,
   });
-  return readRuntimeResponseText(response, onActivity, onTextDelta);
 }
 
 function parseVoiceTurnJson(

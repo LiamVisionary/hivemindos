@@ -49,7 +49,7 @@
   --hex-active-glow: rgba(13, 142, 126, 0.32);
 
   --hex-honey-bg: linear-gradient(180deg, rgba(184, 130, 22, 0.50), rgba(140, 94, 10, 0.22));
-  --hex-honey-border: rgba(106, 69, 5, 0.78);
+  --hex-honey-border: rgba(111, 69, 31, 0.78);
   --hex-honey-glow: rgba(184, 130, 22, 0.35);
 
   --hex-danger-bg: linear-gradient(180deg, rgba(180, 35, 66, 0.36), rgba(180, 35, 66, 0.12));
@@ -63,9 +63,9 @@
   --hex-hover-stroke: rgba(13, 90, 78, 1);
 
   --edge-stroke-start: rgba(13, 90, 78, 0.78);
-  --edge-stroke-end: rgba(106, 69, 5, 0.78);
-  --fleet-loading-sheen: rgba(176, 127, 28, 0.16);
-  --fleet-loading-sheen-tail: rgba(95, 143, 90, 0.08);
+  --edge-stroke-end: rgba(111, 69, 31, 0.78);
+  --fleet-loading-sheen: rgba(138, 90, 42, 0.16);
+  --fleet-loading-sheen-tail: rgba(107, 143, 94, 0.08);
 }
 
 /* Hover affordance for any interactive hex cell */

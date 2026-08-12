@@ -13,6 +13,43 @@ const SPEECH_KEY = /"speech"\s*:\s*"/;
 // runaway model cannot stream minutes of audio.
 const MAX_SPEECH_CHARS = 600;
 
+const WRAPPED_STAGE_DIRECTION = /^\s*(?:\*[^*\n]{1,160}\*|\([^()\n]{1,160}\)|\[[^\[\]\n]{1,160}\])\s*(?:[-—,:]\s*)?/;
+const BODY_LANGUAGE = /\b(?:smiles?|grins?|smirks?|chin|eyes?|gaze|brows?|shoulders?|head|posture|expression|nods?|laughs?|chuckles?|sighs?|leans?|tilts?|raises?|lowers?|pauses?)\b/i;
+const STAGE_ACTION = /^(?:smiles?|grins?|smirks?|nods?|laughs?|chuckles?|sighs?|leans?|tilts?|raises?|lowers?|pauses?|chin|eyes?|gaze|brows?|shoulders?|head|posture|expression)\b/i;
+const STAGE_SUBJECT = /^(?:(?:with|wearing)\s+)?(?:a|an|the|her|his|she|he|queen bee)\b/i;
+
+function sentenceBoundary(text: string): number {
+  const match = /[.!?…]["')\]]?(?:\s+|$)/.exec(text);
+  return match ? match.index + match[0].length : -1;
+}
+
+/** Remove visual/body-language prose that a personality prompt occasionally
+ * puts inside the model's `speech` field. TTS must receive only literal words
+ * the Queen would say aloud, never role-play narration or stage directions. */
+export function sanitizeSpokenVoiceText(input: string): string {
+  let text = (input ?? "").trim();
+  for (let pass = 0; pass < 3 && text; pass += 1) {
+    const wrapped = text.match(WRAPPED_STAGE_DIRECTION);
+    if (wrapped?.[0]) {
+      text = text.slice(wrapped[0].length).trimStart();
+      continue;
+    }
+    const boundary = sentenceBoundary(text);
+    if (boundary < 0) {
+      if (STAGE_ACTION.test(text) || (STAGE_SUBJECT.test(text) && BODY_LANGUAGE.test(text))) {
+        return "";
+      }
+      break;
+    }
+    const first = text.slice(0, boundary).trim();
+    if (!(STAGE_ACTION.test(first) || (STAGE_SUBJECT.test(first) && BODY_LANGUAGE.test(first)))) {
+      break;
+    }
+    text = text.slice(boundary).trimStart();
+  }
+  return text.trim();
+}
+
 export type SpeechDeltaExtractor = {
   /** Feed a raw text delta; returns the speech-text delta it unlocked ("" often). */
   push(chunk: string): string;
@@ -227,9 +264,9 @@ export function createSentenceChunker(
   let emittedAny = false;
 
   const takeChunk = (endIndex: number) => {
-    const chunk = buffer.slice(0, endIndex).trim();
+    const chunk = sanitizeSpokenVoiceText(buffer.slice(0, endIndex));
     buffer = buffer.slice(endIndex);
-    emittedAny = true;
+    if (chunk) emittedAny = true;
     return chunk;
   };
 
@@ -266,7 +303,7 @@ export function createSentenceChunker(
   };
 
   const flush = (): string[] => {
-    const rest = buffer.trim();
+    const rest = sanitizeSpokenVoiceText(buffer);
     buffer = "";
     if (!rest) return [];
     emittedAny = true;

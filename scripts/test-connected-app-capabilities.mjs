@@ -51,6 +51,13 @@ const merged = prefs.applyAppPreferences(
 );
 assert.deepEqual([...merged[0].capabilities], ["video"], "capabilities merge onto the discovered app record");
 
+// The context index must consume the overlay too; otherwise the capability
+// chooser sees a generic app name but cannot match its declared video/MCP work.
+const contextIndexSource = readFileSync(new URL("../src/lib/services/context-index.ts", import.meta.url), "utf8");
+assert.match(contextIndexSource, /\.\.\.\(app\.capabilities \?\? \[\]\)/, "connected-app capability tags feed context-index aliases");
+assert.match(contextIndexSource, /app\.mcpVideo[\s\S]+generative media mcp/, "an MCP video descriptor adds explicit generative-media retrieval language");
+assert.match(contextIndexSource, /machineName:\s*app\.machineName/, "connected-app context items preserve their fleet machine label");
+
 // ---- task-retrieval-context.ts: always-on roster ----
 const trc = loadModule(
   "../src/lib/services/chat/task-retrieval-context.ts",

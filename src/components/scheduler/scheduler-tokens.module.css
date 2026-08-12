@@ -15,13 +15,13 @@
   --panel-grad: linear-gradient(180deg, rgba(16,20,29,0.78), rgba(6,8,13,0.60));
   --panel-card-grad: linear-gradient(180deg, rgba(22,28,42,0.72), rgba(16,21,31,0.62));
   /* Run-status tones — theme-aware so failed/stale recolor in hive-light instead
-     of the previous hardcoded #8e3328/#a23a35 literals that broke on light. */
+     of the previous hardcoded #8e3328/#b5483b literals that broke on light. */
   --status-ok: rgba(111,205,186,0.90);
   --status-warn: rgba(255,212,90,0.92);
   --status-failed: #fb7185;
   --status-stale: rgba(255,212,90,0.80);
   --status-idle: var(--muted);
-  /* Primary honey action (New flight / template accents). Solid gold in dark
+  /* Primary Hivemind accent action (New flight / template accents). Solid blue in dark
      with dark ink; recolors to a readable dark-gold + light ink under
      hive-light so the button text never disappears. */
   --auto-honey: #e7b45c;
@@ -29,18 +29,18 @@
   --auto-line: rgba(238,232,220,0.09);
 }
 :global([data-theme="hive-light"]) .root {
-  --auto-honey: #7c550b;
-  --auto-honey-ink: #fbf8f1;
+  --auto-honey: #8a5a2a;
+  --auto-honey-ink: #f8f4ee;
   --auto-line: rgba(54,46,30,0.14);
 }
 :global([data-theme="hive-light"]) .root {
   --hex-default-bg: linear-gradient(180deg, rgba(255,252,246,0.86), rgba(244,239,228,0.70));
   --hex-default-border: rgba(54,46,30,0.26);
-  --hex-honey-bg: linear-gradient(180deg, rgba(176,127,28,0.28), rgba(176,127,28,0.10));
-  --hex-honey-border: #7c550b;
-  --hex-active-border: #406f53;
-  --hex-add-stroke: #406f53;
-  --hex-hover-stroke: #356b2f;
+  --hex-honey-bg: linear-gradient(180deg, rgba(138, 90, 42,0.28), rgba(138, 90, 42,0.10));
+  --hex-honey-border: #8a5a2a;
+  --hex-active-border: #6b8f5e;
+  --hex-add-stroke: #6b8f5e;
+  --hex-hover-stroke: #56794b;
   --panel-bg: rgba(251,248,241,0.94);
   --panel-bg-soft: rgba(244,239,228,0.82);
   --panel-grad: linear-gradient(180deg, rgba(251,248,241,0.94), rgba(244,239,228,0.82));
@@ -580,7 +580,7 @@
 .autoStat { font-family: var(--f-display); font-size: 17px; font-weight: 700; margin-right: 5px; }
 .autoTopActions { display: inline-flex; align-items: center; gap: 6px; }
 
-/* Primary honey button */
+/* Primary Hivemind accent button (legacy class name) */
 .honeyBtn {
   cursor: pointer;
   font-family: var(--f-display);

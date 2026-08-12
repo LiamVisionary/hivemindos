@@ -8,7 +8,16 @@ import {
 import { companyRunsOnThisMachine, markCompanyDispatched, parseMetricNumber, readCompanies } from "@/lib/services/companies-store";
 import { countDispatchableMembers, dispatchCompanyGoal, scopeFleetToMembers } from "@/lib/services/companies-orchestration";
 import type { QueenBeeFleetMachine } from "@/lib/services/queen-bee/control-plane";
-import { redispatchReadyQueenBeeTasks, routePendingQueenBeeTasks } from "@/lib/services/queen-bee/control-plane";
+import { redispatchReadyQueenBeeTasks, routePendingQueenBeeTasks, submitQueenBeeMessage } from "@/lib/services/queen-bee/control-plane";
+import {
+  buildStopVerificationBrief,
+  classifyCompanyStopState,
+  watchdogTaskSource,
+} from "@/lib/services/company-task-watchdog";
+import {
+  readCompanyWatchdogReview,
+  recordCompanyWatchdogReview,
+} from "@/lib/services/company-task-watchdog-store";
 import { rescueInfraStrandedTasks } from "@/lib/services/queen-bee/infra-rescue";
 import { readBoard, reclaimStaleTasks } from "@/lib/services/kanban/local-kanban-store";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
@@ -466,6 +475,74 @@ export function countCompanyWaitingOnHuman(
   }).length;
 }
 
+/** Watchdog verification is on unless HIVEMINDOS_COMPANY_STOP_WATCHDOG=0. */
+const stopWatchdogEnabled = () => process.env.HIVEMINDOS_COMPANY_STOP_WATCHDOG !== "0";
+
+/**
+ * A company with no live path has either finished cleanly or stopped for a bad
+ * reason. Re-planning the apex goal (what happens next in this pass) is the
+ * right answer only for the first case; on top of a bad stop it compounds the
+ * defect, burning tokens re-deriving work while a false "done" or an invented
+ * blocker sits unexamined.
+ *
+ * So classify the rest state first. When it is suspicious AND new (by
+ * fingerprint), hand it to a verifier before any more planning happens.
+ *
+ * Returns true when a verification task was created, which means the company now
+ * HAS live work and this pass must not also re-dispatch.
+ */
+async function maybeReviewCompanyStop(
+  company: Company,
+  tasks: Awaited<ReturnType<typeof readBoard>>["tasks"],
+  links: Awaited<ReturnType<typeof readBoard>>["links"],
+  scoped: QueenBeeFleetMachine[],
+): Promise<boolean> {
+  if (!stopWatchdogEnabled()) return false;
+  const previous = await readCompanyWatchdogReview(company.id).catch(() => null);
+  const classification = classifyCompanyStopState({
+    companyId: company.id,
+    tasks,
+    links,
+    reviewedFingerprint: previous?.stopFingerprint ?? null,
+  });
+  if (classification.state !== "stopped") return false;
+
+  const brief = buildStopVerificationBrief({
+    companyName: company.name,
+    apexGoal: company.apexGoal?.metric,
+    classification,
+  });
+  try {
+    const result = await submitQueenBeeMessage({
+      message: brief,
+      taskTitle: `Verify stop: ${company.name}`,
+      mode: "act",
+      priority: "high",
+      // Stays a company task so it counts as live work and shows in the cockpit,
+      // and carries the fingerprint so the task is traceable to the stop it reviews.
+      source: watchdogTaskSource(company.id, classification.stopFingerprint),
+      fleetSnapshot: scoped,
+      projectId: company.projectId,
+    });
+    await recordCompanyWatchdogReview(company.id, {
+      stopFingerprint: classification.stopFingerprint,
+      verificationTaskId: result.task.id,
+    });
+    console.log(
+      `[company-autonomy-driver] ${company.id}: stop watchdog opened ${result.task.id} for ${classification.suspiciousLeaves.length} resting task(s)`,
+    );
+    return true;
+  } catch (error) {
+    // Recording the review on a FAILED submit would suppress this stop forever.
+    // Leaving it unrecorded means the next tick retries, which is what we want.
+    console.warn(
+      `[company-autonomy-driver] ${company.id}: stop watchdog could not open a verification task:`,
+      error instanceof Error ? error.message : error,
+    );
+    return false;
+  }
+}
+
 async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof readCompanies>>, fleet: QueenBeeFleetMachine[]): Promise<void> {
   // Native crews fail closed when the Work Board cannot be read. AEON companies
   // remain independent of that surface and use their workspace run state below.
@@ -523,6 +600,11 @@ async function redispatchEligibleCompanies(eligible: Awaited<ReturnType<typeof r
         // Crew already has live work → let it finish before re-dispatching.
         const idents = memberIdentities(scoped);
         if (companyHasActiveWork(tasks, idents, company.id)) return;
+        // No live path. Before planning MORE work on top of the rest state,
+        // verify that stopping was correct — a false "done" or an invented
+        // blocker must be caught here, not buried under a fresh wave of tasks.
+        // At most one review per distinct stop (keyed by fingerprint).
+        if (await maybeReviewCompanyStop(company, tasks, board.links, scoped)) return;
       } else if (company.execution?.engine === "aeon") {
         // The AEON workspace is the activity authority. Any queued/active run in
         // that workspace serializes company dispatches so overlapping external

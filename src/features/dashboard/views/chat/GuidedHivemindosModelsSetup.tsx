@@ -21,6 +21,7 @@ import { fetchPersonalWalletBalance, fetchPersonalWalletRecords } from "@/lib/na
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { createSafeTauriUnlisten } from "@/lib/native/tauri-event-listeners";
 import { getSurvivalSnapshot, hasConfiguredAgentWallet } from "@/lib/utils/agent-wallet";
+import { formatModelCredits, modelCreditsForRetailAmount } from "@/lib/utils/model-credits";
 import { mergePersonalWalletSources } from "@/lib/utils/personal-wallet-grouping";
 import { WalletSelectPanel, type PickableWallet } from "../trade/WalletSelectModal";
 import {
@@ -37,10 +38,11 @@ import {
   walletUsdcBalanceUsdForPickable,
 } from "./hivemindos-model-funding-wallets";
 import { deriveFreeMeter, type FreeAllowanceSnapshot, type FreeMeterState } from "./hivemindos-free-meter";
+import { HivemindosModelSubscriptions } from "./HivemindosModelSubscriptions";
 import { scoreModelStrength } from "@/lib/config/model-strength";
 import styles from "./HivemindosModelsSetup.module.css";
 
-const CARD_CREDIT_AMOUNT_OPTIONS = [10, 25, 50, 100] as const;
+const CARD_CREDIT_AMOUNT_OPTIONS = [5, 10, 25, 50, 100] as const;
 const CARD_CHECKOUT_POLL_WINDOW_MS = 10 * 60 * 1000;
 const CARD_CHECKOUT_POLL_INTERVAL_MS = 5_000;
 const CARD_CHECKOUT_INITIAL_POLL_DELAY_MS = 2_500;
@@ -142,11 +144,11 @@ type ModelCreditState = {
   configured?: boolean;
   checkoutUrl?: string;
   checkoutSessionId?: string;
-  balanceUsd?: number | null;
+  balanceCredits?: number | null;
   balanceLabel?: string;
-  creditedUsd?: number;
-  totalCreditedUsd?: number;
-  totalDebitedUsd?: number;
+  creditedCredits?: number;
+  totalCreditedCredits?: number;
+  totalDebitedCredits?: number;
   updatedAt?: string;
   message?: string;
   error?: string;
@@ -202,32 +204,32 @@ function formatUsd(value: number): string {
   }).format(Math.max(0, value));
 }
 
-function moneyValue(value: unknown): number {
+function numericValue(value: unknown): number {
   const raw = typeof value === "number"
     ? value
     : typeof value === "string"
-      ? Number(value.replace(/[$,\s]/g, ""))
+      ? Number(value.replace(/[^0-9.+-]/g, ""))
       : NaN;
   return Number.isFinite(raw) ? raw : 0;
 }
 
 function hasFundedModelCredits(state: ModelCreditState, config?: HivemindosModelsAgentConfig | null): boolean {
   return [
-    state.balanceUsd,
-    state.totalCreditedUsd,
-    config?.lastCreditBalanceUsd,
+    state.balanceCredits,
+    state.totalCreditedCredits,
+    config?.lastCreditBalanceCredits,
     config?.lastCreditBalanceLabel,
-  ].some((value) => moneyValue(value) > 0);
+  ].some((value) => numericValue(value) > 0);
 }
 
-function modelCreditBalanceUsd(state: ModelCreditState): number | null {
-  if (typeof state.balanceUsd === "number" && Number.isFinite(state.balanceUsd)) {
-    return Math.max(0, state.balanceUsd);
+function modelCreditBalance(state: ModelCreditState): number | null {
+  if (typeof state.balanceCredits === "number" && Number.isFinite(state.balanceCredits)) {
+    return Math.max(0, state.balanceCredits);
   }
-  const balanceFromLabel = moneyValue(state.balanceLabel);
+  const balanceFromLabel = numericValue(state.balanceLabel);
   if (balanceFromLabel > 0) return balanceFromLabel;
-  const totalCredited = moneyValue(state.totalCreditedUsd);
-  if (totalCredited > 0) return Math.max(0, totalCredited - moneyValue(state.totalDebitedUsd));
+  const totalCredited = numericValue(state.totalCreditedCredits);
+  if (totalCredited > 0) return Math.max(0, totalCredited - numericValue(state.totalDebitedCredits));
   return state.configured ? 0 : null;
 }
 
@@ -376,8 +378,8 @@ export function GuidedHivemindosModelsSetup({
   const selectedModelIsFree = isFreeHivemindosWalletPaidModel(selectedModel);
   const fundingConfigured = walletReady || cardFundingReady;
   const cardCheckoutPolling = fundingMode === "credits" && cardCheckoutPollUntil > 0 && !cardFundingReady;
-  const cardTopUpAmountUsd = cardCreditAmount === "custom" ? Math.round(moneyValue(customCardCreditAmount) * 100) / 100 : cardCreditAmount;
-  const cardTopUpAmountValid = cardTopUpAmountUsd >= 1 && cardTopUpAmountUsd <= 500;
+  const cardTopUpAmountUsd = cardCreditAmount === "custom" ? Math.round(numericValue(customCardCreditAmount) * 100) / 100 : cardCreditAmount;
+  const cardTopUpAmountValid = cardTopUpAmountUsd >= 5 && cardTopUpAmountUsd <= 500;
   const currentWalletId = effectiveWalletVaultId;
   const savedFundingPickable = effectiveWalletVaultId ? resolvePickableAccount(walletPickables, effectiveWalletVaultId) : null;
   const creditPaymentTokenOptions = creditPaymentTokenOptionsForPickable(savedFundingPickable, mergedPersonalWallets);
@@ -414,19 +416,19 @@ export function GuidedHivemindosModelsSetup({
   const walletChainIcon = chainIconSrc(effectiveWalletNetwork);
   // The panel pill is the hosted model-credit balance only. Wallet balances are
   // shown in the wallet funding badge inside the modal.
-  const cachedCreditBalanceUsd = moneyValue(agent?.hivemindosModels?.lastCreditBalanceUsd)
-    || moneyValue(agent?.hivemindosModels?.lastCreditBalanceLabel);
-  const creditBalanceForPill = modelCreditBalanceUsd(creditState) ?? cachedCreditBalanceUsd;
-  const modelCreditPillBalanceUsd = Math.max(0, creditBalanceForPill);
-  const modelCreditPillFunded = modelCreditPillBalanceUsd > 0;
-  const creditBalanceSummaryLabel = creditRefreshing && creditState.balanceUsd == null
+  const cachedCreditBalance = numericValue(agent?.hivemindosModels?.lastCreditBalanceCredits)
+    || numericValue(agent?.hivemindosModels?.lastCreditBalanceLabel);
+  const creditBalanceForPill = modelCreditBalance(creditState) ?? cachedCreditBalance;
+  const modelCreditPillBalance = Math.max(0, creditBalanceForPill);
+  const modelCreditPillFunded = modelCreditPillBalance > 0;
+  const creditBalanceSummaryLabel = creditRefreshing && creditState.balanceCredits == null
     ? "Checking credits"
-    : typeof creditState.balanceUsd === "number"
-      ? formatUsd(creditState.balanceUsd)
+    : typeof creditState.balanceCredits === "number"
+      ? formatModelCredits(creditState.balanceCredits)
       : creditState.configured === false
-        ? formatUsd(0)
+        ? formatModelCredits(0)
         : agent?.hivemindosModels?.lastCreditBalanceLabel
-          || (creditBalanceForPill > 0 ? formatUsd(creditBalanceForPill) : "—");
+          || (creditBalanceForPill > 0 ? formatModelCredits(creditBalanceForPill) : "—");
   const modelCreditHelp = cardCheckoutPolling
     ? "Watching Stripe for credits. HivemindOS will keep checking for up to 10 minutes."
     : creditState.error
@@ -438,7 +440,6 @@ export function GuidedHivemindosModelsSetup({
           ? "Add card credits once, then future model calls debit the hosted balance."
           : "Top up once to let this wallet pay future model calls from a prepaid hosted balance."
         : "Future model calls debit this hosted balance before asking for another payment.";
-
   const topUpAmountSelector = (
     <>
       <div className={styles.cardAmounts} role="group" aria-label="Credit amount">
@@ -451,7 +452,7 @@ export function GuidedHivemindosModelsSetup({
             aria-pressed={cardCreditAmount === amount}
             onClick={() => setCardCreditAmount(amount)}
           >
-            {formatUsd(amount)}
+            {formatModelCredits(modelCreditsForRetailAmount(amount))} · {formatUsd(amount)}
           </button>
         ))}
         <button
@@ -470,7 +471,7 @@ export function GuidedHivemindosModelsSetup({
           <input
             type="number"
             inputMode="decimal"
-            min="1"
+            min="5"
             max="500"
             step="1"
             value={customCardCreditAmount}
@@ -514,7 +515,7 @@ export function GuidedHivemindosModelsSetup({
           : isReady
             ? nextFundingMode === "credits" ? "Hosted credits are set for HivemindOS." : "Wallet is saved for HivemindOS."
             : nextFundingMode === "credits" ? "Add card credits for HivemindOS." : "Choose or create a wallet for HivemindOS.",
-        lastCreditBalanceUsd: existingConfig.lastCreditBalanceUsd,
+        lastCreditBalanceCredits: existingConfig.lastCreditBalanceCredits,
         lastCreditBalanceLabel: existingConfig.lastCreditBalanceLabel,
         lastCreditCheckedAt: existingConfig.lastCreditCheckedAt,
         fundingWalletKind: config.fundingWalletKind ?? (nextWalletVaultId.startsWith("user:") ? "personal" : "agent"),
@@ -535,16 +536,16 @@ export function GuidedHivemindosModelsSetup({
     state: ModelCreditState,
     statusMessage = "HivemindOS credits funded.",
   ): Promise<boolean> => {
-    const balanceUsd = modelCreditBalanceUsd(state);
-    if (balanceUsd === null) return false;
-    const balanceLabel = state.balanceLabel && moneyValue(state.balanceLabel) > 0
+    const balanceCredits = modelCreditBalance(state);
+    if (balanceCredits === null) return false;
+    const balanceLabel = state.balanceLabel && numericValue(state.balanceLabel) > 0
       ? state.balanceLabel
-      : formatUsd(balanceUsd);
-    const funded = balanceUsd > 0;
+      : formatModelCredits(balanceCredits);
+    const funded = balanceCredits > 0;
     const persistKey = [
       fundingMode,
       fundingMode === "credits" ? effectiveCreditAccountId : effectiveWalletVaultId,
-      balanceUsd.toFixed(6),
+      balanceCredits.toFixed(3),
       balanceLabel,
       state.updatedAt ?? "",
     ].join(":");
@@ -553,7 +554,7 @@ export function GuidedHivemindosModelsSetup({
     await onComplete(profilePatch({
       fundingMode,
       ...(fundingMode === "credits" ? { creditAccountId: effectiveCreditAccountId } : {}),
-      lastCreditBalanceUsd: String(balanceUsd),
+      lastCreditBalanceCredits: String(balanceCredits),
       lastCreditBalanceLabel: balanceLabel,
       lastCreditCheckedAt: new Date().toISOString(),
       lastTestStatus: funded || fundingMode === "wallet" ? "ready" : "needs-credits",
@@ -1022,16 +1023,16 @@ export function GuidedHivemindosModelsSetup({
         return;
       }
       setCreditState(data);
-      const balanceLabel = data.balanceLabel ?? (typeof data.balanceUsd === "number" ? formatUsd(data.balanceUsd) : "");
+      const balanceLabel = data.balanceLabel ?? (typeof data.balanceCredits === "number" ? formatModelCredits(data.balanceCredits) : "");
       await onComplete(profilePatch({
-        lastCreditBalanceUsd: typeof data.balanceUsd === "number" ? String(data.balanceUsd) : "",
+        lastCreditBalanceCredits: typeof data.balanceCredits === "number" ? String(data.balanceCredits) : "",
         lastCreditBalanceLabel: balanceLabel,
         lastCreditCheckedAt: new Date().toISOString(),
         lastTestStatus: "ready",
         lastStatusMessage: data.message || "HivemindOS credits funded.",
       }));
       setMessage(data.message || "HivemindOS credits funded.");
-      if (moneyValue(data.balanceUsd) > 0 || moneyValue(data.balanceLabel) > 0) {
+      if (numericValue(data.balanceCredits) > 0 || numericValue(data.balanceLabel) > 0) {
         setFundedSignal((signal) => signal + 1);
       }
     } catch (error) {
@@ -1070,12 +1071,12 @@ export function GuidedHivemindosModelsSetup({
         return;
       }
       setCreditState(data);
-      const balanceLabel = data.balanceLabel ?? (typeof data.balanceUsd === "number" ? formatUsd(data.balanceUsd) : "");
+      const balanceLabel = data.balanceLabel ?? (typeof data.balanceCredits === "number" ? formatModelCredits(data.balanceCredits) : "");
       await onComplete(profilePatch({
         fundingMode: "credits",
         creditAccountId: effectiveCreditAccountId,
         lastCheckoutSessionId: data.checkoutSessionId || "",
-        lastCreditBalanceUsd: typeof data.balanceUsd === "number" ? String(data.balanceUsd) : agent?.hivemindosModels?.lastCreditBalanceUsd ?? "",
+        lastCreditBalanceCredits: typeof data.balanceCredits === "number" ? String(data.balanceCredits) : agent?.hivemindosModels?.lastCreditBalanceCredits ?? "",
         lastCreditBalanceLabel: balanceLabel || (agent?.hivemindosModels?.lastCreditBalanceLabel ?? ""),
         lastCreditCheckedAt: new Date().toISOString(),
         lastTestStatus: "needs-credits",
@@ -1111,7 +1112,7 @@ export function GuidedHivemindosModelsSetup({
               onClick={openFundingModal}
             >
               {modelCreditPillFunded ? <span className={styles.balanceDot} /> : <Coins aria-hidden="true" />}
-              <span className={styles.balanceAmt}>{formatUsd(modelCreditPillBalanceUsd)}</span>
+              <span className={styles.balanceAmt}>{formatModelCredits(modelCreditPillBalance)}</span>
               <span className={styles.balanceCar}><ChevronRight aria-hidden="true" /></span>
             </button>
           </div>
@@ -1354,6 +1355,15 @@ export function GuidedHivemindosModelsSetup({
 
                   {fundingMode === "credits" ? (
                     <div className={styles.creditBox}>
+                      <HivemindosModelSubscriptions
+                        disabled={isBusy || creditRefreshing || creditFunding}
+                        onMessage={setMessage}
+                        openCheckout={openCheckoutUrl}
+                      />
+
+                      <div className={styles.fundingDivider} role="separator" aria-label="One-time top-up">
+                        <span>Or add once</span>
+                      </div>
                       {topUpAmountSelector}
                       <div className={styles.creditActions}>
                         <button
@@ -1363,7 +1373,9 @@ export function GuidedHivemindosModelsSetup({
                           onClick={() => void startCardCreditCheckout()}
                         >
                           {creditFunding ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <CreditCard aria-hidden="true" />}
-                          {cardTopUpAmountValid ? `Add ${formatUsd(cardTopUpAmountUsd)} with card` : "Add credits with card"}
+                          {cardTopUpAmountValid
+                            ? `Add ${formatModelCredits(modelCreditsForRetailAmount(cardTopUpAmountUsd))} for ${formatUsd(cardTopUpAmountUsd)}`
+                            : "Add credits with card"}
                         </button>
                       </div>
                     </div>
@@ -1427,7 +1439,9 @@ export function GuidedHivemindosModelsSetup({
                           onClick={() => void topUpModelCredits()}
                         >
                           {creditFunding ? <LoaderCircle className={styles.spin} aria-hidden="true" /> : <Plus aria-hidden="true" />}
-                          Fund with crypto
+                          {cardTopUpAmountValid
+                            ? `Buy ${formatModelCredits(modelCreditsForRetailAmount(cardTopUpAmountUsd))} with crypto`
+                            : "Fund with crypto"}
                         </button>
                       </div>
                     </div>

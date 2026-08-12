@@ -546,21 +546,23 @@ function AppNavShelfBase({
           ) : null}
           <div className="fr-shelf-control-row" role="group" aria-label="Dashboard controls">
             <DashboardSecurityControl onTooltipOpenChange={setSecurityTooltipOpen} />
-            <Tooltip onOpenChange={setThemeTooltipOpen}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  className="fr-nav"
-                  onClick={onToggleTheme}
-                  aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-                >
-                  <span className="fr-nav-ico">{theme === "light" ? <MoonIcon /> : <SunIcon />}</span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" className="z-[80]">
-                {theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
-              </TooltipContent>
-            </Tooltip>
+            {activeView !== "governance" ? (
+              <Tooltip onOpenChange={setThemeTooltipOpen}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    className="fr-nav"
+                    onClick={onToggleTheme}
+                    aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+                  >
+                    <span className="fr-nav-ico">{theme === "light" ? <MoonIcon /> : <SunIcon />}</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" className="z-[80]">
+                  {theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
           </div>
           {displayVersion ? <div className="fr-shelf-version" aria-label={`HivemindOS version ${displayVersion}`}>v{displayVersion}</div> : null}
         </div>

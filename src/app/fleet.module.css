@@ -187,7 +187,7 @@
   min-width: max-content;
   border: 1px solid rgba(45, 212, 191, 0.42);
   border-radius: 999px;
-  background: rgba(45, 212, 191, 0.16);
+  background: #f0e8d8;
   color: #99f6e4;
   font-size: 13px;
   padding: 9px 13px;
@@ -4334,8 +4334,8 @@
 :global(:root[data-theme="hive-light"]) .agentBubble.active,
 :global(:root[data-theme="hive-light"]) .agentBubble.primary,
 :global(:root[data-theme="hive-light"]) .machineUpdateStatus.success {
-  border-color: rgba(185, 139, 47, 0.34);
-  background: rgba(212, 180, 111, 0.16);
+  border-color: rgba(138, 90, 42, 0.34);
+  background: #f0e8d8;
 }
 
 :global(:root[data-theme="hive-light"]) .agentCard strong,
@@ -4645,7 +4645,7 @@
 :global(:root[data-theme="hive-light"]) .setupCopyIconButton {
   background: linear-gradient(180deg, var(--accent), var(--accent-strong));
   color: var(--button-primary-foreground);
-  box-shadow: 0 14px 30px rgba(185, 139, 47, 0.2);
+  box-shadow: 0 14px 30px rgba(138, 90, 42, 0.2);
 }
 
 :global(:root[data-theme="hive-light"]) .agentState.ready,
@@ -4654,9 +4654,9 @@
 :global(:root[data-theme="hive-light"]) .machineInitTokenOk,
 :global(:root[data-theme="hive-light"]) .adaptiveRuntimeModelCard,
 :global(:root[data-theme="hive-light"]) .adaptiveFreeBadge {
-  border-color: rgba(64, 111, 83, 0.32);
-  background: rgba(64, 111, 83, 0.12);
-  color: var(--success, #406f53) !important;
+  border-color: rgba(107, 143, 94, 0.32);
+  background: rgba(107, 143, 94, 0.12);
+  color: var(--success, #6b8f5e) !important;
 }
 
 :global(:root[data-theme="hive-light"]) .agentState.setup,
@@ -4670,9 +4670,9 @@
 :global(:root[data-theme="hive-light"]) .schedulerAttachmentBadge.path,
 :global(:root[data-theme="hive-light"]) .skillBrowserWarning,
 :global(:root[data-theme="hive-light"]) .skillUpdateBadge {
-  border-color: rgba(185, 139, 47, 0.32);
-  background: rgba(212, 180, 111, 0.16);
-  color: var(--warning, #8a641f) !important;
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+  background: var(--warning-soft);
+  color: var(--warning, #9a5d32) !important;
 }
 
 :global(:root[data-theme="hive-light"]) .machineVersion.dirty,
@@ -4689,9 +4689,9 @@
 :global(:root[data-theme="hive-light"]) .skillBrowserRemoveSkillButton,
 :global(:root[data-theme="hive-light"]) .skillBrowserRemoveSkillButton:hover,
 :global(:root[data-theme="hive-light"]) .schedulerStepInputRow > button:hover {
-  border-color: rgba(192, 82, 77, 0.32) !important;
-  background: rgba(192, 82, 77, 0.12) !important;
-  color: var(--danger, #a23a35) !important;
+  border-color: rgba(181, 72, 59, 0.32) !important;
+  background: rgba(181, 72, 59, 0.12) !important;
+  color: var(--danger, #b5483b) !important;
 }
 
 :global(:root[data-theme="hive-light"]) .agentRuntimeSegments button:disabled,

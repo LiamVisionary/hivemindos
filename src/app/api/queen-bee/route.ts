@@ -13,6 +13,7 @@ import {
   visualPlanReceipt,
 } from "@/lib/services/visual-plan";
 import { DEFAULT_QUEEN_BEE_NAME } from "@/lib/config/queen-bee-personality";
+import { parseQueenBeeLoopTemplateId } from "@/lib/services/queen-bee/task-loop-policy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,11 +83,14 @@ export async function POST(request: NextRequest) {
       mode: body.mode,
       priority: body.priority,
       loop: body.loop,
+      loopTemplateId: parseQueenBeeLoopTemplateId(body.loopTemplateId),
       workspace: normalizeWorkspace(body.workspace),
       taskTitle: body.taskTitle,
       agentId: body.agentId,
       machineId: body.machineId,
       skills: Array.isArray(body.skills) ? body.skills.filter((skill: unknown) => typeof skill === "string") : undefined,
+      projectId: typeof body.projectId === "string" ? body.projectId : undefined,
+      parents: Array.isArray(body.parents) ? body.parents.filter((parent: unknown) => typeof parent === "string") : undefined,
       fleetSnapshot,
     });
     if (result.created) {

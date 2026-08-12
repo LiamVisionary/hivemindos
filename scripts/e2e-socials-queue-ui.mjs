@@ -11,6 +11,9 @@ const screenshotPath = process.env.HIVE_E2E_SCREENSHOT || "/tmp/hivemindos-socia
 const generateDrafts = process.env.HIVE_E2E_GENERATE_DRAFTS === "1";
 const generateEngagement = process.env.HIVE_E2E_GENERATE_ENGAGEMENT === "1";
 const contextlessHandle = (process.env.HIVE_E2E_CONTEXTLESS_HANDLE || "").trim().replace(/^@/, "");
+const viewportWidth = Number(process.env.HIVE_E2E_VIEWPORT_WIDTH) || 1440;
+const viewportHeight = Number(process.env.HIVE_E2E_VIEWPORT_HEIGHT) || 1000;
+const temporaryTheme = process.env.HIVE_E2E_THEME === "hive-light" ? "hive-light" : "";
 
 async function readEnvValue(filePath, key) {
   const raw = await readFile(filePath, "utf8").catch(() => "");
@@ -29,7 +32,7 @@ const browser = await chromium.launch({ headless: process.env.HIVE_E2E_HEADED !=
 try {
   const context = await browser.newContext({
     extraHTTPHeaders: { "x-hivemindos-device-token": dashboardDeviceToken },
-    viewport: { width: 1440, height: 1000 },
+    viewport: { width: viewportWidth, height: viewportHeight },
   });
   let session;
   try {
@@ -54,11 +57,22 @@ try {
   });
 
   await page.goto(`${baseUrl}/?view=socials`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  if (temporaryTheme) await page.evaluate((theme) => document.documentElement.setAttribute("data-theme", theme), temporaryTheme);
   await page.getByText("Socials", { exact: true }).first().waitFor({ state: "visible", timeout: 60_000 });
 
   const workspace = page.getByTestId("social-queue-workspace");
   await workspace.waitFor({ state: "visible", timeout: 60_000 });
   await page.getByTestId("social-queue-composer").waitFor({ state: "visible" });
+  const platformPreview = page.getByTestId("social-platform-preview").first();
+  if (await platformPreview.count()) {
+    await platformPreview.waitFor({ state: "visible" });
+    assert.match(
+      await platformPreview.getAttribute("data-platform"),
+      /^(x|telegram|farcaster|linkedin|reddit|facebook)$/,
+      "Draft previews must identify the platform-specific surface they render.",
+    );
+    await platformPreview.locator("[data-social-focus-editor]").waitFor({ state: "visible" });
+  }
   await page.getByRole("button", { name: "Process queue" }).waitFor({ state: "visible" });
   await page.getByTestId("social-drafting-automation").waitFor({ state: "visible" });
   const allAccounts = page.locator(".sc-account-chip").filter({ hasText: "All accounts" });
@@ -144,6 +158,8 @@ try {
 
   const firstTarget = page.getByTestId("social-engagement-target").first();
   if (await firstTarget.count()) await firstTarget.scrollIntoViewIfNeeded();
+  else if (await platformPreview.count()) await platformPreview.scrollIntoViewIfNeeded();
+  if (temporaryTheme) await page.evaluate((theme) => document.documentElement.setAttribute("data-theme", theme), temporaryTheme);
 
   await page.waitForTimeout(400);
   await page.screenshot({ path: screenshotPath, fullPage: true });

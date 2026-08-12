@@ -192,6 +192,17 @@ globalThis.fetch = async (input, init) => {
   assert.equal(succeeded.bytes, 480, "PCM bytes preserved");
   assert.equal(succeeded.wav.byteLength, 44 + 480, "WAV = RIFF header + PCM");
   assert.equal(localTtsBreakerState(APP_ID).open, false, "success closes the breaker");
+  assert.equal(lastSpeechPayload?.language, "English", "providers using display-language labels keep English");
+
+  const kokoro = await synthesizeLocalTtsWav({
+    origin: ORIGIN,
+    appId: APP_ID,
+    model: "hexgrad/Kokoro-82M",
+    voice: "am_liam",
+    text: "Hello",
+  });
+  assert.equal(kokoro.ok, true, "Kokoro synth succeeds against the mock server");
+  assert.equal(lastSpeechPayload?.language, "a", "Kokoro receives its American English language code");
 
   speechMode = "network";
   const network = await synthesizeLocalTtsWav({

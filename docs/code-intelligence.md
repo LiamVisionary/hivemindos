@@ -41,9 +41,14 @@ auto-installed or auto-trusted — only an explicitly-configured path, a known
 install location, or a PATH binary that answers `--version` is used. Set
 `CODE_INTEL_DISABLE_ENGINE=1` to disable the engine entirely.
 
-The engine is invoked via a fixed argv (`<binary> cli <tool> '<json>'`,
-`execFile`, never a shell), with timeouts and a max-output cap; its JSON is
-treated as untrusted and normalized into HivemindOS types.
+The engine is invoked via a fixed argv (`<binary> cli <tool> --args-file <path>`,
+`execFile`, never a shell). HivemindOS writes the per-call JSON argument file
+with mode `0600`, removes it in `finally`, applies cold-daemon-aware timeouts and
+a max-output cap, and treats the compact column/row JSON as untrusted before
+normalizing it into HivemindOS types. `CBM_ALLOWED_ROOT` is overwritten with the
+workspace-validated repository on every call, and `CBM_CACHE_DIR` is overwritten
+with `~/.hivemindos/code-intelligence/codebase-memory-cache`; caller environment
+variables cannot broaden either boundary.
 
 ## API — `POST /api/code-intelligence`
 
@@ -85,8 +90,14 @@ signing) escalate risk regardless of provider.
 
 ## Security & non-goals
 
-- No secrets in graph storage or logs; `.gitignore` excludes `.codebase-memory/`
-  and the engine artifact is **not** committed by default (`persistence: false`).
+- HivemindOS does not intentionally send credentials to the graph. The engine
+  respects `.gitignore`, and the repository `.cbmignore` adds defense-in-depth
+  exclusions for `.env` variants, private-key/certificate containers, service
+  account files, and `Operations/Secure`. Hard-coded secrets in otherwise
+  indexable source are still the repository owner's responsibility.
+- The engine artifact is **not** committed by default (`persistence: false`),
+  and the managed graph cache stays outside the repository under
+  `~/.hivemindos/code-intelligence/`.
 - Respects `.gitignore` / `.cbmignore` (engine) and HivemindOS skipped dirs (fallback).
 - Third-party graph DBs are not durable Shared Brain Memory.
 - `rg` is augmented, not replaced — graph queries add depth when an index exists.
@@ -94,4 +105,12 @@ signing) escalate risk regardless of provider.
 ## Verification
 
 `pnpm test:code-intelligence` proves status/search/context-index retrieval and
-MCP action metadata with the engine forced missing (graceful degradation).
+MCP action metadata with the engine forced missing (graceful degradation), then
+uses a stub with the audited 0.10.2 response shapes to prove invocation,
+normalization, cache isolation, and repository-root isolation.
+
+`pnpm test:code-intelligence:real` is the opt-in local E2E. It exercises the
+real Next route, service, configured binary, managed persistent graph, search,
+call trace, snippet, architecture, diff impact, and `.env` exclusion. It writes
+or refreshes the local graph; set `CODE_INTEL_E2E_SKIP_INDEX=1` to query an
+already-built graph without re-indexing.

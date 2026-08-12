@@ -66,6 +66,27 @@ is downloadable but does **not** move the updater (GitHub's `/latest/` excludes
 pre-releases). Pick the channel deliberately when publishing — `gh release create`
 without `--prerelease` makes it Latest and triggers fleet-wide auto-update.
 
+## Version synchronization
+
+The Complete Hub version is one contract across `package.json`,
+`src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and the
+`hivemindos-desktop` package entry in `src-tauri/Cargo.lock`. Run
+`pnpm version:check` to verify all four values match; use
+`node scripts/bump-app-version.mjs --set X.Y.Z` to update them together.
+
+Normal release builds stamp and verify those files in every build workspace.
+After all platform artifacts pass, the publish job creates a synchronized
+version commit and makes the source-branch update plus annotated release tag an
+atomic push. A branch that moves while artifacts are building fails closed and
+must be rebuilt from its new head. A tag/SHA source retains the synchronized
+commit through the release tag without moving an unrelated branch.
+
+Signed packaged apps display the version embedded in their native artifact.
+Source/dev builds use `/api/app/version`, which combines the synchronized
+manifest floor, reachable Git tags, and the same stable `latest.json` updater
+manifest used by signed releases. Native compile metadata remains the offline
+fallback; it must not override a newer release-aware value in a source build.
+
 ## When you add, rename, or drop a platform/asset
 
 For a Complete Hub updater asset, change all three in the same commit, or

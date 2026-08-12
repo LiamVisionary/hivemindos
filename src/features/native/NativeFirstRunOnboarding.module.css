@@ -623,12 +623,12 @@
   --panel-2: #ffffff;
   --fg: #1c160a;
   --fg-2: rgba(28, 22, 10, 0.66);
-  --fg-3: #5e574b;
-  --fg-4: #6f6657;
+  --fg-3: #8a7a6a;
+  --fg-4: #a09080;
   --line: rgba(28, 22, 10, 0.09);
   --line-2: rgba(28, 22, 10, 0.15);
   --line-3: rgba(28, 22, 10, 0.24);
-  --honey-2: #6a4505;
+  --honey-2: #8a5a2a;
   --honey-soft: rgba(231, 180, 92, 0.16);
 }
 /* Hero is a dark brand band in both themes, so its eyebrow/title read on dark. */

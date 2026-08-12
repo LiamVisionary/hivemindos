@@ -148,22 +148,22 @@
 }
 
 :global(:root[data-theme="hive-light"]) .tailnetCleanupBanner {
-  border-color: rgba(176, 127, 28, 0.28);
+  border-color: rgba(138, 90, 42, 0.28);
   background:
-    linear-gradient(135deg, rgba(176, 127, 28, 0.12), rgba(251, 248, 241, 0.9) 52%, rgba(95, 143, 90, 0.08)),
+    linear-gradient(135deg, rgba(138, 90, 42, 0.12), rgba(251, 248, 241, 0.9) 52%, rgba(107, 143, 94, 0.08)),
     var(--surface);
   box-shadow: none;
 }
 
 :global(:root[data-theme="hive-light"]) .tailnetCleanupIcon {
-  border-color: rgba(176, 127, 28, 0.28);
-  background: rgba(176, 127, 28, 0.1);
+  border-color: rgba(138, 90, 42, 0.28);
+  background: rgba(138, 90, 42, 0.1);
   color: var(--accent-strong);
 }
 
 :global(:root[data-theme="hive-light"]) .tailnetCleanupHeader span {
-  border-color: rgba(176, 127, 28, 0.26);
-  background: rgba(176, 127, 28, 0.1);
+  border-color: rgba(138, 90, 42, 0.26);
+  background: rgba(138, 90, 42, 0.1);
   color: var(--warning);
 }
 
@@ -174,19 +174,19 @@
 }
 
 :global(:root[data-theme="hive-light"]) .tailnetCleanupBanner .tailnetCleanupActionSecondary[data-slot="button"] {
-  border-color: rgba(54, 46, 30, 0.16);
-  background: rgba(176, 127, 28, 0.08);
+  border-color: rgba(74, 58, 42, 0.16);
+  background: rgba(138, 90, 42, 0.08);
   color: var(--foreground);
 }
 
 :global(:root[data-theme="hive-light"]) .tailnetCleanupBanner .tailnetCleanupActionSecondary[data-slot="button"]:hover:not(:disabled) {
   border-color: rgba(124, 85, 11, 0.28);
-  background: rgba(176, 127, 28, 0.13);
+  background: rgba(138, 90, 42, 0.13);
 }
 
 :global(:root[data-theme="hive-light"]) .tailnetCleanupBanner .tailnetCleanupClose[data-slot="close-icon-button"] {
-  border-color: rgba(54, 46, 30, 0.16);
-  background: rgba(176, 127, 28, 0.08);
+  border-color: rgba(74, 58, 42, 0.16);
+  background: rgba(138, 90, 42, 0.08);
   color: var(--muted);
 }
 

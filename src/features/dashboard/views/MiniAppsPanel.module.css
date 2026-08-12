@@ -13,12 +13,12 @@
 }
 
 :global([data-theme="hive-light"]) .root {
-  --mini-panel: #fbf8f1;
-  --mini-panel-soft: #f6f2e9;
-  --mini-line: rgba(54, 46, 30, 0.16);
-  --mini-muted: #5e574b;
-  --mini-honey: #a97209;
-  --mini-honey-bright: #7d5404;
+  --mini-panel: #f8f4ee;
+  --mini-panel-soft: #f0e8d8;
+  --mini-line: rgba(74, 58, 42, 0.16);
+  --mini-muted: #8a7a6a;
+  --mini-honey: #8a5a2a;
+  --mini-honey-bright: #8a5a2a;
 }
 
 .header {

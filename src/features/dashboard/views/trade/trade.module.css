@@ -35,7 +35,7 @@
 .subtitle {
   margin: 2px 0 0;
   font-size: 12.5px;
-  color: var(--fg-3, #867d6e);
+  color: var(--fg-3, #8a7a6a);
 }
 
 .actingRow {
@@ -49,7 +49,7 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--fg-3, #867d6e);
+  color: var(--fg-3, #8a7a6a);
 }
 
 .select,
@@ -84,7 +84,7 @@
 .segmented button {
   border: 0;
   background: transparent;
-  color: var(--fg-3, #867d6e);
+  color: var(--fg-3, #8a7a6a);
   padding: 7px 16px;
   border-radius: 8px;
   font-size: 13px;
@@ -128,7 +128,7 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--fg-3, #867d6e);
+  color: var(--fg-3, #8a7a6a);
   margin: 0;
 }
 
@@ -150,7 +150,7 @@
   border: 1px solid var(--line-2, #2b3038);
   border-radius: 7px;
   background: var(--panel-hi, #1e222b);
-  color: var(--fg-3, #867d6e);
+  color: var(--fg-3, #8a7a6a);
   cursor: pointer;
 }
 .groupAddButton:hover,
@@ -187,9 +187,9 @@
 .groupActionPopover svg { width: 16px; height: 16px; color: var(--honey, #e7b45c); }
 .groupActionPopover span { min-width: 0; display: grid; gap: 2px; }
 .groupActionPopover strong { font-size: 12px; font-weight: 500; }
-.groupActionPopover small { color: var(--fg-3, #867d6e); font-size: 10.5px; line-height: 1.35; }
+.groupActionPopover small { color: var(--fg-3, #8a7a6a); font-size: 10.5px; line-height: 1.35; }
 .groupActionPopover p { margin: 6px 8px 3px; color: var(--danger, #f17878); font-size: 10.5px; line-height: 1.4; }
-.groupEmpty { padding: 11px 12px; border: 1px dashed var(--line-2, #2b3038); border-radius: 10px; color: var(--fg-3, #867d6e); font-size: 11px; }
+.groupEmpty { padding: 11px 12px; border: 1px dashed var(--line-2, #2b3038); border-radius: 10px; color: var(--fg-3, #8a7a6a); font-size: 11px; }
 
 .walletLoading {
   min-height: 180px;
@@ -197,7 +197,7 @@
   align-items: center;
   justify-content: center;
   gap: 9px;
-  color: var(--fg-3, #867d6e);
+  color: var(--fg-3, #8a7a6a);
   font-size: 12px;
 }
 
@@ -228,7 +228,7 @@
 .intentTile:disabled { cursor: not-allowed; opacity: 0.55; }
 
 .intentName { font-size: 13px; font-weight: 600; }
-.intentDesc { font-size: 11px; color: var(--fg-3, #867d6e); line-height: 1.35; }
+.intentDesc { font-size: 11px; color: var(--fg-3, #8a7a6a); line-height: 1.35; }
 
 .badge {
   display: inline-flex;
@@ -243,7 +243,7 @@
 
 .badgeReady { background: rgba(111, 224, 176, 0.16); color: #6fe0b0; }
 .badgeSetup { background: rgba(231, 180, 92, 0.16); color: var(--honey, #e7b45c); }
-.badgeOff { background: rgba(255, 255, 255, 0.07); color: var(--fg-3, #867d6e); }
+.badgeOff { background: rgba(255, 255, 255, 0.07); color: var(--fg-3, #8a7a6a); }
 
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .fieldRow { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -301,16 +301,16 @@
 
 .reviewLine { display: flex; justify-content: space-between; gap: 12px; font-size: 12.5px; padding: 5px 0; border-bottom: 1px dashed var(--line-2, #2b3038); }
 .reviewLine:last-child { border-bottom: 0; }
-.reviewKey { color: var(--fg-3, #867d6e); }
+.reviewKey { color: var(--fg-3, #8a7a6a); }
 .reviewVal { color: var(--fg-1, #e9e4d8); text-align: right; word-break: break-word; }
 
 .risk { font-size: 12px; color: var(--honey, #e7b45c); display: flex; gap: 6px; padding: 3px 0; }
 
-.note { font-size: 12px; color: var(--fg-3, #867d6e); line-height: 1.45; }
+.note { font-size: 12px; color: var(--fg-3, #8a7a6a); line-height: 1.45; }
 .error { font-size: 12.5px; color: #ef9a9a; line-height: 1.45; }
 .success { font-size: 12.5px; color: #6fe0b0; line-height: 1.45; }
 
-.empty { padding: 28px 16px; text-align: center; color: var(--fg-3, #867d6e); font-size: 13px; }
+.empty { padding: 28px 16px; text-align: center; color: var(--fg-3, #8a7a6a); font-size: 13px; }
 
 .pill {
   font-size: 11px;
@@ -318,12 +318,12 @@
   border-radius: 999px;
   background: var(--panel-hi, #1e222b);
   border: 1px solid var(--line-2, #2b3038);
-  color: var(--fg-3, #867d6e);
+  color: var(--fg-3, #8a7a6a);
 }
 
 .warnCard {
-  border: 1px solid rgba(231, 180, 92, 0.4);
-  background: rgba(231, 180, 92, 0.08);
+  border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+  background: var(--warning-soft);
   border-radius: 10px;
   padding: 10px 12px;
   font-size: 12px;
@@ -347,7 +347,7 @@
 }
 .switchLabel { display: flex; flex-direction: column; gap: 2px; }
 .switchTitle { font-size: 12.5px; font-weight: 600; color: var(--fg-1, #e9e4d8); }
-.switchHint { font-size: 11px; color: var(--fg-3, #867d6e); }
+.switchHint { font-size: 11px; color: var(--fg-3, #8a7a6a); }
 .switch {
   position: relative;
   width: 42px;
@@ -377,10 +377,10 @@
 .accountGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin-top: 10px; }
 .accountStat { display: flex; flex-direction: column; gap: 2px; }
 .accountStatVal { font-size: 16px; font-weight: 650; color: var(--fg-1, #e9e4d8); }
-.accountStatKey { font-size: 10.5px; color: var(--fg-3, #867d6e); text-transform: uppercase; letter-spacing: 0.04em; }
+.accountStatKey { font-size: 10.5px; color: var(--fg-3, #8a7a6a); text-transform: uppercase; letter-spacing: 0.04em; }
 .posTable { margin-top: 12px; display: flex; flex-direction: column; }
 .posHead, .posRow { display: grid; grid-template-columns: 1.2fr 0.8fr 1fr 1fr; gap: 10px; align-items: center; }
-.posHead { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-3, #867d6e); padding-bottom: 6px; border-bottom: 1px solid var(--line-2, #2b3038); }
+.posHead { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-3, #8a7a6a); padding-bottom: 6px; border-bottom: 1px solid var(--line-2, #2b3038); }
 .posRow { font-size: 12.5px; padding: 7px 0; border-bottom: 1px dashed var(--line-2, #2b3038); }
 .posRow:last-child { border-bottom: 0; }
 .posSym { font-weight: 600; color: var(--fg-1, #e9e4d8); }
@@ -428,7 +428,7 @@
   font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--fg-3, #867d6e);
+  color: var(--fg-3, #8a7a6a);
   border-bottom: 1px solid var(--line-2, #2b3038);
 }
 .practiceRow {
@@ -445,7 +445,7 @@
 .practiceRow small {
   display: block;
   margin-top: 2px;
-  color: var(--fg-3, #867d6e);
+  color: var(--fg-3, #8a7a6a);
 }
 .practiceManual {
   display: grid;
@@ -543,7 +543,7 @@
 .iconBtn {
   background: transparent;
   border: 0;
-  color: var(--fg-3, #867d6e);
+  color: var(--fg-3, #8a7a6a);
   cursor: pointer;
   font-size: 22px;
   line-height: 1;

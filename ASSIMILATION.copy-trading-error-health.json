@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-08-11T16:35:03.665624+00:00",
+  "request": "Fix the copy-trading dashboard so historical errors are not presented as a current fault",
+  "custom_code_assessment": "mostly_assimilated",
+  "entries": [
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/trade/CopyTradingPanel.tsx",
+      "target_path": "src/components/trade/CopyTradingPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "reused the existing lastError and loopStatus health row as the authoritative current-health signal"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "src/components/trade/CopyTradingPanel.tsx",
+      "target_path": "src/components/trade/CopyTradingPanel.tsx",
+      "reuse_type": "adapted_code",
+      "note": "reused DetailMetric for the current Healthy/Needs attention status while moving lifetime failures to explanatory history"
+    },
+    {
+      "source_repo": "LiamVisionary/hivemindos",
+      "source_path": "scripts/test-copy-trading.mjs",
+      "target_path": "scripts/test-copy-trading.mjs",
+      "reuse_type": "test_adapted",
+      "note": "extended the existing copy-trading UI source contract with current-versus-lifetime error assertions"
+    }
+  ]
+}

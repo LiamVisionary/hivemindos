@@ -1,7 +1,7 @@
 .root {
   --tm-honey: #f2b705;
   --tm-honey-2: #ffd45a;
-  --tm-honey-3: #fff6cf;
+  --tm-honey-3: #f0e8d8;
   --tm-cyan: #2dd4bf;
   --tm-cyan-2: #5eead4;
   --tm-cyan-3: #99f6e4;
@@ -22,19 +22,19 @@
   --tm-f-mono: ui-monospace,"JetBrains Mono",SFMono-Regular,Menlo,monospace;
 }
 :global([data-theme="hive-light"]) .root {
-  --tm-fg: #221d14;
-  --tm-fg-2: #5e574b;
-  --tm-fg-3: #5e574b;
-  --tm-fg-4: #6f6657;
+  --tm-fg: #4a3a2a;
+  --tm-fg-2: #8a7a6a;
+  --tm-fg-3: #8a7a6a;
+  --tm-fg-4: #a09080;
   --tm-line: rgba(54,46,30,0.10);
   --tm-line-2: rgba(54,46,30,0.16);
-  --tm-bg-2: #fbf8f1;
-  --tm-bg-3: #f4efe4;
+  --tm-bg-2: #f8f4ee;
+  --tm-bg-3: #f0e8d8;
   --tm-bg-4: #e8dfcf;
   --tm-panel: rgba(251,248,241,0.97);
   --tm-panel-soft: rgba(244,239,228,0.82);
   --tm-honey-border: rgba(147,104,17,0.48);
-  --tm-cyan-3: #376739;
+  --tm-cyan-3: #56794b;
   --tm-add: rgba(95,143,90,0.60);
 }
 .monoCap {

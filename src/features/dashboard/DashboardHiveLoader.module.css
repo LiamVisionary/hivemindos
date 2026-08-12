@@ -97,8 +97,8 @@
 }
 
 :global(:root[data-theme="hive-light"]) .brainLoader {
-  --brain-loader-rail-sheen: rgba(176, 127, 28, 0.22);
-  --brain-loader-rail-tail: rgba(95, 143, 90, 0.14);
+  --brain-loader-rail-sheen: rgba(138, 90, 42, 0.22);
+  --brain-loader-rail-tail: rgba(107, 143, 94, 0.14);
   background: rgba(248, 244, 232, 0.78);
   box-shadow: inset 0 0 140px rgba(92, 75, 45, 0.08);
 }
@@ -110,5 +110,5 @@
 
 :global(:root[data-theme="hive-light"]) .brainLoaderBee {
   filter: drop-shadow(0 0 18px rgba(13, 142, 126, 0.12))
-    drop-shadow(0 8px 18px rgba(176, 127, 28, 0.16));
+    drop-shadow(0 8px 18px rgba(138, 90, 42, 0.16));
 }

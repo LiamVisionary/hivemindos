@@ -4,8 +4,8 @@
    trade-desk.css, wallets.module.css).
 
    Warm-neutral graphite base. HONEY/AMBER is the primary action + brand accent.
-   MINT-TEAL is reserved strictly for the "live / working" signal. Light theme =
-   warm paper ("hive-light"). */
+   MINT-TEAL is reserved strictly for the "live / working" signal. Light mode
+   mirrors the mobile app's warm cream, brown text, and restrained caramel accent. */
 
 :root {
   /* ---- Base surfaces (warm graphite) ---- */
@@ -45,6 +45,7 @@
   --bee: #e7b45c;
   --honey: #e7b45c;
   --honey-2: #f0c879;
+  --honey-fill: var(--honey);
   --pollen: #fff6cf;
   --honey-soft: rgba(231, 180, 92, 0.13);
   --honey-line: rgba(231, 180, 92, 0.32);
@@ -86,69 +87,69 @@
 
 /* ---- Warm-paper light theme ---- */
 :root[data-theme="hive-light"] {
-  --background: #f1ede3;
-  --bg-0: #f1ede3;
-  --bg-1: #f6f2e9;
-  --bg-2: #fbf8f1;
-  --bg-3: #f4efe4;
-  --bg-4: #ffffff;
-  --panel: #fbf8f1;
-  --panel-soft: #f4efe4;
-  --panel-hi: #ffffff;
-  --field: #fffdf8;
+  --background: #f5efe6;
+  --bg-0: #f5efe6;
+  --bg-1: #f8f4ee;
+  --bg-2: #f8f4ee;
+  --bg-3: #f0e8d8;
+  --bg-4: #fffaf4;
+  --panel: #f8f4ee;
+  --panel-soft: #f0e8d8;
+  --panel-hi: #fffaf4;
+  --field: #f8f4ee;
 
-  --surface: #fbf8f1;
-  --surface-strong: #f6f2e9;
-  --surface-soft: #f4efe4;
+  --surface: #f8f4ee;
+  --surface-strong: #f8f4ee;
+  --surface-soft: #f0e8d8;
 
-  --foreground: #221d14;
-  --fg: #221d14;
-  --fg-2: #5e574b;
-  --fg-3: #867d6e;
-  --fg-4: #a59b89;
-  --text-soft: #5e574b;
-  --muted: #5e574b;
+  --foreground: #4a3a2a;
+  --fg: #4a3a2a;
+  --fg-2: #8a7a6a;
+  --fg-3: #8a7a6a;
+  --fg-4: #a09080;
+  --text-soft: #a09080;
+  --muted: #8a7a6a;
 
-  --line: rgba(54, 46, 30, 0.10);
-  --line-2: rgba(54, 46, 30, 0.16);
-  --line-3: rgba(54, 46, 30, 0.26);
-  --hairline: rgba(54, 46, 30, 0.16);
+  --line: #e8dcc8;
+  --line-2: rgba(74, 58, 42, 0.16);
+  --line-3: rgba(74, 58, 42, 0.26);
+  --hairline: #e8dcc8;
 
-  --bee: #b07f1c;
-  --honey: #b07f1c;
-  --honey-2: #936811;
-  --pollen: #efe2be;
-  --honey-soft: rgba(176, 127, 28, 0.12);
-  --honey-line: rgba(176, 127, 28, 0.34);
-  --on-honey: #fff7df;
+  --bee: #8a5a2a;
+  --honey: #8a5a2a;
+  --honey-2: #8a5a2a;
+  --honey-fill: #f0e8d8;
+  --pollen: #f0e8d8;
+  --honey-soft: rgba(138, 90, 42, 0.12);
+  --honey-line: rgba(138, 90, 42, 0.34);
+  --on-honey: #4a3a2a;
 
-  --accent: #b07f1c;
-  --accent-strong: #7c550b;
+  --accent: #8a5a2a;
+  --accent-strong: #8a5a2a;
 
-  /* muted warm olive for the live signal (not the dark-theme cool mint) */
-  --live: #88926e;
-  --live-2: #6f7a54;
-  --live-soft: rgba(136, 146, 110, 0.12);
-  --cyan: #88926e;
-  --cyan-2: #6f7a54;
+  --live: #6b8f5e;
+  --live-2: #56794b;
+  --live-soft: rgba(107, 143, 94, 0.12);
+  --cyan: #6b8f5e;
+  --cyan-2: #56794b;
 
-  --success: #4f7d4b;
-  --warning: #8a641f;
-  --danger: #c0524d;
-  --success-soft: rgba(79, 125, 75, 0.14);
-  --warning-soft: rgba(176, 127, 28, 0.12);
-  --danger-soft: rgba(192, 82, 77, 0.12);
+  --success: #6b8f5e;
+  --warning: #9a5d32;
+  --danger: #b5483b;
+  --success-soft: rgba(107, 143, 94, 0.14);
+  --warning-soft: rgba(154, 93, 50, 0.12);
+  --danger-soft: rgba(181, 72, 59, 0.12);
 
-  --button-primary: #b07f1c;
-  --button-primary-foreground: #fff7df;
-  --button-secondary: rgba(54, 46, 30, 0.06);
-  --button-secondary-foreground: #221d14;
-  --button-accent: var(--honey-soft);
-  --button-accent-foreground: #221d14;
-  --button-muted-foreground: #867d6e;
-  --button-destructive: #c0524d;
-  --button-border: rgba(54, 46, 30, 0.16);
-  --button-ring: rgba(176, 127, 28, 0.34);
+  --button-primary: #8a5a2a;
+  --button-primary-foreground: #f8f4ee;
+  --button-secondary: #f0e8d8;
+  --button-secondary-foreground: #4a3a2a;
+  --button-accent: #f0e8d8;
+  --button-accent-foreground: #4a3a2a;
+  --button-muted-foreground: #8a7a6a;
+  --button-destructive: #b5483b;
+  --button-border: #e8dcc8;
+  --button-ring: rgba(138, 90, 42, 0.34);
 
   color-scheme: light;
 }

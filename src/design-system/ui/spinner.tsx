@@ -3,7 +3,7 @@ import { LoaderCircle } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-/* Spinner — the loading-state ring (honey arc). */
+/* Spinner — the loading-state ring (Hivemind accent arc; legacy tone name). */
 
 type SpinnerProps = React.ComponentProps<"span"> & {
   size?: number;

@@ -75,11 +75,11 @@ export function isVeniceSetupReady(config: VeniceAgentConfig = {}) {
   return config.lastTestStatus === "ready";
 }
 
-function moneyValue(value: unknown) {
+function numericValue(value: unknown) {
   const raw = typeof value === "number"
     ? value
     : typeof value === "string"
-      ? Number(value.replace(/[$,\s]/g, ""))
+      ? Number(value.replace(/[^\d.-]/g, ""))
       : NaN;
   return Number.isFinite(raw) ? raw : 0;
 }
@@ -89,7 +89,7 @@ export function hasHivemindosModelsSetup(config: HivemindosModelsAgentConfig = {
     config.creditAccountId
       || config.walletVaultId
       || config.walletAddress
-      || config.lastCreditBalanceUsd
+      || config.lastCreditBalanceCredits
       || config.lastTestStatus
       || config.lastCheckedAt,
   );
@@ -100,8 +100,8 @@ export function isHivemindosModelsSetupReady(config: HivemindosModelsAgentConfig
   // funding; only wallet-paid routes require credits or a wallet.
   if (isFreeHivemindosWalletPaidModel(model)) return true;
   const fundedCredits = Boolean(
-    moneyValue(config.lastCreditBalanceUsd) > 0
-      || moneyValue(config.lastCreditBalanceLabel) > 0,
+    numericValue(config.lastCreditBalanceCredits) > 0
+      || numericValue(config.lastCreditBalanceLabel) > 0,
   );
   return Boolean((config.creditAccountId && fundedCredits) || (config.walletVaultId && config.walletAddress));
 }

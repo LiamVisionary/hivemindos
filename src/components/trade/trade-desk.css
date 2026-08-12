@@ -57,7 +57,7 @@
 
 /* buttons */
 .fb-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border-radius: 99px; padding: 9px 15px; font-size: 12.5px; font-family: var(--f-body); cursor: pointer; border: 1px solid transparent; transition: filter .16s, border-color .16s, color .16s, background .16s; white-space: nowrap; }
-.fb-btn.primary { background: var(--honey); color: #1a1305; font-weight: 500; }
+.fb-btn.primary { background: var(--honey); color: var(--bg); font-weight: 500; }
 .fb-btn.primary:hover { filter: brightness(1.06); }
 .fb-btn.ghost { background: transparent; color: var(--fg-2); border-color: var(--line-2); }
 .fb-btn.ghost:hover { border-color: var(--line-3); color: var(--fg); }
@@ -92,16 +92,16 @@
 .tk-side { display: inline-flex; gap: 3px; padding: 4px; border: 1px solid var(--line-2); border-radius: 99px; background: color-mix(in srgb, var(--panel) 70%, transparent); }
 .tk-side button { border: 0; background: transparent; cursor: pointer; border-radius: 99px; padding: 7px 16px; font-family: var(--f-body); font-size: 12.5px; color: var(--fg-3); transition: .15s; font-weight: 500; }
 .tk-side button:hover { color: var(--fg); }
-.tk-side button[data-active] { background: var(--honey); color: #1a1305; }
+.tk-side button[data-active] { background: var(--honey-fill, var(--panel-2)); color: var(--on-honey, #1a1305); }
 .tk-side button[data-active][data-sell] { background: var(--danger); color: #2a0f0c; }
 
 /* leg = you pay / you receive box */
-.tk-leg { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: var(--radius); padding: 13px 15px; transition: border-color .16s; }
-.tk-leg:focus-within { border-color: var(--honey-line); }
+.tk-leg { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: var(--radius); padding: 13px 15px; transition: border-color .16s, box-shadow .16s; }
+.tk-leg:focus-within { border-color: var(--line-3); box-shadow: 0 0 0 3px color-mix(in srgb, var(--fg) 5%, transparent); }
 .tk-leg .lhead { display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: var(--fg-3); margin-bottom: 8px; }
 .tk-leg .lhead .bal { font-family: var(--f-mono); }
 .tk-legrow { display: flex; align-items: center; gap: 12px; }
-.tk-input { flex: 1 1 auto; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--fg); font-family: var(--f-display); font-weight: 600; font-size: 27px; letter-spacing: -0.02em; padding: 0; }
+.tk-input { flex: 1 1 auto; min-width: 0; min-height: 42px; appearance: none; -webkit-appearance: none; background: transparent; border: 0; box-shadow: none; outline: 0; color: var(--fg); caret-color: var(--honey); font-family: var(--f-display); font-weight: 600; font-size: 27px; letter-spacing: -0.02em; padding: 0; }
 .tk-input::placeholder { color: var(--fg-4); }
 .tk-input[readonly] { color: var(--fg-2); }
 .tk-usd { font-size: 11.5px; color: var(--fg-3); font-family: var(--f-mono); margin-top: 7px; }
@@ -148,6 +148,17 @@
 .tk-chips button { flex: 1 1 0; border: 1px solid var(--line-2); background: transparent; color: var(--fg-3); border-radius: 99px; padding: 6px 0; font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase; cursor: pointer; transition: .15s; }
 .tk-chips button:hover { color: var(--honey); border-color: var(--honey-line); }
 
+/* The dashboard's generic light-field paint is intentionally strong for form
+   controls. Swap amounts are part of the leg surface, so keep them transparent
+   and let the leg carry the boundary instead of drawing a box inside a box. */
+.fr-root[data-fr-theme="light"] .tk-leg { background: var(--panel); border-color: var(--line); box-shadow: 0 1px 2px rgba(74, 58, 42, 0.04); }
+.fr-root[data-fr-theme="light"] .tk-legrow > .tk-input,
+.fr-root[data-fr-theme="light"] .tk-legrow > .tk-input:focus,
+.fr-root[data-fr-theme="light"] .tk-legrow > .tk-input:focus-visible { background: transparent !important; border: 0 !important; box-shadow: none !important; color: var(--fg) !important; }
+.fr-root[data-fr-theme="light"] .tk-legrow > .tk-input[readonly] { color: var(--fg-2) !important; }
+.fr-root[data-fr-theme="light"] .tk-leg .tk-bymode,
+.fr-root[data-fr-theme="light"] .tk-leg .tk-chips button { color: var(--fg-3); }
+
 /* order-type seg for stocks */
 .tk-otype { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--line-2); border-radius: 9px; background: var(--panel-2); }
 .tk-otype button { border: 0; background: transparent; cursor: pointer; border-radius: 7px; padding: 6px 13px; font-family: var(--f-body); font-size: 12px; color: var(--fg-3); transition: .15s; }
@@ -162,7 +173,7 @@
 .tk-guard { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; padding: 10px 12px; border-radius: var(--radius-sm); font-size: 11.5px; line-height: 1.45; border: 1px solid var(--honey-line); background: var(--honey-soft); color: var(--honey); }
 .tk-guard svg { flex: 0 0 auto; margin-top: 1px; }
 .tk-guard[data-danger] { border-color: color-mix(in srgb, var(--danger) 38%, transparent); background: var(--danger-soft); color: var(--danger); }
-.tk-place { width: 100%; margin-top: 14px; border: 0; border-radius: 99px; padding: 13px; font-family: var(--f-body); font-size: 13.5px; font-weight: 600; cursor: pointer; background: var(--honey); color: #1a1305; transition: filter .16s, transform .12s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.tk-place { width: 100%; margin-top: 14px; border: 0; border-radius: 99px; padding: 13px; font-family: var(--f-body); font-size: 13.5px; font-weight: 600; cursor: pointer; background: var(--honey); color: var(--bg); transition: filter .16s, transform .12s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .tk-place:hover { filter: brightness(1.06); }
 .tk-place:active { transform: translateY(1px); }
 .tk-place[data-sell] { background: var(--danger); color: #2a0f0c; }
@@ -550,7 +561,7 @@
 .dk-seg { display: inline-flex; gap: 3px; padding: 4px; border: 1px solid var(--line-2); border-radius: 99px; background: color-mix(in srgb, var(--panel) 70%, transparent); }
 .dk-seg button { border: 0; background: transparent; cursor: pointer; border-radius: 99px; padding: 9px 22px; font-family: var(--f-body); font-size: 13px; font-weight: 500; color: var(--fg-3); transition: .15s; display: inline-flex; align-items: center; gap: 8px; }
 .dk-seg button:hover { color: var(--fg); }
-.dk-seg button[data-active] { background: var(--honey); color: #1a1305; }
+.dk-seg button[data-active] { background: var(--honey-fill, var(--panel-2)); color: var(--on-honey, #1a1305); }
 .dk-marketpill { display: inline-flex; align-items: center; gap: 8px; font-size: 11.5px; font-family: var(--f-mono); color: var(--fg-3); border: 1px solid var(--line-2); border-radius: 99px; padding: 7px 13px; white-space: nowrap; }
 .dk-refreshable { position: relative; }
 .dk-refresh-indicator { position: absolute; z-index: 2; top: 13px; right: 13px; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; color: var(--honey); background: color-mix(in srgb, var(--panel-hi) 88%, transparent); border: 1px solid var(--line-2); border-radius: 50%; box-shadow: 0 5px 18px color-mix(in srgb, #000 18%, transparent); pointer-events: none; }

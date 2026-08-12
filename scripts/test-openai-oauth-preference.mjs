@@ -257,15 +257,15 @@ const voiceRoute = readFileSync(
   new URL("../src/app/api/queen-bee/voice/route.ts", import.meta.url),
   "utf8",
 );
-assert.match(
-  voiceRoute,
-  /openAiOAuthSupportsChatModel/,
-  "Queen voice brain selection must use the canonical OAuth capability matrix",
-);
 assert.doesNotMatch(
   voiceRoute,
-  /const oauthServable = \/\^\(gpt-5\|o\\d\|codex\)\/i/,
-  "Queen voice brain selection must not duplicate the OAuth model-family rule",
+  /openAiOAuthSupportsChatModel/,
+  "Queen voice must not silently replace the configured provider with OAuth",
+);
+assert.match(
+  voiceRoute,
+  /const provider = defaults\.provider \|\| "openai-api"/,
+  "Queen voice must route through the Queen agent's configured provider",
 );
 
 const directChatFetches = [];

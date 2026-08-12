@@ -65,7 +65,9 @@
     ".next-tauri/verify-socials-redesign-e2e/types/**/*.ts",
     ".next-tauri/verify-socials-redesign-e2e/dev/types/**/*.ts",
     ".next-tauri/dev-5121/types/**/*.ts",
-    ".next-tauri/dev-5121/dev/types/**/*.ts"
+    ".next-tauri/dev-5121/dev/types/**/*.ts",
+    ".next-tauri/dev-5122/types/**/*.ts",
+    ".next-tauri/dev-5122/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

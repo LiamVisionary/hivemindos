@@ -1,7 +1,7 @@
 **Segmented** — a pill segmented control for switching between a small set of views or modes (the hive/graph/map/list switcher, wallet view toggles, buy/sell). Controlled or uncontrolled.
 
 ```jsx
-// View switch — subtle honey tint on the active segment
+// View switch — subtle Hivemind accent tint on the active segment
 <Segmented options={["Hive", "Graph", "Map", "List"]} defaultValue="Hive" />
 
 // Binary toggle — solid fill, per-option tone

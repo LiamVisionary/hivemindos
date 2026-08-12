@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock3,
-  ExternalLink,
   MessageCircle,
   Pause,
   Play,
@@ -20,6 +19,7 @@ import {
 } from "lucide-react";
 
 import { useSocialsDesk, type SocialsAccountView } from "@/components/socials/socials-context";
+import { PlatformPostPreview } from "@/components/socials/PlatformPostPreview";
 import { SocialsSpinner } from "@/components/socials/skeletons";
 import { socialAccountHasStandaloneGroundingSource } from "@/lib/services/socials/social-drafting-readiness";
 import type { SocialQueueItem } from "@/lib/services/socials/socials-types";
@@ -47,14 +47,6 @@ function isoToLocalInput(value: string): string {
   if (!Number.isFinite(date.getTime())) return "";
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 16);
-}
-
-function formatDate(value?: string): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date)
-    : value;
 }
 
 function formatRelative(value?: string): string {
@@ -341,20 +333,7 @@ function ReviewFocusCard({ item, account, position, total, onSkip }: {
         <span className="sc-mono">{text.length} characters</span>
       </div>
 
-      <div className="sc-platform-preview">
-        {target ? <EngagementTargetPreview item={item} /> : (
-          <div className="sc-account-preview">
-            <span>{platformGlyph(item.platform)}</span>
-            <strong>@{account?.handle ?? item.accountId}</strong>
-            {account?.displayName ? <em>{account.displayName}</em> : null}
-          </div>
-        )}
-        {item.title ? <strong className="sc-focus-title">{item.title}</strong> : null}
-        <label className="sc-focus-editor">
-          <span>Draft</span>
-          <textarea data-social-focus-editor value={text} onChange={(event) => setText(event.target.value)} />
-        </label>
-      </div>
+      <PlatformPostPreview account={account} item={item} kind={kind} text={text} onTextChange={setText} />
 
       <div className="sc-provenance-pills">
         {account?.soulPath ? <span>voice · {account.soulPath}</span> : <span>generic account voice</span>}
@@ -394,27 +373,6 @@ function ReviewFocusCard({ item, account, position, total, onSkip }: {
         </div>
       </footer>
     </article>
-  );
-}
-
-function EngagementTargetPreview({ item }: { item: SocialQueueItem }) {
-  const target = item.generation?.target;
-  if (!target) return null;
-  const metrics = [
-    `${new Intl.NumberFormat().format(target.metrics.likes)} likes`,
-    `${new Intl.NumberFormat().format(target.metrics.reposts)} reposts`,
-    `${new Intl.NumberFormat().format(target.metrics.replies)} replies`,
-    ...(typeof target.metrics.views === "number" ? [`${new Intl.NumberFormat().format(target.metrics.views)} views`] : []),
-  ];
-  return (
-    <div className="sc-engagement-target" data-testid="social-engagement-target">
-      <div className="sc-engagement-target-head">
-        <div><strong>@{target.authorHandle}</strong>{target.authorName ? <span>{target.authorName}</span> : null}<span>· {formatDate(target.createdAt)}</span></div>
-        <a className="sc-link-btn" href={target.url} target="_blank" rel="noreferrer">Open target <ExternalLink width={12} /></a>
-      </div>
-      <div className="sc-engagement-target-text">{target.text}</div>
-      <div className="sc-engagement-target-meta"><span>{metrics.join(" · ")}</span><span>Found via {target.source === "timeline" ? "followed account" : `search${target.sourceQuery ? `: ${target.sourceQuery}` : ""}`}</span></div>
-    </div>
   );
 }
 

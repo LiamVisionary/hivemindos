@@ -5,9 +5,12 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
 import { writeSharedHiveEnvValues } from "@/lib/services/hive-env-write";
+import { resilientHttpsFetch } from "@/lib/net/resilient-https-fetch";
 import {
   buildOpenAiOAuthResponsesInput,
+  buildOpenAiOAuthToolContinuationInput,
   type OpenAiOAuthChatMessage,
+  type OpenAiOAuthToolContinuation,
 } from "@/lib/services/openai-oauth-payload";
 
 /**
@@ -342,7 +345,7 @@ export async function openAiOAuthFetch(
   headers.set("session_id", randomUUID());
   if (accountId) headers.set("chatgpt-account-id", accountId);
   else headers.delete("chatgpt-account-id");
-  return fetch(input, { ...init, headers });
+  return resilientHttpsFetch(input, { ...init, headers });
 }
 
 /**
@@ -410,13 +413,21 @@ export async function runOpenAiOAuthChatTurnDetailed(
     onTextDelta?: (chunk: string) => void;
     timeoutMs?: number;
     tools?: Array<Record<string, unknown>>;
+    assistantText?: string;
+    toolResults?: OpenAiOAuthToolContinuation[];
   } = {},
 ): Promise<OpenAiOAuthChatTurnResult> {
   const instructions = messages
     .filter((message) => message.role === "system")
     .map((message) => message.content)
     .join("\n");
-  const input = buildOpenAiOAuthResponsesInput(messages, options.images);
+  const input = [
+    ...buildOpenAiOAuthResponsesInput(messages, options.images),
+    ...buildOpenAiOAuthToolContinuationInput(
+      options.assistantText ?? "",
+      options.toolResults ?? [],
+    ),
+  ];
   const response = await openAiOAuthResponsesRequest(
     {
       model,

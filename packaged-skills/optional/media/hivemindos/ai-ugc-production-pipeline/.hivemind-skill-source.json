@@ -13,6 +13,9 @@
   "hivemindAdaptations": [
     "Turns the supplied Claude plus Higgsfield MCP UGC factory notes into a reusable agent-neutral production workflow.",
     "Splits the loop into current-signal research, visual anchors, six-shot video generation, batch scripting, and metric-driven regeneration.",
+    "Adds a load-on-demand performance-creative reference for pain-to-transformation briefs, public-ad evidence coding, five-beat direct-response scripts, storyboard approval, controlled variants, and claim review.",
+    "Separates observed ad-library facts from performance inference and routes Seedance work by verified version and runtime instead of treating one prompt syntax as universal.",
+    "Routes MiniMax H3 work through the standalone H3 compiler, including exact base-versus-Ref2VA schemas, current license/territory checks, native audiovisual fields, and multi-clip handling for 25-30 second ads.",
     "References discovered media capabilities and existing Higgsfield skills instead of hard-coding one execution surface.",
     "Adds approval gates for paid generation, private asset upload, publishing, scheduling, and unverified campaign claims."
   ]

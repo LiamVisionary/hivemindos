@@ -1045,7 +1045,7 @@
   height: 30px;
   border: 1px solid rgba(231, 180, 92, 0.48);
   border-radius: 7px;
-  background: rgba(231, 180, 92, 0.16);
+  background: #f0e8d8;
   color: var(--kb-honey-2);
   cursor: pointer;
   font-size: 12px;
@@ -3870,7 +3870,7 @@
 :global(:root[data-theme="hive-light"]) .kanbanCard.active,
 :global(:root[data-theme="hive-light"]) .kanbanInlineAdd,
 :global(:root[data-theme="hive-light"]) .kanbanFirstRun {
-  background: rgba(212, 180, 111, 0.16);
+  background: #f0e8d8;
 }
 
 :global(:root[data-theme="hive-light"]) .kanbanCard strong,
@@ -3899,7 +3899,7 @@
 :global(:root[data-theme="hive-light"]) .priorityPill.normal {
   border-color: rgba(72, 120, 85, 0.3);
   background: rgba(105, 145, 96, 0.12);
-  color: #356b2f;
+  color: #56794b;
 }
 
 :global(:root[data-theme="hive-light"]) .kanbanSyncPill.local,
@@ -3908,9 +3908,9 @@
 :global(:root[data-theme="hive-light"]) .priorityPill.stale,
 :global(:root[data-theme="hive-light"]) .kanbanStaleNotice,
 :global(:root[data-theme="hive-light"]) .kanbanStaleNotice button {
-  border-color: rgba(185, 139, 47, 0.36);
-  background: rgba(212, 180, 111, 0.14);
-  color: #6f5625;
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 :global(:root[data-theme="hive-light"]) .kanbanToolbar select,
@@ -3931,25 +3931,25 @@
 }
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel {
-  --kb-bg-0: #f1ede3;
-  --kb-bg-1: #fbf8f1;
-  --kb-bg-2: #f4efe4;
+  --kb-bg-0: #f5efe6;
+  --kb-bg-1: #f8f4ee;
+  --kb-bg-2: #f0e8d8;
   --kb-bg-3: #e9e2d4;
   --kb-column: rgba(255, 255, 255, 0.58);
-  --kb-card: #fbf8f1;
+  --kb-card: #f8f4ee;
   --kb-card-hover: #ffffff;
-  --kb-line: rgba(54, 46, 30, 0.10);
-  --kb-line-strong: rgba(54, 46, 30, 0.16);
-  --kb-fg: #221d14;
-  --kb-muted: #5e574b;
+  --kb-line: rgba(74, 58, 42, 0.10);
+  --kb-line-strong: rgba(74, 58, 42, 0.16);
+  --kb-fg: #4a3a2a;
+  --kb-muted: #8a7a6a;
   --kb-muted-soft: rgba(94, 87, 75, 0.76);
-  --kb-cyan: #1d8e7c;
-  --kb-cyan-2: #1d8e7c;
+  --kb-cyan: #6b8f5e;
+  --kb-cyan-2: #6b8f5e;
   --kb-cyan-3: #166b5d;
-  --kb-danger: #c0524d;
+  --kb-danger: #b5483b;
   --kb-danger-2: #8f3a36;
-  --kb-honey: #936811; --kb-honey-fill: #e6bb5c;
-  --kb-honey-2: #936811;
+  --kb-honey: #8a5a2a; --kb-honey-fill: #f0e8d8;
+  --kb-honey-2: #8a5a2a;
   --kb-honey-3: #6b4d12;
   border-color: rgba(79, 68, 52, 0.12);
   background:
@@ -4573,24 +4573,24 @@
 
 /* light theme — re-point the Comb tokens to warm paper */
 :global(:root[data-theme="hive-light"]) .workBoardPanel {
-  --fc-bg-soft: #f6f2e9;
-  --fc-panel: #fbf8f1;
-  --fc-panel-2: #f4efe4;
-  --fc-line: rgba(54, 46, 30, 0.10);
-  --fc-line-2: rgba(54, 46, 30, 0.16);
-  --fc-line-3: rgba(54, 46, 30, 0.26);
-  --fc-fg: #221d14;
-  --fc-fg-2: #5e574b;
-  --fc-fg-3: #5e574b;
-  --fc-fg-4: #6f6657;
-  --fc-honey: #936811; --fc-honey-fill: #e6bb5c;
-  --fc-honey-soft: rgba(176, 127, 28, 0.12);
-  --fc-honey-line: rgba(176, 127, 28, 0.34);
-  --fc-live: #1d8e7c;
-  --fc-live-soft: rgba(29, 142, 124, 0.12);
-  --fc-danger: #c0524d;
-  --fc-danger-soft: rgba(192, 82, 77, 0.12);
-  background: linear-gradient(180deg, #fbf8f1, #f1ede3) !important;
+  --fc-bg-soft: #f0e8d8;
+  --fc-panel: #f8f4ee;
+  --fc-panel-2: #f0e8d8;
+  --fc-line: rgba(74, 58, 42, 0.10);
+  --fc-line-2: rgba(74, 58, 42, 0.16);
+  --fc-line-3: rgba(74, 58, 42, 0.26);
+  --fc-fg: #4a3a2a;
+  --fc-fg-2: #8a7a6a;
+  --fc-fg-3: #8a7a6a;
+  --fc-fg-4: #a09080;
+  --fc-honey: #8a5a2a; --fc-honey-fill: #f0e8d8;
+  --fc-honey-soft: rgba(138, 90, 42, 0.12);
+  --fc-honey-line: rgba(138, 90, 42, 0.34);
+  --fc-live: #6b8f5e;
+  --fc-live-soft: rgba(107, 143, 94, 0.12);
+  --fc-danger: #b5483b;
+  --fc-danger-soft: rgba(181, 72, 59, 0.12);
+  background: linear-gradient(180deg, #f8f4ee, #f5efe6) !important;
 }
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryItem {
@@ -4606,7 +4606,7 @@
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workHistorySummaryLine:hover,
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workHistorySummaryLine:focus-visible {
-  background: rgba(29, 142, 124, 0.06);
+  background: rgba(107, 143, 94, 0.06);
 }
 
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryChevron,
@@ -4624,7 +4624,7 @@
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryMarkdown code,
 :global(:root[data-theme="hive-light"]) .workBoardPanel .workHistoryDetailFacts code {
   border-color: color-mix(in srgb, var(--fc-live) 22%, transparent);
-  background: rgba(29, 142, 124, 0.08);
+  background: rgba(107, 143, 94, 0.08);
   color: var(--fc-live);
 }
 

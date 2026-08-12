@@ -136,12 +136,12 @@ export function renderGitHubOAuthPage(input: {
       :root[data-tone="error"] { --accent: var(--danger); --accent-soft: var(--danger-soft); --accent-line: var(--danger-line); }
       @media (prefers-color-scheme: light) {
         :root {
-          --bg: #f1ede3; --panel: #fbf8f1; --panel-2: #f4efe4;
-          --line-2: rgba(54, 46, 30, 0.16);
-          --fg: #221d14; --fg-2: #5e574b; --fg-4: #a59b89;
-          --honey: #e6bb5c; --honey-2: #936811;
-          --ok: #1d8e7c; --ok-soft: rgba(29, 142, 124, 0.13); --ok-line: rgba(29, 142, 124, 0.32);
-          --danger: #a23a35; --danger-soft: rgba(162, 58, 53, 0.12); --danger-line: rgba(162, 58, 53, 0.32);
+          --bg: #f5efe6; --panel: #f8f4ee; --panel-2: #f0e8d8;
+          --line-2: rgba(74, 58, 42, 0.16);
+          --fg: #4a3a2a; --fg-2: #8a7a6a; --fg-4: #a09080;
+          --honey: #8a5a2a; --honey-2: #8a5a2a;
+          --ok: #6b8f5e; --ok-soft: rgba(107, 143, 94, 0.13); --ok-line: rgba(107, 143, 94, 0.32);
+          --danger: #b5483b; --danger-soft: rgba(162, 58, 53, 0.12); --danger-line: rgba(162, 58, 53, 0.32);
         }
       }
       * { box-sizing: border-box; }

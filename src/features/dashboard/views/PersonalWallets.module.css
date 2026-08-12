@@ -763,7 +763,7 @@
 }
 
 :global(:root[data-theme="hive-light"]) .personalWalletCard:hover {
-  border-color: rgba(176, 127, 28, 0.36);
+  border-color: rgba(138, 90, 42, 0.36);
   box-shadow: 0 18px 42px rgba(82, 61, 22, 0.16);
 }
 
@@ -792,9 +792,9 @@
 :global(:root[data-theme="hive-light"]) .personalConnectorStatus,
 :global(:root[data-theme="hive-light"]) .personalTokenStakeButton,
 :global(:root[data-theme="hive-light"]) .personalWalletStatus[data-tone="ok"] {
-  border-color: rgba(95, 143, 90, 0.28);
-  background: rgba(95, 143, 90, 0.12);
-  color: #356b2f;
+  border-color: rgba(107, 143, 94, 0.28);
+  background: rgba(107, 143, 94, 0.12);
+  color: #56794b;
 }
 
 :global(:root[data-theme="hive-light"]) .personalStakeRouteLink:hover,
@@ -804,8 +804,8 @@
 :global(:root[data-theme="hive-light"]) .walletActionGrid button:hover:not(:disabled),
 :global(:root[data-theme="hive-light"]) .walletActionGrid button:focus-visible:not(:disabled),
 :global(:root[data-theme="hive-light"]) .personalTokenRow:hover {
-  border-color: rgba(176, 127, 28, 0.38);
-  background: rgba(176, 127, 28, 0.12);
+  border-color: rgba(138, 90, 42, 0.38);
+  background: rgba(138, 90, 42, 0.12);
   color: var(--foreground);
 }
 
@@ -834,7 +834,7 @@
 :global(:root[data-theme="hive-light"]) .walletMenuAction:focus-visible,
 :global(:root[data-theme="hive-light"]) .addressCopyButton:hover,
 :global(:root[data-theme="hive-light"]) .addressCopyButton:focus-visible {
-  background: rgba(176, 127, 28, 0.12);
+  background: rgba(138, 90, 42, 0.12);
   color: var(--foreground);
 }
 
@@ -850,5 +850,5 @@
 }
 
 :global(:root[data-theme="hive-light"]) .personalWalletStatus[data-tone="error"] {
-  background: rgba(192, 82, 77, 0.1);
+  background: rgba(181, 72, 59, 0.1);
 }

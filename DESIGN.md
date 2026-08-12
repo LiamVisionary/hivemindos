@@ -67,7 +67,8 @@ This file is the machine-readable agent contract. The fuller rationale and speci
 
 ## Colors
 
-- Honey identifies the one primary action on a surface.
+- Honey identifies the one primary action on a dark surface; mint-teal remains reserved for live or working state.
+- Light mode mirrors the mobile app: `#F5EFE6` background, `#F8F4EE` surface, `#F0E8D8` pressed/selected fill, and `#4A3A2A` text.
 - Mint communicates live or working state, not generic emphasis.
 - Warm graphite surfaces and off-white text keep the control room calm and legible.
 - Danger is reserved for destructive, risky, or money-moving actions.
@@ -90,6 +91,7 @@ This file is the machine-readable agent contract. The fuller rationale and speci
 ## Do's and Don'ts
 
 - Do create emphasis with hierarchy, whitespace, contrast, and a single honey action.
+- Do use the tonal surface for selected tabs and segmented controls instead of filling them with the accent.
 - Do use the shared design-system primitives and tokens before adding local styles.
 - Do keep control labels calm and readable at weight `500` by default.
 - Don't use heavy display typography on buttons, tabs, segmented controls, or action links.

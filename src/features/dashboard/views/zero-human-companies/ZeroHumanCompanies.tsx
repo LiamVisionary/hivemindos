@@ -70,19 +70,9 @@ export function PillButton({
   );
 }
 
-/** Theme toggle pill (in-view light/dark for the ZHC panel). */
-export function ThemeToggle({ theme, onToggle }: { theme: Theme; onToggle: () => void }) {
-  return (
-    <PillButton onClick={onToggle} title="Toggle light / dark">
-      <span style={{ fontSize: 13, lineHeight: 1 }}>{theme === "dark" ? "☼" : "☾"}</span>
-      {theme === "dark" ? "Light" : "Dark"}
-    </PillButton>
-  );
-}
-
 function Masthead({
-  companies, loading, initialLoading, onRefresh, onImport, onFounder, theme, onToggleTheme,
-}: { companies: Colony[]; loading: boolean; initialLoading: boolean; onRefresh: () => void; onImport: () => void; onFounder: () => void; theme: Theme; onToggleTheme: () => void }) {
+  companies, loading, initialLoading, onRefresh, onImport, onFounder,
+}: { companies: Colony[]; loading: boolean; initialLoading: boolean; onRefresh: () => void; onImport: () => void; onFounder: () => void }) {
   const pendingFirstSync = initialLoading && companies.length === 0;
   const s = {
     colonies: companies.length,
@@ -111,7 +101,6 @@ function Masthead({
           )}
         </div>
         <div style={{ justifySelf: "end", display: "flex", alignItems: "center", gap: 8 }}>
-          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
           <PillButton onClick={onFounder} title="Turn one outcome into a governed company blueprint">
             ✦ Founder mode
           </PillButton>
@@ -225,22 +214,6 @@ export default function ZeroHumanCompanies({
   const [submitting, setSubmitting] = React.useState(false);
   const closeModal = React.useCallback(() => setModal(null), []);
 
-  // In-view light/dark for this panel. Defaults to the global dashboard theme
-  // (which flows in via `theme`); the toggle pill sets a local override. When the
-  // global theme changes we drop the override during render (the React-recommended
-  // "adjust state when a prop changes" pattern) so the panel never drifts from the
-  // app's chosen theme.
-  const [themeOverride, setThemeOverride] = React.useState<Theme | null>(null);
-  const [lastGlobalTheme, setLastGlobalTheme] = React.useState<Theme>(theme);
-  if (theme !== lastGlobalTheme) {
-    setLastGlobalTheme(theme);
-    setThemeOverride(null);
-  }
-  const themeState: Theme = themeOverride ?? theme;
-  const toggleTheme = React.useCallback(() => {
-    setThemeOverride((prev) => ((prev ?? theme) === "dark" ? "light" : "dark"));
-  }, [theme]);
-
   const visiblePortfolioColonies = portfolioColonies ?? colonies;
   const membershipOwners = React.useMemo(() => companyMembershipOwners(
     colonies.map((entry) => ({
@@ -323,7 +296,7 @@ export default function ZeroHumanCompanies({
   };
 
   return (
-    <div className="zhc-root frfade" data-theme={themeState} style={{ position: "relative", width: "100%", minWidth: 0, maxWidth: "100%", minHeight: "100%", background: "var(--bg)", color: "var(--fg)", borderRadius: 14, overflow: "hidden", border: "1px solid var(--line)" }}>
+    <div className="zhc-root frfade" data-theme={theme} style={{ position: "relative", width: "100%", minWidth: 0, maxWidth: "100%", minHeight: "100%", background: "var(--bg)", color: "var(--fg)", borderRadius: 14, overflow: "hidden", border: "1px solid var(--line)" }}>
       {/* backdrop — subtle warm wash + hex pattern, contained to the panel */}
       <div aria-hidden style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(120% 60% at 50% -10%, color-mix(in srgb, var(--honey) 6%, transparent), transparent 60%)" }} />
       <svg aria-hidden style={{ position: "absolute", inset: 0, width: "100%", height: "100%", opacity: 0.06, pointerEvents: "none" }}>
@@ -337,7 +310,7 @@ export default function ZeroHumanCompanies({
 
       <div style={{ position: "relative", zIndex: 1 }}>
         {view === "portfolio" && (
-          <Masthead companies={visiblePortfolioColonies} loading={loading} initialLoading={initialLoading} onRefresh={onRefresh} onImport={() => setModal({ type: "import" })} onFounder={() => setModal({ type: "founder" })} theme={themeState} onToggleTheme={toggleTheme} />
+          <Masthead companies={visiblePortfolioColonies} loading={loading} initialLoading={initialLoading} onRefresh={onRefresh} onImport={() => setModal({ type: "import" })} onFounder={() => setModal({ type: "founder" })} />
         )}
         {error ? (
           <div style={{ margin: "12px 40px 0", padding: "8px 12px", borderRadius: 8, border: "1px solid color-mix(in srgb, var(--danger) 35%, transparent)", background: "color-mix(in srgb, var(--danger) 10%, transparent)", color: "var(--danger)", fontFamily: "var(--f-mono)", fontSize: 11 }}>
@@ -371,8 +344,7 @@ export default function ZeroHumanCompanies({
             colony={colony}
             colonies={colonies}
             showBudget={showBudget}
-            theme={themeState}
-            onToggleTheme={toggleTheme}
+            theme={theme}
             onRefresh={onRefresh}
             refreshing={loading}
             initialTasksLoading={initialTasksLoading}
@@ -386,12 +358,12 @@ export default function ZeroHumanCompanies({
       </div>
 
       {modal && modal.type === "create" && (
-        <CreateCompanyModal agentPool={agentPool} initialCrew={initialCreateCrew} busy={submitting} theme={themeState} membershipOwners={membershipOwners} onDuplicateAgent={onDuplicateAgent ? duplicateFromPicker : undefined} onClose={closeModal} onCreate={handleCreate} />
+        <CreateCompanyModal agentPool={agentPool} initialCrew={initialCreateCrew} busy={submitting} theme={theme} membershipOwners={membershipOwners} onDuplicateAgent={onDuplicateAgent ? duplicateFromPicker : undefined} onClose={closeModal} onCreate={handleCreate} />
       )}
       {modal && modal.type === "founder" && (
         <FounderModeModal
           agentPool={unassignedAgentPool}
-          theme={themeState}
+          theme={theme}
           onClose={closeModal}
           onCreated={(companyId) => {
             setModal(null);
@@ -403,7 +375,7 @@ export default function ZeroHumanCompanies({
       {modal && modal.type === "import" && (
         <ImportCompanyModal
           busy={submitting}
-          theme={themeState}
+          theme={theme}
           chooseDirectoryForMachine={chooseDirectoryForMachine}
           defaultDirectoryMachine={defaultDirectoryMachine}
           onClose={closeModal}
@@ -413,25 +385,25 @@ export default function ZeroHumanCompanies({
       {modal && modal.type === "edit" && (() => {
         const target = colonies.find((c) => c.id === modal.id);
         return target ? (
-          <EditCompanyModal initial={target.edit} busy={submitting} theme={themeState} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
+          <EditCompanyModal initial={target.edit} busy={submitting} theme={theme} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
         ) : null;
       })()}
       {modal && modal.type === "treasury" && (() => {
         const target = colonies.find((c) => c.id === modal.id);
         return target ? (
-          <TreasurySettingsModal colony={target} busy={submitting} theme={themeState} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
+          <TreasurySettingsModal colony={target} busy={submitting} theme={theme} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
         ) : null;
       })()}
       {modal && modal.type === "browse" && (() => {
         const target = colonies.find((c) => c.id === modal.id);
         return target ? (
-          <AgentBrowserModal colony={target} agentPool={agentPool} busy={submitting} theme={themeState} membershipOwners={membershipOwners} onDuplicateAgent={onDuplicateAgent ? duplicateFromPicker : undefined} onClose={closeModal} onConfirm={(crew) => handleAddAgents(modal.id, crew)} />
+          <AgentBrowserModal colony={target} agentPool={agentPool} busy={submitting} theme={theme} membershipOwners={membershipOwners} onDuplicateAgent={onDuplicateAgent ? duplicateFromPicker : undefined} onClose={closeModal} onConfirm={(crew) => handleAddAgents(modal.id, crew)} />
         ) : null;
       })()}
       {modal && modal.type === "edit-agent" && (() => {
         const target = colonies.find((c) => c.id === modal.id);
         return target ? (
-          <AgentMemberSettingsModal key={`${modal.id}:${modal.agentId}`} colony={target} agentId={modal.agentId} busy={submitting} theme={themeState} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
+          <AgentMemberSettingsModal key={`${modal.id}:${modal.agentId}`} colony={target} agentId={modal.agentId} busy={submitting} theme={theme} onClose={closeModal} onSave={(form) => handleEdit(modal.id, form)} />
         ) : null;
       })()}
       {modal && modal.type === "task" && (() => {
@@ -449,7 +421,7 @@ export default function ZeroHumanCompanies({
             companyId={target!.id}
             apexGoal={apex?.title}
             metric={metricLine}
-            theme={themeState}
+            theme={theme}
             onClose={closeModal}
             onResolveIssue={(item, answer) => onResolveIssue(target!.id, item, answer)}
             onReviewPreview={onReviewPreview ? (item, decision, notes) => onReviewPreview(target!.id, item, decision, notes) : undefined}

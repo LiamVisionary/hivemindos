@@ -286,27 +286,27 @@
 }
 
 :global(:root[data-theme="hive-light"]) .legendHoney {
-  background: var(--brain-honey, #936811);
-  box-shadow: 0 0 7px color-mix(in srgb, var(--brain-honey, #936811) 65%, transparent);
+  background: var(--brain-honey, #8a5a2a);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--brain-honey, #8a5a2a) 65%, transparent);
 }
 
 :global(:root[data-theme="hive-light"]) .legendTeal {
-  background: var(--brain-live, #1d8e7c);
-  box-shadow: 0 0 7px color-mix(in srgb, var(--brain-live, #1d8e7c) 65%, transparent);
+  background: var(--brain-live, #6b8f5e);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--brain-live, #6b8f5e) 65%, transparent);
 }
 
 :global(:root[data-theme="hive-light"]) .legendDanger {
-  background: var(--brain-danger, #c0524d);
+  background: var(--brain-danger, #b5483b);
   box-shadow: none;
 }
 
 :global(:root[data-theme="hive-light"]) .legendPulse {
-  background: radial-gradient(circle, var(--brain-live, #1d8e7c) 0%, transparent 72%);
-  box-shadow: 0 0 9px color-mix(in srgb, var(--brain-live, #1d8e7c) 80%, transparent);
+  background: radial-gradient(circle, var(--brain-live, #6b8f5e) 0%, transparent 72%);
+  box-shadow: 0 0 9px color-mix(in srgb, var(--brain-live, #6b8f5e) 80%, transparent);
 }
 
 :global(:root[data-theme="hive-light"]) .legendAssociation {
-  background: color-mix(in srgb, var(--brain-fg-2, #5e574b) 58%, transparent);
+  background: color-mix(in srgb, var(--brain-fg-2, #8a7a6a) 58%, transparent);
   box-shadow: none;
 }
 
@@ -571,14 +571,14 @@
 }
 
 :global(:root[data-theme="hive-light"]) .nodeLabel[data-state="selected"] strong {
-  color: var(--brain-honey, #936811);
+  color: var(--brain-honey, #8a5a2a);
 }
 
 :global(:root[data-theme="hive-light"]) .inspector {
   /* Beat the global light-theme aside surface, which is intentionally solid
      for ordinary panels but would erase the Hive Vault glass treatment. */
   background: rgba(251, 248, 241, 0.38) !important;
-  box-shadow: 0 18px 54px rgba(54, 46, 30, 0.18);
+  box-shadow: 0 18px 54px rgba(74, 58, 42, 0.18);
 }
 
 /* ---- Inspector content (unchanged logic, same class names as before) ---- */

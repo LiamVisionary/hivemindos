@@ -12,6 +12,27 @@ export type OpenAiOAuthResponsesMessage = {
   content: Array<OpenAiOAuthInputText | OpenAiOAuthInputImage>;
 };
 
+export type OpenAiOAuthToolContinuation = {
+  id: string;
+  name: string;
+  arguments: string;
+  output: string;
+};
+
+export type OpenAiOAuthToolContinuationItem =
+  | OpenAiOAuthResponsesMessage
+  | {
+      type: "function_call";
+      call_id: string;
+      name: string;
+      arguments: string;
+    }
+  | {
+      type: "function_call_output";
+      call_id: string;
+      output: string;
+    };
+
 export function buildOpenAiOAuthResponsesInput(
   messages: OpenAiOAuthChatMessage[],
   images: string[] = [],
@@ -37,4 +58,35 @@ export function buildOpenAiOAuthResponsesInput(
         : []),
     ],
   }));
+}
+
+/** Replays one Responses function-call turn with its server-owned outputs.
+ * ChatGPT OAuth cannot consume Chat Completions `role: "tool"` messages; it
+ * needs the original function_call + function_call_output items instead. */
+export function buildOpenAiOAuthToolContinuationInput(
+  assistantText: string,
+  results: OpenAiOAuthToolContinuation[],
+): OpenAiOAuthToolContinuationItem[] {
+  const items: OpenAiOAuthToolContinuationItem[] = [];
+  if (assistantText.trim()) {
+    items.push({
+      type: "message",
+      role: "assistant",
+      content: [{ type: "output_text", text: assistantText.trim() }],
+    });
+  }
+  for (const result of results) {
+    items.push({
+      type: "function_call",
+      call_id: result.id,
+      name: result.name,
+      arguments: result.arguments || "{}",
+    });
+    items.push({
+      type: "function_call_output",
+      call_id: result.id,
+      output: result.output,
+    });
+  }
+  return items;
 }

@@ -138,7 +138,17 @@ assert.match(liveHarnessSource, /recordCanonicalHarness/);
 assert.match(liveHarnessSource, /MIN_REPEATS = 3/);
 assert.match(liveHarnessSource, /deterministicPolicyIsOutcomeGrader: false/);
 
-console.log("earned scale policy, live-provider harness contract, settlement evidence, allocation, blackboard, and delight-miner checks passed");
+const workBoardHarnessSource = await readFile(new URL("./benchmark-earned-scale-workboard.mjs", import.meta.url), "utf8");
+assert.match(workBoardHarnessSource, /runQueenBeeAutonomousPickup/);
+assert.match(workBoardHarnessSource, /createTask\(null/);
+assert.match(workBoardHarnessSource, /runHiddenTest/);
+assert.match(workBoardHarnessSource, /rehearseRollback/);
+assert.match(workBoardHarnessSource, /agent:judge/);
+assert.match(workBoardHarnessSource, /MIN_RUNS_PER_CONDITION = 3/);
+assert.match(workBoardHarnessSource, /recordCanonicalHarness/);
+assert.match(workBoardHarnessSource, /deterministicOutcomeGrader: false/);
+
+console.log("earned scale policy, live-provider and real-Work-Board harness contracts, settlement evidence, allocation, blackboard, and delight-miner checks passed");
 
 function observations(prefix, metrics) {
   return Array.from({ length: 3 }, (_, index) => ({ id: `${prefix}-${index + 1}`, settledTasks: 12, ...metrics }));

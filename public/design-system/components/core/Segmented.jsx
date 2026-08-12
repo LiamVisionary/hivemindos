@@ -2,8 +2,7 @@ import * as React from "react";
 
 /* Segmented — a pill segmented control. The hive's view/mode switcher
    (walletSegmented, tk-side, fleet ViewModeToggle). Options sit in a pill
-   track; the active one fills. `subtle` (honey-soft tint, for view switches) or
-   `solid` (honey fill + dark text, for binary toggles like buy/sell). */
+   track; active options use the mobile app's tonal pressed surface. */
 
 export function Segmented({ options, value, defaultValue, onChange, variant = "subtle", size = "default", style, ...props }) {
   const controlled = value !== undefined;
@@ -38,7 +37,7 @@ export function Segmented({ options, value, defaultValue, onChange, variant = "s
         const tone = opt.tone; // optional per-option active tone (e.g. "sell")
         const active = current === val;
         const activeBg = variant === "solid"
-          ? (tone === "sell" ? "var(--danger)" : "var(--honey)")
+          ? (tone === "sell" ? "var(--danger)" : "var(--honey-fill)")
           : "var(--honey-soft)";
         const activeColor = variant === "solid"
           ? (tone === "sell" ? "#2a0f0c" : "var(--on-honey)")

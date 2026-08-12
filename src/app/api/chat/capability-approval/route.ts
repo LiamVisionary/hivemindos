@@ -9,6 +9,7 @@ import {
 import { createAgentNotification, setAgentNotificationResolution } from "@/lib/services/obsidian/agent-notifications";
 import { capabilityPlanRequiresReview } from "@/lib/types/capability-approval";
 import { errorJson, okJson } from "@/lib/utils/api-response";
+import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
       chatLeaf: typeof body.chatLeaf === "string" ? body.chatLeaf : undefined,
       vaultPath,
       workingDirectory: typeof body.workingDirectory === "string" ? body.workingDirectory : undefined,
+      permissionMode: normalizeChatPermissionMode(body.permissionMode),
       origin: request.nextUrl.origin,
     });
     const notificationCreated = capabilityPlanRequiresReview(plan) ? await createAgentNotification({

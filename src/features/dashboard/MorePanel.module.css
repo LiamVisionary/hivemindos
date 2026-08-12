@@ -41,19 +41,19 @@
    hardcoded to the app light palette so the var(--m-panel)->var(--m-panel) remap
    below only rewrites the dark body usages, not this block. */
 :global([data-theme="hive-light"]) .root {
-  --m-panel: #fbf8f1;
-  --m-panel-soft: #f6f2e9;
-  --m-line: rgba(54, 46, 30, 0.16);
-  --m-muted: #5e574b;
-  --m-tile-fill: linear-gradient(180deg, #fff8df 0%, #f2c66c 100%);
-  --m-tile-border: rgba(169, 114, 9, 0.42);
-  --m-tile-ink: #7d5404;
-  --m-accent-text: #a97209;
-  --m-active-bg: rgba(169, 114, 9, 0.14);
-  --m-active-border: rgba(169, 114, 9, 0.42);
-  --m-active-ink: #7d5404;
-  --m-interact: #207f78;
-  --m-interact-soft: rgba(32, 127, 120, 0.16);
+  --m-panel: #f8f4ee;
+  --m-panel-soft: #f0e8d8;
+  --m-line: rgba(74, 58, 42, 0.16);
+  --m-muted: #8a7a6a;
+  --m-tile-fill: linear-gradient(180deg, #f0e8d8 0%, #e8dcc8 100%);
+  --m-tile-border: rgba(138, 90, 42, 0.42);
+  --m-tile-ink: #8a5a2a;
+  --m-accent-text: #8a5a2a;
+  --m-active-bg: rgba(138, 90, 42, 0.14);
+  --m-active-border: rgba(138, 90, 42, 0.42);
+  --m-active-ink: #8a5a2a;
+  --m-interact: #6b8f5e;
+  --m-interact-soft: rgba(107, 143, 94, 0.16);
 }
 
 .header {

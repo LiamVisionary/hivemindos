@@ -32,6 +32,7 @@ import {
   validateOutreachCompletion,
 } from "@/lib/services/kanban/outreach-safeguards";
 import { withMutationQueue } from "@/lib/services/kanban/mutation-queue";
+import { promoteReadyChildren, replaceIncomingTaskLinks } from "@/lib/services/kanban/dependency-links";
 import {
   deliverableId,
   deliverableLabel,
@@ -134,6 +135,7 @@ type PatchTaskInput = Partial<
   >
 > & {
   loop?: KanbanTask["loop"] | null;
+  parents?: string[];
   reviewedAt?: number | null;
   undoRequestedAt?: number | null;
 };
@@ -715,7 +717,11 @@ function applyPatchToBoard(
 ): { task: KanbanTask; completionBlocked?: { missingGateIds: string[]; missingGateTitles: string[] } } {
   const task = board.tasks.find((item) => item.id === taskId);
   if (!task) throw new Error("Task not found.");
+  const { parents: requestedParents, ...taskPatch } = patch;
+  if (requestedParents !== undefined) replaceIncomingTaskLinks(board, taskId, requestedParents);
   const fromStatus = task.status;
+  const storedTask = { ...task } as KanbanTask & { parents?: string[] };
+  delete storedTask.parents;
   const nextStatus =
     patch.status && KANBAN_STATUSES.includes(patch.status)
       ? patch.status
@@ -734,8 +740,8 @@ function applyPatchToBoard(
   const retryingWorking =
     nextStatus === "working" && isRetryBlockerResult(task.result);
   const changedBase = {
-    ...task,
-    ...patch,
+    ...storedTask,
+    ...taskPatch,
     status: nextStatus ?? task.status,
     title: patch.title?.trim() || task.title,
     body: patch.body ?? task.body,
@@ -2404,40 +2410,6 @@ function unfinishedParentIds(board: KanbanBoard, taskId: string) {
       const parent = tasksById.get(parentId);
       return parent && parent.status !== "done" && parent.status !== "archived";
     });
-}
-
-function promoteReadyChildren(board: KanbanBoard, kind: string) {
-  const now = Date.now();
-  const tasksById = new Map(board.tasks.map((task) => [task.id, task]));
-  const promotedIds = new Set<string>();
-  for (const task of board.tasks) {
-    if (task.status !== "ideas" && task.status !== "needs-human") continue;
-    const parents = board.links.filter((link) => link.childId === task.id);
-    if (!parents.length) continue;
-    const ready = parents.every((link) => {
-      const parent = tasksById.get(link.parentId);
-      return parent?.status === "done" || parent?.status === "archived";
-    });
-    if (!ready) continue;
-    task.status = "ready";
-    task.updatedAt = now;
-    task.claimLock = undefined;
-    task.claimExpiresAt = undefined;
-    task.lastHeartbeatAt = undefined;
-    task.currentRunId = undefined;
-    promotedIds.add(task.id);
-  }
-  for (const taskId of promotedIds) {
-    const task = tasksById.get(taskId);
-    board.events.unshift(
-      event(
-        kind,
-        `Promoted ${task?.title ?? taskId} after parent tasks completed.`,
-        taskId,
-      ),
-    );
-  }
-  return promotedIds.size;
 }
 
 function finishActiveRun(

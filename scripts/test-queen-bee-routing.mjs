@@ -264,6 +264,39 @@ assert.equal(gitLawbProjectRoute.machine?.key, "maps-dirty");
 assert.match(gitLawbProjectRoute.reason, /GitLawb project registry/i);
 assert.match(gitLawbProjectRoute.reason, /local changes/i);
 
+const amiProjectMachine = machine("ami-machine", "Ami Machine", [{
+  ...baseAgent,
+  id: "ami-code-worker",
+  name: "Ami Code Bee",
+  runtime: "codex",
+  workerClass: "code",
+}], {
+  version: {
+    projects: [{ projectId: "ami-6323f942f4", name: "Ami", localPath: "/Users/liam/ami" }],
+  },
+});
+const exactProjectRoute = chooseQueenBeeDelegate({
+  title: "Build Liam's website packet",
+  body: "Use the linked project checkout.",
+  projectId: "maps-agency",
+  projectRegistry: {
+    projects: [
+      { id: "maps-agency", name: "Maps Agency", localPath: "/root/documents/maps-agency" },
+      { id: "ami-6323f942f4", name: "Ami", localPath: "/Users/liam/ami" },
+    ],
+  },
+}, [amiProjectMachine, dirtyMapsAgencyMachine]);
+assert.equal(exactProjectRoute.machine?.key, "maps-dirty", "stamped project id wins over fuzzy task-text matches");
+assert.doesNotMatch(
+  chooseQueenBeeDelegate({
+    title: "Build Liam's website packet",
+    body: "No project id was stamped.",
+    projectRegistry: { projects: [{ id: "ami-6323f942f4", name: "Ami", localPath: "/Users/liam/ami" }] },
+  }, [amiProjectMachine]).reason,
+  /GitLawb project registry matched Ami/i,
+  "three-letter project aliases do not match inside unrelated words such as Liam",
+);
+
 const pendingRoute = chooseQueenBeeDelegate({ title: "do work", body: "" }, [machine("offline", "Offline", [], { device: { online: false } })]);
 assert.equal(pendingRoute.status, "pending");
 assert.equal(pendingRoute.agent, undefined);

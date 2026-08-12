@@ -98,7 +98,7 @@ import {
 } from "@/features/dashboard/chat-run-transcripts";
 import { chatStreamHasLocalRun, reconcilePolledChatProcessState, reconcilePolledChatStreamState } from "@/features/dashboard/hooks/status-chat-stream-state";
 import { readNativeDashboardBootstrap } from "@/lib/native/dashboard-bootstrap";
-import { getNativeAppVersion } from "@/lib/native/desktop-status";
+import { getNativeAppVersion, isPackagedReleaseAppVersion, selectDashboardAppVersion } from "@/lib/native/desktop-status";
 import { getNativeFleetAppsCache, getNativeFleetDiscovery, getNativeTailscaleDevices } from "@/lib/native/fleet";
 import { tailscaleStatusPresentation, tailscaleStatusRequiresAttention } from "@/lib/native/tailscale-status";
 import { getNativeObsidianAgents } from "@/lib/native/obsidian";
@@ -2360,7 +2360,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
       const nativeBootstrap = await readNativeDashboardBootstrap({ maxAgeMs: 5 * 60 * 1000 });
       const nativeStatus = nativeBootstrap?.desktopStatus;
       const nativeVersion = nativeStatus?.commit ? nativeStatus : await getNativeAppVersion(signal);
-      if (nativeVersion?.commit) {
+      if (isPackagedReleaseAppVersion(nativeVersion)) {
         setAppVersion(nativeVersion);
         return;
       }
@@ -2369,7 +2369,7 @@ export default function DashboardApp({ initialChatAgentId, initialChatLeaf, init
         signal,
       }).catch(() => null);
       const data = await response?.json().catch(() => null) as AppVersion | null;
-      if (data?.commit) setAppVersion(data);
+      setAppVersion((current) => selectDashboardAppVersion(nativeVersion, data) ?? current);
   }, []);
   useVisibilityAwarePolling({
     enabled: hydrated && !chatRequestActive,

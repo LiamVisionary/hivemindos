@@ -3525,7 +3525,7 @@ details[open] > summary .treeDisclosure::before {
 }
 
 :global(:root[data-theme="hive-light"]) .message.user {
-  border-color: rgba(185, 139, 47, 0.24);
+  border-color: rgba(138, 90, 42, 0.24);
   background: #f1eee7;
   color: var(--foreground);
 }
@@ -3559,7 +3559,7 @@ details[open] > summary .treeDisclosure::before {
 :global(:root[data-theme="hive-light"]) .machineChatLeaves button:hover,
 :global(:root[data-theme="hive-light"]) .machineChatLeaves button.active,
 :global(:root[data-theme="hive-light"]) .machineChatLeaves button[aria-current="true"] {
-  background: rgba(212, 180, 111, 0.18);
+  background: #f0e8d8;
   color: var(--foreground);
 }
 
@@ -3578,7 +3578,7 @@ details[open] > summary .treeDisclosure::before {
 }
 
 :global(:root[data-theme="hive-light"]) .machineChatLeaves .machineChatShowMore:hover {
-  background: rgba(212, 180, 111, 0.16);
+  background: #f0e8d8;
   color: var(--foreground);
 }
 
@@ -3614,8 +3614,8 @@ details[open] > summary .treeDisclosure::before {
 :global(:root[data-theme="hive-light"]) .slashCommandList button:hover,
 :global(:root[data-theme="hive-light"]) .slashCommandList button.active,
 :global(:root[data-theme="hive-light"]) .slashCommandList button[aria-selected="true"] {
-  border-color: rgba(185, 139, 47, 0.28);
-  background: rgba(212, 180, 111, 0.16);
+  border-color: rgba(138, 90, 42, 0.28);
+  background: #f0e8d8;
 }
 
 :global(:root[data-theme="hive-light"]) .composerIconButton.sendButton {
@@ -3651,8 +3651,8 @@ details[open] > summary .treeDisclosure::before {
 
 :global(:root[data-theme="hive-light"]) .composerPermissionButton,
 :global(:root[data-theme="hive-light"]) .composerPermissionButton.bypass {
-  border-color: rgba(176, 127, 28, 0.28);
-  background: rgba(176, 127, 28, 0.14);
+  border-color: rgba(138, 90, 42, 0.28);
+  background: rgba(138, 90, 42, 0.14);
   color: #9a6a15;
 }
 
@@ -3675,8 +3675,8 @@ details[open] > summary .treeDisclosure::before {
 :global(:root[data-theme="hive-light"]) .modelPickerList button:hover,
 :global(:root[data-theme="hive-light"]) .modelPickerList button[aria-selected="true"],
 :global(:root[data-theme="hive-light"]) .workingDirectoryPanel button:hover {
-  border-color: rgba(176, 127, 28, 0.34);
-  background: rgba(176, 127, 28, 0.12);
+  border-color: rgba(138, 90, 42, 0.34);
+  background: rgba(138, 90, 42, 0.12);
   color: var(--foreground);
 }
 
@@ -3698,8 +3698,8 @@ details[open] > summary .treeDisclosure::before {
 }
 
 :global(:root[data-theme="hive-light"]) .chatSuggestions button:hover {
-  border-color: rgba(185, 139, 47, 0.34) !important;
-  background: rgba(212, 180, 111, 0.16) !important;
+  border-color: rgba(138, 90, 42, 0.34) !important;
+  background: #f0e8d8 !important;
 }
 
 @media (max-width: 720px) {

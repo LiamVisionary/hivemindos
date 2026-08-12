@@ -408,6 +408,13 @@ export interface Company {
   products?: CompanyProductCatalog;
   /** Pending crew-raised price-change requests (resolved ones are removed; outcomes live in company memory). */
   pricingProposals?: CompanyPricingProposal[];
+  /**
+   * Durable task/product receipts for parsed `PRICING PROPOSAL:` markers. Unlike
+   * the bounded company-memory digest, these replicate with the definition so
+   * an old terminal task cannot surface the same request again after its memory
+   * record ages out or another machine processes the board.
+   */
+  pricingProposalMarkerReceipts?: string[];
   /** Human approval policy for company actions such as sends, publishing, and learned permission subjects. */
   approvalPolicies?: CompanyApprovalPolicy[];
   /** Which analytics provider this company's numbers come from. Unset = not configured (guided setup shown). */

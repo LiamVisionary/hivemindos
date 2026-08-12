@@ -53,6 +53,10 @@ export function chatPermissionModeAllowsUnlistedCommands(mode: ChatPermissionMod
   return mode === "bypass";
 }
 
+export function chatPermissionModeSkipsReadyCapabilityReview(mode: ChatPermissionMode) {
+  return mode === "auto" || mode === "bypass";
+}
+
 export function chatPermissionModeLabel(mode: ChatPermissionMode) {
   return CHAT_PERMISSION_MODE_OPTIONS.find((option) => option.mode === mode)?.label ?? "Manual permissions";
 }

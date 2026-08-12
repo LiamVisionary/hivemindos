@@ -733,17 +733,17 @@
 :global(:root[data-theme="hive-light"]) .detailModal,
 :global(:root[data-theme="hive-light"]) .controlBar,
 :global(:root[data-theme="hive-light"]) .voicePicker {
-  border-color: rgba(54, 46, 30, 0.18);
+  border-color: rgba(74, 58, 42, 0.18);
   background: rgba(251, 248, 241, 0.9);
-  color: #221d14;
+  color: #4a3a2a;
   box-shadow: 0 18px 48px rgba(82, 61, 22, 0.16);
 }
 
 /* Bubble matches the light pill exactly (color-mix(--panel 60%) + --line-2);
    wins over the grouped rule above by source order, leaving text + shadow. */
 :global(:root[data-theme="hive-light"]) .transcriptPanel {
-  background: color-mix(in srgb, #fbf8f1 60%, transparent);
-  border-color: rgba(54, 46, 30, 0.16);
+  background: color-mix(in srgb, #f8f4ee 60%, transparent);
+  border-color: rgba(74, 58, 42, 0.16);
 }
 
 :global(:root[data-theme="hive-light"]) .detailBackdrop {
@@ -751,12 +751,12 @@
 }
 
 :global(:root[data-theme="hive-light"]) .bubbleTail svg path {
-  fill: color-mix(in srgb, #fbf8f1 60%, transparent);
-  stroke: rgba(54, 46, 30, 0.16);
+  fill: color-mix(in srgb, #f8f4ee 60%, transparent);
+  stroke: rgba(74, 58, 42, 0.16);
 }
 
 :global(:root[data-theme="hive-light"]) .bubbleTail:hover svg path {
-  stroke: rgba(176, 127, 28, 0.34);
+  stroke: rgba(138, 90, 42, 0.34);
 }
 
 :global(:root[data-theme="hive-light"]) .detailButton,
@@ -764,9 +764,9 @@
 :global(:root[data-theme="hive-light"]) .statusBadge,
 :global(:root[data-theme="hive-light"]) .controlButton,
 :global(:root[data-theme="hive-light"]) .voiceOption {
-  border-color: rgba(54, 46, 30, 0.18);
+  border-color: rgba(74, 58, 42, 0.18);
   background: rgba(244, 239, 228, 0.84);
-  color: #221d14;
+  color: #4a3a2a;
 }
 
 :global(:root[data-theme="hive-light"]) .detailButton:hover,
@@ -774,9 +774,9 @@
 :global(:root[data-theme="hive-light"]) .controlButton:hover,
 :global(:root[data-theme="hive-light"]) .voiceOption:hover,
 :global(:root[data-theme="hive-light"]) .voiceOptionActive {
-  border-color: rgba(176, 127, 28, 0.36);
-  background: rgba(176, 127, 28, 0.14);
-  color: #221d14;
+  border-color: rgba(138, 90, 42, 0.36);
+  background: rgba(138, 90, 42, 0.14);
+  color: #4a3a2a;
 }
 
 :global(:root[data-theme="hive-light"]) .waveformCanvas {
@@ -790,12 +790,12 @@
 :global(:root[data-theme="hive-light"]) .turnWho,
 :global(:root[data-theme="hive-light"]) .voicePickerTitle,
 :global(:root[data-theme="hive-light"]) .voicePickerEmpty {
-  color: #6f6657;
+  color: #a09080;
 }
 
 :global(:root[data-theme="hive-light"]) .turnText,
 :global(:root[data-theme="hive-light"]) .detailModalBody {
-  color: #221d14;
+  color: #4a3a2a;
 }
 
 :global(:root[data-theme="hive-light"]) .commandBadge {
@@ -811,12 +811,12 @@
 }
 
 :global(:root[data-theme="hive-light"]) .voiceNoticeLoading {
-  color: #8c5e0a;
+  color: #8a5a2a;
 }
 
 :global(:root[data-theme="hive-light"]) .voiceNoticeLoading::before {
   border-color: rgba(140, 94, 10, 0.24);
-  border-top-color: #8c5e0a;
+  border-top-color: #8a5a2a;
 }
 
 :global(:root[data-theme="hive-light"]) .voiceNoticeReady {

@@ -1367,21 +1367,21 @@
   --fg3: var(--text-soft);
   --fg4: var(--muted);
   --line: rgba(137, 119, 91, 0.22);
-  --line2: rgba(185, 139, 47, 0.28);
+  --line2: rgba(138, 90, 42, 0.28);
   --cyan: var(--accent);
   --cyan2: var(--accent-strong);
   --cyan3: var(--accent-strong);
-  --cyan-glow: rgba(185, 139, 47, 0.18);
+  --cyan-glow: rgba(138, 90, 42, 0.18);
   --honey: var(--accent);
-  --honey2: var(--warning, #8a641f);
-  --honey-glow: rgba(212, 180, 111, 0.2);
+  --honey2: var(--warning, #9a5d32);
+  --honey-glow: rgba(138, 90, 42, 0.16);
   --violet: #7760a8;
   --violet2: #5f4a91;
   --violet-soft: rgba(119, 96, 168, 0.12);
 
   border-color: var(--line);
   background:
-    radial-gradient(140% 80% at 50% -10%, rgba(212, 180, 111, 0.14), transparent 60%),
+    radial-gradient(140% 80% at 50% -10%, rgba(138, 90, 42, 0.05), transparent 60%),
     var(--surface);
   box-shadow: 0 24px 64px rgba(82, 61, 22, 0.16);
   color: var(--foreground);
@@ -1415,7 +1415,7 @@
 :global(:root[data-theme="hive-light"]) .honey,
 :global(:root[data-theme="hive-light"]) .transferPrimary {
   background: linear-gradient(180deg, var(--accent), var(--accent-strong));
-  box-shadow: 0 14px 28px rgba(185, 139, 47, 0.2);
+  box-shadow: 0 14px 28px rgba(138, 90, 42, 0.2);
   color: var(--button-primary-foreground);
 }
 
@@ -1470,18 +1470,18 @@
 
 :global(:root[data-theme="hive-light"]) .fundingStatus[data-tone="ok"],
 :global(:root[data-theme="hive-light"]) .successMark {
-  border-color: rgba(64, 111, 83, 0.32);
-  background: rgba(64, 111, 83, 0.12);
-  color: var(--success, #406f53);
+  border-color: rgba(107, 143, 94, 0.32);
+  background: rgba(107, 143, 94, 0.12);
+  color: var(--success, #6b8f5e);
 }
 
 :global(:root[data-theme="hive-light"]) .fundingStatus[data-tone="warn"],
 :global(:root[data-theme="hive-light"]) .badge,
 :global(:root[data-theme="hive-light"]) .msg.warn,
 :global(:root[data-theme="hive-light"]) .wbal b {
-  border-color: rgba(185, 139, 47, 0.34);
-  background: rgba(212, 180, 111, 0.16);
-  color: var(--warning, #8a641f);
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
+  background: var(--warning-soft);
+  color: var(--warning, #9a5d32);
 }
 
 :global(:root[data-theme="hive-light"]) .dropdown {

@@ -4,6 +4,8 @@ export type ChatResponseBilling = {
   source?: string;
   costUsd?: number;
   balanceUsd?: number;
+  creditsDebited?: number;
+  creditsBalance?: number;
   paid?: boolean;
   network?: string;
 };
@@ -28,16 +30,30 @@ export function normalizeChatResponseBilling(value: unknown): ChatResponseBillin
   const label = cleanString(record.label);
   const source = cleanString(record.source);
   const network = cleanString(record.network);
-  const costUsd = finiteNumber(record.costUsd);
-  const balanceUsd = finiteNumber(record.balanceUsd);
+  const creditsDebited = finiteNumber(record.creditsDebited);
+  const creditsBalance = finiteNumber(record.creditsBalance);
+  const opaqueManagedCredits = provider?.toLowerCase() === "hivemindos-models"
+    && (source?.toLowerCase() === "prepaid-credit"
+      || creditsDebited !== undefined
+      || creditsBalance !== undefined);
+  // Historical prepaid HivemindOS messages persisted the private USD debit and
+  // balance. Scrub those fields as records are hydrated so old conversations
+  // cannot keep rendering the retired dollar-denominated credit contract.
+  const costUsd = opaqueManagedCredits ? undefined : finiteNumber(record.costUsd);
+  const balanceUsd = opaqueManagedCredits ? undefined : finiteNumber(record.balanceUsd);
   const paid = typeof record.paid === "boolean" ? record.paid : undefined;
-  if (!provider && !label && !source && costUsd === undefined && balanceUsd === undefined && paid === undefined && !network) return undefined;
+  if (
+    !provider && !label && !source && costUsd === undefined && balanceUsd === undefined
+    && creditsDebited === undefined && creditsBalance === undefined && paid === undefined && !network
+  ) return undefined;
   return {
     provider,
     label,
     source,
     costUsd,
     balanceUsd,
+    creditsDebited,
+    creditsBalance,
     paid,
     network,
   };

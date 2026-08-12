@@ -11,6 +11,8 @@ import { DASHBOARD_AUTH_HEADER, internalApiAuthHeaders } from "@/lib/utils/inter
 import { companyIdFromSource } from "@/lib/services/queen-bee/company-task-context";
 import { readQueenBeeOutcomeStats } from "@/lib/services/queen-bee/outcome-stats";
 import { readProjectRegistry } from "@/lib/services/projects/project-registry";
+import { queenBeeLoopPolicyKey, queenBeeLoopSkills, resolveQueenBeeTaskLoop } from "@/lib/services/queen-bee/task-loop-policy";
+import type { LoopTemplateId } from "@/lib/services/loops/loop-templates";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
 import type { KanbanLoopSpec, KanbanPriority, KanbanTask } from "@/lib/types/kanban";
 
@@ -29,6 +31,8 @@ export type QueenBeeMessageInput = QueenBeeOptions & {
   mode?: "act" | "plan" | "route";
   priority?: KanbanPriority;
   loop?: KanbanLoopSpec | null;
+  /** Server-owned verifier/rubric profile used only when loop is omitted. */
+  loopTemplateId?: LoopTemplateId | null;
   taskTitle?: string | null;
   agentId?: string | null;
   machineId?: string | null;
@@ -49,6 +53,8 @@ export type QueenBeeMessageInput = QueenBeeOptions & {
 
 export type QueenBeeFleetMachine = {
   key?: string;
+  /** Canonical id returned at the top level by /api/fleet/discover. */
+  machineId?: string;
   collector?: string;
   device?: {
     name?: string;
@@ -295,7 +301,7 @@ export async function prepareQueenBeeResumeChainContext(options: QueenBeeResumeC
  * known delegate).
  */
 export function rebuildQueenBeeResumeChain(
-  task: Pick<KanbanTask, "title" | "body" | "skills" | "source" | "assignee" | "targetMachine" | "requestedMachine" | "requestedAgent">,
+  task: Pick<KanbanTask, "title" | "body" | "skills" | "source" | "assignee" | "targetMachine" | "requestedMachine" | "requestedAgent" | "projectId">,
   context: QueenBeeResumeChainContext,
 ): QueenBeeDelegate[] {
   const assignee = task.assignee?.trim();
@@ -319,7 +325,7 @@ export function rebuildQueenBeeResumeChain(
     candidateFleet = scopeFleetToMemberIds(candidateFleet, new Set([requestedAgent]));
     if (candidateFleet.length === 0) return [];
   }
-  const intent = { title: task.title, body: task.body ?? "", skills: task.skills ?? [], projectRegistry: context.projectRegistry };
+  const intent = { title: task.title, body: task.body ?? "", skills: task.skills ?? [], projectId: task.projectId, projectRegistry: context.projectRegistry };
   const ranked = rankQueenBeeDelegates(
     intent,
     candidateFleet,
@@ -519,7 +525,7 @@ export async function routePendingQueenBeeTasks(
         candidateFleet = scopeFleetToMemberIds(candidateFleet, new Set([requestedAgent]));
         if (candidateFleet.length === 0) continue;
       }
-      const intent = { title: task.title, body: task.body ?? "", skills: task.skills ?? [], projectRegistry };
+      const intent = { title: task.title, body: task.body ?? "", skills: task.skills ?? [], projectId: task.projectId, projectRegistry };
       const chain = rankQueenBeeDelegates(
         intent,
         candidateFleet,
@@ -625,7 +631,7 @@ function resolveQueenBeeTargetMachine(
   const text = message.toLowerCase();
   for (const machine of machines) {
     const dns = String(machine.device?.dnsName || "").toLowerCase().replace(/\.$/, "");
-    const identifiers = [machine.key, machine.device?.machineId, dns, dns.split(".")[0]]
+    const identifiers = [machine.key, machine.machineId, machine.device?.machineId, dns, dns.split(".")[0]]
       .map((value) => String(value || "").toLowerCase().trim())
       .filter((value) => value.length >= 12 && value.includes("-"));
     if (identifiers.some((id) => text.includes(id))) {
@@ -635,16 +641,106 @@ function resolveQueenBeeTargetMachine(
   return undefined;
 }
 
+type QueenBeeCompanySubmission = {
+  message: string;
+  memberIds?: Set<string>;
+  projectId?: string;
+  workspace?: KanbanTask["workspace"];
+};
+
+/**
+ * A `company:{id}:…` source is an authority boundary, not a loose label.
+ * Resolve it to the live company before routing so direct Queen/API tasks get
+ * the same crew, project, directives, products, and approval policy as tasks
+ * created by the autonomy planner. Without this normalization, a caller could
+ * stamp a company source yet route a context-free scratch task to any fleet
+ * worker (the failure mode that produced WEBS's generic recovery previews).
+ */
+async function resolveQueenBeeCompanySubmission(input: {
+  input: QueenBeeMessageInput;
+  source: string;
+  message: string;
+  title: string;
+}): Promise<QueenBeeCompanySubmission> {
+  const companyId = companyIdFromSource(input.source);
+  if (!companyId) return { message: input.message };
+
+  const [{ getCompany }, { companyTaskWorkspace, companyWorkerContext }] = await Promise.all([
+    import("@/lib/services/companies-store"),
+    import("@/lib/services/companies-orchestration"),
+  ]);
+  const company = await getCompany(companyId);
+  if (!company) throw new Error(`Company source references unknown company ${companyId}.`);
+  const memberIds = new Set(company.agentIds ?? []);
+  const projectId = input.input.projectId?.trim() || company.projectId?.trim() || undefined;
+  const workspace = input.input.workspace ?? companyTaskWorkspace(company, {
+    title: input.title,
+    body: input.message,
+    skills: input.input.skills ?? [],
+  });
+  const workerContext = companyWorkerContext(company, "");
+  const alreadyCarriesCurrentCompanyContext = input.message.includes(workerContext);
+  const message = alreadyCarriesCurrentCompanyContext
+    ? input.message
+    : `${input.message}\n${workerContext}`;
+  return { message, memberIds, projectId, workspace };
+}
+
+function linkedProjectDirectories(
+  projectId: string | undefined,
+  projectRegistry: QueenBeeTaskIntent["projectRegistry"],
+  delegation: QueenBeeDelegate,
+): KanbanTask["linkedDirectories"] {
+  if (!projectId) return [];
+  const project = projectRegistry?.projects?.find((entry) => entry.id === projectId);
+  const localPath = project?.localPath?.trim();
+  const machine = delegation.machine;
+  if (!project || !localPath || !machine) return [];
+  const advertisedCheckouts = [...(machine.version?.projects ?? []), ...(machine.version?.projectCheckouts ?? [])];
+  const selectedMachineOwnsCheckout = machine.device?.self === true || advertisedCheckouts.some((checkout) => (
+    checkout.projectId === projectId || checkout.localPath === localPath || checkout.appDir === localPath
+  ));
+  if (!selectedMachineOwnsCheckout) return [];
+  const machineName = machine.device?.name || machine.key || "Project machine";
+  return [{
+    id: `project-${projectId}`,
+    name: project.name || projectId,
+    path: localPath,
+    machineName,
+    machineKey: machine.key || machine.machineId || machine.device?.machineId || machineName,
+    lastUsedAt: Date.now(),
+  }];
+}
+
 export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
-  const message = input.message?.trim();
-  if (!message) throw new Error("Queen Bee message is required.");
+  const rawMessage = input.message?.trim();
+  if (!rawMessage) throw new Error("Queen Bee message is required.");
 
   const { paths, state } = await initializeQueenBeeControlPlane(input);
   const source = input.source?.trim() || "api";
   const mode = input.mode || "act";
-  const fingerprint = fingerprintIntent({ message, source, mode });
-  const idempotencyKey = `queen-bee:${fingerprint}`;
+  const companyContext = await resolveQueenBeeCompanySubmission({
+    input,
+    source,
+    message: rawMessage,
+    title: input.taskTitle?.trim() || taskTitleFromMessage(rawMessage),
+  });
+  const message = companyContext.message;
+  const projectId = input.projectId?.trim() || companyContext.projectId;
   const title = input.taskTitle?.trim() || taskTitleFromMessage(message);
+  const taskLoop = resolveQueenBeeTaskLoop({
+    title,
+    message,
+    loop: input.loop,
+    loopTemplateId: input.loopTemplateId,
+  });
+  const fingerprint = fingerprintIntent({
+    message,
+    source,
+    mode,
+    policy: queenBeeLoopPolicyKey(input),
+  });
+  const idempotencyKey = `queen-bee:${fingerprint}`;
   const createdAt = new Date().toISOString();
   const projectRegistry = await readQueenBeeProjectRegistry(input.vaultPath);
   const sessionOutcomes = await readQueenBeeOutcomeStats().catch(() => ({}));
@@ -657,28 +753,39 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   // never a silent fallback to whoever ranks best (routing kept selecting a
   // fabricating delegate over the caller's proven one, 2026-07-19).
   const requestedAgent = input.agentId?.trim() || undefined;
-  const routableFleet = requestedAgent
-    ? scopeFleetToMemberIds(input.fleetSnapshot ?? [], new Set([requestedAgent]))
+  const companyFleet = companyContext.memberIds
+    ? scopeFleetToMemberIds(input.fleetSnapshot ?? [], companyContext.memberIds)
     : input.fleetSnapshot ?? [];
+  const routableFleet = requestedAgent
+    ? scopeFleetToMemberIds(companyFleet, new Set([requestedAgent]))
+    : companyFleet;
   const targetMachineKey = resolveQueenBeeTargetMachine(input.machineId, message, routableFleet);
   const routerOptions = { outcomes, assignments, targetMachineKey };
-  const delegationChain = rankQueenBeeDelegates({ title, body: message, skills: input.skills ?? [], projectRegistry }, routableFleet, routerOptions);
-  const delegation = delegationChain[0] ?? chooseQueenBeeDelegate({ title, body: message, skills: input.skills ?? [], projectRegistry }, routableFleet, routerOptions);
+  const delegationChain = rankQueenBeeDelegates({ title, body: message, skills: input.skills ?? [], projectId, projectRegistry }, routableFleet, routerOptions);
+  const delegation = delegationChain[0] ?? chooseQueenBeeDelegate({ title, body: message, skills: input.skills ?? [], projectId, projectRegistry }, routableFleet, routerOptions);
   const selectedAgentName = delegation.agent?.name || delegation.agent?.id || delegation.agent?.agentId;
   const selectedMachineName = delegation.machine?.device?.name || delegation.machine?.key;
   const selectedCollectorUrl = queenBeeDelegationCollectorUrl(delegation);
+  const linkedDirectories = linkedProjectDirectories(projectId, projectRegistry, delegation);
+  const taskSkills = [...new Set([
+    "hivemindos-coordination",
+    delegation.workerClass,
+    ...(input.skills ?? []),
+    ...(input.loop === undefined ? queenBeeLoopSkills(input.loopTemplateId) : []),
+  ])];
 
   const result = await createTask(null, {
     title,
-    body: queenBeeTaskBody({ message, source, mode, fingerprint, delegation, loop: input.loop }),
+    body: queenBeeTaskBody({ message, source, mode, fingerprint, delegation, loop: taskLoop }),
     source,
     assignee: selectedAgentName || "queen-bee",
     status: mode === "plan" ? "ideas" : "ready",
     priority: input.priority || "normal",
-    workspace: input.workspace ?? "scratch",
-    skills: ["hivemindos-coordination", delegation.workerClass, ...(input.skills ?? [])],
+    workspace: input.workspace ?? companyContext.workspace ?? "scratch",
+    skills: taskSkills,
+    linkedDirectories,
     targetMachine: delegation.machine ? {
-      key: delegation.machine.key || delegation.machine.device?.machineId || selectedMachineName || "unknown",
+      key: delegation.machine.key || delegation.machine.machineId || delegation.machine.device?.machineId || selectedMachineName || "unknown",
       name: selectedMachineName || "Unknown machine",
       collectorUrl: selectedCollectorUrl,
     } : null,
@@ -686,8 +793,8 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
     // can never send this task to a different machine or agent than demanded.
     requestedMachine: targetMachineKey || undefined,
     requestedAgent,
-    loop: input.loop ?? undefined,
-    projectId: input.projectId?.trim() || undefined,
+    loop: taskLoop,
+    projectId,
     parents: input.parents?.filter(Boolean) ?? undefined,
     idempotencyKey,
   }, {
@@ -762,8 +869,9 @@ export async function submitQueenBeeMessage(input: QueenBeeMessageInput) {
   };
 }
 
-export function fingerprintIntent(input: { message: string; source?: string; mode?: string }) {
-  const normalized = [input.source || "api", input.mode || "act", input.message]
+export function fingerprintIntent(input: { message: string; source?: string; mode?: string; policy?: string }) {
+  const normalized = [input.source || "api", input.mode || "act", input.policy, input.message]
+    .filter(Boolean)
     .join("\n")
     .toLowerCase()
     .replace(/\s+/g, " ")
@@ -875,7 +983,7 @@ function publicDelegation(delegation: ReturnType<typeof chooseQueenBeeDelegate>)
       name: delegation.machine.device?.name,
       os: delegation.machine.device?.os,
       collectorUrl: queenBeeDelegationCollectorUrl(delegation),
-      machineId: delegation.machine.device?.machineId,
+      machineId: delegation.machine.machineId || delegation.machine.device?.machineId,
     } : null,
   };
 }

@@ -300,7 +300,7 @@
 :global(:root[data-theme="hive-light"]) .modal {
   --sf-bg: rgba(255, 252, 246, 0.98);
   --sf-fg: var(--foreground);
-  --sf-accent: var(--success, #406f53);
+  --sf-accent: var(--success, #6b8f5e);
   --sf-link: var(--accent-strong);
   --sf-dim: var(--text-soft);
   --sf-line: var(--line);
@@ -328,11 +328,11 @@
 }
 
 :global(:root[data-theme="hive-light"]) .sendButton {
-  border-color: rgba(64, 111, 83, 0.4);
+  border-color: rgba(107, 143, 94, 0.4);
   background: var(--button-accent);
   color: var(--accent-strong);
 }
 
 :global(:root[data-theme="hive-light"]) .statusNoteError {
-  color: var(--danger, #a23a35);
+  color: var(--danger, #b5483b);
 }

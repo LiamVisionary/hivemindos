@@ -10,7 +10,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // Honey primary with dark text (the refined hive language).
+        // Hivemind accent primary with dark text (the refined hive language).
         default: "bg-primary text-primary-foreground shadow-xs hover:brightness-[1.06]",
         secondary: "border border-border bg-secondary text-secondary-foreground hover:brightness-[1.06]",
         outline:

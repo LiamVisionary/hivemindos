@@ -531,11 +531,11 @@
   --panel-2: #ffffff;
   --fg: #1c160a;
   --fg-2: rgba(28, 22, 10, 0.66);
-  --fg-3: #5e574b;
+  --fg-3: #8a7a6a;
   --line: rgba(28, 22, 10, 0.09);
   --line-2: rgba(28, 22, 10, 0.15);
   --line-3: rgba(28, 22, 10, 0.24);
-  --honey-2: #6a4505;
+  --honey-2: #8a5a2a;
 }
 /* The ClawBank hero stays a dark brand band in both themes so the white mark
    and warm glow read correctly. */

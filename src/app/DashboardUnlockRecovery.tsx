@@ -62,7 +62,7 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
           justifySelf: "center",
           border: 0,
           background: "transparent",
-          color: "var(--accent-strong, #936811)",
+          color: "var(--accent-strong, #8a5a2a)",
           cursor: "pointer",
           fontSize: 13,
           fontWeight: 600,
@@ -77,7 +77,7 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
           style={{
             display: "grid",
             gap: 14,
-            border: "1px solid var(--line, rgba(54, 46, 30, 0.16))",
+            border: "1px solid var(--line, rgba(74, 58, 42, 0.16))",
             borderRadius: 8,
             background: "var(--surface-strong, rgba(244, 239, 228, 0.94))",
             padding: 14,
@@ -88,7 +88,7 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
             <StatusLine ok={authSecretPresent} label="Auth secret" missingLabel="Missing" />
             <StatusLine ok={deviceTokenPresent} label="Device token" missingLabel="Missing" />
           </div>
-          <p style={{ margin: 0, color: "var(--text-soft, #5e574b)", fontSize: 13, lineHeight: 1.55 }}>
+          <p style={{ margin: 0, color: "var(--text-soft, #8a7a6a)", fontSize: 13, lineHeight: 1.55 }}>
             {nativeMode
               ? "The desktop app uses a registered device passkey when available and keeps its local device token as the fallback."
               : "Run these from any terminal after setup. If the command is not on PATH yet, run it from the HivemindOS project folder with pnpm. The token value is never exposed through this locked page."}
@@ -124,13 +124,13 @@ export default function DashboardUnlockRecovery({ authSecretPresent, deviceToken
             </div>
           ) : null}
           {!deviceTokenPresent || !authSecretPresent ? (
-            <p style={{ margin: 0, color: "var(--muted, #867d6e)", fontSize: 12, lineHeight: 1.5 }}>
+            <p style={{ margin: 0, color: "var(--muted, #8a7a6a)", fontSize: 12, lineHeight: 1.5 }}>
               {nativeMode
                 ? "Desktop auth is missing. Reopening the app should create a fresh local auth file."
                 : "Restart the dashboard after changing auth values so the server loads the new env."}
             </p>
           ) : (
-            <p style={{ margin: 0, color: "var(--muted, #867d6e)", fontSize: 12, lineHeight: 1.5 }}>
+            <p style={{ margin: 0, color: "var(--muted, #8a7a6a)", fontSize: 12, lineHeight: 1.5 }}>
               {nativeMode
                 ? "Desktop auth is ready. Use device authentication above, choose the token fallback, or reopen HivemindOS to retry."
                 : <>Manual fallback: open <code style={codeStyle}>.env.local</code> and copy <code style={codeStyle}>HIVEMINDOS_DASHBOARD_DEVICE_TOKEN</code>.</>}
@@ -171,12 +171,12 @@ async function writeClipboardText(value: string) {
 
 function StatusLine({ ok, label, missingLabel }: { ok: boolean; label: string; missingLabel: string }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, color: "var(--foreground, #221d14)", fontSize: 13 }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, color: "var(--foreground, #4a3a2a)", fontSize: 13 }}>
       <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-        {ok ? <Check size={15} color="#356b2f" /> : <KeyRound size={15} color="#8e3328" />}
+        {ok ? <Check size={15} color="#56794b" /> : <KeyRound size={15} color="#8e3328" />}
         {label}
       </span>
-      <strong style={{ color: ok ? "#356b2f" : "#8e3328", fontSize: 12 }}>{ok ? "Present" : missingLabel}</strong>
+      <strong style={{ color: ok ? "#56794b" : "#8e3328", fontSize: 12 }}>{ok ? "Present" : missingLabel}</strong>
     </div>
   );
 }
@@ -189,7 +189,7 @@ function CommandButton({ command, copied, failed, icon, label, onCopy }: {
   label: string;
   onCopy: (command: string) => Promise<void>;
 }) {
-  const statusColor = copied ? "#356b2f" : failed ? "#8e3328" : "var(--text-soft, #5e574b)";
+  const statusColor = copied ? "#56794b" : failed ? "#8e3328" : "var(--text-soft, #8a7a6a)";
   const statusText = copied ? "Copied" : failed ? "Failed" : "Copy";
   return (
     <button
@@ -201,10 +201,10 @@ function CommandButton({ command, copied, failed, icon, label, onCopy }: {
         alignItems: "center",
         gap: 10,
         width: "100%",
-        border: "1px solid var(--line, rgba(54, 46, 30, 0.16))",
+        border: "1px solid var(--line, rgba(74, 58, 42, 0.16))",
         borderRadius: 8,
         background: "var(--field, rgba(255, 252, 246, 0.92))",
-        color: "var(--foreground, #221d14)",
+        color: "var(--foreground, #4a3a2a)",
         cursor: "pointer",
         padding: "10px 11px",
         textAlign: "left",
@@ -237,10 +237,10 @@ function ActionButton({ icon, label, title, onClick }: {
         justifyContent: "center",
         gap: 8,
         width: "100%",
-        border: "1px solid var(--line, rgba(54, 46, 30, 0.16))",
+        border: "1px solid var(--line, rgba(74, 58, 42, 0.16))",
         borderRadius: 8,
         background: "var(--field, rgba(255, 252, 246, 0.92))",
-        color: "var(--foreground, #221d14)",
+        color: "var(--foreground, #4a3a2a)",
         cursor: "pointer",
         padding: "10px 11px",
         fontSize: 12,
@@ -255,10 +255,10 @@ function ActionButton({ icon, label, title, onClick }: {
 }
 
 const codeStyle = {
-  border: "1px solid var(--line, rgba(54, 46, 30, 0.16))",
+  border: "1px solid var(--line, rgba(74, 58, 42, 0.16))",
   borderRadius: 6,
   background: "var(--field, rgba(255, 252, 246, 0.92))",
-  color: "var(--foreground, #221d14)",
+  color: "var(--foreground, #4a3a2a)",
   fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
   fontSize: 12,
   padding: "2px 5px",

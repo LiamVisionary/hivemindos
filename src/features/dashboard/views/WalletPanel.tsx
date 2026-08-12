@@ -1246,13 +1246,6 @@ function WalletPanelComponent(props: any) {
       await loadHoneyLedger();
       return result;
     },
-    onMessageHive: (text: string) => {
-      try { window.sessionStorage.setItem("hivemindos.walletDraftMessage", text); } catch {}
-      window.dispatchEvent(new CustomEvent("hivemindos:wallet-message", { detail: { text } }));
-      const nextUrl = new URL(window.location.href);
-      nextUrl.searchParams.set("view", "chat");
-      window.location.assign(nextUrl.toString());
-    },
   }), [bankrRecipientAddress, effectiveWalletsByAgent, invalidatePersonalWalletBalance, loadBankrWallet, loadHoneyLedger, loadPersonalWallets, loadWalletActivity, mergedPersonalWallets, persistPersonalWalletBalances, props, readPersonalWalletBalances, refreshPersonalWalletSourceBalance, refreshUsePodTargets, refreshWalletBalance, resolvePersonalWalletBalanceTargets, vaultPath]);
   const navigateFromDropInShelf = useCallback((id: string) => {
     if (typeof window === "undefined") return;

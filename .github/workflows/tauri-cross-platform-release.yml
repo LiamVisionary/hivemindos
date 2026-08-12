@@ -6,7 +6,6 @@ on:
       version:
         description: Release version to publish after all builds pass
         required: true
-        default: 0.4.1
       source_ref:
         description: Branch, tag, or SHA to build
         required: true
@@ -657,6 +656,45 @@ jobs:
             --out release-assets/latest.json
           cat release-assets/latest.json
 
+      - name: Stamp release source
+        id: release_source
+        if: github.event.inputs.link_release_tag == ''
+        env:
+          RELEASE_VERSION: ${{ github.event.inputs.version }}
+          SOURCE_REF: ${{ github.event.inputs.source_ref }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/bump-app-version.mjs --set "$RELEASE_VERSION"
+          node scripts/bump-app-version.mjs --check "$RELEASE_VERSION"
+          git diff --check
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
+          if ! git diff --cached --quiet; then
+            git commit -m "release: stamp v${RELEASE_VERSION}"
+          fi
+
+          release_commit="$(git rev-parse HEAD)"
+          source_branch="${SOURCE_REF#refs/heads/}"
+          remote_source_sha=""
+          if git check-ref-format --branch "$source_branch" >/dev/null 2>&1; then
+            remote_source_sha="$(git ls-remote --heads origin "refs/heads/${source_branch}" | awk 'NR == 1 { print $1 }')"
+          fi
+          if [ -n "$remote_source_sha" ] && [ "$remote_source_sha" != "$SOURCE_SHA" ]; then
+            echo "Source branch ${source_branch} moved from ${SOURCE_SHA} to ${remote_source_sha} while release assets were building. Rerun from the new head." >&2
+            exit 1
+          fi
+          if [ -z "$remote_source_sha" ]; then
+            source_branch=""
+            echo "Source ref is not a remote branch; the synchronized version commit will be retained by the release tag only."
+          fi
+
+          echo "release_commit=${release_commit}" >> "$GITHUB_OUTPUT"
+          echo "source_branch=${source_branch}" >> "$GITHUB_OUTPUT"
+
       - name: Create tag and publish release
         if: github.event.inputs.link_release_tag == ''
         env:
@@ -664,6 +702,8 @@ jobs:
           RELEASE_VERSION: ${{ github.event.inputs.version }}
           REPOSITORY: ${{ github.repository }}
           PRERELEASE: ${{ github.event.inputs.prerelease }}
+          RELEASE_COMMIT: ${{ steps.release_source.outputs.release_commit }}
+          SOURCE_BRANCH: ${{ steps.release_source.outputs.source_branch }}
         shell: bash
         run: |
           set -euo pipefail
@@ -686,10 +726,16 @@ jobs:
             exit 1
           fi
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$release_tag" -m "HivemindOS ${release_tag}"
-          git push origin "$release_tag"
+          if ! [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Stamped release commit is missing or invalid: ${RELEASE_COMMIT}" >&2
+            exit 1
+          fi
+          git tag -a "$release_tag" "$RELEASE_COMMIT" -m "HivemindOS ${release_tag}"
+          if [ -n "$SOURCE_BRANCH" ]; then
+            git push --atomic origin "HEAD:refs/heads/${SOURCE_BRANCH}" "refs/tags/${release_tag}"
+          else
+            git push origin "refs/tags/${release_tag}"
+          fi
 
           # A pre-release stays OFF GitHub's /releases/latest/ pointer, so the
           # updater (releases/latest/download/latest.json) does NOT pick it up and

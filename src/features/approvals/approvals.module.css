@@ -28,24 +28,24 @@
 }
 
 :global(:root[data-theme="hive-light"]) .approvalsRoot {
-  --ap-panel: #fbf8f1;
-  --ap-panel-2: #f4efe4;
+  --ap-panel: #f8f4ee;
+  --ap-panel-2: #f0e8d8;
   --ap-panel-hi: #ffffff;
-  --ap-line: rgba(54, 46, 30, 0.1);
-  --ap-line-2: rgba(54, 46, 30, 0.16);
-  --ap-fg: #221d14;
-  --ap-fg-2: #5e574b;
-  --ap-fg-3: #5e574b;
-  --ap-fg-4: #6f6657;
-  --ap-honey: #936811; --ap-honey-fill: #e6bb5c;
+  --ap-line: rgba(74, 58, 42, 0.1);
+  --ap-line-2: rgba(74, 58, 42, 0.16);
+  --ap-fg: #4a3a2a;
+  --ap-fg-2: #8a7a6a;
+  --ap-fg-3: #8a7a6a;
+  --ap-fg-4: #a09080;
+  --ap-honey: #8a5a2a; --ap-honey-fill: #f0e8d8;
   --ap-honey-ink: #fdf7ea;
-  --ap-honey-soft: rgba(176, 127, 28, 0.12);
-  --ap-honey-line: rgba(176, 127, 28, 0.34);
+  --ap-honey-soft: rgba(138, 90, 42, 0.12);
+  --ap-honey-line: rgba(138, 90, 42, 0.34);
   --ap-live: #6f8f68;
   --ap-live-soft: rgba(111, 143, 104, 0.14);
-  --ap-danger: #c0524d;
-  --ap-danger-soft: rgba(192, 82, 77, 0.12);
-  --ap-danger-line: rgba(192, 82, 77, 0.4);
+  --ap-danger: #b5483b;
+  --ap-danger-soft: rgba(181, 72, 59, 0.12);
+  --ap-danger-line: rgba(181, 72, 59, 0.4);
 }
 
 /* — Approval card — */

@@ -59,7 +59,12 @@ const {
   updateCompanyMetric,
   upsertCompany,
 } = await import("../src/lib/services/companies-store.ts");
-const { ensureCompanyProductsSeeded, extractPricingProposalMarkers } = await import("../src/lib/services/company-products.ts");
+const {
+  ensureCompanyProductsSeeded,
+  extractPricingProposalMarkers,
+  extractTaskPricingCatalog,
+  fileTaskPricingProposals,
+} = await import("../src/lib/services/company-products.ts");
 const { proposeCompanyPricingChange, resolveCompanyPricingProposal } = await import("../src/lib/services/companies-store.ts");
 const { companyQueenAgentId } = await import("../src/lib/services/company-queen.ts");
 const { companyWorkerContext } = await import("../src/lib/services/companies-orchestration.ts");
@@ -68,6 +73,7 @@ const { readCompanyMemory, syncCompanyTaskOutcomes } = await import("../src/lib/
 const { readCompanyConfigHistory } = await import("../src/lib/services/company-governance.ts");
 const { submitQueenBeeMessage } = await import("../src/lib/services/queen-bee/control-plane.ts");
 const { readBoard } = await import("../src/lib/services/kanban/local-kanban-store.ts");
+const { upsertProject } = await import("../src/lib/services/projects/project-registry.ts");
 const { appendSpend } = await import("../src/lib/services/wallet/spend-ledger.ts");
 const { evaluateSpend, resolveSpendGovernance } = await import("../src/lib/services/wallet/spend-governance.ts");
 const { createTask } = await import("../src/lib/services/kanban/local-kanban-store.ts");
@@ -359,21 +365,75 @@ try {
   const defaulted = await upsertCompany({ name: "Fresh Co" });
   assert.equal(defaulted.homeMachineKey, hostname(), "new companies default to the creating machine");
 
-  // ── projectId stamps dispatched Work Board tasks ──
+  // ── company-source submissions inherit the full company envelope ──
   const kanbanOptions = { vaultPath, kanbanFolder: "Operations/Work Board" };
+  await upsertCompany({
+    id: "co-legacy-1",
+    name: "Legacy Outreach Agency",
+    projectId: "maps-agency-1234",
+  });
+  await addCompanyDirective("co-legacy-1", {
+    text: "Use the linked template project and reject generic one-card previews.",
+    source: "inject",
+  });
+  await upsertProject({
+    id: "maps-agency-1234",
+    name: "maps-agency",
+    localPath: "/tmp/maps-agency-1234",
+  }, { vaultPath });
   await submitQueenBeeMessage({
-    message: "Ship the Sarasota template refresh",
-    taskTitle: "Template refresh",
+    message: "Build the Sarasota website template refresh",
+    taskTitle: "Website template refresh",
     mode: "act",
     source: "company:co-legacy-1:test-run",
-    fleetSnapshot: [],
-    projectId: "maps-agency-1234",
+    fleetSnapshot: [
+      {
+        key: "company-machine",
+        collector: "ready",
+        device: { self: true, name: "Company machine", online: true, collectorUrl: "http://127.0.0.1:1" },
+        agents: [{ id: "hermes-alpha", name: "Hermes Alpha", runtime: "hermes", workerClass: "code", runtimeCapabilities: { chat: true } }],
+      },
+      {
+        key: "outsider-machine",
+        collector: "ready",
+        device: { name: "Outsider machine", online: true, collectorUrl: "http://127.0.0.1:2" },
+        agents: [{ id: "not-a-member", name: "Outsider", runtime: "hermes", workerClass: "code", runtimeCapabilities: { chat: true } }],
+      },
+    ],
     ...kanbanOptions,
   });
   const board = await readBoard(null, kanbanOptions);
-  const dispatched = (board.tasks ?? []).find((task) => task.title === "Template refresh");
+  const dispatched = (board.tasks ?? []).find((task) => task.title === "Website template refresh");
   assert.ok(dispatched, "queen-bee dispatch creates the task");
-  assert.equal(dispatched.projectId, "maps-agency-1234", "task carries the company's projectId");
+  assert.equal(dispatched.projectId, "maps-agency-1234", "company source inherits the company's projectId without a caller copy");
+  assert.equal(dispatched.workspace, "worktree", "website work inherits a project worktree instead of scratch");
+  assert.equal(dispatched.assignee, "Hermes Alpha", "company source can route only to a company member");
+  assert.equal(dispatched.linkedDirectories?.[0]?.path, "/tmp/maps-agency-1234", "local project checkout is linked onto the task");
+  assert.match(dispatched.body, /Use the linked template project and reject generic one-card previews/, "task receives current company directives");
+  assert.match(dispatched.body, /Company id: co-legacy-1/, "task receives the company identity envelope");
+
+  await addCompanyDirective("co-legacy-1", {
+    text: "Current contract revision CURRENT-2026 must be present.",
+    source: "inject",
+  });
+  await submitQueenBeeMessage({
+    message: "Audit a stale company envelope\nCompany id: co-legacy-1\nStanding directives from the human — follow these exactly (newest last):\n- OLD-ONLY",
+    taskTitle: "Stale company envelope audit",
+    mode: "plan",
+    source: "company:co-legacy-1:stale-context-test",
+    fleetSnapshot: [
+      {
+        key: "company-machine",
+        collector: "ready",
+        device: { self: true, name: "Company machine", online: true, collectorUrl: "http://127.0.0.1:1" },
+        agents: [{ id: "hermes-alpha", name: "Hermes Alpha", runtime: "hermes", workerClass: "code", runtimeCapabilities: { chat: true } }],
+      },
+    ],
+    ...kanbanOptions,
+  });
+  const refreshedBoard = await readBoard(null, kanbanOptions);
+  const staleEnvelopeTask = (refreshedBoard.tasks ?? []).find((task) => task.title === "Stale company envelope audit");
+  assert.match(staleEnvelopeTask?.body ?? "", /Current contract revision CURRENT-2026 must be present/, "stale company envelopes receive the current server-resolved context");
 
   // ── API/integration limits: dedicated writes compose and generic saves preserve them ──
   const guarded = await upsertCompany({ name: "Guarded API Co", sector: "Research" });
@@ -491,6 +551,18 @@ try {
   });
   assert.equal(markers[1].productRef, "Care Plan", "name-based reference parses");
   assert.equal(markers[1].amountUsd, 79, "arrow + /mo cadence suffix parses");
+  assert.deepEqual(
+    extractTaskPricingCatalog([
+      "Official products & pricing:",
+      "- Standard Site (key: standard-site) — $3,000 (recommended default): Full site.",
+      "- Care Plan (key: care-plan) — $99/mo (add-on): Managed care.",
+    ].join("\n")),
+    [
+      { productKey: "standard-site", productName: "Standard Site", amountUsd: 3000 },
+      { productKey: "care-plan", productName: "Care Plan", amountUsd: 99 },
+    ],
+    "task prompt catalog snapshots parse without cadence or description noise",
+  );
 
   assert.equal(
     await proposeCompanyPricingChange(shop.id, { productRef: "standard-site", proposedAmountUsd: 2400 }),
@@ -521,7 +593,9 @@ try {
     status: "done",
     source: `company:${shop.id}:run-9`,
     assignee: "hermes-ada",
+    body: "Official products & pricing:\n- Standard Site (key: standard-site) — $3,000 (recommended default): Full site.",
     result: "Reviewed replies.\nPRICING PROPOSAL: standard-site $2,400\nWHY: 9 of 14 replies said too expensive.",
+    createdAt: Date.now(),
     completedAt: Date.now(),
   };
   await syncCompanyTaskOutcomes([await getCompany(shop.id)], [proposalTask]);
@@ -531,9 +605,103 @@ try {
   assert.equal(pricingCo.pricingProposals[0].proposedAmountUsd, 2400);
   assert.equal(pricingCo.pricingProposals[0].sourceTaskId, "t-pricing-1");
   assert.equal(pricingCo.pricingProposals[0].proposedBy, "hermes-ada");
+  assert.ok(
+    pricingCo.pricingProposalMarkerReceipts?.includes("t-pricing-1:standard-site"),
+    "task/product marker receipt persists with the replicated company definition",
+  );
+  const originalProposalId = pricingCo.pricingProposals[0].id;
   await syncCompanyTaskOutcomes([pricingCo], [proposalTask]);
   pricingCo = await getCompany(shop.id);
   assert.equal(pricingCo.pricingProposals?.length, 1, "re-syncing the same task does not duplicate the proposal");
+  assert.equal(pricingCo.pricingProposals[0].id, originalProposalId, "re-sync keeps the stable task/product proposal id");
+  assert.equal(await fileTaskPricingProposals(shop.id, proposalTask), 0, "durable receipt survives outside the rolling memory window");
+
+  // A task marker is evaluated against the catalog snapshot it actually saw,
+  // not whatever price happens to be current when a later sync processes it.
+  const stalePricingTask = {
+    id: "t-pricing-stale",
+    title: "Review care-plan pricing",
+    status: "done",
+    source: `company:${shop.id}:run-stale`,
+    assignee: "hermes-grace",
+    body: "Official products & pricing:\n- Care Plan (key: care-plan) — $79/mo (add-on): Managed care.",
+    result: "Price clarity only.\nPRICING PROPOSAL: care-plan $79\nWHY: Keep the visible package the task was shown.",
+    createdAt: Date.now() - 60_000,
+    completedAt: Date.now() - 30_000,
+  };
+  assert.equal(await fileTaskPricingProposals(shop.id, stalePricingTask), 0, "stale task snapshot cannot manufacture a price change");
+  pricingCo = await getCompany(shop.id);
+  assert.equal(
+    pricingCo.pricingProposals.some((proposal) => proposal.sourceTaskId === stalePricingTask.id),
+    false,
+    "stale marker never reaches Approvals",
+  );
+  assert.ok(
+    pricingCo.pricingProposalMarkerReceipts?.includes("t-pricing-stale:care-plan"),
+    "stale marker is consumed permanently instead of resurfacing later",
+  );
+
+  // Upgrade path for a request already pending before durable receipts existed:
+  // reconciliation must compare the source task snapshot and remove it.
+  const legacyStaleCompany = await upsertCompany({ name: "Legacy Stale Pricing Co" });
+  await setCompanyProducts(legacyStaleCompany.id, {
+    items: [{ key: "starter-launch", name: "Starter Launch", amountUsd: 700 }],
+  });
+  await proposeCompanyPricingChange(legacyStaleCompany.id, {
+    productRef: "starter-launch",
+    proposedAmountUsd: 1500,
+    sourceTaskId: "t-legacy-stale-pricing",
+    proposedBy: "hermes-grace",
+  });
+  const legacyDefinitions = await readJson(definitionsFile);
+  const legacyDefinition = legacyDefinitions.find((entry) => entry.id === legacyStaleCompany.id);
+  delete legacyDefinition.pricingProposalMarkerReceipts;
+  await writeFile(definitionsFile, JSON.stringify(legacyDefinitions, null, 2));
+  const legacyStaleTask = {
+    id: "t-legacy-stale-pricing",
+    title: "Old pricing clarity review",
+    status: "done",
+    source: `company:${legacyStaleCompany.id}:run-old`,
+    assignee: "hermes-grace",
+    body: "Official products & pricing:\n- Starter Launch (key: starter-launch) — $1,500: One-page site.",
+    result: "No price objection found.\nPRICING PROPOSAL: starter-launch $1500\nWHY: Keep the visible package the task was shown.",
+    createdAt: Date.now() - 120_000,
+    completedAt: Date.now() - 90_000,
+  };
+  await syncCompanyTaskOutcomes([await getCompany(legacyStaleCompany.id)], [legacyStaleTask]);
+  const reconciledLegacyCompany = await getCompany(legacyStaleCompany.id);
+  assert.equal(reconciledLegacyCompany.pricingProposals?.length ?? 0, 0, "reconciliation removes an already-pending stale request");
+  assert.ok(
+    reconciledLegacyCompany.pricingProposalMarkerReceipts?.includes("t-legacy-stale-pricing:starter-launch"),
+    "reconciliation leaves a durable receipt so the legacy request stays gone",
+  );
+
+  const freshCareTask = {
+    ...stalePricingTask,
+    id: "t-pricing-fresh-care",
+    body: "Official products & pricing:\n- Care Plan (key: care-plan) — $99/mo (add-on): Managed care.",
+    result: "Observed checkout loss.\nPRICING PROPOSAL: care-plan $79\nWHY: 8 of 10 buyers abandoned at the $99 quote.",
+    createdAt: Date.now(),
+    completedAt: Date.now(),
+  };
+  assert.equal(await fileTaskPricingProposals(shop.id, freshCareTask), 1, "fresh catalog snapshot files a real change request");
+  await setCompanyProducts(shop.id, {
+    items: [
+      { key: "standard-site", name: "Standard Site", amountUsd: 3000, recommended: true },
+      { key: "care-plan", name: "Care Plan", amountUsd: 89, interval: "month", kind: "addon" },
+    ],
+  });
+  pricingCo = await getCompany(shop.id);
+  assert.equal(
+    pricingCo.pricingProposals.some((proposal) => proposal.sourceTaskId === freshCareTask.id),
+    false,
+    "a later catalog edit supersedes a pending request based on the old current price",
+  );
+  assert.equal(
+    pricingCo.pricingProposals.some((proposal) => proposal.id === originalProposalId),
+    true,
+    "catalog edits preserve unrelated still-current proposals",
+  );
 
   // A newer proposal for the same product replaces the pending one.
   await proposeCompanyPricingChange(shop.id, { productRef: "Standard Site", proposedAmountUsd: 2200, why: "fresher evidence" });
@@ -563,6 +731,16 @@ try {
   assert.ok(pricingMemory.some((entry) => entry.title.startsWith("Pricing change requested")), "request lands in company memory");
   assert.ok(pricingMemory.some((entry) => entry.title.startsWith("Pricing change rejected")), "rejection lands in company memory");
   assert.ok(pricingMemory.some((entry) => entry.title.startsWith("Pricing approved")), "approval lands in company memory");
+
+  const [companiesViewSource, cockpitSource, productsPanelSource] = await Promise.all([
+    readFile(join(process.cwd(), "src/features/dashboard/views/zero-human-companies/ZeroHumanCompanies.tsx"), "utf8"),
+    readFile(join(process.cwd(), "src/features/dashboard/views/zero-human-companies/Cockpit.tsx"), "utf8"),
+    readFile(join(process.cwd(), "src/features/dashboard/views/zero-human-companies/ProductsPanel.tsx"), "utf8"),
+  ]);
+  assert.doesNotMatch(companiesViewSource, /ThemeToggle|onToggleTheme|themeOverride/, "Companies portfolio has no route-local theme toggle");
+  assert.doesNotMatch(cockpitSource, /onToggleTheme|Toggle light \/ dark/, "Company cockpit has no route-local theme toggle");
+  assert.doesNotMatch(productsPanelSource, /pricing may be blocking sales/i, "pricing banner does not imply every price change is a price cut");
+  assert.match(productsPanelSource, /Pricing review requested/, "pricing banner uses direction-neutral review copy");
 
   // ── repo seeding: a never-configured company inherits the repo's default pricing once ──
   const repoDir = await mkdtemp(join(tmpdir(), "hivemind-company-pricing-repo-"));

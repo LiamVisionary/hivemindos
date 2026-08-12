@@ -16,6 +16,9 @@ const {
 } = await import("../src/lib/services/kanban/kanban-failure-classification.ts");
 const { runQueenBeeAutonomousPickup } = await import("../src/lib/services/queen-bee/autonomous-worker.ts");
 const { classifyRuntimeFailureOutput } = await import("../src/lib/services/queen-bee/worker-output-failure.ts");
+const { isOutreachRevenueTask, validateOutreachCompletion } = await import(
+  "../src/lib/services/kanban/outreach-safeguards.ts"
+);
 const {
   createTask,
   claimTask,
@@ -41,6 +44,41 @@ const body = [
   "Request",
   "Send or block a Sarasota outreach email pitch with evidence.",
 ].join("\n");
+
+const stagedCompanyContext = [
+  "Created by the Queen Bee control plane.",
+  "Request",
+  "Qualify five current no-website prospects only. Do not publish, send, spend, contact prospects, or make an offer.",
+  "---",
+  "Company: Website Outreach Agency (Web Development)",
+  "The eventual email must include the website, walkthrough, and purchase link.",
+].join("\n");
+assert.equal(
+  isOutreachRevenueTask({
+    title: "Stage 1 — qualify five safe prospects",
+    body: stagedCompanyContext,
+    source,
+  }),
+  false,
+  "qualification-only cards are not mistaken for completed outreach because of appended company context",
+);
+assert.equal(
+  validateOutreachCompletion({
+    title: "Stage 2 — build and QA five prospect websites",
+    body: stagedCompanyContext.replace(
+      "Qualify five current no-website prospects only.",
+      "Build five websites only with verified contact/directions CTAs.",
+    ),
+    source,
+  }, "Five local sites built and verified."),
+  null,
+  "build-only contact/directions copy is not mistaken for an instruction to contact a prospect",
+);
+assert.equal(
+  isOutreachRevenueTask({ title: "Send approved outreach emails", body, source }),
+  true,
+  "a positive send request still activates the outreach receipt gate",
+);
 
 async function outreachTask(title) {
   const { task } = await createTask(null, {

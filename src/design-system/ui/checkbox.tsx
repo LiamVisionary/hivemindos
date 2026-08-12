@@ -6,7 +6,7 @@ import { Checkbox as CheckboxPrimitive } from "radix-ui";
 
 import { cn } from "@/lib/utils";
 
-/* Checkbox — square opt-in toggle with a honey fill when checked. */
+/* Checkbox — square opt-in toggle with a Hivemind accent fill when checked. */
 
 function Checkbox({ className, ...props }: React.ComponentProps<typeof CheckboxPrimitive.Root>) {
   return (

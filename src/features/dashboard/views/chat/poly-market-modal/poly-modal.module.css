@@ -33,21 +33,21 @@
 .root *, .root *::before, .root *::after { box-sizing: border-box; }
 
 :global([data-theme="hive-light"]) .root {
-  --bg-0: #f1ede3; --bg-1: #f6f2e9;
-  --line: rgba(54, 46, 30, 0.10); --line-2: rgba(54, 46, 30, 0.16);
-  --fg: #221d14; --fg-2: #5e574b; --fg-3: #5e574b; --fg-4: #6f6657;
-  --cyan: #5f8f5a; --cyan-2: #4f7d4b; --cyan-glow: rgba(95, 143, 90, 0.22);
-  --honey: #936811; --honey-fill: #e6bb5c; --honey-2: #936811; --honey-3: #6f5011;
-  --danger: #c0524d; --danger-2: #963a37;
+  --bg-0: #f5efe6; --bg-1: #f0e8d8;
+  --line: rgba(74, 58, 42, 0.10); --line-2: rgba(74, 58, 42, 0.16);
+  --fg: #4a3a2a; --fg-2: #8a7a6a; --fg-3: #8a7a6a; --fg-4: #a09080;
+  --cyan: #6b8f5e; --cyan-2: #6b8f5e; --cyan-glow: rgba(107, 143, 94, 0.22);
+  --honey: #8a5a2a; --honey-fill: #f0e8d8; --honey-2: #8a5a2a; --honey-3: #8a5a2a;
+  --danger: #b5483b; --danger-2: #963a37;
   --panel-grad: linear-gradient(180deg, rgba(251,248,241,0.94), rgba(244,239,228,0.82));
   --panel-card-grad: linear-gradient(180deg, rgba(255,252,246,0.88), rgba(244,239,228,0.76));
-  --pm-mkt: #867d6e; --pm-no: #c0524d;
-  background: rgba(54, 46, 30, 0.28);
+  --pm-mkt: #8a7a6a; --pm-no: #b5483b;
+  background: rgba(74, 58, 42, 0.28);
 }
 
 :global([data-theme="hive-light"]) .root :global(.mm-modal) {
   background: var(--panel-grad);
-  box-shadow: 0 40px 120px rgba(80, 60, 20, 0.20), 0 0 0 1px rgba(54, 46, 30, 0.08);
+  box-shadow: 0 40px 120px rgba(80, 60, 20, 0.20), 0 0 0 1px rgba(74, 58, 42, 0.08);
 }
 
 /* ── modal shell ── */
@@ -75,7 +75,7 @@
 .root :global(.mm-x svg) { width: 15px; height: 15px; }
 
 .root :global(.mm-callout) { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: stretch; }
-.root :global(.mm-verdict) { display: grid; gap: 4px; align-content: center; border: 1px solid rgba(255,212,90,0.34); background: rgba(242,183,5,0.07); border-radius: 13px; padding: 11px 14px; }
+.root :global(.mm-verdict) { display: grid; gap: 4px; align-content: center; border: 1px solid var(--honey-line); background: var(--honey-soft); border-radius: 13px; padding: 11px 14px; }
 .root :global(.mm-verdict .lbl) { font-family: var(--f-mono); font-size: 9px; font-weight: 600; letter-spacing: 0; text-transform: uppercase; color: var(--honey-2); }
 .root :global(.mm-verdict .hl) { font-family: var(--f-display); font-weight: 700; font-size: 17px; letter-spacing: 0; color: var(--honey-3); line-height: 1.1; }
 .root :global(.mm-verdict .sub) { font-family: var(--f-mono); font-size: 10px; color: var(--fg-3); }

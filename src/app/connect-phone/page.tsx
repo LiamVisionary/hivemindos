@@ -16,9 +16,9 @@ const pageStyle: CSSProperties = {
   justifyContent: "center",
   gap: 20,
   padding: 32,
-  color: "var(--foreground, #221d14)",
+  color: "var(--foreground, #4a3a2a)",
   background:
-    "radial-gradient(circle at 22% 18%, rgba(176, 127, 28, 0.11), transparent 22rem), radial-gradient(circle at 78% 78%, rgba(95, 143, 90, 0.14), transparent 24rem), linear-gradient(180deg, var(--bg-0, #f1ede3), var(--bg-1, #f8f4ec))",
+    "radial-gradient(circle at 22% 18%, rgba(138, 90, 42, 0.11), transparent 22rem), radial-gradient(circle at 78% 78%, rgba(107, 143, 94, 0.14), transparent 24rem), linear-gradient(180deg, var(--bg-0, #f5efe6), var(--bg-1, #f8f4ec))",
   fontFamily: "system-ui, -apple-system, sans-serif",
   textAlign: "center",
 };
@@ -33,7 +33,7 @@ const headingStyle: CSSProperties = {
 const bodyCopyStyle: CSSProperties = {
   maxWidth: 440,
   margin: 0,
-  color: "var(--muted, #6f6657)",
+  color: "var(--muted, #a09080)",
   lineHeight: 1.5,
 };
 
@@ -46,13 +46,13 @@ const errorStyle: CSSProperties = {
 const qrStyle: CSSProperties = {
   border: "1px solid var(--border, #d8cdbb)",
   borderRadius: 8,
-  background: "var(--surface, #fbf8f1)",
+  background: "var(--surface, #f8f4ee)",
   boxShadow: "0 18px 40px rgba(82, 61, 22, 0.13)",
 };
 
 const codeStyle: CSSProperties = {
   maxWidth: "min(520px, 100%)",
-  color: "var(--muted, #6f6657)",
+  color: "var(--muted, #a09080)",
   fontSize: 13,
   overflowWrap: "anywhere",
 };

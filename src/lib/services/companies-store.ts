@@ -4,7 +4,7 @@ import { promises as fs } from "fs";
 import { statSync } from "fs";
 import { hostname } from "os";
 import path from "path";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 
 import { homedir } from "@/lib/home-dir";
 import { normalizeFrontierLabPolicy } from "@/lib/frontier-lab";
@@ -165,6 +165,14 @@ function normalizeCompanyRecord(raw: unknown): Company | null {
   const name = typeof record.name === "string" && record.name.trim() ? record.name : "Untitled company";
   const company = { ...(record as unknown as Company), id, name };
   if (record.frontierLab !== undefined) company.frontierLab = normalizeFrontierLabPolicy(record.frontierLab);
+  if (record.pricingProposalMarkerReceipts !== undefined) {
+    company.pricingProposalMarkerReceipts = Array.isArray(record.pricingProposalMarkerReceipts)
+      ? [...new Set(record.pricingProposalMarkerReceipts
+          .filter((entry): entry is string => typeof entry === "string")
+          .map((entry) => entry.trim().slice(0, 360))
+          .filter(Boolean))]
+      : undefined;
+  }
   return company;
 }
 
@@ -318,6 +326,7 @@ function companyDefinitionOf(record: Company): Company {
     projectId: record.projectId,
     products: record.products,
     pricingProposals: record.pricingProposals,
+    pricingProposalMarkerReceipts: record.pricingProposalMarkerReceipts,
     approvalPolicies: record.approvalPolicies,
     analyticsProvider: record.analyticsProvider,
     analyticsConfig: record.analyticsConfig,
@@ -554,13 +563,38 @@ export async function setCompanyProducts(
   input: { items: CompanyProduct[] | unknown[]; seededFrom?: string },
   source = "companies-store:set-products",
 ): Promise<Company | null> {
-  return mutateCompanyDefinition(id, source, (company) => {
-    company.products = normalizeCompanyProductCatalog({
+  const mutation = await enqueueCompaniesWrite(async () => {
+    const records = await readRaw();
+    const company = records.find((record) => record.id === id);
+    if (!company) return { company: null, invalidated: [] as CompanyPricingProposal[] };
+    const before = companyDefinitionOf(company);
+    const nextProducts = normalizeCompanyProductCatalog({
       items: input.items,
       seededFrom: input.seededFrom ?? company.products?.seededFrom ?? "ui",
       updatedAt: new Date().toISOString(),
     });
+    const invalidated = (company.pricingProposals ?? []).filter((proposal) => {
+      const current = nextProducts?.items.find((product) => product.key === proposal.productKey);
+      return !current || current.amountUsd !== proposal.currentAmountUsd;
+    });
+    const invalidatedIds = new Set(invalidated.map((proposal) => proposal.id));
+    company.products = nextProducts;
+    if (invalidatedIds.size > 0) {
+      company.pricingProposals = (company.pricingProposals ?? []).filter((proposal) => !invalidatedIds.has(proposal.id));
+    }
+    company.updatedAt = new Date().toISOString();
+    await writeRawUnqueued(records);
+    await recordConfigChange("updated", before, company, source);
+    return { company, invalidated };
   });
+  for (const proposal of mutation.invalidated) {
+    await settleCompanyProposal(id, proposal.id, {
+      status: "superseded",
+      decision: "The catalog changed before this pricing request was decided; re-run the evidence review against current prices.",
+      decidedBy: "company",
+    }).catch(() => undefined);
+  }
+  return mutation.company;
 }
 
 /**
@@ -657,7 +691,28 @@ export type ProposePricingChangeInput = {
   why?: string;
   sourceTaskId?: string;
   proposedBy?: string;
+  /** Catalog price shown in the source task's immutable worker-context snapshot. */
+  sourceCatalogAmountUsd?: number;
+  /** Source task creation time; fallback freshness check when its price snapshot cannot be parsed. */
+  sourceTaskCreatedAtMs?: number;
 };
+
+type PricingProposalMutation = {
+  proposal: CompanyPricingProposal | null;
+  superseded?: CompanyPricingProposal;
+  discarded?: CompanyPricingProposal;
+  discardReason?: string;
+};
+
+function pricingProposalMarkerReceipt(sourceTaskId: string | undefined, productKey: string): string | undefined {
+  return sourceTaskId ? `${sourceTaskId}:${productKey}`.slice(0, 360) : undefined;
+}
+
+function pricingProposalId(companyId: string, markerReceipt: string | undefined): string {
+  if (!markerReceipt) return `prc_${randomUUID()}`;
+  const digest = createHash("sha256").update(`${companyId}\0${markerReceipt}`).digest("hex").slice(0, 24);
+  return `prc_${digest}`;
+}
 
 /**
  * File a crew-raised price-change request against a catalog product. The
@@ -675,45 +730,109 @@ export async function proposeCompanyPricingChange(
   const ref = input.productRef?.trim().toLowerCase();
   if (!ref) return null;
 
-  const records = await readRaw();
-  const company = records.find((record) => record.id === companyId);
-  if (!company) return null;
-  const items = company.products?.items ?? [];
-  const product = items.find((item) => item.key === ref) ?? items.find((item) => item.name.toLowerCase() === ref);
-  if (!product) return null;
-  if (product.amountUsd === proposedAmountUsd) return null;
+  const mutation = await enqueueCompaniesWrite<PricingProposalMutation>(async () => {
+    const records = await readRaw();
+    const company = records.find((record) => record.id === companyId);
+    if (!company) return { proposal: null };
+    const items = company.products?.items ?? [];
+    const product = items.find((item) => item.key === ref) ?? items.find((item) => item.name.toLowerCase() === ref);
+    if (!product) return { proposal: null };
 
-  const before = companyDefinitionOf(company);
-  const superseded = (company.pricingProposals ?? []).find((pending) => pending.productKey === product.key);
-  const proposal: CompanyPricingProposal = {
-    id: `prc_${randomUUID()}`,
-    productKey: product.key,
-    productName: product.name,
-    currentAmountUsd: product.amountUsd,
-    proposedAmountUsd,
-    why: trimmed(input.why),
-    sourceTaskId: trimmed(input.sourceTaskId),
-    proposedBy: trimmed(input.proposedBy),
-    createdAt: new Date().toISOString(),
-  };
-  company.pricingProposals = [
-    ...(company.pricingProposals ?? []).filter((pending) => pending.productKey !== product.key),
-    proposal,
-  ];
-  company.updatedAt = new Date().toISOString();
-  await writeRaw(records);
-  await recordConfigChange("updated", before, company, "companies-store:propose-pricing");
+    const sourceTaskId = trimmed(input.sourceTaskId);
+    const markerReceipt = pricingProposalMarkerReceipt(sourceTaskId, product.key);
+    const receipts = Array.isArray(company.pricingProposalMarkerReceipts)
+      ? company.pricingProposalMarkerReceipts.filter((entry): entry is string => typeof entry === "string" && Boolean(entry.trim()))
+      : [];
+    if (markerReceipt && receipts.includes(markerReceipt)) return { proposal: null };
+
+    const sourceCatalogRaw = Number(input.sourceCatalogAmountUsd);
+    const hasSourceCatalogAmount = Number.isFinite(sourceCatalogRaw) && sourceCatalogRaw >= 0;
+    const sourceCatalogAmountUsd = hasSourceCatalogAmount ? Math.round(sourceCatalogRaw * 100) / 100 : undefined;
+    const sourceTaskCreatedAtMs = Number(input.sourceTaskCreatedAtMs);
+    const catalogUpdatedAtMs = Date.parse(company.products?.updatedAt ?? "");
+    const catalogChangedSinceSource = sourceCatalogAmountUsd !== undefined
+      ? sourceCatalogAmountUsd !== product.amountUsd
+      : Number.isFinite(sourceTaskCreatedAtMs)
+        && sourceTaskCreatedAtMs > 0
+        && Number.isFinite(catalogUpdatedAtMs)
+        && catalogUpdatedAtMs > sourceTaskCreatedAtMs;
+    const samePrice = product.amountUsd === proposedAmountUsd;
+    const existingFromSource = sourceTaskId
+      ? (company.pricingProposals ?? []).find((pending) => pending.productKey === product.key && pending.sourceTaskId === sourceTaskId)
+      : undefined;
+
+    const before = companyDefinitionOf(company);
+    if (markerReceipt) company.pricingProposalMarkerReceipts = [...receipts, markerReceipt];
+
+    if (catalogChangedSinceSource || samePrice) {
+      if (existingFromSource) {
+        company.pricingProposals = (company.pricingProposals ?? []).filter((pending) => pending.id !== existingFromSource.id);
+      }
+      // Source-less direct no-ops have no durable marker to consume and need no write.
+      if (!markerReceipt && !existingFromSource) return { proposal: null };
+      company.updatedAt = new Date().toISOString();
+      await writeRawUnqueued(records);
+      const discardReason = catalogChangedSinceSource
+        ? "The catalog changed after the source task's pricing snapshot; re-run the evidence review against current prices."
+        : "The task proposed the same price it was shown, so the marker was consumed as a no-op.";
+      await recordConfigChange(
+        "updated",
+        before,
+        company,
+        catalogChangedSinceSource ? "companies-store:discard-stale-pricing" : "companies-store:consume-noop-pricing",
+      );
+      return { proposal: null, discarded: existingFromSource, discardReason };
+    }
+
+    if (existingFromSource) {
+      company.updatedAt = new Date().toISOString();
+      await writeRawUnqueued(records);
+      await recordConfigChange("updated", before, company, "companies-store:receipt-existing-pricing");
+      return { proposal: null };
+    }
+
+    const superseded = (company.pricingProposals ?? []).find((pending) => pending.productKey === product.key);
+    const proposal: CompanyPricingProposal = {
+      id: pricingProposalId(companyId, markerReceipt),
+      productKey: product.key,
+      productName: product.name,
+      currentAmountUsd: product.amountUsd,
+      proposedAmountUsd,
+      why: trimmed(input.why),
+      sourceTaskId,
+      proposedBy: trimmed(input.proposedBy),
+      createdAt: new Date().toISOString(),
+    };
+    company.pricingProposals = [
+      ...(company.pricingProposals ?? []).filter((pending) => pending.productKey !== product.key),
+      proposal,
+    ];
+    company.updatedAt = new Date().toISOString();
+    await writeRawUnqueued(records);
+    await recordConfigChange("updated", before, company, "companies-store:propose-pricing");
+    return { proposal, superseded };
+  });
+
+  if (mutation.discarded) {
+    await settleCompanyProposal(companyId, mutation.discarded.id, {
+      status: "superseded",
+      decision: mutation.discardReason,
+      decidedBy: "company",
+    }).catch(() => undefined);
+  }
+  const proposal = mutation.proposal;
+  if (!proposal) return null;
 
   const { appendCompanyMemory } = await import("@/lib/services/company-memory");
   await appendCompanyMemory(companyId, {
     kind: "note",
-    title: `Pricing change requested: ${product.name} $${product.amountUsd.toLocaleString("en-US")} → $${proposedAmountUsd.toLocaleString("en-US")} (awaiting human approval)`,
+    title: `Pricing change requested: ${proposal.productName} $${proposal.currentAmountUsd.toLocaleString("en-US")} → $${proposal.proposedAmountUsd.toLocaleString("en-US")} (awaiting human approval)`,
     detail: proposal.why,
     taskId: proposal.sourceTaskId,
     agent: proposal.proposedBy,
   }).catch(() => undefined);
-  if (superseded) {
-    await settleCompanyProposal(companyId, superseded.id, {
+  if (mutation.superseded) {
+    await settleCompanyProposal(companyId, mutation.superseded.id, {
       status: "superseded",
       decision: "A newer pricing proposal for the same product replaced this one.",
       decidedBy: proposal.proposedBy ?? "company",
@@ -726,7 +845,7 @@ export async function proposeCompanyPricingChange(
     title: `Pricing change requested: ${proposal.productName}`,
     summary: proposal.why,
     sourceTaskId: proposal.sourceTaskId,
-    idempotencyKey: `pricing:${proposal.id}`,
+    idempotencyKey: `pricing:${pricingProposalMarkerReceipt(proposal.sourceTaskId, proposal.productKey) ?? proposal.id}`,
     risk: Math.abs(proposal.proposedAmountUsd - proposal.currentAmountUsd) >= proposal.currentAmountUsd * 0.25 ? "high" : "medium",
     proposedChange: {
       productKey: proposal.productKey,
@@ -1007,6 +1126,7 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<Company>
     products: input.products !== undefined ? normalizeCompanyProductCatalog(input.products) : existing?.products,
     // Proposals are crew/human-resolved only — never writable through upsert.
     pricingProposals: existing?.pricingProposals,
+    pricingProposalMarkerReceipts: existing?.pricingProposalMarkerReceipts,
     approvalPolicies: input.approvalPolicies !== undefined ? normalizeCompanyApprovalPolicies(input.approvalPolicies) : existing?.approvalPolicies,
     analyticsProvider: input.analyticsProvider !== undefined ? input.analyticsProvider : existing?.analyticsProvider,
     analyticsConfig:

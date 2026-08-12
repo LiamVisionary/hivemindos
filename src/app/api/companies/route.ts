@@ -156,6 +156,7 @@ type CompanyBody = {
   analyticsConfig?: Company["analyticsConfig"];
   importedOperations?: CompanyImportedOperations;
   autonomyPause?: CompanyAutonomyPause | null;
+  setupEnvKeys?: Company["setupEnvKeys"];
   // dispatch-goal
   fleetSnapshot?: QueenBeeFleetMachine[];
   maxTasks?: number;
@@ -461,6 +462,7 @@ export async function POST(request: NextRequest) {
       analyticsConfig: body.analyticsConfig,
       importedOperations: body.importedOperations,
       autonomyPause: body.autonomyPause,
+      setupEnvKeys: body.setupEnvKeys,
     });
     return NextResponse.json({ ok: true, company });
   } catch (error) {

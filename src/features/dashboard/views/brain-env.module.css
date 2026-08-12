@@ -447,17 +447,17 @@
 }
 
 :global(:root[data-theme="hive-light"]) .envPanel {
-  --brain-bg: #f1ede3;
-  --brain-panel: #fbf8f1;
-  --brain-panel-2: #f4efe4;
-  --brain-line: rgba(54, 46, 30, 0.12);
-  --brain-line-2: rgba(54, 46, 30, 0.18);
-  --brain-fg: #221d14;
-  --brain-fg-2: #5e574b;
-  --brain-fg-3: #5e574b;
-  --brain-honey: #936811; --brain-honey-fill: #e6bb5c;
-  --brain-honey-soft: rgba(176, 127, 28, 0.12);
-  --brain-live: #1d8e7c;
+  --brain-bg: #f5efe6;
+  --brain-panel: #f8f4ee;
+  --brain-panel-2: #f0e8d8;
+  --brain-line: rgba(74, 58, 42, 0.12);
+  --brain-line-2: rgba(74, 58, 42, 0.18);
+  --brain-fg: #4a3a2a;
+  --brain-fg-2: #8a7a6a;
+  --brain-fg-3: #8a7a6a;
+  --brain-honey: #8a5a2a; --brain-honey-fill: #f0e8d8;
+  --brain-honey-soft: rgba(138, 90, 42, 0.12);
+  --brain-live: #6b8f5e;
 }
 
 :global(:root[data-theme="hive-light"]) .envHeader {

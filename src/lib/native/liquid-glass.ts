@@ -6,7 +6,7 @@ export type AppNavLiquidGlassMode = "native" | "vibrancy" | "fallback";
 
 const TINT_BY_THEME: Record<AppNavLiquidGlassTheme, string> = {
   dark: "#14161c42",
-  light: "#fbf8f15c",
+  light: "#f8f4ee5c",
 };
 
 let liquidGlassWarningShown = false;

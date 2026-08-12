@@ -21,8 +21,10 @@ const {
   createTask,
   deleteTask,
   moveTask,
+  patchTask,
   readBoard,
 } = await import("../src/lib/services/kanban/local-kanban-store.ts");
+const { invalidateKanbanShardCache } = await import("../src/lib/services/kanban/board-shards.ts");
 
 const vaultPath = await mkdtemp(join(tmpdir(), "hivemind-kanban-shards-"));
 const options = { vaultPath, kanbanFolder: "Operations/Work Board" };
@@ -219,13 +221,32 @@ try {
     "another machine's log records should fold in",
   );
 
-  // 7) Determinism: repeated reads must not churn the materialized snapshot.
+  // 7) Link removals are append-only too: PATCH replaces the incoming edge,
+  // and an explicit cache reset proves the unlink survives a full shard fold.
+  const linkParent = await createTask(null, { title: "Link parent", status: "ready" }, options);
+  const linkChild = await createTask(null, {
+    title: "Link child",
+    status: "ready",
+    parents: [linkParent.task.id],
+  }, options);
+  assert.ok((await readBoard(null, options)).links.some((link) => link.childId === linkChild.task.id));
+  await patchTask(null, linkChild.task.id, { parents: [] }, options);
+  assert.ok(!(await readBoard(null, options)).links.some((link) => link.childId === linkChild.task.id));
+  const ownLog = await readFile(join(shardsDir, "logs", "testmachinea.jsonl"), "utf-8");
+  assert.match(ownLog, /"k":"unlink"/, "removed dependency should append an unlink record");
+  invalidateKanbanShardCache(snapshotPath);
+  assert.ok(
+    !(await readBoard(null, options)).links.some((link) => link.childId === linkChild.task.id),
+    "removed dependency must stay removed after replaying the shard logs",
+  );
+
+  // 8) Determinism: repeated reads must not churn the materialized snapshot.
   const bytesA = await readFile(snapshotPath, "utf-8");
   await readBoard(null, options);
   const bytesB = await readFile(snapshotPath, "utf-8");
   assert.equal(bytesA, bytesB, "rematerialization must be byte-stable");
 
-  // 8) Kill switch: with shards disabled, a fresh board stays single-file.
+  // 9) Kill switch: with shards disabled, a fresh board stays single-file.
   process.env.HIVEMINDOS_KANBAN_SHARDS = "0";
   await createTask("killswitch", { title: "Legacy-mode task" }, options);
   const killswitchDir = join(boardDir, "boards", "killswitch");
@@ -239,7 +260,7 @@ try {
   );
   delete process.env.HIVEMINDOS_KANBAN_SHARDS;
 
-  // 9) Sharded board move still round-trips through the public store API.
+  // 10) Sharded board move still round-trips through the public store API.
   const moved = await moveTask(null, foreignTask.id, "archived", options);
   assert.equal(moved.task.status, "archived");
   const finalSnapshot = await readSnapshot();

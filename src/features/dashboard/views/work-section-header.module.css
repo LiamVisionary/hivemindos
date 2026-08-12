@@ -257,59 +257,59 @@
 }
 
 :global(:root[data-theme="hive-light"]) .header {
-  border-bottom-color: rgba(54, 46, 30, 0.1);
+  border-bottom-color: rgba(74, 58, 42, 0.1);
 }
 
 :global(:root[data-theme="hive-light"]) .modeRail {
-  border-color: rgba(54, 46, 30, 0.16);
-  background: #f4efe4;
+  border-color: rgba(74, 58, 42, 0.16);
+  background: #f0e8d8;
   box-shadow: none;
 }
 
 :global(:root[data-theme="hive-light"]) .modeRail .activeMode {
-  background: rgba(176, 127, 28, 0.12);
-  box-shadow: inset 0 0 0 1px rgba(176, 127, 28, 0.34);
-  color: #936811;
+  background: rgba(138, 90, 42, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(138, 90, 42, 0.34);
+  color: #8a5a2a;
 }
 
 :global(:root[data-theme="hive-light"]) .titleText,
 :global(:root[data-theme="hive-light"]) .stats strong {
-  color: #221d14;
+  color: #4a3a2a;
 }
 
 :global(:root[data-theme="hive-light"]) .titleBlock span,
 :global(:root[data-theme="hive-light"]) .stats span,
 :global(:root[data-theme="hive-light"]) .modeRail button {
-  color: #867d6e;
+  color: #8a7a6a;
 }
 
 :global(:root[data-theme="hive-light"]) .modeRail button:hover,
 :global(:root[data-theme="hive-light"]) .modeRail button:focus-visible {
-  color: #221d14;
+  color: #4a3a2a;
 }
 
 :global(:root[data-theme="hive-light"]) .stats .cyan strong {
-  color: #1d8e7c;
+  color: #6b8f5e;
 }
 
 :global(:root[data-theme="hive-light"]) .stats .cyan::before {
-  background: #1d8e7c;
+  background: #6b8f5e;
 }
 
 :global(:root[data-theme="hive-light"]) .stats .honey strong {
-  color: #936811;
+  color: #8a5a2a;
 }
 
 :global(:root[data-theme="hive-light"]) .stats .honey::before {
-  background: #e6bb5c;
+  background: #8a5a2a;
 }
 
 :global(:root[data-theme="hive-light"]) .stats .danger strong {
-  color: #c0524d;
+  color: #b5483b;
 }
 
 :global(:root[data-theme="hive-light"]) .stats .danger::before {
-  background: #c0524d;
+  background: #b5483b;
 }
 
 @media (max-width: 1180px) {

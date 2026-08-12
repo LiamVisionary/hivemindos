@@ -16,6 +16,7 @@ export type CapabilityCandidate = {
   kind: string;
   availability: CapabilityAvailability;
   locator?: string;
+  machineName?: string;
   setupOptions?: CapabilitySetupOption[];
 };
 

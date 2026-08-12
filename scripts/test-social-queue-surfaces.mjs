@@ -7,6 +7,8 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const view = readFileSync("src/components/socials/SocialsView.tsx", "utf8");
 const workspace = readFileSync("src/components/socials/SocialQueueWorkspace.tsx", "utf8");
+const platformPreview = readFileSync("src/components/socials/PlatformPostPreview.tsx", "utf8");
+const platformPreviewStyles = readFileSync("src/components/socials/PlatformPostPreview.module.css", "utf8");
 const draftingCard = readFileSync("src/components/socials/DraftingAutomationCard.tsx", "utf8");
 const contextSourcesCard = readFileSync("src/components/socials/ContextSourcesCard.tsx", "utf8");
 const engagementCard = readFileSync("src/components/socials/EngagementDiscoveryCard.tsx", "utf8");
@@ -30,7 +32,7 @@ const catalog = readFileSync("src/lib/services/hive-actions/catalog.ts", "utf8")
 
 assert.doesNotMatch(view, /No queue engine running yet|lands in Phase 2|arrive in the next phases/);
 assert.match(view, /SocialQueueWorkspace/);
-const redesignedSurfaces = [view, workspace, scheduleBoard, analyticsDashboard, settingsWorkspace, connectModal, draftingCard, engagementCard].join("\n");
+const redesignedSurfaces = [view, workspace, platformPreview, scheduleBoard, analyticsDashboard, settingsWorkspace, connectModal, draftingCard, engagementCard].join("\n");
 for (const action of ["create", "update", "schedule", "send-now", "cancel", "retry", "pause-engine", "resume-engine", "generate-drafts", "generate-engagement", "refresh-analytics"]) {
   assert.match(route, new RegExp(`case ["']${action}["']`), `queue route exposes ${action}`);
 }
@@ -44,6 +46,13 @@ assert.match(scheduleBoard, /draggable/, "scheduled posts can be dragged to anot
 assert.match(analyticsDashboard, /metered hosted X API reads/);
 assert.match(workspace, /Publish this reply/);
 assert.match(workspace, /This is not a reply or comment/);
+assert.match(workspace, /PlatformPostPreview/, "review cards delegate only the platform preview layer");
+for (const platform of ["x", "telegram", "farcaster", "linkedin", "reddit", "facebook"]) {
+  assert.match(platformPreviewStyles, new RegExp(`data-platform=["']${platform}["']`), `${platform} drafts receive platform-specific styling`);
+}
+assert.match(platformPreview, /data-social-focus-editor/, "platform previews preserve the keyboard-edit target");
+assert.match(platformPreview, /social-engagement-target/, "X reply and quote previews preserve source context");
+assert.match(platformPreviewStyles, /data-theme=["']hive-light["']/, "platform previews include the app light theme");
 assert.match(workspace, /reply: "Replies"/, "review filters use the correct Replies label");
 assert.match(workspace, /canDeliver.*account\?\.probe\.ok/, "publishing controls require a live connection probe");
 assert.match(workspace, /You can still save a draft/, "failed connections preserve the safe draft path");

@@ -666,8 +666,9 @@ function parseStoredCapabilityApproval(message: ChatMessage): CapabilityApproval
         kind: typeof candidate.kind === "string" ? candidate.kind : "capability",
         availability: candidate.availability,
         locator: typeof candidate.locator === "string" ? candidate.locator : undefined,
+        machineName: typeof candidate.machineName === "string" ? candidate.machineName : undefined,
       }];
-    }).slice(0, 5);
+    }).slice(0, 8);
     if (!candidates.length) return [];
     const selectedCapabilityId = candidates.some((candidate) => candidate.id === item.selectedCapabilityId)
       ? item.selectedCapabilityId

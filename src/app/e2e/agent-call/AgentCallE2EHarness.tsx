@@ -145,9 +145,9 @@ const harnessPageStyle: React.CSSProperties = {
   minHeight: "100vh",
   display: "grid",
   placeItems: "center",
-  color: "var(--foreground, #221d14)",
+  color: "var(--foreground, #4a3a2a)",
   background:
-    "radial-gradient(circle at 20% 18%, rgba(176, 127, 28, 0.12), transparent 24rem), radial-gradient(circle at 80% 76%, rgba(95, 143, 90, 0.14), transparent 24rem), linear-gradient(180deg, var(--bg-0, #f1ede3), var(--bg-1, #f8f4ec))",
+    "radial-gradient(circle at 20% 18%, rgba(138, 90, 42, 0.12), transparent 24rem), radial-gradient(circle at 80% 76%, rgba(107, 143, 94, 0.14), transparent 24rem), linear-gradient(180deg, var(--bg-0, #f5efe6), var(--bg-1, #f8f4ec))",
 };
 
 const harnessControlsStyle: React.CSSProperties = {
@@ -157,26 +157,26 @@ const harnessControlsStyle: React.CSSProperties = {
   padding: 24,
   border: "1px solid var(--border, #d8cdbb)",
   borderRadius: 8,
-  background: "var(--surface, #fbf8f1)",
+  background: "var(--surface, #f8f4ee)",
   boxShadow: "0 18px 42px rgba(82, 61, 22, 0.14)",
 };
 
 const startButtonStyle: React.CSSProperties = {
-  border: "1px solid rgba(95, 143, 90, 0.55)",
+  border: "1px solid rgba(107, 143, 94, 0.55)",
   borderRadius: 7,
   padding: "10px 14px",
-  background: "rgba(95, 143, 90, 0.13)",
-  color: "var(--foreground, #221d14)",
+  background: "rgba(107, 143, 94, 0.13)",
+  color: "var(--foreground, #4a3a2a)",
   fontWeight: 700,
   opacity: 0.72,
 };
 
 const localTtsButtonStyle: React.CSSProperties = {
-  border: "1px solid rgba(176, 127, 28, 0.52)",
+  border: "1px solid rgba(138, 90, 42, 0.52)",
   borderRadius: 7,
   padding: "10px 14px",
-  background: "rgba(176, 127, 28, 0.16)",
-  color: "var(--foreground, #221d14)",
+  background: "rgba(138, 90, 42, 0.16)",
+  color: "var(--foreground, #4a3a2a)",
   fontWeight: 700,
 };
 

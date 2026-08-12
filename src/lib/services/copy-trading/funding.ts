@@ -14,6 +14,21 @@ import type { AgentWalletBalance } from "@/lib/types/agent-wallet";
 export type FundingAsset = { symbol: string; availableUsd: number; isStable: boolean; priceUsd: number | null };
 export type BuyFunding = { sellToken: string; amountHuman: number; estValueUsd: number };
 
+type FundingStableSymbol = "USDC" | "USDT";
+
+// Funding is executed by canonical symbol in dex-swap, so a same-symbol token at
+// any other address must never be counted as spendable canonical USDC/USDT.
+const FUNDING_STABLE_ADDRESSES: Record<CopyTradeNetwork, Readonly<Partial<Record<FundingStableSymbol, string>>>> = {
+  "eip155:8453": {
+    USDC: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    USDT: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+  },
+  "solana:mainnet": {
+    USDC: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+    USDT: "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
+  },
+};
+
 // Stable-first, then native. These symbols are what executeDexSwap resolves.
 const FUNDING_PRIORITY: Record<CopyTradeNetwork, string[]> = {
   "eip155:8453": ["USDC", "USDT", "ETH"],
@@ -36,9 +51,19 @@ export function fundingPriority(network: CopyTradeNetwork): string[] {
   return FUNDING_PRIORITY[network] ?? ["USDC"];
 }
 
-function isFundingStable(symbol: string): boolean {
-  const s = symbol.toUpperCase();
-  return s === "USDC" || s === "USDT";
+function canonicalFundingStableSymbol(
+  network: CopyTradeNetwork,
+  token: NonNullable<AgentWalletBalance["tokens"]>[number],
+): FundingStableSymbol | null {
+  const symbol = token.symbol.toUpperCase();
+  if (symbol !== "USDC" && symbol !== "USDT") return null;
+  const expectedAddress = FUNDING_STABLE_ADDRESSES[network][symbol];
+  const actualAddress = token.tokenAddress?.trim();
+  if (!expectedAddress || !actualAddress) return null;
+  const matches = network === "eip155:8453"
+    ? actualAddress.toLowerCase() === expectedAddress.toLowerCase()
+    : actualAddress === expectedAddress;
+  return matches ? symbol : null;
 }
 
 /** Pick the asset to spend for a copied buy of `usd`, sized down to what's held. */
@@ -77,9 +102,10 @@ export function fundingAssetsFromBalance(
     if (usd > 0) funds.push({ symbol: copyTradeNativeSymbol(network), availableUsd: usd, isStable: false, priceUsd: nativePriceUsd });
   }
   for (const token of balance.tokens ?? []) {
-    if (!isFundingStable(token.symbol || "")) continue;
+    const symbol = canonicalFundingStableSymbol(network, token);
+    if (!symbol) continue;
     const usd = token.valueUsd ?? token.balance ?? 0;
-    if (usd > 0) funds.push({ symbol: token.symbol.toUpperCase(), availableUsd: usd, isStable: true, priceUsd: 1 });
+    if (usd > 0) funds.push({ symbol, availableUsd: usd, isStable: true, priceUsd: 1 });
   }
   return funds;
 }
@@ -100,9 +126,10 @@ export function fundableSummary(
     });
   }
   for (const token of balance.tokens ?? []) {
-    if (!isFundingStable(token.symbol || "")) continue;
+    const symbol = canonicalFundingStableSymbol(network, token);
+    if (!symbol) continue;
     const amount = token.balance ?? 0;
-    if (amount > 0) assets.push({ symbol: token.symbol.toUpperCase(), amount, usd: token.valueUsd ?? amount });
+    if (amount > 0) assets.push({ symbol, amount, usd: token.valueUsd ?? amount });
   }
   return { assets, totalUsd: assets.reduce((sum, a) => sum + (a.usd || 0), 0) };
 }

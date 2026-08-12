@@ -1,0 +1,4 @@
+interface:
+  display_name: "Video Generator Prompting"
+  short_description: "Route prompts through runtime-specific video model guidance"
+  default_prompt: "Identify the exact video-generation runtime, load its prompting guide, compile a duration-matched prompt, and record the guide used."

@@ -6,7 +6,7 @@
 // things that don't ship are worse than no templates: they found companies
 // whose playbooks dangle.
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { register } from "node:module";
 
@@ -121,6 +121,15 @@ for (const templateId of ["local-website-agency", "local-seo-agency"]) {
   const website = COMPANY_TEMPLATE_MATRIX.find((entry) => entry.id === "local-website-agency");
   const mapsKey = website?.setupKeys.find((key) => key.envKey === "GOOGLE_MAPS_API_KEY");
   assert.equal(mapsKey?.hostedAlternative, "leadgen-data", "GOOGLE_MAPS_API_KEY names the hosted rail that replaces it");
+  const founderVideo = website?.setupKeys.find((key) => key.envKey === "FOUNDER_INTRO_VIDEO");
+  assert.equal(founderVideo?.kind, "text", "website agency declares the reusable founder-intro asset up front");
+  const operatingContract = website?.directives.map((directive) => directive.text).join("\n") ?? "";
+  assert.match(operatingContract, /linked website-template project/i, "website agency selects from its linked template library");
+  assert.match(operatingContract, /generic card.*not a website deliverable/i, "website agency rejects the generic-card failure mode");
+  assert.match(operatingContract, /Loom-style walkthrough/i, "website agency requires a real site walkthrough");
+  assert.match(operatingContract, /founder-introduction clip/i, "website agency requires the founder-intro segment");
+  assert.match(operatingContract, /website → video → purchase-or-book link/i, "website agency fixes the outbound packet order");
+  assert.match(operatingContract, /desktop and mobile layout/i, "website agency makes public visual QA a send gate");
 }
 
 // The outbound-email rail is the hosted fix for per-company email setup (the
@@ -150,6 +159,12 @@ assert.deepEqual(
   agency?.requiredSetupKeys,
   ["OUTREACH_PHYSICAL_ADDRESS", "AGENTMAIL_API_KEY"],
   "catalog surfaces the launch-required keys so the picker can show real setup cost",
+);
+const setupBlockersRoute = readFileSync(join(ROOT, "src/app/api/companies/[id]/setup-blockers/route.ts"), "utf8");
+assert.match(
+  setupBlockersRoute,
+  /setupEnvKeys:\s*company\.setupEnvKeys/,
+  "setup-blocker endpoint forwards the company's declared keys instead of dropping every template setup issue",
 );
 
 // ── founder compiler honors the template ─────────────────────────────────────

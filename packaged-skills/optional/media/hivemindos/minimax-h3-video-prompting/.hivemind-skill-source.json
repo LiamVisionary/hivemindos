@@ -1,0 +1,19 @@
+{
+  "upstreamName": "MiniMax H3 Video Prompting",
+  "upstreamSlug": "minimax-h3-video-prompting",
+  "hiveSlug": "minimax-h3-video-prompting",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/media/hivemindos/minimax-h3-video-prompting",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT for HivemindOS-authored instructions; linked MiniMax H3 sources remain under their upstream terms",
+  "importedAt": "2026-08-12T01:00:00Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional media skills",
+  "sourcePath": "packaged-skills/optional/media/hivemindos/minimax-h3-video-prompting",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Paraphrases the official MiniMax H3 base and full-reference prompt guides without redistributing their examples or source files.",
+    "Routes T2VA, I2VA, FL2VA, L2VA, and Ref2VA into their distinct schemas instead of applying another video model's syntax by analogy.",
+    "Adds runtime, endpoint-capability, private-upload, generation-spend, and current license/territory gates before model execution.",
+    "Adds UGC-specific continuity, truthful-product, exact-UI, multi-clip duration, receipt, and artifact-QA controls."
+  ]
+}

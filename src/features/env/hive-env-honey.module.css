@@ -30,17 +30,17 @@
 }
 
 :global(:root[data-theme="hive-light"]) .scope {
-  --he-panel: #fbf8f1;
-  --he-panel-2: #f4efe4;
-  --he-line: rgba(54, 46, 30, 0.12);
-  --he-line-2: rgba(54, 46, 30, 0.18);
-  --he-fg: #221d14;
-  --he-fg-2: #5e574b;
-  --he-fg-3: #5e574b;
-  --he-honey: #936811; --he-honey-fill: #e6bb5c;
-  --he-honey-soft: rgba(176, 127, 28, 0.12);
-  --he-honey-line: rgba(176, 127, 28, 0.32);
-  --he-live: #1d8e7c;
+  --he-panel: #f8f4ee;
+  --he-panel-2: #f0e8d8;
+  --he-line: rgba(74, 58, 42, 0.12);
+  --he-line-2: rgba(74, 58, 42, 0.18);
+  --he-fg: #4a3a2a;
+  --he-fg-2: #8a7a6a;
+  --he-fg-3: #8a7a6a;
+  --he-honey: #8a5a2a; --he-honey-fill: #f0e8d8;
+  --he-honey-soft: rgba(138, 90, 42, 0.12);
+  --he-honey-line: rgba(138, 90, 42, 0.32);
+  --he-live: #6b8f5e;
 }
 
 /* ---- Input container (shared by both contexts) ---- */

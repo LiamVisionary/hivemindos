@@ -122,6 +122,24 @@ async function companyRepoPath(company: Company): Promise<string | null> {
 // ── crew-raised pricing proposals (the "pricing is why they aren't buying" rail) ──
 
 export type PricingProposalMarker = { productRef: string; amountUsd: number; why?: string };
+export type TaskPricingCatalogEntry = { productKey: string; productName: string; amountUsd: number };
+
+/** Parse the immutable official-price lines embedded in a company task prompt. */
+export function extractTaskPricingCatalog(body: string): TaskPricingCatalogEntry[] {
+  const entries: TaskPricingCatalogEntry[] = [];
+  for (const line of (body ?? "").split(/\r?\n/)) {
+    const match = /^\s*-\s+(.+?)\s+\(key:\s*([^)]+)\)\s+(?:—|->|-)\s+\$\s*([\d,]+(?:\.\d+)?)/i.exec(line);
+    if (!match) continue;
+    const amountUsd = Number(match[3].replace(/,/g, ""));
+    if (!Number.isFinite(amountUsd) || amountUsd < 0) continue;
+    entries.push({
+      productKey: match[2].trim().toLowerCase(),
+      productName: match[1].trim(),
+      amountUsd: Math.round(amountUsd * 100) / 100,
+    });
+  }
+  return entries;
+}
 
 /**
  * Extract `PRICING PROPOSAL:` markers from a task result. The protocol mirrors
@@ -150,23 +168,29 @@ export function extractPricingProposalMarkers(result: string): PricingProposalMa
 }
 
 /**
- * File any pricing proposals a finished company task's result carries. Called
- * exactly once per task terminal status from syncCompanyTaskOutcomes (the same
- * idempotency window that guards the memory ledger), so a marker never files
- * twice. Bad references / no-op prices are silently skipped by the store.
+ * File any pricing proposals a finished company task's result carries. The
+ * store consumes a durable task/product receipt, while the prompt's immutable
+ * catalog snapshot prevents a marker from being reinterpreted after prices
+ * change. Bad references, stale snapshots, and no-op prices are skipped.
  */
 export async function fileTaskPricingProposals(
   companyId: string,
-  task: { id: string; result?: string; assignee?: string | null },
+  task: { id: string; body?: string; result?: string; assignee?: string | null; createdAt?: number },
 ): Promise<number> {
   let filed = 0;
+  const catalogSnapshot = extractTaskPricingCatalog(task.body ?? "");
   for (const marker of extractPricingProposalMarkers(task.result ?? "").slice(0, 5)) {
+    const ref = marker.productRef.trim().toLowerCase();
+    const sourceProduct = catalogSnapshot.find((entry) => entry.productKey === ref)
+      ?? catalogSnapshot.find((entry) => entry.productName.toLowerCase() === ref);
     const proposal = await proposeCompanyPricingChange(companyId, {
       productRef: marker.productRef,
       proposedAmountUsd: marker.amountUsd,
       why: marker.why,
       sourceTaskId: task.id,
       proposedBy: task.assignee ?? undefined,
+      sourceCatalogAmountUsd: sourceProduct?.amountUsd,
+      sourceTaskCreatedAtMs: task.createdAt,
     }).catch(() => null);
     if (proposal) filed += 1;
   }

@@ -84,6 +84,36 @@ test("zero-review evolved cards place the waiting status below learning evidence
   );
 });
 
+test("copy-trading UI groups original and agent configs into the pinned head-to-head redesign", async () => {
+  const panelSource = await readFile(new URL("../src/components/trade/CopyTradingPanel.tsx", import.meta.url), "utf8");
+  const panelStyles = await readFile(new URL("../src/components/trade/CopyTradingPanel.module.css", import.meta.url), "utf8");
+  assert.match(panelSource, /function pairConfigs\(configs: CopyTradingConfig\[\]\)/);
+  assert.match(panelSource, /<PairedConfigCard/);
+  assert.match(panelSource, /Original vs agent/);
+  assert.match(panelSource, /Where they disagreed/);
+  assert.match(panelSource, /Agent-analyzed copy/);
+  assert.match(panelSource, /Add another copy of/);
+  assert.match(panelSource, /Remove \$\{props\.label\} copy/);
+  assert.match(panelSource, /React\.useState<"original" \| "agent" \| null>\(null\)/);
+  assert.match(panelSource, /current === side \? null : side/);
+  assert.match(panelSource, /openDetails === "original" \? \(/);
+  assert.doesNotMatch(panelSource, /leftOpen|rightOpen/);
+  assert.match(panelStyles, /\.raceGrid/);
+  assert.match(panelStyles, /"identity crown"\s*"actions actions"/);
+  assert.match(panelStyles, /\.duplicateChooser/);
+  assert.match(panelStyles, /\.pairDetails\s*\{[^}]*width:\s*100%/s);
+  assert.doesNotMatch(panelStyles, /\.pairDetails\s*\{[^}]*grid-template-columns/s);
+  assert.match(panelStyles, /:global\(:root\[data-theme="hive-light"\]\) \.wrap/);
+});
+
+test("copy-trading details separate current health from lifetime processing failures", async () => {
+  const panelSource = await readFile(new URL("../src/components/trade/CopyTradingPanel.tsx", import.meta.url), "utf8");
+  assert.match(panelSource, /label="Current health"/);
+  assert.match(panelSource, /Lifetime processing failures/);
+  assert.match(panelSource, /not a count of completed trades or investment losses/);
+  assert.doesNotMatch(panelSource, /DetailMetric label="Errors"/);
+});
+
 function transfer(txHash, token, from, to, valueRaw) {
   return { txHash, blockNumber: "100", token, from, to, valueRaw };
 }
@@ -490,6 +520,22 @@ test("funding: fundableSummary reports raw amounts + total USD", () => {
   }, 3000);
   assert.equal(s.assets.length, 2);
   assert.ok(Math.abs(s.totalUsd - 40) < 1e-6); // $30 ETH + $10 USDC
+});
+
+test("funding: ignores tokens impersonating a supported stablecoin symbol", () => {
+  const balance = {
+    nativeBalance: 0,
+    tokens: [
+      { symbol: "USDC", balance: 10, valueUsd: 10, tokenAddress: USDC },
+      { symbol: "USDC", balance: 1_000, valueUsd: 1_000, tokenAddress: "0x34628a64abbcb562dfc668ab8e76327759fc855f" },
+    ],
+  };
+
+  const funds = fundingAssetsFromBalance("eip155:8453", balance, 3_000);
+  assert.deepEqual(funds, [{ symbol: "USDC", availableUsd: 10, isStable: true, priceUsd: 1 }]);
+
+  const summary = fundableSummary("eip155:8453", balance, 3_000);
+  assert.deepEqual(summary, { assets: [{ symbol: "USDC", amount: 10, usd: 10 }], totalUsd: 10 });
 });
 
 // ── config normalization clamps ───────────────────────────────────────────────

@@ -13,8 +13,16 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 const { classifyDeliverable, bucketDeliverables, deliverableOpenKind } = await import(
   "../src/features/dashboard/views/zero-human-companies/deliverables-model.ts"
 );
+const { extractKanbanDeliverables } = await import(
+  "../src/lib/services/kanban/deliverable-extraction.ts"
+);
 
 const d = (o) => ({ id: o.id ?? Math.random().toString(36).slice(2), kind: o.kind ?? "file", label: o.label, path: o.path, url: o.url });
+
+const markdownPath = "/tmp/hivemind-deliverable-regression.md";
+const markdownExtracted = extractKanbanDeliverables(`Manifest: \`${markdownPath}\``);
+assert.equal(markdownExtracted.length, 1, "a code-formatted absolute path is extracted once");
+assert.equal(markdownExtracted[0].path, markdownPath, "closing Markdown backticks are not stored in deliverable paths");
 
 // ── junk / broken → hidden (internal) ──────────────────────────────────────
 const junk = [

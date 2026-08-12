@@ -20,6 +20,7 @@ import { loadGovernanceWallet } from "@/lib/services/wallet/spend-governance";
 import { executeX402Fetch, type X402FetchPolicy, type X402FetchResult } from "@/lib/services/wallet/x402-agent-fetch";
 import type { AgentWalletBalance, AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
 import { internalApiAuthHeaders } from "@/lib/utils/internal-api-auth";
+import { formatModelCredits } from "@/lib/utils/model-credits";
 import { requireAuth } from "@/lib/utils/server-auth";
 
 export const runtime = "nodejs";
@@ -45,10 +46,10 @@ type CreditTopUpResponse = {
   creditToken?: string;
   checkoutUrl?: string;
   checkoutSessionId?: string;
-  creditedUsd?: number;
-  balanceUsd?: number;
-  totalCreditedUsd?: number;
-  totalDebitedUsd?: number;
+  creditedCredits?: number;
+  balanceCredits?: number;
+  totalCreditedCredits?: number;
+  totalDebitedCredits?: number;
   updatedAt?: string;
 };
 
@@ -61,7 +62,7 @@ type CreditTopUpPaymentToken = {
 };
 
 const MODEL_CREDIT_CARD_TOP_UP_USD = 10;
-const MODEL_CREDIT_CARD_TOP_UP_MIN_USD = 1;
+const MODEL_CREDIT_CARD_TOP_UP_MIN_USD = 5;
 const MODEL_CREDIT_CARD_TOP_UP_MAX_USD = 500;
 const MODEL_CREDIT_TOP_UP_CAP_USD = MODEL_CREDIT_CARD_TOP_UP_MAX_USD;
 const CREDIT_TOP_UP_SWAP_BUFFER_BPS = 300;
@@ -85,7 +86,7 @@ export async function GET(request: NextRequest) {
       ok: true,
       configured: false,
       slug,
-      balanceUsd: null,
+      balanceCredits: null,
       balanceLabel: "No prepaid credits",
     });
   }
@@ -104,10 +105,10 @@ export async function GET(request: NextRequest) {
     ok: true,
     configured: true,
     slug,
-    balanceUsd: balance.balanceUsd ?? null,
-    balanceLabel: balance.balanceUsd === undefined ? "Unknown" : formatUsd(balance.balanceUsd),
-    totalCreditedUsd: balance.totalCreditedUsd,
-    totalDebitedUsd: balance.totalDebitedUsd,
+    balanceCredits: balance.balanceCredits ?? null,
+    balanceLabel: balance.balanceCredits === undefined ? "Unknown" : formatModelCredits(balance.balanceCredits),
+    totalCreditedCredits: balance.totalCreditedCredits,
+    totalDebitedCredits: balance.totalDebitedCredits,
     updatedAt: balance.updatedAt,
   });
 }
@@ -280,16 +281,21 @@ export async function POST(request: NextRequest) {
 
     await storeHivemindosModelCreditToken({ walletAgentId: HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID, slug, token: creditToken });
     const balance = await readHostedBalance(request, slug, creditToken);
+    const creditedCredits = numberOrUndefined(topUp?.creditedCredits);
+    if (creditedCredits === undefined) {
+      return NextResponse.json({ ok: false, error: "Hosted HivemindOS Models top-up did not return its credit amount." }, { status: 502 });
+    }
+    const balanceCredits = balance.balanceCredits ?? numberOrUndefined(topUp?.balanceCredits) ?? creditedCredits;
     return NextResponse.json({
       ok: true,
       slug,
       paid: result.paid,
       amountUsd: result.amountUsd,
-      creditedUsd: numberOrUndefined(topUp?.creditedUsd) ?? cryptoTopUpAmountUsd,
-      balanceUsd: balance.balanceUsd ?? numberOrUndefined(topUp?.balanceUsd) ?? numberOrUndefined(topUp?.creditedUsd) ?? cryptoTopUpAmountUsd,
-      balanceLabel: formatUsd(balance.balanceUsd ?? numberOrUndefined(topUp?.balanceUsd) ?? numberOrUndefined(topUp?.creditedUsd) ?? cryptoTopUpAmountUsd),
-      totalCreditedUsd: balance.totalCreditedUsd,
-      totalDebitedUsd: balance.totalDebitedUsd,
+      creditedCredits,
+      balanceCredits,
+      balanceLabel: formatModelCredits(balanceCredits),
+      totalCreditedCredits: balance.totalCreditedCredits,
+      totalDebitedCredits: balance.totalDebitedCredits,
       updatedAt: balance.updatedAt,
       message: "HivemindOS Models credits funded.",
     });
@@ -344,11 +350,13 @@ async function startCardCheckout(
     slug,
     checkoutUrl: checkout.checkoutUrl,
     checkoutSessionId: checkout.checkoutSessionId,
-    creditedUsd: numberOrUndefined(checkout.creditedUsd) ?? normalizedCreditTopUpUsd(body.amountUsd),
-    balanceUsd: balance.balanceUsd ?? checkout.balanceUsd ?? null,
-    balanceLabel: typeof balance.balanceUsd === "number" ? formatUsd(balance.balanceUsd) : checkout.balanceUsd === undefined ? "Checkout pending" : formatUsd(checkout.balanceUsd),
-    totalCreditedUsd: balance.totalCreditedUsd,
-    totalDebitedUsd: balance.totalDebitedUsd,
+    creditedCredits: numberOrUndefined(checkout.creditedCredits),
+    balanceCredits: balance.balanceCredits ?? checkout.balanceCredits ?? null,
+    balanceLabel: typeof balance.balanceCredits === "number"
+      ? formatModelCredits(balance.balanceCredits)
+      : checkout.balanceCredits === undefined ? "Checkout pending" : formatModelCredits(checkout.balanceCredits),
+    totalCreditedCredits: balance.totalCreditedCredits,
+    totalDebitedCredits: balance.totalDebitedCredits,
     updatedAt: balance.updatedAt,
     message: "Card checkout opened. Refresh credits after payment completes.",
   });

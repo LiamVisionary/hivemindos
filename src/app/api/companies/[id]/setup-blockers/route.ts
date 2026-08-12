@@ -21,7 +21,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   if (!company) return NextResponse.json({ ok: false, error: "Company not found." }, { status: 404 });
 
   try {
-    const blockers = await readCompanySetupBlockers({ id: companyId, projectId: company.projectId });
+    const blockers = await readCompanySetupBlockers({
+      id: companyId,
+      projectId: company.projectId,
+      setupEnvKeys: company.setupEnvKeys,
+    });
     return NextResponse.json({ ok: true, blockers });
   } catch (error) {
     return NextResponse.json(

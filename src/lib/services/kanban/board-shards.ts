@@ -23,7 +23,7 @@ import type {
 //
 // Layout (next to kanban.json, per board directory):
 //   shards/tasks/<taskId>.json    one file per task (or a {tombstone} marker)
-//   shards/logs/<machineKey>.jsonl  append-only {k,v} records: event/comment/run/link
+//   shards/logs/<machineKey>.jsonl  append-only {k,v} records: event/comment/run/link/unlink
 //   shards/stamps/<machineKey>.json per-machine freshness stamp
 //   shards/meta.json              board meta (name/description/icon), LWW
 //
@@ -67,7 +67,8 @@ type LogRecord =
   | { k: "event"; v: KanbanEvent }
   | { k: "comment"; v: KanbanComment }
   | { k: "run"; v: KanbanTaskRun }
-  | { k: "link"; v: KanbanLink };
+  | { k: "link"; v: KanbanLink }
+  | { k: "unlink"; v: KanbanLink & { deletedAt: number } };
 
 type ShardState = {
   slug: string;
@@ -80,6 +81,7 @@ type ShardState = {
   runs: Map<string, KanbanTaskRun>;
   runJson: Map<string, string>;
   links: Map<string, KanbanLink>;
+  unlinks: Map<string, number>;
   ownLogLines: number;
   snapshotSig: string;
   stampsSig: string;
@@ -219,10 +221,19 @@ export async function writeBoardViaShards(
     state.runs.set(run.id, run);
     records.push({ k: "run", v: run });
   }
+  const requestedLinkKeys = new Set(board.links.map(linkKey));
+  for (const [key, link] of [...state.links]) {
+    if (requestedLinkKeys.has(key)) continue;
+    const deletedAt = Date.now();
+    state.links.delete(key);
+    state.unlinks.set(key, deletedAt);
+    records.push({ k: "unlink", v: { ...link, deletedAt } });
+  }
   for (const link of board.links) {
     const key = linkKey(link);
     if (!state.links.has(key)) {
       state.links.set(key, link);
+      if ((link.createdAt ?? 0) > (state.unlinks.get(key) ?? 0)) state.unlinks.delete(key);
       records.push({ k: "link", v: link });
     }
   }
@@ -260,6 +271,7 @@ function emptyShardState(slug: string): ShardState {
     runs: new Map(),
     runJson: new Map(),
     links: new Map(),
+    unlinks: new Map(),
     ownLogLines: 0,
     snapshotSig: "",
     stampsSig: "",
@@ -336,6 +348,9 @@ async function compactOwnLogIfNeeded(paths: ShardPaths, state: ShardState) {
     if (record.k === "event") return keepEventIds.has(record.v.id);
     if (record.k === "comment") return keepCommentIds.has(record.v.id);
     if (record.k === "run") return keepRunIds.has(record.v.id);
+    if (record.k === "unlink") {
+      return state.unlinks.get(linkKey(record.v)) === record.v.deletedAt;
+    }
     return keepLinkKeys.has(linkKey(record.v));
   });
   await writeAtomic(logPath, kept.map((record) => JSON.stringify(record)).join("\n") + (kept.length ? "\n" : ""));
@@ -596,8 +611,20 @@ function mergeRecord(state: ShardState, record: LogRecord): boolean {
   if (record.k === "link") {
     if (!record.v?.parentId || !record.v?.childId) return false;
     const key = linkKey(record.v);
-    if (state.links.has(key)) return false;
+    if ((state.unlinks.get(key) ?? 0) >= (record.v.createdAt ?? 0)) return false;
+    const incumbent = state.links.get(key);
+    if (incumbent && (incumbent.createdAt ?? 0) >= (record.v.createdAt ?? 0)) return false;
     state.links.set(key, record.v);
+    return true;
+  }
+  if (record.k === "unlink") {
+    if (!record.v?.parentId || !record.v?.childId) return false;
+    const key = linkKey(record.v);
+    const deletedAt = record.v.deletedAt ?? 0;
+    if ((state.unlinks.get(key) ?? 0) >= deletedAt) return false;
+    state.unlinks.set(key, deletedAt);
+    const incumbent = state.links.get(key);
+    if (incumbent && (incumbent.createdAt ?? 0) <= deletedAt) state.links.delete(key);
     return true;
   }
   return false;

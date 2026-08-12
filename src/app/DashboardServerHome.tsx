@@ -74,27 +74,27 @@ function DashboardUnlock({ params }: { params?: Record<string, string | string[]
       placeItems: "center",
       padding: 24,
       background:
-        "radial-gradient(circle at 22% 18%, rgba(176, 127, 28, 0.14), transparent 25rem), radial-gradient(circle at 78% 78%, rgba(95, 143, 90, 0.14), transparent 28rem), linear-gradient(180deg, var(--bg-0, #f1ede3), var(--bg-1, #f6f2e9))",
-      color: "var(--foreground, #221d14)",
+        "radial-gradient(circle at 22% 18%, rgba(138, 90, 42, 0.14), transparent 25rem), radial-gradient(circle at 78% 78%, rgba(107, 143, 94, 0.14), transparent 28rem), linear-gradient(180deg, var(--bg-0, #f5efe6), var(--bg-1, #f0e8d8))",
+      color: "var(--foreground, #4a3a2a)",
       fontFamily: "Geist, system-ui, sans-serif",
     }}>
       <section style={{
         width: "min(100%, 420px)",
-        border: "1px solid var(--line, rgba(54, 46, 30, 0.16))",
+        border: "1px solid var(--line, rgba(74, 58, 42, 0.16))",
         borderRadius: 10,
         background: "var(--surface, rgba(251, 248, 241, 0.9))",
         padding: 22,
         boxShadow: "0 22px 56px rgba(82, 61, 22, 0.14)",
       }}>
-        <p style={{ margin: "0 0 8px", color: "var(--accent-strong, #936811)", fontSize: 13, fontWeight: 800, textTransform: "uppercase" }}>
+        <p style={{ margin: "0 0 8px", color: "var(--accent-strong, #8a5a2a)", fontSize: 13, fontWeight: 800, textTransform: "uppercase" }}>
           HivemindOS
         </p>
         <h1 style={{ margin: "0 0 12px", fontSize: 30, lineHeight: 1.1 }}>Dashboard locked</h1>
-        <p style={{ margin: "0 0 22px", color: "var(--text-soft, #5e574b)", lineHeight: 1.6 }}>
+        <p style={{ margin: "0 0 22px", color: "var(--text-soft, #8a7a6a)", lineHeight: 1.6 }}>
           Use this device&apos;s secure unlock when available, or enter its dashboard token.
         </p>
         {!status.ok ? (
-          <p style={{ margin: 0, padding: 14, border: "1px solid rgba(192, 82, 77, 0.38)", background: "rgba(192, 82, 77, 0.1)", color: "#8e3328", borderRadius: 8 }}>
+          <p style={{ margin: 0, padding: 14, border: "1px solid rgba(181, 72, 59, 0.38)", background: "rgba(181, 72, 59, 0.1)", color: "#8e3328", borderRadius: 8 }}>
             {status.reason}
           </p>
         ) : (
@@ -107,7 +107,7 @@ function DashboardUnlock({ params }: { params?: Record<string, string | string[]
             />
             <form action="/api/auth/session" method="post" style={{ display: "grid", gap: 12 }}>
               <input type="hidden" name="returnTo" value={returnTo} />
-              <label style={{ display: "grid", gap: 8, color: "var(--foreground, #221d14)", fontSize: 13, fontWeight: 500 }}>
+              <label style={{ display: "grid", gap: 8, color: "var(--foreground, #4a3a2a)", fontSize: 13, fontWeight: 500 }}>
                 Device token
                 <input
                   name="token"
@@ -116,10 +116,10 @@ function DashboardUnlock({ params }: { params?: Record<string, string | string[]
                   style={{
                     width: "100%",
                     boxSizing: "border-box",
-                    border: "1px solid var(--button-input, rgba(54, 46, 30, 0.18))",
+                    border: "1px solid var(--button-input, rgba(74, 58, 42, 0.18))",
                     borderRadius: 8,
                     background: "var(--field, rgba(255, 252, 246, 0.92))",
-                    color: "var(--foreground, #221d14)",
+                    color: "var(--foreground, #4a3a2a)",
                     padding: "12px 14px",
                     fontSize: 16,
                   }}
@@ -131,8 +131,8 @@ function DashboardUnlock({ params }: { params?: Record<string, string | string[]
                 style={{
                   border: 0,
                   borderRadius: 8,
-                  background: "var(--button-primary, #936811)",
-                  color: "var(--button-primary-foreground, #fff7df)",
+                  background: "var(--button-primary, #8a5a2a)",
+                  color: "var(--button-primary-foreground, #f7fbff)",
                   padding: "12px 14px",
                   fontSize: 15,
                   fontWeight: 600,

@@ -10,6 +10,7 @@ export type OutreachCompletionBlock = {
 };
 
 const OUTREACH_TERMS = /\b(outreach|pitch|prospect|lead|email|consultation|contact form|customer-facing|website outreach agency|sarasota web agency)\b/i;
+const OUTBOUND_ACTION_TERMS = /\b(?:send|sending|sent|submit|submitting|submitted|deliver|delivering|delivered|contact(?:ing|ed)|contact (?:the )?(?:prospects?|leads?|businesses?|clients?)|reach(?:ing)? out|pitch(?:ing|ed)? to|email(?:ing|ed)? (?:the )?(?:prospects?|leads?|businesses?|clients?))\b/i;
 const SENT_STATUS = /(?:^|\n)\s*(?:status|outreach status)\s*:\s*(?:sent|submitted|delivered)\b/i;
 const BLOCKED_STATUS = /(?:^|\n)\s*(?:status|outreach status)\s*:\s*blocked\b/i;
 const RECEIPT_FIELD = /(?:^|\n)\s*(?:receipt|sent_at|sent at|submitted_at|submitted at|message-id|confirmation|provider response|form response|delivery receipt)\s*:/i;
@@ -19,9 +20,35 @@ const EVIDENCE_FIELD = /(?:^|\n)\s*(?:evidence|verification|verified|checked|pro
 const PREVIEW_SALES_JOURNEY_TERMS = /\b(preview|customer-facing website|proposal link|proposal page|payment flow|checkout|lead form|sales journey)\b/i;
 const FINAL_FAILURE_TERMS = /\b(no final response|silent failure|fetch failed|429|rate limited|rate-limit|usage limit|usage-limit)\b/i;
 
+function taskRequestText(body?: string) {
+  const text = body ?? "";
+  const request = text.match(
+    /(?:^|\n)\s*(?:#{1,6}\s*)?Request\s*\n([\s\S]*?)(?=\n\s*---\s*(?:\n|$)|$)/i,
+  )?.[1];
+  return request?.trim() || text;
+}
+
+function stripNegatedOutboundActions(text: string) {
+  return text
+    .replace(
+      /\b(?:do not|don't|must not|never|without)\b[^\n.;]*(?:[.;]|$)/gi,
+      " ",
+    )
+    .replace(
+      /\bno\s+(?:external\s+)?(?:sending|send|contact|outreach|email delivery)\b[^\n.;]*(?:[.;]|$)/gi,
+      " ",
+    );
+}
+
 export function isOutreachRevenueTask(task: Pick<KanbanTask, "title" | "body" | "source">) {
-  const haystack = [task.title, task.body, task.source].filter(Boolean).join("\n");
-  return /company:/i.test(task.source ?? "") && OUTREACH_TERMS.test(haystack);
+  if (!/company:/i.test(task.source ?? "")) return false;
+  const requestText = [task.title, taskRequestText(task.body)]
+    .filter(Boolean)
+    .join("\n");
+  return (
+    OUTREACH_TERMS.test(requestText) &&
+    OUTBOUND_ACTION_TERMS.test(stripNegatedOutboundActions(requestText))
+  );
 }
 
 export function validateOutreachCompletion(

@@ -4,6 +4,7 @@ import {
   formatDashboardScreenContextForPrompt,
   type DashboardScreenContext,
 } from "@/features/dashboard/screen-context";
+import { isWalletBalanceReadQuery } from "@/lib/services/queen-bee/voice-conversation-policy";
 
 type WalletReadinessProvider = {
   provider?: unknown;
@@ -77,6 +78,16 @@ export async function fetchHivemindFastContext(
 ) {
   const query =
     rawQuery.trim() || screenContext?.viewLabel || "HivemindOS app and brain context";
+  if (isWalletBalanceReadQuery(query)) {
+    const data = await postJsonWithTimeout<{ ok?: unknown; result?: unknown }>(
+      "/api/queen-bee/voice",
+      { action: "read-wallet-balances", query },
+      15_000,
+    );
+    return typeof data.result === "string"
+      ? data.result
+      : "The HivemindOS wallet reader returned no balance evidence.";
+  }
   const [contextIndex, memory, knowledge, accessHistory] = await Promise.allSettled([
     postJsonWithTimeout<FastContextIndexResponse>(
       "/api/context-index",

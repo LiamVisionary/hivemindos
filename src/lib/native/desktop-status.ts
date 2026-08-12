@@ -1,4 +1,5 @@
 import type { AppVersion } from "@/features/dashboard/dashboard-types";
+export { isPackagedReleaseAppVersion, selectDashboardAppVersion } from "./app-version-selection";
 
 type NativeDesktopStatus = AppVersion & {
   ok?: boolean;
@@ -11,6 +12,24 @@ type NativeDesktopStatus = AppVersion & {
   nativeHost?: string;
   nativePort?: number | null;
 };
+
+function appVersionFromNativeStatus(status: NativeDesktopStatus): AppVersion {
+  return {
+    appDir: status.appDir,
+    version: status.version,
+    latestVersion: status.latestVersion,
+    commit: status.commit,
+    shortCommit: status.shortCommit ?? status.commit?.slice(0, 7),
+    branch: status.branch,
+    dirty: status.dirty,
+    latestCommit: status.latestCommit ?? status.commit,
+    latestShortCommit: status.latestShortCommit ?? status.commit?.slice(0, 7),
+    updateCommand: status.updateCommand,
+    packaged: status.packaged,
+    sourceBuild: status.sourceBuild,
+    releaseChannel: status.releaseChannel,
+  };
+}
 
 declare global {
   interface Window {
@@ -61,35 +80,13 @@ export async function getNativeAppVersion(signal?: AbortSignal): Promise<AppVers
     const bootstrap = await readNativeDashboardBootstrap();
     const bootStatus = bootstrap?.appVersion ?? bootstrap?.desktopStatus;
     if (!signal?.aborted && bootStatus?.commit) {
-      return {
-        appDir: bootStatus.appDir,
-        version: bootStatus.version,
-        latestVersion: bootStatus.latestVersion,
-        commit: bootStatus.commit,
-        shortCommit: bootStatus.shortCommit ?? bootStatus.commit.slice(0, 7),
-        branch: bootStatus.branch,
-        dirty: bootStatus.dirty,
-        latestCommit: bootStatus.latestCommit ?? bootStatus.commit,
-        latestShortCommit: bootStatus.latestShortCommit ?? bootStatus.commit.slice(0, 7),
-        updateCommand: bootStatus.updateCommand,
-      };
+      return appVersionFromNativeStatus(bootStatus);
     }
     const { invoke } = await import("@tauri-apps/api/core");
     const status = await invoke<NativeDesktopStatus>("desktop_status");
     if (signal?.aborted || !status?.commit) return null;
 
-    return {
-      appDir: status.appDir,
-      version: status.version,
-      latestVersion: status.latestVersion,
-      commit: status.commit,
-      shortCommit: status.shortCommit ?? status.commit.slice(0, 7),
-      branch: status.branch,
-      dirty: status.dirty,
-      latestCommit: status.latestCommit ?? status.commit,
-      latestShortCommit: status.latestShortCommit ?? status.commit.slice(0, 7),
-      updateCommand: status.updateCommand,
-    };
+    return appVersionFromNativeStatus(status);
   } catch {
     return null;
   }

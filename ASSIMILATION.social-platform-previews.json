@@ -1,0 +1,35 @@
+{
+  "created_at": "2026-08-11T16:22:17.146383+00:00",
+  "request": "Make the Socials route drafted posts look like their actual social media platforms: X styling for X, Reddit styling for Reddit, and equivalent styling for every supported platform.",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "local",
+      "source_path": "hivemind-os:src/components/socials/SocialQueueWorkspace.tsx",
+      "target_path": "src/components/socials/PlatformPostPreview.tsx",
+      "reuse_type": "adapted_code",
+      "note": "extracted the existing queue account, target, and editable draft preview contract"
+    },
+    {
+      "source_repo": "local",
+      "source_path": "hivemind-os:src/components/simulation/outputs.tsx",
+      "target_path": "src/components/socials/PlatformPostPreview.tsx",
+      "reuse_type": "adapted_code",
+      "note": "adapted the existing Reddit header, vote rail, title, body, and action composition"
+    },
+    {
+      "source_repo": "local",
+      "source_path": "hivemind-os:src/components/socials/socials.css",
+      "target_path": "src/components/socials/PlatformPostPreview.module.css",
+      "reuse_type": "style_adapted",
+      "note": "reused the Socials scoped palette, dark surface, responsive, and hive-light conventions"
+    },
+    {
+      "source_repo": "local",
+      "source_path": "hivemind-os:src/lib/services/socials/socials-types.ts",
+      "target_path": "src/components/socials/PlatformPostPreview.tsx",
+      "reuse_type": "adapted_code",
+      "note": "reused the exhaustive six-platform queue and engagement target contracts"
+    }
+  ]
+}

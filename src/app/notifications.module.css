@@ -1015,26 +1015,26 @@
 
 /* — Light theme: re-declare tokens once; every rule reads them — */
 :global(:root[data-theme="hive-light"]) .notificationsPanel {
-  --nf-panel: #fbf8f1;
-  --nf-panel-2: #f4efe4;
+  --nf-panel: #f8f4ee;
+  --nf-panel-2: #f0e8d8;
   --nf-panel-hi: #ffffff;
-  --nf-line: rgba(54, 46, 30, 0.1);
-  --nf-line-2: rgba(54, 46, 30, 0.16);
-  --nf-line-3: rgba(54, 46, 30, 0.26);
-  --nf-fg: #221d14;
-  --nf-fg-2: #5e574b;
-  --nf-fg-3: #5e574b;
-  --nf-fg-4: #6f6657;
-  --nf-honey: #936811; --nf-honey-fill: #e6bb5c;
-  --nf-honey-2: #936811;
-  --nf-honey-soft: rgba(176, 127, 28, 0.12);
-  --nf-honey-line: rgba(176, 127, 28, 0.34);
+  --nf-line: rgba(74, 58, 42, 0.1);
+  --nf-line-2: rgba(74, 58, 42, 0.16);
+  --nf-line-3: rgba(74, 58, 42, 0.26);
+  --nf-fg: #4a3a2a;
+  --nf-fg-2: #8a7a6a;
+  --nf-fg-3: #8a7a6a;
+  --nf-fg-4: #a09080;
+  --nf-honey: #8a5a2a; --nf-honey-fill: #f0e8d8;
+  --nf-honey-2: #8a5a2a;
+  --nf-honey-soft: rgba(138, 90, 42, 0.12);
+  --nf-honey-line: rgba(138, 90, 42, 0.34);
   --nf-live: #6f8f68;
   --nf-live-soft: rgba(111, 143, 104, 0.14);
   --nf-live-line: rgba(111, 143, 104, 0.32);
-  --nf-danger: #c0524d;
-  --nf-danger-soft: rgba(192, 82, 77, 0.12);
-  --nf-danger-line: rgba(192, 82, 77, 0.34);
+  --nf-danger: #b5483b;
+  --nf-danger-soft: rgba(181, 72, 59, 0.12);
+  --nf-danger-line: rgba(181, 72, 59, 0.34);
   --nf-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset, 0 18px 50px -30px rgba(80, 60, 20, 0.35);
 }
 

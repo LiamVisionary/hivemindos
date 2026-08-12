@@ -6,6 +6,8 @@ import * as THREE from "three";
 
 export type SynapseNodeTone = "plain" | "recent" | "touched" | "stale" | "unresolved";
 
+const LIGHT_PLAIN_TONES = ["#3f68b2", "#357f9a", "#6657aa", "#8e5799"] as const;
+
 export function hashUnit(value: string, salt = 0) {
   let hash = 2166136261 + salt;
   for (const char of value) {
@@ -42,6 +44,10 @@ export function srgbColor(value: string) {
   return linearizeSRGB(new THREE.Color(value));
 }
 
+export function lightPulseColorInto(target: THREE.Color) {
+  return linearizeSRGB(target.set("#2b92a7"));
+}
+
 export function readPalette(element: HTMLElement): Palette {
   const styles = getComputedStyle(element);
   const light = document.documentElement.dataset.theme === "hive-light";
@@ -51,12 +57,12 @@ export function readPalette(element: HTMLElement): Palette {
   };
   return {
     light,
-    bg: srgbColor(pick("--brain-bg", light ? "#f1ede3" : "#0c0d11")),
-    fg: srgbColor(pick("--brain-fg", light ? "#221d14" : "#f3f0e9")),
-    fg2: srgbColor(pick("--brain-fg-2", light ? "#5e574b" : "#a7a39a")),
-    honey: srgbColor(pick("--brain-honey", light ? "#936811" : "#e7b45c")),
-    live: srgbColor(pick("--brain-live", light ? "#1d8e7c" : "#6fcdba")),
-    danger: srgbColor(pick("--brain-danger", light ? "#c0524d" : "#e58e85")),
+    bg: srgbColor(pick("--brain-bg", light ? "#f5efe6" : "#0c0d11")),
+    fg: srgbColor(pick("--brain-fg", light ? "#4a3a2a" : "#f3f0e9")),
+    fg2: srgbColor(pick("--brain-fg-2", light ? "#8a7a6a" : "#a7a39a")),
+    honey: srgbColor(pick("--brain-honey", light ? "#8a5a2a" : "#e7b45c")),
+    live: srgbColor(pick("--brain-live", light ? "#6b8f5e" : "#6fcdba")),
+    danger: srgbColor(pick("--brain-danger", light ? "#b5483b" : "#e58e85")),
   };
 }
 
@@ -65,14 +71,16 @@ export function readPalette(element: HTMLElement): Palette {
 // WITHIN the family (touched = magenta, recent = cyan, unresolved = hot pink,
 // stale = dim violet) instead of breaking the field with orange/red. Most
 // vault notes carry a tone, so any out-of-family tone color takes over the
-// whole map. Hive-light keeps the token-driven ink-on-parchment look.
+// whole map. Hive-light uses a darker, saturated version of the same neural
+// spectrum so normal blending does not bleach the graph into the canvas.
 export function toneColorInto(palette: Palette, tone: SynapseNodeTone, seed: number, target: THREE.Color) {
   if (palette.light) {
-    if (tone === "touched") return target.copy(palette.honey);
-    if (tone === "recent") return target.copy(palette.live);
-    if (tone === "unresolved") return target.copy(palette.danger);
-    if (tone === "stale") return target.copy(palette.honey).lerp(palette.fg2, 0.55);
-    return target.copy(palette.fg2).lerp(palette.fg, 0.55);
+    if (tone === "touched") return linearizeSRGB(target.set("#aa523c"));
+    if (tone === "recent") return linearizeSRGB(target.set("#2b8275"));
+    if (tone === "unresolved") return linearizeSRGB(target.set("#b83c61"));
+    if (tone === "stale") return linearizeSRGB(target.set("#7563a1"));
+    const toneIndex = Math.min(LIGHT_PLAIN_TONES.length - 1, Math.floor(seed * LIGHT_PLAIN_TONES.length));
+    return linearizeSRGB(target.set(LIGHT_PLAIN_TONES[toneIndex]));
   }
   if (tone === "touched") return linearizeSRGB(target.set("#dc83ff"));
   if (tone === "recent") return linearizeSRGB(target.set("#71e2ff"));
@@ -198,12 +206,13 @@ export const SOMA_FRAGMENT = /* glsl */ `
     float nucleus = pow(facing, 6.0);
     float proximity = vProximity * mix(1.0, 0.86 + 0.14 * sin(uTime * 4.6 + vSeed * 18.0), uMotion);
     vec3 col = mix(vTint * (0.82 + vGlow * 0.12), vec3(0.9, 0.97, 1.0), nucleus * uAdditive * 0.18);
+    col *= mix(1.28, 1.0, uAdditive);
     col += vTint * nucleus * vGlow * 0.18;
     col += mix(vTint, vec3(0.88, 0.96, 1.0), 0.2) * proximity * (0.06 + membrane * 0.08);
     vec3 hoverTint = mix(vTint, vec3(0.2, 0.9, 1.35), 0.78);
     col = mix(col, hoverTint * (0.85 + membrane * 0.55 + nucleus * 0.3), vHover);
     float darkAlpha = (0.06 + membrane * 0.16 + nucleus * 0.1) * (0.75 + vGlow * 0.12);
-    float lightAlpha = 0.28 + membrane * 0.34;
+    float lightAlpha = 1.0;
     float alpha = mix(lightAlpha, darkAlpha, uAdditive);
     alpha *= 1.0 + proximity * 0.08;
     alpha = max(alpha, (0.13 + membrane * 0.4 + nucleus * 0.2) * vHover);
@@ -456,7 +465,7 @@ export const PULSE_VERTEX = /* glsl */ `
     float ends = smoothstep(0.08, 0.2, t) * (1.0 - smoothstep(0.8, 0.92, t));
     float fog = smoothstep(uFogNear, uFogFar, -mv.z);
     vTint = aTint;
-    vAlpha = ends * mix(uSelDim, 1.0, aLit) * (1.0 - fog * 0.9) * mix(0.16, 0.48, uAdditive);
+    vAlpha = ends * mix(uSelDim, 1.0, aLit) * (1.0 - fog * 0.9) * mix(0.72, 0.48, uAdditive);
     gl_PointSize = aSize * (1.0 + aLit * 0.06) * uScale / max(-mv.z, 1.0);
     gl_Position = projectionMatrix * mv;
   }
@@ -471,7 +480,9 @@ export const PULSE_FRAGMENT = /* glsl */ `
     float mask = texture2D(uMap, gl_PointCoord).a;
     if (mask < 0.003) discard;
     float a = mask * vAlpha;
-    gl_FragColor = vec4(vTint, a);
+    float lightCore = smoothstep(0.55, 0.96, mask) * (1.0 - uAdditive);
+    vec3 color = mix(vTint, vec3(0.9, 0.98, 1.0), lightCore * 0.82);
+    gl_FragColor = vec4(color, a);
   }
 `;
 

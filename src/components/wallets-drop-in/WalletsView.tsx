@@ -66,7 +66,6 @@ export type WalletDropInActions = WalletRewardsActionsSlice & HoneyContributionA
   onImportWallet?: (input: WalletModalActionInput) => Promise<unknown>;
   onOpenRailDocs?: (rail: { baseUrl?: string }) => unknown;
   onToggleHoneyLedger?: (enabled: boolean) => unknown;
-  onMessageHive?: (text: string) => unknown;
 };
 const {
   FR_CCY, FR_MACHINES, frFmtAmount, frFmtUsd, frFmtUsdFull, frFmtChange, frTopBalances,
@@ -197,44 +196,6 @@ function MoonIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
     </svg>
-  );
-}
-function ChatPill({ placeholder, offsetX = 0, onSubmitMessage }: { placeholder?: string; offsetX?: number; onSubmitMessage?: (text: string) => unknown }) {
-  const ref = React.useRef<HTMLInputElement | null>(null);
-  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => { e.preventDefault(); const text = ref.current ? ref.current.value.trim() : ""; if (text) onSubmitMessage && onSubmitMessage(text); if (ref.current) ref.current.value = ""; };
-  const focusInput = () => {
-    const input = ref.current;
-    if (!input) return;
-    input.focus();
-    const end = input.value.length;
-    input.setSelectionRange(end, end);
-  };
-  const focusInputFromContainer = (event: React.PointerEvent<HTMLFormElement>) => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
-    if (target.closest("button, input, textarea, select, a, [role='button']")) return;
-    event.preventDefault();
-    focusInput();
-  };
-  return (
-    <div className="fr-chat-wrap" style={offsetX ? { left: `calc(50% - ${offsetX}px)` } : undefined}>
-      <form className="fr-chat" onPointerDown={focusInputFromContainer} onSubmit={onSubmit}>
-        <span className="fr-chat-orb"><span className="ring" /><span className="core" /></span>
-        <span className="fr-chat-label">Message the hive</span>
-        <span className="fr-chat-field">
-          <input
-            ref={ref} className="fr-chat-input"
-            placeholder={placeholder || "Ask the hive to dispatch a task…"}
-            aria-label="Message the hive"
-          />
-          <button type="submit" className="fr-chat-send" aria-label="Send">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 19V5M5 12l7-7 7 7" />
-            </svg>
-          </button>
-        </span>
-      </form>
-    </div>
   );
 }
 const FR_SHELF_W = 72;
@@ -2149,7 +2110,6 @@ function FleetWallets({ theme, onToggleTheme, onNavigate, actions, showAppNaviga
       <div className="fr-scroll" style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto" }}>
         <div className="fb-wrap">{body}</div>
       </div>
-      <ChatPill placeholder="Ask the hive to fund an agent or set a spend cap…" onSubmitMessage={actions?.onMessageHive} />
     </div>
   );
 }

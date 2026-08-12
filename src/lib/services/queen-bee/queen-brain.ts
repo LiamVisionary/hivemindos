@@ -5,6 +5,7 @@
    tools; the typed chat turn consumes the chat-completions format. */
 
 import { formatQueenBeePersonalityInstruction } from "@/lib/config/queen-bee-personality";
+import { isWalletBalanceReadQuery } from "@/lib/services/queen-bee/voice-conversation-policy";
 import {
   X_ACCOUNT_CAPABILITY_INSTRUCTION,
   X_ACCOUNT_READ_TOOL_DEF,
@@ -18,16 +19,16 @@ const QUEEN_OPERATIONAL_INSTRUCTIONS = [
   "Wallet and Bankr requests are HivemindOS agent-wallet operations, not consumer banking - never refuse them as banking; relay them through your tools.",
   "Keep replies short and natural - one to three sentences. No reasoning preambles.",
   "When the user asks what makes you different, why you are different, or what separates you from an ordinary AI or coding agent, answer directly from HivemindOS's operating model: you coordinate a company-like hive of six agents that can run separate scheduled jobs; you can act through 32 connected tools across code, CRM, money, inbox, and the open web; and you operate across the business with persistent Shared Brain memory instead of forgetting when one project closes. Keep the answer punchy and use the user's terminology. Never introduce Claude, Claude Code, or any other competitor unless the user's current message names it. If the current message does name Claude or Claude Code, respect it as a strong coding instrument and contrast a single user-driven coding agent with your coordinating operating role.",
-  "Use read_hivemind_context for read-only questions about HivemindOS app data, dashboard state, routes, capabilities, connected apps, Shared Brain memory, compiled brain knowledge, Work Board summaries, schedules, agents/fleet, and what the hive knows. It searches fast app/brain indexes directly instead of delegating to a runtime agent.",
+  "Use read_hivemind_context for read-only questions about HivemindOS app data, dashboard state, routes, capabilities, connected apps, Shared Brain memory, compiled brain knowledge, Work Board summaries, schedules, agents/fleet, wallet balances, and what the hive knows. It searches fast app/brain indexes and canonical app stores directly instead of delegating to a runtime agent.",
   "A user's request to read, search, compare, summarize, or analyze their own local HivemindOS Brain, notes, vault, memories, or access history is already authorized by that request. Use read_hivemind_context and answer from its evidence; never ask for permission or authorization to perform that local read. Permission is only relevant when a tool explicitly reports a governed remote-machine access, mutation, or consequential action.",
   "When the user asks a bare latest-status question like 'what's latest?', 'what's new?', or 'what's happening in the hive?', interpret it as the latest HivemindOS hive happenings and use read_hivemind_context. Do not answer from the coding runtime's git checkout unless the context evidence says repo work is the relevant hive update.",
   "Use read_wallet_readiness for read-only questions about which wallet/payment rails are configured, spend-ready, gated, or missing setup. It reads app capability state directly and does not fetch balances or move money.",
   "For 'open wallets' style requests, use drive_dashboard to open the Wallets screen, then use read_wallet_readiness if the user also needs the live readiness summary.",
-  "Use use_hive_capability whenever no more-specific direct tool fully covers the user's request. This includes requests about the user, notes, files, projects, memories, fleet, wallet balances/actions, computer/app operation, and capabilities connected after this prompt was authored. It runs full Hive capability search across registered skills, MCP tools, connected app APIs, Hive Actions, runtime tools, and specialty agents, then executes the selected capability through its existing safety and confirmation gates. Pass the user's complete goal in their own words with needed conversation context. ALWAYS call it before claiming an external capability is unavailable; never guess, deny access, or invent a provider-specific tool merely because the direct Queen tool list does not name it.",
-  "ALWAYS use use_hive_capability to EXECUTE a money movement - a swap, send, transfer, buy, sell, trade, payment, fee collection, or balance check. It runs the transaction on the real wallet rails and returns a confirmation prompt (e.g. 'reply CONFIRM_SWAP'); relay that back so the user can confirm. A swap, send, buy, sell, or trade is a SIMPLE, DIRECT action that use_hive_capability executes immediately on the rails - NEVER route it (or its confirmation) to create_hive_task or drive_dashboard. Do not delegate it to another agent as a task and do not just navigate the screen; it transacts directly. This holds even when the user is already on the Trade or Wallets screen.",
+  "Use use_hive_capability whenever no more-specific direct tool fully covers the user's request. This includes requests about the user, exact note/file changes, projects, computer/app operation, wallet actions, and capabilities connected after this prompt was authored. It runs full Hive capability search across registered skills, MCP tools, connected app APIs, Hive Actions, runtime tools, and specialty agents, then executes the selected capability through its existing safety and confirmation gates. Pass the user's complete goal in their own words with needed conversation context. ALWAYS call it before claiming an external capability is unavailable; never guess, deny access, or invent a provider-specific tool merely because the direct Queen tool list does not name it.",
+  "ALWAYS use use_hive_capability to EXECUTE a money movement - a swap, send, transfer, buy, sell, trade, payment, or fee collection. Use read_hivemind_context for read-only HivemindOS wallet balance questions. Money actions run on the real wallet rails and return a confirmation prompt (e.g. 'reply CONFIRM_SWAP'); relay that back so the user can confirm. A swap, send, buy, sell, or trade is a SIMPLE, DIRECT action that use_hive_capability executes immediately on the rails - NEVER route it (or its confirmation) to create_hive_task or drive_dashboard. Do not delegate it to another agent as a task and do not just navigate the screen; it transacts directly. This holds even when the user is already on the Trade or Wallets screen.",
   "CONFIRMATIONS ARE EXACT TOKENS, NOT CONVERSATION. When a tool returns a confirmation prompt, show the user the EXACT word or token to reply with (e.g. tell them to reply CONFIRM_SWAP, or confirm), do not soften it into your own phrasing. When the user then replies to confirm a pending action - whether they type a bare token like CONFIRM_SWAP / SEND_USDC or a word like confirm, yes, or send it - relay their reply to use_hive_capability EXACTLY as they typed it: no rephrasing, no added words, and do NOT ask them to confirm again. That exact token finalizes the prepared transaction on the rails; any paraphrase silently fails it and loops.",
   "When the global hive input provides current dashboard context, use it to resolve words like this screen, this view, this section, selected item, or open modal; do not ask the user to repeat visible context unless the provided context is insufficient.",
-  "Answer general questions about what you can do from the capability list above, directly and confidently. Use read_hivemind_context to verify read-only app/brain/capability facts, use read_wallet_readiness to verify wallet/payment rail readiness, and use use_hive_capability for actions, OS/app operation, exact file/note edits, balances, or money actions. Never deny a capability or claim you lack access based on your own assumptions.",
+  "Answer general questions about what you can do from the capability list above, directly and confidently. Use read_hivemind_context to verify read-only app/brain/capability facts and wallet balances, use read_wallet_readiness to verify wallet/payment rail readiness, and use use_hive_capability for actions, OS/app operation, exact file/note edits, or money actions. Never deny a capability or claim you lack access based on your own assumptions.",
   "When the user asks how an agent is doing, or whether one is offline, timing out, stuck, or erroring, call read_agent_status to check the live fleet before you answer - do NOT tell them to look on their own system, and NEVER claim an agent is down, timing out, or failing unless read_agent_status actually shows it. Pass the agent's name (e.g. 'HermesMain'); call it with no name for a fleet-wide health summary.",
   "When read_agent_status shows an agent offline, erroring, or timing out, don't stop at reporting it - OFFER to queue a diagnosis-and-fix job so the hive fixes it itself, and when the user agrees, call create_hive_task (e.g. title 'Diagnose & fix HermesMain timeout', with the status details in the message) so a fleet worker investigates and repairs it. Only create the task after they confirm; a fleet agent, not the user, does the fixing.",
   "When the user asks about Work Board revenue, quoted/open pipeline, forecasts, weekly target, close probability, or approval bottlenecks, call read_work_board with a short revenue/pipeline query and explain that quoted/open pipeline is potential pipeline, not booked or recognized revenue.",
@@ -48,7 +49,7 @@ export const QUEEN_INSTRUCTIONS = queenInstructionsForPersonality();
 
 /** A spoken-style line guidance appended only for the realtime (voice) modality. */
 export const QUEEN_VOICE_STYLE =
-  " Speak naturally, no lists or markdown. Tool calls take several seconds, so ALWAYS say a brief filler FIRST - 'Let me check…', 'One sec…', 'On it…' - in the same breath before calling a tool, so the user is never left in silence.";
+  " Speak naturally, no lists or markdown. The first sentence MUST be a complete direct answer of 4-10 words with terminal punctuation; put any explanation in one concise second sentence. Never make the first sentence a filler or dependent fragment. Output only literal words spoken aloud: never narrate a smile, pose, gesture, facial expression, posture, movement, tone, mood, or stage direction, and never put actions in asterisks, parentheses, or brackets. Tool calls take several seconds, so ALWAYS say a brief filler FIRST - 'Let me check…', 'One sec…', 'On it…' - in the same breath before calling a tool, so the user is never left in silence.";
 
 /** Raw tool definitions — shared shape; adapted per modality below. */
 export interface QueenToolDef {
@@ -166,7 +167,7 @@ const READ_WALLET_READINESS_TOOL_DEF: QueenToolDef = {
 const READ_HIVEMIND_CONTEXT_TOOL_DEF: QueenToolDef = {
   name: "read_hivemind_context",
   description:
-    "Read fast, read-only HivemindOS app and local Brain context directly: dashboard/API routes, connected apps, capabilities, runtime/tool surfaces, Shared Brain Memory, compiled brain knowledge, Brain note access history, Work Board/schedule/fleet discovery hints, and what the hive knows about a topic. The user's request authorizes reads of their own local Brain, notes, vault, memories, and access history; do not ask for separate permission. Use before delegating for read-only app-data or Brain questions. Does NOT execute actions, edit notes/files, create tasks, fetch wallet balances, or move money.",
+    "Read fast, read-only HivemindOS app and local Brain context directly: dashboard/API routes, connected apps, capabilities, runtime/tool surfaces, Shared Brain Memory, compiled brain knowledge, Brain note access history, Work Board/schedule/fleet discovery hints, wallet balances from the canonical wallet ledger and public chains, and what the hive knows about a topic. The user's request authorizes reads of their own local Brain, notes, vault, memories, access history, and wallet balances; do not ask for separate permission. Use before delegating for read-only app-data or Brain questions. Does NOT execute actions, edit notes/files, create tasks, expose wallet secrets, or move money.",
   parameters: {
     type: "object",
     properties: {
@@ -342,7 +343,7 @@ const WALLET_META_CONTEXT_RE =
   /\b(route|routes|api|code|source|docs?|screen|dashboard|component|file|implementation)\b/i;
 
 const HIVEMIND_FAST_CONTEXT_SUBJECT_RE =
-  /\b(hivemind(?:os)?|app|dashboard|screen|route|api|data|state|brain|memory|memories|vault|notes?|knowledge|compiled\s+brain|work\s+board|kanban|tasks?|schedules?|automations?|agents?|fleet|runtimes?|tools?|skills?|capabilit(?:y|ies)|connected\s+apps?|settings|status)\b/i;
+  /\b(hivemind(?:os)?|app|dashboard|screen|route|api|data|state|brain|memory|memories|vault|notes?|knowledge|compiled\s+brain|work\s+board|to[-\s]?do(?:\s+list)?|kanban|tasks?|schedules?|automations?|agents?|fleet|runtimes?|tools?|skills?|capabilit(?:y|ies)|connected\s+apps?|settings|status)\b/i;
 
 const HIVEMIND_FAST_CONTEXT_QUERY_RE =
   /\b(what|which|who|where|when|why|how|show|list|search|find|look\s*up|summari[sz]e|tell|status|do\s+we\s+have|does\s+.*\s+have|is\s+there|are\s+there|what'?s|what\s+is|what\s+are)\b/i;
@@ -369,12 +370,12 @@ const BARE_HIVE_LATEST_RE = new RegExp(
 
 /**
  * Read-only wallet readiness can be answered from the app capability matrix.
- * Balances and state-changing actions stay on use_hive_capability because those
- * routes touch real wallet rails and confirmation state.
+ * Balance reads stay on read_hivemind_context; state-changing wallet actions
+ * stay on use_hive_capability because those touch real rails and confirmation.
  */
 export function isWalletReadinessCommand(userMessage: string): boolean {
   const trimmed = userMessage.trim();
-  if (!trimmed || WALLET_META_CONTEXT_RE.test(trimmed) || WALLET_ACTION_OR_BALANCE_RE.test(trimmed)) return false;
+  if (!trimmed || isWalletBalanceReadQuery(trimmed) || WALLET_META_CONTEXT_RE.test(trimmed) || WALLET_ACTION_OR_BALANCE_RE.test(trimmed)) return false;
   return WALLET_READINESS_REQUIRED_RE.test(trimmed) && WALLET_READINESS_HINT_RE.test(trimmed);
 }
 
@@ -385,7 +386,9 @@ export function isWalletReadinessCommand(userMessage: string): boolean {
  */
 export function isHivemindFastContextCommand(userMessage: string): boolean {
   const trimmed = userMessage.trim();
-  if (!trimmed || isWalletReadinessCommand(trimmed)) return false;
+  if (!trimmed) return false;
+  if (isWalletBalanceReadQuery(trimmed)) return true;
+  if (isWalletReadinessCommand(trimmed)) return false;
   if (WALLET_ACTION_OR_BALANCE_RE.test(trimmed) || HIVEMIND_FAST_CONTEXT_ACTION_RE.test(trimmed)) return false;
   if (isHivemindLatestBriefCommand(trimmed)) return true;
   return HIVEMIND_FAST_CONTEXT_SUBJECT_RE.test(trimmed) && HIVEMIND_FAST_CONTEXT_QUERY_RE.test(trimmed);

@@ -22,14 +22,37 @@ const {
   buildRuntimeVoiceMessages,
   buildRuntimeVoiceUserText,
   spokenVoicePreferenceFromTranscript,
+  voiceTurnHiveContextKinds,
+  voiceTurnNeedsHiveContext,
+  voiceReasoningEffort,
+  voiceTurnShouldOfferTools,
+  voiceToolAcknowledgement,
+  runtimeVoicePersistedReply,
 } = await import("../src/lib/services/queen-bee/voice-turn.ts");
+const { scheduledCallPreparationInstruction } = await import(
+  "../src/lib/services/queen-bee/voice-runtime-prompt.ts"
+);
+const { isWalletBalanceReadQuery } = await import(
+  "../src/lib/services/queen-bee/voice-conversation-policy.ts"
+);
+const { readQueenWalletBalances } = await import(
+  "../src/lib/services/queen-bee/wallet-balance-read.ts"
+);
+const { isHivemindFastContextCommand } = await import(
+  "../src/lib/services/queen-bee/queen-brain.ts"
+);
+const { buildOpenAiOAuthToolContinuationInput } = await import(
+  "../src/lib/services/openai-oauth-payload.ts"
+);
 const {
   queenAskedForTaskApproval,
   voiceTranscriptDirectlyRequestsTask,
   voiceTaskApprovalPrompt,
   voiceTaskSubmissionAuthorized,
 } = await import("../src/lib/services/queen-bee/voice-task-approval.ts");
-const { toolActivityLabel } = await import("../src/lib/services/phone/runtime-voice-turn.ts");
+const { buildPhoneRuntimeVoiceUserText, phoneVoiceHistoryFromEvents, toolActivityLabel } = await import(
+  "../src/lib/services/phone/runtime-voice-turn.ts"
+);
 const {
   BARGE_IN_TUNING,
   bargeInThreshold,
@@ -37,6 +60,10 @@ const {
   requestBargeInRecalibration,
   updateBargeInDetector,
 } = await import("../src/features/queen-voice/barge-in-detector.ts");
+const {
+  OPEN_LOCAL_APP_CHAT_TOOL,
+  normalizeLocalAppName,
+} = await import("../src/lib/services/queen-bee/local-app-tool.ts");
 
 // --- turn id normalization ----------------------------------------------------
 {
@@ -47,6 +74,240 @@ const {
   assert.equal(normalizeVoiceTurnId("x".repeat(81)), "", "too long rejected");
   assert.equal(normalizeVoiceTurnId(42), "", "non-strings rejected");
   console.log("turn id normalization ok");
+}
+
+// --- phone runtime inhabits the call even when adapters drop system messages -
+{
+  const prompt = buildPhoneRuntimeVoiceUserText(
+    "Can you hear me clearly?",
+    "Solara",
+  );
+  assert.match(prompt, /You are Solara, the active Queen Bee voice/);
+  assert.match(prompt, /user physically spoke/i);
+  assert.match(prompt, /Never mention chat, text.*transcription/i);
+  assert.match(prompt, /Can you hear me clearly\?/);
+  assert.match(prompt, /only the words you will say aloud/i);
+  assert.doesNotMatch(
+    prompt.slice(prompt.indexOf("USER'S LATEST SPOKEN WORDS:")),
+    /role:\s*user|content:/i,
+    "the spoken message is not serialized as chat metadata",
+  );
+  console.log("phone runtime voice embodiment prompt ok");
+}
+
+// --- phone Queen turns retain the live call's prior exchange -----------------
+{
+  const history = phoneVoiceHistoryFromEvents([
+    { type: "user.transcript", speaker: "user", text: "What is moving?" },
+    { type: "agent.caption", speaker: "agent", text: "WEBS has movement." },
+    { type: "note", speaker: "system", text: "latency sample" },
+    { type: "user.transcript", speaker: "user", text: "Tell me more." },
+  ], "Tell me more.");
+  assert.deepEqual(history, [
+    { who: "you", text: "What is moving?" },
+    { who: "queen", text: "WEBS has movement." },
+  ]);
+  console.log("phone Queen conversation history ok");
+}
+
+// --- first spoken sentence is intentionally short enough to stream early ----
+{
+  const prompt = buildRuntimeVoiceUserText(
+    "Explain RNA.",
+    [],
+  );
+  assert.match(prompt, /complete direct answer of 4-10 words/i);
+  assert.match(prompt, /Never make the first sentence a filler, dependent clause/i);
+  assert.match(prompt, /never call a tool merely to restate that context/i);
+  assert.match(prompt, /Never promise to check, fetch, look up/i);
+  console.log("Queen voice fast natural first-sentence contract ok");
+}
+
+// --- scheduled calls execute the requested briefing before APNs rings -------
+{
+  const instruction = scheduledCallPreparationInstruction(true);
+  assert.match(instruction, /before the phone rings/i);
+  assert.match(instruction, /speak its actual contents/i);
+  assert.match(instruction, /Set task to null/i);
+  assert.match(instruction, /do not ask permission/i);
+  assert.equal(scheduledCallPreparationInstruction(false), "");
+  console.log("Queen scheduled-call preparation contract ok");
+}
+
+// --- casual turns keep history without paying the full hive-context lookup ---
+{
+  assert.equal(voiceTurnNeedsHiveContext("What's RNA?"), false);
+  assert.equal(voiceTurnNeedsHiveContext("Tell me another cool fact."), false);
+  assert.equal(voiceTurnNeedsHiveContext("What did I say about Cortana?"), false);
+  assert.equal(voiceTurnNeedsHiveContext("What's on my work board today?"), true);
+  assert.equal(voiceTurnNeedsHiveContext("Give me my daily briefing."), true);
+  assert.equal(voiceTurnNeedsHiveContext("Check the hive brain for that project."), true);
+  assert.deepEqual(voiceTurnHiveContextKinds("What's in my inbox?"), {
+    memories: false,
+    board: true,
+    business: true,
+  });
+  assert.deepEqual(voiceTurnHiveContextKinds("What's on my Work Board?"), {
+    memories: false,
+    board: true,
+    business: false,
+  });
+  assert.deepEqual(voiceTurnHiveContextKinds("What is on our to-do list?"), {
+    memories: false,
+    board: true,
+    business: false,
+  });
+  assert.deepEqual(voiceTurnHiveContextKinds("Give me my daily briefing."), {
+    memories: true,
+    board: true,
+    business: true,
+  });
+  console.log("Queen voice contextual lookup gate ok");
+}
+
+// --- realtime 5.6 brains do not spend hidden reasoning time before speech ---
+{
+  assert.equal(voiceReasoningEffort("gpt-5.6-terra"), "none");
+  assert.equal(voiceReasoningEffort("gpt-5.6-luna"), "none");
+  assert.equal(voiceReasoningEffort("gpt-5.6-sol"), "none");
+  assert.equal(voiceReasoningEffort("gpt-5.4"), "low");
+  assert.equal(voiceReasoningEffort("o4-mini"), "low");
+  console.log("Queen voice reasoning-effort contract ok");
+}
+
+// --- normal voice answers do not carry or accidentally invoke tool schemas --
+{
+  assert.equal(voiceTurnShouldOfferTools("Tell me one unusual whale fact."), false);
+  assert.equal(voiceTurnShouldOfferTools("What's new?"), false);
+  assert.equal(voiceTurnShouldOfferTools("What is in my marketplace inbox?"), true);
+  assert.equal(voiceTurnShouldOfferTools("How much money is in my agent wallets?"), true);
+  assert.equal(voiceTurnShouldOfferTools("What are my agent wallet balances?"), true);
+  assert.equal(voiceTurnShouldOfferTools("What notes do I have about voice calls?"), true);
+  assert.equal(voiceTurnShouldOfferTools("What is on our to-do list?"), true);
+  assert.equal(voiceTurnShouldOfferTools("What is RNA?"), false);
+  assert.equal(isWalletBalanceReadQuery("How much money is in my agent wallets?"), true);
+  assert.equal(isWalletBalanceReadQuery("Send money from my agent wallet."), false);
+  assert.equal(isHivemindFastContextCommand("How much money is in my agent wallets?"), true);
+  assert.equal(isHivemindFastContextCommand("Send money from my agent wallet."), false);
+  assert.equal(isHivemindFastContextCommand("What is on our to-do list?"), true);
+  assert.equal(voiceTurnShouldOfferTools("Read the individual inbox messages."), true);
+  assert.equal(voiceTurnShouldOfferTools("Check the latest posts on X."), true);
+  assert.equal(voiceTurnShouldOfferTools("Send an email to Liam."), true);
+  console.log("Queen voice tool-schema gate ok");
+}
+
+// --- ChatGPT OAuth voice turns continue through server-owned tool outputs ---
+{
+  assert.deepEqual(
+    buildOpenAiOAuthToolContinuationInput("One moment.", [{
+      id: "call_work_board",
+      name: "read_hivemind_context",
+      arguments: '{"query":"What is on our to-do list?"}',
+      output: "Open Work Board items:\n- Fix voice context [working]",
+    }]),
+    [
+      {
+        type: "message",
+        role: "assistant",
+        content: [{ type: "output_text", text: "One moment." }],
+      },
+      {
+        type: "function_call",
+        call_id: "call_work_board",
+        name: "read_hivemind_context",
+        arguments: '{"query":"What is on our to-do list?"}',
+      },
+      {
+        type: "function_call_output",
+        call_id: "call_work_board",
+        output: "Open Work Board items:\n- Fix voice context [working]",
+      },
+    ],
+  );
+  const source = readFileSync(
+    new URL("../src/lib/services/queen-bee/voice-turn.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /runOpenAiOAuthChatTurnDetailed/);
+  assert.match(source, /tools:\s*voiceTurnShouldOfferTools\(transcript\)/);
+  assert.match(source, /toolResults,/);
+  const brainReadSource = readFileSync(
+    new URL("../src/lib/services/queen-bee/voice-brain-reads.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(brainReadSource, /budgetMs:\s*5_000/);
+  console.log("Queen ChatGPT OAuth tool continuation ok");
+}
+
+// --- wallet questions read canonical app state without waking an agent ------
+{
+  const wallet = (agentId, agentName) => ({
+    agentId,
+    agentName,
+    updatedAt: new Date(0).toISOString(),
+    dashboardMachine: "test",
+    wallet: {
+      walletAddress: "0x1111111111111111111111111111111111111111",
+      vaultAddress: "",
+      network: "eip155:8453",
+      currentBalanceUsd: 9,
+      onchainBalanceUsd: 9,
+      lastOnchainSyncAt: 0,
+    },
+  });
+  let balanceReads = 0;
+  const result = await readQueenWalletBalances(
+    "How much money is in my agent wallets?",
+    {
+      readLedger: async () => ({
+        vaultPath: "/test",
+        folderPath: "/test/wallets",
+        records: [wallet("aeon", "Aeon"), wallet("solara", "Solara")],
+      }),
+      readBalance: async () => {
+        balanceReads += 1;
+        return { tokenBalance: 12.5, nativeBalance: 0, totalValueUsd: 12.5, tokens: [], fetchedAt: Date.now() };
+      },
+    },
+  );
+  assert.equal(balanceReads, 1, "a shared address is refreshed only once");
+  assert.match(result, /Unique-wallet total: \$12\.50/);
+  assert.match(result, /Aeon: \$12\.50/);
+  assert.match(result, /Solara: \$12\.50/);
+  assert.doesNotMatch(result, /0x1111/, "the read result never exposes full wallet addresses");
+  console.log("Queen direct wallet-balance read ok");
+}
+
+// --- slow tools acknowledge immediately and retain their persisted result --
+{
+  assert.equal(
+    voiceToolAcknowledgement("How much money is in my agent wallets?"),
+    "Checking your wallets now.",
+  );
+  assert.equal(voiceToolAcknowledgement("Open my Notes app."), "Opening Notes now.");
+  assert.equal(
+    voiceToolAcknowledgement("Read the individual marketplace inbox messages."),
+    "Checking the inbox now.",
+  );
+  assert.equal(voiceToolAcknowledgement("Run the deployment."), "On it. Give me a moment.");
+  assert.equal(
+    runtimeVoicePersistedReply([
+      { role: "assistant", content: "Old reply." },
+      { role: "user", content: "Open my Notes app." },
+      { role: "tool", content: "tool.completed" },
+      { role: "assistant", content: "Notes is open." },
+    ], 1),
+    "Notes is open.",
+  );
+  console.log("Queen voice tool acknowledgement and result recovery ok");
+}
+
+// --- simple macOS app launches stay on the direct Queen tool ----------------
+{
+  assert.equal(OPEN_LOCAL_APP_CHAT_TOOL.function.name, "open_local_app");
+  assert.equal(normalizeLocalAppName(" Notes "), "Notes");
+  assert.throws(() => normalizeLocalAppName("../../Applications/Notes"), /invalid/i);
+  console.log("Queen direct local-app tool contract ok");
 }
 
 // --- progress store lifecycle --------------------------------------------------
@@ -210,10 +471,13 @@ const {
     false,
     "latest X post retrieval is not a Work Board task request",
   );
-  const voiceTurnSource = readFileSync(
-    new URL("../src/lib/services/queen-bee/voice-turn.ts", import.meta.url),
+  const voiceTurnSource = [
+    "voice-turn.ts",
+    "voice-runtime-prompt.ts",
+  ].map((file) => readFileSync(
+    new URL(`../src/lib/services/queen-bee/${file}`, import.meta.url),
     "utf8",
-  );
+  )).join("\n");
   assert.ok(
     voiceTurnSource.includes("When an offered tool can fulfill the user's request"),
     "voice prompt tells the model to execute available capabilities during the turn",
@@ -294,8 +558,31 @@ const {
 // model is still streaming and cuts it into TTS-sized chunks (first sentence
 // ships alone so first audio never waits for the full reply).
 {
-  const { createSpeechDeltaExtractor, createSentenceChunker } = await import(
+  const { createSpeechDeltaExtractor, createSentenceChunker, sanitizeSpokenVoiceText } = await import(
     "../src/lib/services/queen-bee/voice-speech-stream.ts"
+  );
+
+  assert.equal(
+    sanitizeSpokenVoiceText(
+      "A quiet half-smile, chin lifted—calm enough to be dangerous. Your move, boss.",
+    ),
+    "Your move, boss.",
+    "visual pose narration is removed before it can reach TTS",
+  );
+  assert.equal(
+    sanitizeSpokenVoiceText("*smiles softly* Loud and clear, boss."),
+    "Loud and clear, boss.",
+    "wrapped role-play directions are removed",
+  );
+  assert.equal(
+    sanitizeSpokenVoiceText("A quiet half-smile,"),
+    "",
+    "a streamed stage-direction clause is blocked before sentence completion",
+  );
+  assert.equal(
+    sanitizeSpokenVoiceText("A quiet approach will work. Let's do it."),
+    "A quiet approach will work. Let's do it.",
+    "ordinary spoken prose is preserved",
   );
 
   // Speech deltas emerge as the JSON streams, unescaped, stopping at the quote.
@@ -353,6 +640,24 @@ const {
     assert.ok(third[0].endsWith("blocked anywhere."), "chunk 2 ends at a sentence boundary");
     const rest = chunker.flush();
     assert.deepEqual(rest, [], "nothing left after clean sentence cuts");
+  }
+
+  {
+    const chunker = createSentenceChunker();
+    assert.deepEqual(
+      chunker.push("A quiet half-smile, chin lifted—calm enough to be dangerous. Your move, boss. "),
+      ["Your move, boss."],
+      "the streamed first stage-direction sentence is discarded",
+    );
+  }
+
+  {
+    const chunker = createSentenceChunker();
+    assert.deepEqual(
+      chunker.push("Boss, octopuses have three hearts, blue blood, and can adapt. "),
+      ["Boss, octopuses have three hearts, blue blood, and can adapt."],
+      "Queen speech never splits and re-punctuates a phrase in mid-sentence",
+    );
   }
 
   // Decimals do not split; flush returns the unpunctuated remainder.

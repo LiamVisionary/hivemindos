@@ -1,0 +1,19 @@
+{
+  "upstreamName": "Video Generator Prompting",
+  "upstreamSlug": "video-generator-prompting",
+  "hiveSlug": "video-generator-prompting",
+  "sourceUrl": "https://github.com/LiamVisionary/hivemindos/tree/main/packaged-skills/optional/media/hivemindos/video-generator-prompting",
+  "repository": "https://github.com/LiamVisionary/hivemindos",
+  "license": "MIT for HivemindOS-authored instructions; linked model-provider documentation remains under its upstream terms",
+  "importedAt": "2026-08-12T01:46:00Z",
+  "provider": "packaged-optional",
+  "providerLabel": "HivemindOS optional media skills",
+  "sourcePath": "packaged-skills/optional/media/hivemindos/video-generator-prompting",
+  "status": "optional",
+  "hivemindAdaptations": [
+    "Packages the shared exact-runtime router used by the AI UGC and MiniMax H3 workflows.",
+    "Routes MiniMax H3 through the standalone H3 compiler and its current license, territory, endpoint, upload, and spend gates.",
+    "Includes the reviewed LTX 2.3 guide and registry metadata while failing closed on unregistered runtimes.",
+    "Requires endpoint-capability receipts and decoded-frame QA instead of treating a successful provider response as an accepted take."
+  ]
+}

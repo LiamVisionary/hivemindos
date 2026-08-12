@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-12",
+  "runtimes": {
+    "ltx23-regular-fp8": {
+      "aliases": ["LTX-2.3", "ltx-2-3-pro", "ltx-2-3-fast"],
+      "guideId": "video-generator-prompting/ltx-2.3",
+      "guideVersion": "1.6.1",
+      "reference": "ltx-2.3.md",
+      "adapterOverrides": {
+        "ami-media-studio": {
+          "mode": "image-to-video",
+          "mcpTool": "media_generate_video",
+          "localMcpUrl": "http://127.0.0.1:8796/mcp",
+          "tailnetMcpUrl": "configured Media Studio tailnet HTTPS origin plus /mcp",
+          "tokenFile": "~/.hivemindos/media-studio/secure/zimg-token",
+          "requiredAuthHeaders": ["Authorization: Bearer <token>", "X-Token: <token>"],
+          "acceptsImage": true,
+          "acceptsAudio": false,
+          "generatesAudio": true,
+          "useGeneratedAudio": true,
+          "supportsMiddleImage": true,
+          "supportsEndImage": true,
+          "supportsKeyframes": true,
+          "acceptsLongNaturalLanguagePrompt": true,
+          "clientPromptCharacterCap": null,
+          "preserveFullPrompt": true,
+          "supportsVideoExtension": true,
+          "preservesSourceAudioDuringExtension": true,
+          "sameSpeakerExtensionSourcePolicy": "complete-accumulated-audiovisual-history",
+          "sameSpeakerQa": "exact-transcript-plus-single-speaker-diarization"
+        }
+      }
+    },
+    "ltx23-ic-dual-character-lora": {
+      "aliases": ["ic", "ic-lora", "dual", "dual-character", "ic-dual-character", "ltx23-ic"],
+      "guideId": "video-generator-prompting/ltx-2.3-ic-dual-character",
+      "guideVersion": "1.6.1",
+      "reference": "ltx-2.3.md",
+      "adapterOverrides": {
+        "ami-media-studio": {
+          "mode": "single-anchor-storyboarded-dialogue",
+          "mcpTool": "media_generate_video",
+          "localMcpUrl": "http://127.0.0.1:8796/mcp",
+          "tailnetMcpUrl": "configured Media Studio tailnet HTTPS origin plus /mcp",
+          "tokenFile": "~/.hivemindos/media-studio/secure/zimg-token",
+          "requiredAuthHeaders": ["Authorization: Bearer <token>", "X-Token: <token>"],
+          "acceptsImage": true,
+          "acceptsAudio": false,
+          "generatesAudio": true,
+          "useGeneratedAudio": true,
+          "supportsMiddleImage": true,
+          "supportsEndImage": true,
+          "supportsKeyframes": true,
+          "acceptsLongNaturalLanguagePrompt": true,
+          "clientPromptCharacterCap": null,
+          "preserveFullPrompt": true,
+          "preferredAnchorCount": 1,
+          "recommendedWidth": 1024,
+          "recommendedHeight": 576,
+          "recommendedFrames": 241,
+          "frameRate": 24,
+          "cfg": 1.0,
+          "loraStrength": 0.8,
+          "failedTakePolicy": "reject-and-regenerate"
+        }
+      }
+    },
+    "minimax-h3": {
+      "aliases": [
+        "MiniMax-H3",
+        "H3-Base-FL2VA",
+        "H3-Base-Ref2VA",
+        "minimax-h3-fl2va",
+        "minimax-h3-ref2va"
+      ],
+      "guideId": "minimax-h3-video-prompting",
+      "guideVersion": "1.0.1",
+      "guideSkill": "minimax-h3-video-prompting",
+      "routeByTaskMode": true,
+      "taskModes": [
+        "t2va",
+        "i2va",
+        "fl2va",
+        "l2va",
+        "ref2va"
+      ],
+      "executionGate": "verify-current-minimax-h3-license-territory-provider-and-endpoint-before-model-use",
+      "sourceUrls": [
+        "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md",
+        "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md",
+        "https://huggingface.co/MiniMaxAI/MiniMax-H3"
+      ]
+    },
+    "seedance-2.0": {
+      "aliases": ["seedance_2_0", "seedance-v2.0-i2v", "seedance-2.0-omni-reference"],
+      "guideSkills": ["muapi-seedance-video", "higgsfield-generate", "higgsfield-api-quirks"],
+      "routeByProvider": true
+    }
+  },
+  "unknownRuntimePolicy": "fail-closed-and-add-reviewed-primary-source-guide"
+}

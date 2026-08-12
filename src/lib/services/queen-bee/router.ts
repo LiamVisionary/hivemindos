@@ -68,6 +68,8 @@ type ProjectRegistryHint = {
 
 type QueenBeeMachine = {
   key?: string;
+  /** Canonical id returned at the top level by /api/fleet/discover. */
+  machineId?: string;
   collector?: string;
   device?: {
     self?: boolean;
@@ -109,6 +111,8 @@ export type QueenBeeTaskIntent = {
   title: string;
   body?: string;
   skills?: string[];
+  /** Exact project-registry id stamped by the submission boundary. */
+  projectId?: string;
   projectRegistry?: ProjectRegistryHint | null;
 };
 
@@ -183,7 +187,7 @@ function machineLoadSpreadingEnabled(): boolean {
 }
 
 function machineLoadKey(machine: QueenBeeMachine): string {
-  return normalizeMachineToken(machine.key) || normalizeMachineToken(machine.device?.machineId) || normalizeMachineToken(machine.device?.name);
+  return normalizeMachineToken(machine.key) || normalizeMachineToken(machine.machineId) || normalizeMachineToken(machine.device?.machineId) || normalizeMachineToken(machine.device?.name);
 }
 
 /** Total in-flight (working/ready) tasks across ALL of a machine's agents. */
@@ -207,6 +211,7 @@ export function machineMatchesTarget(machine: QueenBeeMachine, target?: string |
   return [
     normalizeMachineToken(machine.key),
     normalizeMachineToken(machine.device?.name),
+    normalizeMachineToken(machine.machineId),
     normalizeMachineToken(machine.device?.machineId),
     dns,
     dns.split(".")[0],
@@ -421,7 +426,7 @@ function taskAffinityScore(agent: QueenBeeAgent, machine: QueenBeeMachine, task:
 function projectCheckoutScore(machine: QueenBeeMachine, agent: QueenBeeAgent, task: QueenBeeTaskIntent, taskText: string, reasons: string[]) {
   let score = 0;
   const checkouts = projectCheckoutsForVersion(machine.version);
-  const registryMatches = matchingRegistryProjects(task.projectRegistry, taskText);
+  const registryMatches = matchingRegistryProjects(task.projectRegistry, taskText, task.projectId);
   const matchedRegistry = registryMatches.find((project) => checkouts.some((checkout) => checkoutMatchesRegistryProject(checkout, project)));
   if (matchedRegistry) {
     const checkout = checkouts.find((candidate) => checkoutMatchesRegistryProject(candidate, matchedRegistry));
@@ -497,7 +502,12 @@ function checkoutFreshnessScore(checkout: CollectorProjectCheckout, label: strin
   return score;
 }
 
-function matchingRegistryProjects(registry: ProjectRegistryHint | null | undefined, taskText: string) {
+function matchingRegistryProjects(registry: ProjectRegistryHint | null | undefined, taskText: string, projectId?: string) {
+  const exactProjectId = projectId?.trim();
+  if (exactProjectId) {
+    const exact = (registry?.projects ?? []).find((project) => project.id === exactProjectId);
+    return exact ? [exact] : [];
+  }
   const text = normalizeProjectSlug(taskText);
   if (!text) return [];
   return (registry?.projects ?? []).filter((project) => {
@@ -508,7 +518,7 @@ function matchingRegistryProjects(registry: ProjectRegistryHint | null | undefin
       project.gitlawbRepo?.repoId,
       project.gitlawbRepo?.repoName,
       project.gitlawbRepo?.remoteUrl && projectSlugFromRemote(project.gitlawbRepo.remoteUrl),
-    ].map((value) => normalizeProjectSlug(String(value || ""))).filter((value) => value.length >= 3);
+    ].map((value) => normalizeProjectSlug(String(value || ""))).filter((value) => value.length >= 4);
     return aliases.some((alias) => text.includes(alias));
   });
 }
@@ -537,7 +547,7 @@ function checkoutMatchesRegistryProject(checkout: CollectorProjectCheckout & { p
 
 function machineKeyMatches(machine: QueenBeeMachine, preferred: string) {
   const normalized = normalizeProjectSlug(preferred);
-  return [machine.key, machine.device?.machineId, machine.device?.name, machine.device?.dnsName]
+  return [machine.key, machine.machineId, machine.device?.machineId, machine.device?.name, machine.device?.dnsName]
     .map((value) => normalizeProjectSlug(String(value || "")))
     .includes(normalized);
 }

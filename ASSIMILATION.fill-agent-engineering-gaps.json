@@ -1,0 +1,42 @@
+{
+  "created_at": "2026-08-12T15:17:59.997642+00:00",
+  "request": "fill in all the gaps thoroughly and test end to end",
+  "custom_code_assessment": "balanced",
+  "entries": [
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/loops/loop-templates.ts",
+      "target_path": "src/lib/services/queen-bee/task-loop-policy.ts",
+      "reuse_type": "adapted_code",
+      "note": "Server-owned loop composition reuses the canonical template registry, gates, contracts, and rubrics"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/queen-bee/control-plane.ts",
+      "target_path": "src/lib/services/queen-bee/control-plane.ts",
+      "reuse_type": "adapted_code",
+      "note": "Existing Queen Bee task construction and loop body path extended with explicit-precedence server templates"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "src/lib/services/queen-bee/prd-decomposition.ts",
+      "target_path": "src/lib/services/queen-bee/prd-decomposition.ts",
+      "reuse_type": "adapted_code",
+      "note": "Existing role classification and dependency DAG reused for role-specific loops while acceptance criteria remain gates"
+    },
+    {
+      "source_repo": "DeusData/codebase-memory-mcp",
+      "source_path": "src/main.c",
+      "target_path": "src/lib/services/code-intelligence/codebase-memory-provider.ts",
+      "reuse_type": "adapted_code",
+      "note": "Audited v0.10.2 args-file CLI contract, compact JSON formats, cache root, and repository containment"
+    },
+    {
+      "source_repo": "hivemind-os",
+      "source_path": "scripts/test-loop-kanban-real-tasks.mjs",
+      "target_path": "scripts/test-queen-bee-default-loops.mjs",
+      "reuse_type": "test_adapted",
+      "note": "Route-to-temporary-vault Work Board coverage adapted for swarm and PRD loop persistence"
+    }
+  ]
+}

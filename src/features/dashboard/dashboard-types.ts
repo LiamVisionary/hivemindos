@@ -747,6 +747,9 @@ export type AppVersion = {
   latestCommit?: string;
   latestShortCommit?: string;
   updateCommand?: string;
+  packaged?: boolean;
+  sourceBuild?: boolean;
+  releaseChannel?: string;
 };
 
 export type MachineInitResult = {

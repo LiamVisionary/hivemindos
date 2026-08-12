@@ -63,10 +63,6 @@
       "line": "window.localStorage.setItem(DISMISSED_PLAN_STORAGE_KEY, currentFingerprint);"
     },
     {
-      "file": "src/features/dashboard/views/WalletPanel.tsx",
-      "line": "try { window.sessionStorage.setItem(\"hivemindos.walletDraftMessage\", text); } catch {}"
-    },
-    {
       "file": "src/features/native/NativeFirstRunOnboarding.tsx",
       "line": "return window.localStorage.getItem(DISMISS_KEY) === \"1\" || window.localStorage.getItem(DISMISS_FALLBACK_KEY) === \"1\";"
     },

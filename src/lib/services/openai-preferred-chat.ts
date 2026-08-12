@@ -13,6 +13,7 @@ import {
   runOpenAiOAuthChatTurn,
 } from "@/lib/services/openai-oauth";
 import { hiveEnvValue } from "@/lib/services/shared-hive-env";
+import { resilientHttpsFetch } from "@/lib/net/resilient-https-fetch";
 
 export type PreferredOpenAiTextMessage = {
   role: "system" | "user" | "assistant";
@@ -76,7 +77,7 @@ async function runApiKeyTextTurn(
     model,
     cacheScope: input.cacheScope,
   });
-  const response = await fetch(endpoint.url, {
+  const response = await resilientHttpsFetch(endpoint.url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${endpoint.key}`,

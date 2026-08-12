@@ -20,6 +20,8 @@
   --text-soft: #c6d1df;
   --bee: #f2b705;
   --honey: #ffd45a;
+  --honey-fill: var(--honey);
+  --on-honey: #1a1305;
   --pollen: #fff6cf;
   --comb-line: rgba(242, 183, 5, 0.22);
   --live: #2dd4bf;
@@ -75,56 +77,55 @@
 }
 
 :root[data-theme="hive-light"] {
-  /* Canonical app light palette, matched to the redesigned Fleet Hive view. */
-  --background: #f1ede3;
-  --foreground: #221d14;
-  --panel: #fbf8f1;
-  --panel-soft: #f6f2e9;
-  --line: rgba(54, 46, 30, 0.16);
-  --muted: #5e574b;
-  --accent: #936811;
-  --accent-strong: #7c550b;
-  --success: #406f53;
-  --warning: #8a641f;
-  --danger: #a23a35;
-  --surface: rgba(251, 248, 241, 0.9);
-  --surface-strong: rgba(244, 239, 228, 0.94);
-  --surface-soft: rgba(246, 242, 233, 0.82);
-  --field: rgba(255, 252, 246, 0.92);
-  --text-soft: #4b463d;
-  --bee: #936811;
-  --honey: #d8b468;
-  --pollen: #efe2be;
-  --comb-line: rgba(54, 46, 30, 0.16);
-  --live: #5f8f5a;
-  --live-soft: rgba(95, 143, 90, 0.14);
-  --bg: #f1ede3;
-  --bg-0: #f1ede3;
-  --bg-1: #f6f2e9;
-  --bg-2: #fbf8f1;
-  --bg-3: #f4efe4;
-  --bg-4: #e8dfcf;
-  --fg: #221d14;
-  --fg-2: #4b463d;
-  --fg-3: #5e574b;
-  --fg-4: #6f6657;
-  --cyan: #5f8f5a;
-  --cyan-2: #4f7d4b;
-  --cyan-3: #376739;
-  --button-background: #fbf8f1;
-  --button-primary: #7c550b;
-  --button-primary-foreground: #fff7df;
-  --button-secondary: rgba(176, 127, 28, 0.12);
-  --button-secondary-foreground: #221d14;
-  --button-accent: rgba(176, 127, 28, 0.11);
-  --button-accent-foreground: #221d14;
-  --button-muted-foreground: #867d6e;
-  --button-destructive: #c0524d;
-  --button-border: rgba(54, 46, 30, 0.16);
-  --button-input: rgba(54, 46, 30, 0.18);
-  --button-ring: rgba(176, 127, 28, 0.38);
-  --button-popover: #fbf8f1;
-  --button-popover-foreground: #221d14;
+  --background: #f5efe6;
+  --foreground: #4a3a2a;
+  --panel: #f8f4ee;
+  --panel-soft: #f0e8d8;
+  --line: #e8dcc8;
+  --muted: #8a7a6a;
+  --accent: #8a5a2a; --accent-strong: #8a5a2a;
+  --success: #6b8f5e; --warning: #9a5d32;
+  --warning-soft: rgba(154, 93, 50, 0.12);
+  --danger: #b5483b;
+  --surface: #f8f4ee;
+  --surface-strong: #f8f4ee;
+  --surface-soft: #f0e8d8;
+  --field: #f8f4ee;
+  --text-soft: #a09080;
+  --bee: #8a5a2a;
+  --honey: #8a5a2a;
+  --honey-fill: #f0e8d8;
+  --on-honey: #4a3a2a;
+  --pollen: #f0e8d8;
+  --comb-line: #e8dcc8;
+  --live: #6b8f5e; --live-soft: rgba(107, 143, 94, 0.14);
+  --bg: #f5efe6;
+  --bg-0: #f5efe6;
+  --bg-1: #f8f4ee;
+  --bg-2: #f8f4ee;
+  --bg-3: #f0e8d8;
+  --bg-4: #fffaf4;
+  --fg: #4a3a2a;
+  --fg-2: #8a7a6a;
+  --fg-3: #8a7a6a;
+  --fg-4: #a09080;
+  --cyan: #6b8f5e;
+  --cyan-2: #6b8f5e;
+  --cyan-3: #56794b;
+  --button-background: #f8f4ee;
+  --button-primary: #8a5a2a;
+  --button-primary-foreground: #f8f4ee;
+  --button-secondary: #f0e8d8;
+  --button-secondary-foreground: #4a3a2a;
+  --button-accent: #f0e8d8;
+  --button-accent-foreground: #4a3a2a;
+  --button-muted-foreground: #8a7a6a;
+  --button-destructive: #b5483b;
+  --button-border: #e8dcc8;
+  --button-input: #e8dcc8;
+  --button-ring: rgba(138, 90, 42, 0.34);
+  --button-popover: #f8f4ee;
+  --button-popover-foreground: #4a3a2a;
   color-scheme: light;
 }
 
@@ -154,9 +155,9 @@ body {
   color: var(--foreground);
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%23362e1e' stroke-opacity='.045' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E"),
-    radial-gradient(circle at 16% 10%, rgba(176, 127, 28, 0.10), transparent 26rem),
-    radial-gradient(circle at 84% 18%, rgba(95, 143, 90, 0.10), transparent 28rem),
-    linear-gradient(140deg, #fbf8f1 0%, #f1ede3 52%, #f4efe4 100%);
+    radial-gradient(circle at 16% 10%, rgba(138, 90, 42, 0.07), transparent 26rem),
+    radial-gradient(circle at 84% 18%, rgba(107, 143, 94, 0.08), transparent 28rem),
+    linear-gradient(140deg, #f8f4ee 0%, #f5efe6 52%, #f0e8d8 100%);
   background-size: 72px 41.569px, auto, auto, auto;
 }
 
@@ -281,7 +282,7 @@ a {
 :root[data-theme="hive-light"] .hero {
   border-color: var(--comb-line);
   background:
-    linear-gradient(90deg, rgba(212, 180, 111, 0.2), transparent 38%),
+    linear-gradient(90deg, rgba(138, 90, 42, 0.05), transparent 38%),
     rgba(245, 239, 230, 0.86);
 }
 
@@ -470,14 +471,14 @@ a {
 }
 
 :root[data-theme="hive-light"] .dashboardAppNotification {
-  border-color: rgba(176, 127, 28, 0.38);
+  border-color: rgba(138, 90, 42, 0.38);
   background:
     linear-gradient(135deg, rgba(244, 236, 213, 0.98), rgba(224, 210, 174, 0.96)),
     rgba(245, 239, 230, 0.96);
   box-shadow:
     0 16px 40px rgba(92, 75, 45, 0.22),
-    0 0 0 1px rgba(106, 69, 5, 0.12),
-    0 0 34px rgba(176, 127, 28, 0.20);
+    0 0 0 1px rgba(111, 69, 31, 0.12),
+    0 0 34px rgba(138, 90, 42, 0.20);
 }
 
 :root[data-theme="hive-light"] .dashboardAppNotificationIcon {
@@ -1139,7 +1140,7 @@ h1 {
 }
 
 :root[data-theme="hive-light"] .commandMain :where([class*="text-[#bbf7d0"]) {
-  color: #356b2f !important;
+  color: #56794b !important;
 }
 
 :root[data-theme="hive-light"] .commandMain :where([class*="text-[#fecdd3"]) {
@@ -1156,9 +1157,9 @@ h1 {
 }
 
 :root[data-theme="hive-light"] [data-slot="status-pill"][data-tone="warning"] {
-  border-color: rgba(185, 139, 47, 0.42) !important;
-  background-color: rgba(212, 180, 111, 0.2) !important;
-  color: #6f5625 !important;
+  border-color: rgba(154, 93, 50, 0.42) !important;
+  background-color: rgba(154, 93, 50, 0.12) !important;
+  color: var(--warning) !important;
 }
 
 :root[data-theme="hive-light"] [data-slot="status-pill"][data-tone="danger"] {
@@ -1171,7 +1172,7 @@ h1 {
 :root[data-theme="hive-light"] [data-slot="status-pill"][data-tone="info"] {
   border-color: rgba(72, 120, 85, 0.28) !important;
   background-color: rgba(105, 145, 96, 0.12) !important;
-  color: #356b2f !important;
+  color: #56794b !important;
 }
 
 :root[data-theme="hive-light"] [data-slot="status-pill"][data-tone="neutral"],
@@ -1183,15 +1184,15 @@ h1 {
 
 :root[data-theme="hive-light"] [data-slot="machine-connect-chip"],
 :root[data-theme="hive-light"] [data-slot="machine-update-chip"] {
-  border-color: rgba(185, 139, 47, 0.36) !important;
-  background-color: rgba(212, 180, 111, 0.18) !important;
-  color: #6f5625 !important;
+  border-color: rgba(154, 93, 50, 0.36) !important;
+  background-color: rgba(154, 93, 50, 0.12) !important;
+  color: var(--warning) !important;
 }
 
 :root[data-theme="hive-light"] [data-slot="machine-update-chip-success"] {
   border-color: rgba(72, 120, 85, 0.3) !important;
   background-color: rgba(105, 145, 96, 0.12) !important;
-  color: #356b2f !important;
+  color: #56794b !important;
 }
 
 :root[data-theme="hive-light"] .commandMain [data-slot="cell-menu-trigger"] {
@@ -1207,7 +1208,7 @@ h1 {
 :root[data-theme="hive-light"] .commandMain [data-slot="cell-menu-trigger"][aria-expanded="true"] {
   border-color: rgba(111, 86, 37, 0.46) !important;
   background-color: rgba(240, 232, 216, 0.96) !important;
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(212, 180, 111, 0.24)) !important;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(240, 232, 216, 0.72)) !important;
   color: #33271a !important;
 }
 
@@ -1224,7 +1225,7 @@ h1 {
 }
 
 :root[data-theme="hive-light"] .commandMain [data-slot="cell-menu-item"]:enabled:hover {
-  background: rgba(212, 180, 111, 0.22) !important;
+  background: #f0e8d8 !important;
   color: #33271a !important;
 }
 

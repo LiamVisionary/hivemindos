@@ -219,10 +219,10 @@ export async function POST(request: NextRequest) {
       },
     });
     if (result.paymentResponse) response.headers.set("PAYMENT-RESPONSE", result.paymentResponse);
-    const creditDebitUsd = result.responseHeaders["x-hivemindos-credit-debited-usd"];
-    const creditBalanceUsd = result.responseHeaders["x-hivemindos-credit-balance-usd"];
-    if (creditDebitUsd) response.headers.set("X-HivemindOS-Models-Credit-Debited-Usd", creditDebitUsd);
-    if (creditBalanceUsd) response.headers.set("X-HivemindOS-Models-Credit-Balance-Usd", creditBalanceUsd);
+    const creditDebit = result.responseHeaders["x-hivemindos-credit-debited-credits"];
+    const creditBalance = result.responseHeaders["x-hivemindos-credit-balance-credits"];
+    if (creditDebit) response.headers.set("X-HivemindOS-Models-Credit-Debited-Credits", creditDebit);
+    if (creditBalance) response.headers.set("X-HivemindOS-Models-Credit-Balance-Credits", creditBalance);
     return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "HivemindOS Models wallet-paid request failed.";
@@ -409,10 +409,10 @@ async function fetchWithHostedCredits(
         "X-HivemindOS-Wallet-Paid-Amount-Usd": "0",
       },
     });
-    const creditDebitUsd = response.headers.get("x-hivemindos-credit-debited-usd") || "";
-    const creditBalanceUsd = response.headers.get("x-hivemindos-credit-balance-usd") || "";
-    if (creditDebitUsd) next.headers.set("X-HivemindOS-Models-Credit-Debited-Usd", creditDebitUsd);
-    if (creditBalanceUsd) next.headers.set("X-HivemindOS-Models-Credit-Balance-Usd", creditBalanceUsd);
+    const creditDebit = response.headers.get("x-hivemindos-credit-debited-credits") || "";
+    const creditBalance = response.headers.get("x-hivemindos-credit-balance-credits") || "";
+    if (creditDebit) next.headers.set("X-HivemindOS-Models-Credit-Debited-Credits", creditDebit);
+    if (creditBalance) next.headers.set("X-HivemindOS-Models-Credit-Balance-Credits", creditBalance);
     return next;
   } catch (error) {
     const message = error instanceof Error ? error.message : "HivemindOS Models hosted-credit request failed.";

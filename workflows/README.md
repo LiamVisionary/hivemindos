@@ -33,6 +33,10 @@ workflows/
       templates.json post/comment skeletons, timing windows, intent queries (authored)
     cold-email/
       templates.json first-touch skeleton, frameworks, sequence spine, subject formulas, anti-patterns (authored)
+    creator-rewards/
+      templates.json readiness, roster criteria, payout controls, diagnostics, cohort rules, scorecard, paid handoff (authored)
+    performance-creative/
+      templates.json transformation brief, public-ad research fields, hook shapes, five-beat scripts, storyboard QA, controlled variants, claim gates (authored)
     linkedin/
       templates.json hook shapes, content rotation, warming stages, DM spine, sell-by-chat, safety caps (authored)
     b2b-social/

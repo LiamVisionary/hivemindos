@@ -1,0 +1,13 @@
+# Defense in depth for the optional persistent code graph. The engine also
+# honors .gitignore; these patterns protect common secret-bearing files even if
+# a future local checkout deliberately changes its Git ignore rules.
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.mobileprovision
+credentials*.json
+service-account*.json
+**/Operations/Secure/**

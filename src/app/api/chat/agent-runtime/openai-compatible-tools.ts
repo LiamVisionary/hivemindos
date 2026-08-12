@@ -46,24 +46,24 @@ export function modelVisibleMediaBytes(artifacts: ChatMediaArtifact[]) {
 }
 
 export function hivemindosModelsBillingFromHeaders(headers: Headers): ChatResponseBilling | null {
-  const creditDebitUsd = numericHeader(headers, "X-HivemindOS-Models-Credit-Debited-Usd");
-  const creditBalanceUsd = numericHeader(headers, "X-HivemindOS-Models-Credit-Balance-Usd");
+  const creditsDebited = numericHeader(headers, "X-HivemindOS-Models-Credit-Debited-Credits");
+  const creditsBalance = numericHeader(headers, "X-HivemindOS-Models-Credit-Balance-Credits");
   const walletDebitUsd = numericHeader(headers, "X-HivemindOS-Wallet-Paid-Amount-Usd");
   const paidHeader = stringHeader(headers, "X-HivemindOS-Wallet-Paid");
-  const costUsd = creditDebitUsd ?? walletDebitUsd;
-  if (costUsd === undefined && creditBalanceUsd === undefined && !paidHeader) return null;
+  if (creditsDebited === undefined && creditsBalance === undefined && walletDebitUsd === undefined && !paidHeader) return null;
   const hiveComputeRoute = paidHeader === "hive-compute";
   return {
     provider: hiveComputeRoute ? "hive-compute" : "hivemindos-models",
     label: hiveComputeRoute ? "Hive Compute" : "HivemindOS Models",
     source: hiveComputeRoute
       ? "marketplace"
-      : creditDebitUsd !== undefined
+      : creditsDebited !== undefined
         ? "prepaid-credit"
         : paidHeader === "x402" ? "x402" : undefined,
-    costUsd,
-    balanceUsd: creditBalanceUsd,
-    paid: creditDebitUsd !== undefined || walletDebitUsd !== undefined || paidHeader === "x402" || hiveComputeRoute,
+    costUsd: walletDebitUsd,
+    creditsDebited,
+    creditsBalance,
+    paid: creditsDebited !== undefined || walletDebitUsd !== undefined || paidHeader === "x402" || hiveComputeRoute,
     network: stringHeader(headers, "X-HivemindOS-Wallet-Paid-Network"),
   };
 }

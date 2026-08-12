@@ -813,7 +813,7 @@ function KStat({ n, label, tone, last }: { n: number; label: string; tone?: "hon
   );
 }
 
-/** Small pill button for the breadcrumb row (back / theme / refresh). */
+/** Small pill button for the breadcrumb row (back / refresh). */
 function CrumbPill({ onClick, disabled, children, title }: { onClick?: () => void; disabled?: boolean; children: React.ReactNode; title?: string }) {
   return (
     <button onClick={onClick} disabled={disabled} title={title} className="zhc-btn-ghost" style={{ display: "inline-flex", alignItems: "center", gap: 7, background: "transparent", border: "1px solid var(--line-2)", borderRadius: 999, cursor: disabled ? "default" : "pointer", color: "var(--fg-2)", fontFamily: "var(--f-mono)", fontSize: 11, padding: "7px 13px", opacity: disabled ? 0.6 : 1, whiteSpace: "nowrap" }}>
@@ -825,13 +825,13 @@ function CrumbPill({ onClick, disabled, children, title }: { onClick?: () => voi
 // ── The cockpit ────────────────────────────────────────────────────────────
 export function Cockpit({
   colony: c, colonies, showBudget, onBack, onSwitch, onAddAgents, openSkillAttachmentBrowser, handlers,
-  theme = "dark", onToggleTheme, onRefresh, refreshing = false, initialTasksLoading = false,
+  theme = "dark", onRefresh, refreshing = false, initialTasksLoading = false,
 }: {
   colony: Colony; colonies: Colony[]; showBudget: boolean;
   onBack: () => void; onSwitch: (id: string) => void; onAddAgents: () => void;
   openSkillAttachmentBrowser?: SkillAttachmentBrowserOpener;
   handlers: CockpitHandlers; theme?: "dark" | "light";
-  onToggleTheme?: () => void; onRefresh?: () => void; refreshing?: boolean;
+  onRefresh?: () => void; refreshing?: boolean;
   /** True until the first Work Board tasks fetch lands — shows board lane skeletons. */
   initialTasksLoading?: boolean;
 }) {
@@ -942,11 +942,6 @@ export function Cockpit({
       <div className="zhc-cockpit-toolbar" style={{ display: "flex", alignItems: "center", gap: 14, minWidth: 0 }}>
         <CrumbPill onClick={onBack} title="Back to all companies">← all companies</CrumbPill>
         <span style={{ flex: 1 }} />
-        {onToggleTheme && (
-          <CrumbPill onClick={onToggleTheme} title="Toggle light / dark">
-            <span style={{ fontSize: 13, lineHeight: 1 }}>{theme === "dark" ? "☼" : "☾"}</span>{theme === "dark" ? "Light" : "Dark"}
-          </CrumbPill>
-        )}
         {onRefresh && (
           <CrumbPill onClick={onRefresh} disabled={refreshing} title="Refresh company registry">
             {refreshing ? <><Spinner size={11} /> syncing</> : "↻ refresh"}

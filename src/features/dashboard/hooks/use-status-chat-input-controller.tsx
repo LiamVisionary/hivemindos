@@ -916,7 +916,7 @@ export function useStatusChatInputController(props: any) {
           agentName: selectedAgent.name,
           chatStorageKey: selectedStorageKey,
           chatLeaf: selectedChatLeafKey,
-          workingDirectory: selectedChatDirectoryPath,
+          workingDirectory: selectedChatDirectoryPath, permissionMode,
           vaultPath: sharedVault?.vaultPath,
           notificationsFolder: sharedVault?.notificationsFolder,
         }),

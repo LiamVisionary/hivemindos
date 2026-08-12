@@ -1,13 +1,13 @@
 .aboutWindow {
-  --about-bg: #f1ede3;
+  --about-bg: #f5efe6;
   --about-bg-soft: #f8f4ec;
-  --about-panel: #fbf8f1;
+  --about-panel: #f8f4ee;
   --about-line: #d8cdbb;
-  --about-fg: #221d14;
-  --about-muted: #6f6657;
-  --about-live: #5f8f5a;
+  --about-fg: #4a3a2a;
+  --about-muted: #a09080;
+  --about-live: #6b8f5e;
   --about-live-strong: #466f42;
-  --about-honey: #7c550b;
+  --about-honey: #8a5a2a;
   min-height: 100vh;
   display: grid;
   align-content: start;
@@ -16,8 +16,8 @@
   padding: 42px 26px 24px;
   color: var(--about-fg);
   background:
-    radial-gradient(circle at 20% 14%, rgba(176, 127, 28, 0.11), transparent 22rem),
-    radial-gradient(circle at 84% 76%, rgba(95, 143, 90, 0.13), transparent 24rem),
+    radial-gradient(circle at 20% 14%, rgba(138, 90, 42, 0.11), transparent 22rem),
+    radial-gradient(circle at 84% 76%, rgba(107, 143, 94, 0.13), transparent 24rem),
     linear-gradient(180deg, var(--about-bg) 0%, var(--about-bg-soft) 100%);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", sans-serif;
   text-align: center;

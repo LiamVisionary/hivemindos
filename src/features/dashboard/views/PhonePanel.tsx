@@ -428,7 +428,7 @@ export function PhonePanel({ activeView, fleetClass, formatRelativeTime, sharedV
                     aria-checked={draft.enabled}
                     aria-label={draft.enabled ? "Disable prompt" : "Enable prompt"}
                     onClick={() => setDraft((current) => ({ ...current, enabled: !current.enabled }))}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full border transition ${draft.enabled ? "border-[rgba(64,111,83,0.38)] bg-[rgba(64,111,83,0.18)]" : "border-[var(--line)] bg-[var(--surface-soft)]"}`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full border transition ${draft.enabled ? "border-[rgba(107, 143, 94,0.38)] bg-[rgba(107, 143, 94,0.18)]" : "border-[var(--line)] bg-[var(--surface-soft)]"}`}
                   >
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${draft.enabled ? "translate-x-6" : "translate-x-1"}`} />
                   </button>

@@ -45,6 +45,7 @@ export async function handleDashboardSwarmGoalCommand(input: SwarmGoalCommandInp
         priority: "high",
         taskTitle: swarmGoalTaskTitle(task),
         skills: ["planner", "code", "qa"],
+        loopTemplateId: "app-build-harness",
         vaultPath: input.sharedVault.vaultPath,
         brainServicesFolder: input.sharedVault.brainServicesFolder,
         kanbanFolder: input.sharedVault.kanbanFolder,

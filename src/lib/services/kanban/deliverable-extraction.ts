@@ -94,7 +94,10 @@ function deliverableFromTarget(
   label?: string,
   createdAt = Date.now(),
 ): KanbanDeliverable | null {
-  const trimmed = target.trim().replace(/[),.;:}\]]+$/, "");
+  const trimmed = target
+    .trim()
+    .replace(/[),.;:}\]]+$/, "")
+    .replace(/`+$/, "");
   if (!trimmed) return null;
   if (/^https?:\/\//i.test(trimmed)) {
     if (/^https?:\/\/(?:www\.)?w3\.org\/2000\/svg\b/i.test(trimmed))

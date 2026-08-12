@@ -194,8 +194,8 @@
 }
 
 .heroChip[data-tone="warn"] {
-  background: rgba(242, 183, 5, 0.16);
-  color: var(--honey);
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 .heroChip[data-tone="danger"] {
@@ -1260,8 +1260,8 @@ button.railItem:active {
 }
 
 .banner[data-tone="warn"] {
-  background: rgba(242, 183, 5, 0.10);
-  color: var(--honey);
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
 .banner[data-tone="danger"] {
@@ -1323,17 +1323,17 @@ button.railItem:active {
 :global(:root[data-theme="hive-light"]) .card {
   border-color: var(--comb-line);
   background:
-    radial-gradient(circle at 50% -10%, rgba(212, 180, 111, 0.22), transparent 50%),
+    radial-gradient(circle at 50% -10%, rgba(138, 90, 42, 0.05), transparent 50%),
     var(--surface);
   box-shadow: 0 30px 60px rgba(92, 75, 45, 0.18);
 }
 
 :global(:root[data-theme="hive-light"]) .actionBtn {
-  background: rgba(185, 139, 47, 0.08);
+  background: rgba(138, 90, 42, 0.08);
 }
 
 :global(:root[data-theme="hive-light"]) .actionBtn:hover:not(:disabled) {
-  background: rgba(185, 139, 47, 0.14);
+  background: rgba(138, 90, 42, 0.14);
 }
 
 :global(:root[data-theme="hive-light"]) .actionBtn svg {
@@ -1400,7 +1400,7 @@ button.railItem:active {
 :global(:root[data-theme="hive-light"]) .usePodAdvancedSegment:focus-visible,
 :global(:root[data-theme="hive-light"]) .sheetCopy:hover,
 :global(:root[data-theme="hive-light"]) .token:hover {
-  background: rgba(176, 127, 28, 0.12);
+  background: rgba(138, 90, 42, 0.12);
   color: var(--foreground);
 }
 
@@ -1419,7 +1419,7 @@ button.railItem:active {
 :global(:root[data-theme="hive-light"]) .sheetField select:focus,
 :global(:root[data-theme="hive-light"]) .sheetField textarea:focus {
   border-color: var(--accent-strong);
-  outline-color: rgba(176, 127, 28, 0.24);
+  outline-color: rgba(138, 90, 42, 0.24);
 }
 
 :global(:root[data-theme="hive-light"]) .sheetAddress,
@@ -1430,8 +1430,8 @@ button.railItem:active {
 }
 
 :global(:root[data-theme="hive-light"]) .tokenAction {
-  border-color: rgba(176, 127, 28, 0.34);
-  background: rgba(176, 127, 28, 0.14);
+  border-color: rgba(138, 90, 42, 0.34);
+  background: rgba(138, 90, 42, 0.14);
   color: var(--accent-strong);
 }
 
@@ -1448,7 +1448,7 @@ button.railItem:active {
 }
 
 :global(:root[data-theme="hive-light"]) .banner[data-tone="warn"] {
-  color: #6f5625;
+  color: var(--warning);
 }
 
 :global(:root[data-theme="hive-light"]) .banner[data-tone="off"] {

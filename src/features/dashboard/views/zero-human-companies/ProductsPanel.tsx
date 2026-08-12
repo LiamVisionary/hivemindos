@@ -290,7 +290,7 @@ export function ProductsPanel({
           <span aria-hidden style={{ fontSize: 15 }}>⚖</span>
           <div style={{ flex: 1, minWidth: 220 }}>
             <div style={{ fontFamily: "var(--f-display)", fontSize: 13, fontWeight: 600, color: "var(--honey)" }}>
-              The crew thinks pricing may be blocking sales — {pendingProposals.length === 1 ? "1 price-change request awaits" : `${pendingProposals.length} price-change requests await`} your decision
+              Pricing review requested — {pendingProposals.length === 1 ? "1 price-change request awaits" : `${pendingProposals.length} price-change requests await`} your decision
             </div>
             <div style={{ fontFamily: "var(--f-body)", fontSize: 12, color: "var(--fg-3)", marginTop: 3 }}>
               {pendingProposals.map((p) => `${p.productName} $${p.currentAmountUsd.toLocaleString("en-US")} → $${p.proposedAmountUsd.toLocaleString("en-US")}`).join(" · ")}

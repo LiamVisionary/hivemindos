@@ -21,6 +21,7 @@ import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatAttachment, ChatMessage } from "@/features/dashboard/dashboard-types";
 import type { ChatResponseBilling } from "@/lib/types/chat-billing";
+import { formatModelCreditAmount } from "@/lib/utils/model-credits";
 import type { CapabilityApprovalPlan } from "@/lib/types/capability-approval";
 import type { DeliverableSourceMachine } from "@/lib/services/deliverable-open-client";
 import { Dot, Glyph, ICON } from "./primitives";
@@ -107,6 +108,13 @@ function formatBillingUsd(value: number) {
 }
 
 function responseBillingText(billing: ChatResponseBilling | undefined) {
+  const creditsDebited = Number(billing?.creditsDebited);
+  if (Number.isFinite(creditsDebited)) {
+    const creditsBalance = Number(billing?.creditsBalance);
+    const parts = [`${formatModelCreditAmount(creditsDebited)} credits used`];
+    if (Number.isFinite(creditsBalance)) parts.push(`${formatModelCreditAmount(creditsBalance)} remaining`);
+    return parts.join(" · ");
+  }
   const costUsd = Number(billing?.costUsd);
   if (!Number.isFinite(costUsd)) return "";
   const balanceUsd = Number(billing?.balanceUsd);

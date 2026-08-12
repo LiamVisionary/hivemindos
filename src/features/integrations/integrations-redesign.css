@@ -48,30 +48,30 @@
 [data-fr-theme="light"] .fr-root,
 .fr-root[data-fr-theme="light"],
 :root[data-theme="hive-light"] .fr-root {
-  --bg: #f1ede3;
-  --bg-soft: #f6f2e9;
-  --panel: #fbf8f1;
-  --panel-2: #f4efe4;
+  --bg: #f5efe6;
+  --bg-soft: #f0e8d8;
+  --panel: #f8f4ee;
+  --panel-2: #f0e8d8;
   --panel-hi: #ffffff;
-  --line: rgba(54, 46, 30, 0.10);
-  --line-2: rgba(54, 46, 30, 0.16);
-  --line-3: rgba(54, 46, 30, 0.26);
+  --line: rgba(74, 58, 42, 0.10);
+  --line-2: rgba(74, 58, 42, 0.16);
+  --line-3: rgba(74, 58, 42, 0.26);
 
-  --fg: #221d14;
-  --fg-2: #5e574b;
-  --fg-3: #5e574b;
-  --fg-4: #6f6657;
+  --fg: #4a3a2a;
+  --fg-2: #8a7a6a;
+  --fg-3: #8a7a6a;
+  --fg-4: #a09080;
 
-  --honey: #936811; --honey-fill: #e6bb5c;
-  --honey-2: #936811;
-  --honey-soft: rgba(176, 127, 28, 0.12);
-  --honey-line: rgba(176, 127, 28, 0.34);
+  --honey: #8a5a2a; --honey-fill: #f0e8d8;
+  --honey-2: #8a5a2a;
+  --honey-soft: rgba(138, 90, 42, 0.12);
+  --honey-line: rgba(138, 90, 42, 0.34);
 
-  --live: #1d8e7c;
-  --live-soft: rgba(29, 142, 124, 0.12);
+  --live: #6b8f5e;
+  --live-soft: rgba(107, 143, 94, 0.12);
 
-  --danger: #c0524d;
-  --danger-soft: rgba(192, 82, 77, 0.12);
+  --danger: #b5483b;
+  --danger-soft: rgba(181, 72, 59, 0.12);
 
   --shadow: 0 1px 0 rgba(255,255,255,0.5) inset, 0 18px 50px -30px rgba(80,60,20,0.35);
 }
@@ -115,7 +115,7 @@
 .fb-seg { display: inline-flex; gap: 3px; padding: 4px; border: 1px solid var(--line-2); border-radius: 99px; background: color-mix(in srgb, var(--panel) 70%, transparent); }
 .fb-seg button { border: 0; background: transparent; cursor: pointer; border-radius: 99px; padding: 8px 16px; font-family: var(--f-body); font-size: 12.5px; color: var(--fg-3); transition: color .16s, background .16s; display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
 .fb-seg button:hover { color: var(--fg); }
-.fb-seg button[data-active] { background: var(--honey-fill, var(--honey)); color: #1a1305; font-weight: 500; }
+.fr-root .fb-seg button[data-active] { background: var(--honey-fill, var(--honey)); color: var(--on-honey, #1a1305); font-weight: 500; }
 .fb-seg.sub button[data-active] { background: var(--panel-hi); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-3); }
 
 .fb-pills { display: inline-flex; flex-wrap: wrap; gap: 6px; }
@@ -311,11 +311,13 @@
 .ni-filterchips button[aria-pressed="true"] { border-color: var(--honey-line); background: var(--honey-soft); color: var(--honey); }
 .ni-abtns { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .ni-agrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 13px; }
-.ni-acard { aspect-ratio: 1 / 1; padding: 18px 14px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--panel-2); color: var(--fg); cursor: pointer; display: grid; grid-template-rows: auto auto 1fr auto; gap: 9px; justify-items: center; align-items: center; text-align: center; transition: transform .16s, border-color .16s, background .16s; }
+.ni-acard { aspect-ratio: auto; height: 100%; padding: 18px 14px; border: 1px solid var(--line-2); border-radius: var(--radius); background: var(--panel-2); color: var(--fg); cursor: pointer; display: grid; grid-template-rows: auto auto 1fr auto; gap: 9px; justify-items: center; align-items: center; text-align: center; transition: transform .16s, border-color .16s, background .16s; }
 .ni-acard:hover { transform: translateY(-1px); border-color: var(--line-3); }
 .ni-acard[data-on] { border-color: var(--honey-line); background: var(--panel-hi); box-shadow: 0 0 0 3px var(--honey-soft); }
 .ni-acard strong { font-size: 15.5px; font-weight: 600; letter-spacing: -0.01em; }
 .ni-acard .adet { font-size: 12px; color: var(--fg-3); line-height: 1.35; }
+.ni-acard .ni-pill { min-width: 0; max-width: 100%; justify-content: center; white-space: normal; overflow-wrap: anywhere; line-height: 1.35; }
+.ni-acard .ni-pill > span { min-width: 0; overflow-wrap: anywhere; }
 
 .ni-connhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .ni-connhead strong { font-size: 13.5px; font-weight: 600; }

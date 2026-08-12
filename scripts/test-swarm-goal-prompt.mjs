@@ -94,6 +94,7 @@ assert.equal(capturedRequest.url, "/api/queen-bee");
 assert.equal(capturedRequest.body.mode, "act");
 assert.equal(capturedRequest.body.priority, "high");
 assert.equal(capturedRequest.body.source, "dashboard-swarm-goal");
+assert.equal(capturedRequest.body.loopTemplateId, "app-build-harness", "swarm goals request the server-owned app-build evidence loop");
 assert.deepEqual(capturedRequest.body.skills, ["planner", "code", "qa"]);
 assert.match(capturedRequest.body.message, /Build a first-person roller coaster POV ride in Three\.js\./);
 assert.match(capturedRequest.body.message, /Give each agent its own dedicated \/goal\./);

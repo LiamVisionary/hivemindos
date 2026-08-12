@@ -597,11 +597,11 @@
 }
 
 :global([data-theme="hive-light"]) .loadingShell {
-  color: #221d14;
+  color: #4a3a2a;
   background:
-    radial-gradient(circle at 50% 45%, rgba(176, 127, 28, 0.11), transparent 22rem),
-    radial-gradient(circle at 16% 8%, rgba(95, 143, 90, 0.09), transparent 28rem),
-    linear-gradient(145deg, #fbf8f1 0%, #f1ede3 52%, #f5f0e6 100%);
+    radial-gradient(circle at 50% 45%, rgba(138, 90, 42, 0.11), transparent 22rem),
+    radial-gradient(circle at 16% 8%, rgba(107, 143, 94, 0.09), transparent 28rem),
+    linear-gradient(145deg, #f8f4ee 0%, #f5efe6 52%, #f5f0e6 100%);
 }
 
 :global([data-theme="hive-light"]) .loadingShell::before {
@@ -610,20 +610,20 @@
 }
 
 :global([data-theme="hive-light"]) .loadingShell::after {
-  background: radial-gradient(circle, rgba(176, 127, 28, 0.045), transparent 68%);
+  background: radial-gradient(circle, rgba(138, 90, 42, 0.045), transparent 68%);
 }
 
 :global([data-theme="hive-light"]) .loadingEmblem::before {
-  border-color: rgba(106, 69, 5, 0.28);
-  background: rgba(176, 127, 28, 0.045);
+  border-color: rgba(111, 69, 31, 0.28);
+  background: rgba(138, 90, 42, 0.045);
 }
 
 :global([data-theme="hive-light"]) .loadingEmblem::after {
-  background: linear-gradient(145deg, rgba(176, 127, 28, 0.2), rgba(176, 127, 28, 0.065));
+  background: linear-gradient(145deg, rgba(138, 90, 42, 0.2), rgba(138, 90, 42, 0.065));
 }
 
 :global([data-theme="hive-light"]) .loadingEmblem .brandMark {
-  color: #8c5e0a;
+  color: #8a5a2a;
 }
 
 :global([data-theme="hive-light"]) .loadingEyebrow {
@@ -631,7 +631,7 @@
 }
 
 :global([data-theme="hive-light"]) .loadingCard h1 {
-  color: #221d14;
+  color: #4a3a2a;
 }
 
 :global([data-theme="hive-light"]) .loadingDetail {
@@ -639,11 +639,11 @@
 }
 
 :global([data-theme="hive-light"]) .loadingBar {
-  background: rgba(54, 46, 30, 0.12);
+  background: rgba(74, 58, 42, 0.12);
 }
 
 :global([data-theme="hive-light"]) .loadingBar span {
-  background: linear-gradient(90deg, transparent, #5f8f5a 40%, #b07f1c 72%, transparent);
+  background: linear-gradient(90deg, transparent, #6b8f5e 40%, #8a5a2a 72%, transparent);
 }
 
 :global([data-theme="hive-light"]) .loadingFootnote {

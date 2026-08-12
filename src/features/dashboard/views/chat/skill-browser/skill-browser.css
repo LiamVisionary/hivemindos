@@ -45,30 +45,30 @@
 [data-fr-theme="light"] .sb-overlay,
 [data-theme="hive-light"] .fr-root,
 [data-theme="hive-light"] .sb-overlay {
-  --bg: #f1ede3;
-  --bg-soft: #f6f2e9;
-  --panel: #fbf8f1;
-  --panel-2: #f4efe4;
+  --bg: #f5efe6;
+  --bg-soft: #f0e8d8;
+  --panel: #f8f4ee;
+  --panel-2: #f0e8d8;
   --panel-hi: #ffffff;
-  --line: rgba(54, 46, 30, 0.10);
-  --line-2: rgba(54, 46, 30, 0.16);
-  --line-3: rgba(54, 46, 30, 0.26);
+  --line: rgba(74, 58, 42, 0.10);
+  --line-2: rgba(74, 58, 42, 0.16);
+  --line-3: rgba(74, 58, 42, 0.26);
 
-  --fg: #221d14;
-  --fg-2: #5e574b;
-  --fg-3: #5e574b;
-  --fg-4: #6f6657;
+  --fg: #4a3a2a;
+  --fg-2: #8a7a6a;
+  --fg-3: #8a7a6a;
+  --fg-4: #a09080;
 
-  --honey: #936811; --honey-fill: #e6bb5c;
-  --honey-2: #936811;
-  --honey-soft: rgba(176, 127, 28, 0.12);
-  --honey-line: rgba(176, 127, 28, 0.34);
+  --honey: #8a5a2a; --honey-fill: #f0e8d8;
+  --honey-2: #8a5a2a;
+  --honey-soft: rgba(138, 90, 42, 0.12);
+  --honey-line: rgba(138, 90, 42, 0.34);
 
-  --live: #1d8e7c;
-  --live-soft: rgba(29, 142, 124, 0.12);
+  --live: #6b8f5e;
+  --live-soft: rgba(107, 143, 94, 0.12);
 
-  --danger: #c0524d;
-  --danger-soft: rgba(192, 82, 77, 0.12);
+  --danger: #b5483b;
+  --danger-soft: rgba(181, 72, 59, 0.12);
 
   --shadow: 0 1px 0 rgba(255,255,255,0.5) inset, 0 18px 50px -30px rgba(80,60,20,0.35);
 }

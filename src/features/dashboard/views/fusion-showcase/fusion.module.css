@@ -41,23 +41,23 @@
 }
 
 :global(:root[data-theme="hive-light"]) .root {
-  --fz-teal: #5f8f5a;
-  --fz-teal-2: #4f7d4b;
-  --fz-teal-soft: rgba(95, 143, 90, 0.14);
-  --fz-gold: #936811; --fz-gold-fill: #e6bb5c;
-  --fz-gold-2: #7c550b;
-  --fz-gold-soft: rgba(176, 127, 28, 0.13);
+  --fz-teal: #6b8f5e;
+  --fz-teal-2: #6b8f5e;
+  --fz-teal-soft: rgba(107, 143, 94, 0.14);
+  --fz-gold: #8a5a2a; --fz-gold-fill: #f0e8d8;
+  --fz-gold-2: #8a5a2a;
+  --fz-gold-soft: rgba(138, 90, 42, 0.13);
   --fz-violet: #7b629d;
   --fz-violet-soft: rgba(123, 98, 157, 0.12);
   --fz-blue: #3f6d9d;
-  --fz-ink: #f1ede3;
-  --fz-fg: #221d14;
-  --fz-fg-2: #5e574b;
-  --fz-fg-3: #5e574b;
-  --fz-fg-4: #6f6657;
-  --fz-panel-line: rgba(54, 46, 30, 0.16);
-  --fz-line-dim: rgba(54, 46, 30, 0.10);
-  --fz-hex-line: rgba(54, 46, 30, 0.08);
+  --fz-ink: #f5efe6;
+  --fz-fg: #4a3a2a;
+  --fz-fg-2: #8a7a6a;
+  --fz-fg-3: #8a7a6a;
+  --fz-fg-4: #a09080;
+  --fz-panel-line: rgba(74, 58, 42, 0.16);
+  --fz-line-dim: rgba(74, 58, 42, 0.10);
+  --fz-hex-line: rgba(74, 58, 42, 0.08);
   --fz-glow: 0.64;
 }
 
@@ -262,7 +262,7 @@
 }
 
 :global(:root[data-theme="hive-light"]) .shelfCell {
-  border-color: rgba(54, 46, 30, 0.14);
+  border-color: rgba(74, 58, 42, 0.14);
   background: rgba(255, 252, 246, 0.5);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48);
 }

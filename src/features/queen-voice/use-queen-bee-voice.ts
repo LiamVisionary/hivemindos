@@ -675,6 +675,10 @@ export function useQueenBeeVoice(
             liveSpeech += event.text;
             showCaption(liveSpeech.trim(), true);
             for (const chunk of chunker.push(event.text)) speaker.enqueue(chunk);
+          } else if (event.type === "status" && event.text) {
+            window.clearTimeout(ackTimer);
+            cancelPendingAck();
+            speaker.enqueue(event.text);
           } else if (event.type === "reset") {
             // A failed model attempt was superseded server-side; discard its
             // captions, queued chunks, and any audio mid-play.

@@ -127,7 +127,7 @@
 
 :global(:root[data-theme="hive-light"]) .chatQueueAction {
   border-color: rgba(111, 86, 37, 0.22);
-  background: rgba(212, 180, 111, 0.16);
+  background: #f0e8d8;
   color: var(--foreground);
 }
 

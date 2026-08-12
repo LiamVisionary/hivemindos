@@ -36,24 +36,24 @@
 }
 
 :global(:root[data-theme="hive-light"]) .hiveChatRoot {
-  --hive-bg-0: #f1ede3;
-  --hive-bg-1: #f6f2e9;
-  --hive-bg-2: #fbf8f1;
-  --hive-bg-3: #f4efe4;
+  --hive-bg-0: #f5efe6;
+  --hive-bg-1: #f0e8d8;
+  --hive-bg-2: #f8f4ee;
+  --hive-bg-3: #f0e8d8;
   --hive-bg-4: #e8dfcf;
-  --hive-line: rgba(54, 46, 30, 0.10);
-  --hive-line-2: rgba(54, 46, 30, 0.16);
-  --hive-hex-line: rgba(54, 46, 30, 0.08);
-  --hive-fg: #221d14;
-  --hive-fg-2: #5e574b;
-  --hive-fg-3: #5e574b;
-  --hive-fg-4: #6f6657;
-  --hive-cyan: #5f8f5a;
-  --hive-cyan-2: #4f7d4b;
-  --hive-cyan-3: #376739;
-  --hive-honey: #936811; --hive-honey-fill: #e6bb5c;
-  --hive-honey-2: #936811;
-  --hive-danger: #c0524d;
+  --hive-line: rgba(74, 58, 42, 0.10);
+  --hive-line-2: rgba(74, 58, 42, 0.16);
+  --hive-hex-line: rgba(74, 58, 42, 0.08);
+  --hive-fg: #4a3a2a;
+  --hive-fg-2: #8a7a6a;
+  --hive-fg-3: #8a7a6a;
+  --hive-fg-4: #a09080;
+  --hive-cyan: #6b8f5e;
+  --hive-cyan-2: #6b8f5e;
+  --hive-cyan-3: #56794b;
+  --hive-honey: #8a5a2a; --hive-honey-fill: #f0e8d8;
+  --hive-honey-2: #8a5a2a;
+  --hive-danger: #b5483b;
   --hive-danger-2: #963a37;
   --hive-panel: linear-gradient(180deg, rgba(251, 248, 241, 0.94), rgba(244, 239, 228, 0.82));
   --hive-panel-card: linear-gradient(180deg, rgba(255, 252, 246, 0.88), rgba(244, 239, 228, 0.76));
@@ -100,13 +100,13 @@
 :global(:root[data-theme="hive-light"]) .hiveAgentMenuList button.active,
 :global(:root[data-theme="hive-light"]) .hiveNavRow:hover,
 :global(:root[data-theme="hive-light"]) .hiveNavRow.active {
-  border-color: rgba(95, 143, 90, 0.28);
-  background: rgba(95, 143, 90, 0.10);
+  border-color: rgba(107, 143, 94, 0.28);
+  background: rgba(107, 143, 94, 0.10);
 }
 
 :global(:root[data-theme="hive-light"]) .hiveUserBubble {
-  border-color: rgba(95, 143, 90, 0.24);
-  background: rgba(95, 143, 90, 0.10);
+  border-color: rgba(107, 143, 94, 0.24);
+  background: rgba(107, 143, 94, 0.10);
 }
 
 :global(:root[data-theme="hive-light"]) .hiveChatRoot :where(input, textarea, pre) {

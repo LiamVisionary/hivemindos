@@ -1244,8 +1244,8 @@
 :global(:root[data-theme="hive-light"]) .mirosharkHistoryCard.active,
 :global(:root[data-theme="hive-light"]) .mirosharkTemplateList button.active,
 :global(:root[data-theme="hive-light"]) .mirosharkWorkbenchTab.active {
-  border-color: rgba(185, 139, 47, 0.34);
-  background: rgba(212, 180, 111, 0.16);
+  border-color: rgba(138, 90, 42, 0.34);
+  background: #f0e8d8;
   color: var(--foreground);
 }
 
@@ -1279,8 +1279,8 @@
 
 :global(:root[data-theme="hive-light"]) .mirosharkHistoryList button:hover,
 :global(:root[data-theme="hive-light"]) .mirosharkHistoryList button.active {
-  border-color: rgba(185, 139, 47, 0.34);
-  background: rgba(212, 180, 111, 0.16);
+  border-color: rgba(138, 90, 42, 0.34);
+  background: #f0e8d8;
 }
 
 :global(:root[data-theme="hive-light"]) .mirosharkTemplateShelf {
@@ -1289,8 +1289,8 @@
 
 :global(:root[data-theme="hive-light"]) .mirosharkTemplateList button:hover,
 :global(:root[data-theme="hive-light"]) .mirosharkTemplateList button.active {
-  border-color: rgba(185, 139, 47, 0.34);
-  background: rgba(212, 180, 111, 0.16);
+  border-color: rgba(138, 90, 42, 0.34);
+  background: #f0e8d8;
 }
 
 :global(:root[data-theme="hive-light"]) .mirosharkTemplateList strong {

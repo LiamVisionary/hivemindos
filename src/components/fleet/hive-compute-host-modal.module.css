@@ -50,7 +50,7 @@
 :global(:root[data-theme="hive-light"]) .tokens {
   --hc-bg: #f4f6ee;
   --hc-bg-soft: #eef3e8;
-  --hc-panel: #fffdf8;
+  --hc-panel: #f8f4ee;
   --hc-panel-2: #f8fbf5;
   --hc-panel-hi: #ffffff;
   --hc-line: rgba(44, 58, 47, 0.1);
@@ -60,12 +60,12 @@
   --hc-muted: #4e5a4e;
   --hc-fg3: #55604f;
   --hc-fg4: #66705f;
-  --hc-honey: #a97209;
-  --hc-honey2: #7d5404;
-  --hc-honey-soft: rgba(169, 114, 9, 0.1);
-  --hc-honey-line: rgba(169, 114, 9, 0.26);
-  --hc-live: #207f78;
-  --hc-live-soft: rgba(32, 127, 120, 0.12);
+  --hc-honey: #8a5a2a;
+  --hc-honey2: #8a5a2a;
+  --hc-honey-soft: rgba(138, 90, 42, 0.1);
+  --hc-honey-line: rgba(138, 90, 42, 0.26);
+  --hc-live: #6b8f5e;
+  --hc-live-soft: rgba(107, 143, 94, 0.12);
   --hc-danger: #b84b45;
   --hc-danger-soft: rgba(184, 75, 69, 0.11);
 }

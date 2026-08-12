@@ -47,10 +47,12 @@ const FRAGMENT = /* glsl */ `
     float rim = pow(1.0 - facing, 1.7);
     float terminalLight = vTerminal * uTerminalGlow;
     vec3 emissive = mix(vColor * 0.92, vec3(0.72, 0.9, 1.0), 0.1 + body * 0.2 + terminalLight * 0.08);
-    vec3 lightBody = mix(vColor * 0.82, vColor * 1.14, body);
+    vec3 lightBody = mix(vColor * 0.98, vColor * 1.22, body);
     vec3 coreColor = mix(emissive, lightBody, uLight);
     float membrane = 0.48 + body * 0.52;
-    float coreAlpha = uOpacity * mix(membrane, 0.72 + body * 0.28, uLight) * (0.86 + terminalLight * 0.3);
+    float darkCoreAlpha = uOpacity * membrane * (0.86 + terminalLight * 0.3);
+    float lightCoreAlpha = min(1.0, uOpacity * (1.06 + terminalLight * 0.08));
+    float coreAlpha = mix(darkCoreAlpha, lightCoreAlpha, uLight);
     vec3 glowColor = mix(vColor, vec3(0.45, 0.72, 1.0), 0.18);
     float glowAlpha = uOpacity * (0.025 + rim * 0.1) * (0.7 + terminalLight * 0.48) * (1.0 - uLight);
     vec3 col = mix(coreColor, glowColor, uGlowLayer) * mix(1.0, 1.48, 1.0 - uLight);
@@ -124,7 +126,7 @@ export class BrainFiberTubes {
       uniforms: {
         uGlowLayer: { value: 0 },
         uLight: { value: light ? 1 : 0 },
-        uOpacity: { value: light ? 0.14 : 0.36 },
+        uOpacity: { value: light ? 0.62 : 0.36 },
         uShell: { value: 0 },
         uTerminalGlow: { value: options.terminalGlow ?? 0.55 },
       },
@@ -132,7 +134,7 @@ export class BrainFiberTubes {
       fragmentShader: FRAGMENT,
       vertexColors: true,
       transparent: true,
-      depthWrite: false,
+      depthWrite: light,
       // These are closed radial surfaces. Drawing the back faces as well as
       // the front faces doubles additive energy and makes silhouettes pop as
       // the camera rotates across facets.
@@ -155,9 +157,11 @@ export class BrainFiberTubes {
   setTheme(light: boolean) {
     this.coreMaterial.uniforms.uLight.value = light ? 1 : 0;
     this.coreMaterial.blending = light ? THREE.NormalBlending : THREE.AdditiveBlending;
+    this.coreMaterial.depthWrite = light;
     this.coreMaterial.needsUpdate = true;
     this.glowMaterial.uniforms.uLight.value = light ? 1 : 0;
     this.glowMaterial.blending = THREE.AdditiveBlending;
+    this.glowMaterial.depthWrite = false;
     this.glowMaterial.needsUpdate = true;
     this.glowMaterial.visible = !light;
   }

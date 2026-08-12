@@ -16,7 +16,6 @@ import { useVisibilityAwarePolling } from "@/features/dashboard/hooks/use-visibi
 import { paperPortfolioSummary, type PaperPortfolioSummary } from "@/lib/services/copy-trading/paper";
 import { compareCopyTradeEvolution, type CopyTradeEvolutionComparison } from "@/lib/services/copy-trading/evolution";
 import styles from "./CopyTradingPanel.module.css";
-import { ManagedBankrCopyTradingPanel } from "./ManagedBankrCopyTradingPanel";
 import {
   MAX_COPY_TRADE_USD,
   copyTradeNetworkLabel,
@@ -147,6 +146,29 @@ export function CopyTradingPanel(props: Props) {
     setDraft(defaultCopyTradingConfig({ id: "", agentId, walletAddress, network }));
   };
 
+  const duplicateConfig = (source: CopyTradingConfig) => {
+    if (!isCopyTradeNetwork(network)) return;
+    const now = Date.now();
+    const sourceLabel = source.label?.replace(/\s*·\s*Agent analyzed\s*$/i, "").trim();
+    setError("");
+    setShowAdv(false);
+    setReturningConfigId(null);
+    setIsClosingDraft(false);
+    setDraft({
+      ...source,
+      id: "",
+      label: sourceLabel ? `${sourceLabel} copy` : "Copy trader",
+      agentId,
+      walletAddress,
+      network,
+      enabled: true,
+      dryRun: true,
+      evolution: undefined,
+      createdAt: now,
+      updatedAt: now,
+    });
+  };
+
   const editConfig = (config: CopyTradingConfig) => {
     swapConfigView(() => {
       setError("");
@@ -215,7 +237,6 @@ export function CopyTradingPanel(props: Props) {
   };
 
   const configs = snap?.configs ?? [];
-  const evolvedSourceIds = new Set(configs.flatMap((config) => config.evolution ? [config.evolution.sourceConfigId] : []));
   const mine = configs.filter((c) => c.agentId === agentId && c.network === network);
   const others = configs.filter((c) => !(c.agentId === agentId && c.network === network));
   const daemonReady = Boolean(snap && (snap.online || daemonService?.installed));
@@ -245,7 +266,6 @@ export function CopyTradingPanel(props: Props) {
 
   return (
     <div className={styles.wrap}>
-      <ManagedBankrCopyTradingPanel />
       <EngineStatus snap={snap} service={daemonService} installing={daemonBusy} error={daemonError} onInstall={installDaemon} />
 
       {!daemonReady ? (
@@ -278,12 +298,13 @@ export function CopyTradingPanel(props: Props) {
             <ConfigList
               list={mine}
               states={snap?.states ?? {}}
-              evolvedSourceIds={evolvedSourceIds}
               fundable={snap?.fundable ?? {}}
               online={snap?.online ?? false}
               busy={busy}
               onEdit={editConfig}
               onAct={act}
+              onDuplicate={duplicateConfig}
+              canDuplicate
               editView={draft?.id ? { configId: draft.id, content: draftForm } : undefined}
               returningConfigId={!supportsViewTransitions && !prefersReducedMotion ? returningConfigId : null}
               emptyText="No copy configs on this wallet + chain yet."
@@ -306,7 +327,6 @@ export function CopyTradingPanel(props: Props) {
           <ConfigList
             list={others}
             states={snap?.states ?? {}}
-            evolvedSourceIds={evolvedSourceIds}
             fundable={snap?.fundable ?? {}}
             online={snap?.online ?? false}
             busy={busy}
@@ -342,12 +362,7 @@ function EngineStatus(props: { snap: Snapshot | null; service: DaemonServiceStat
     );
   }
   if (snap?.online && snap.engine) {
-    return (
-      <div className={`${styles.status} ${styles.statusOk}`}>
-        <span className={styles.statusDot} />
-        Background engine running on <b style={{ color: "var(--fg)" }}>&nbsp;{snap.engine.host}</b>&nbsp;· {snap.engine.activeConfigs} active.
-      </div>
-    );
+    return null;
   }
   const installed = Boolean(service?.installed);
   const buttonLabel = props.installing ? "Installing..." : installed ? "Restart service" : "Install service";
@@ -386,12 +401,13 @@ function DaemonSetupGate(props: { installing: boolean }) {
 function ConfigList(props: {
   list: CopyTradingConfig[];
   states: Record<string, CopyTradeRuntimeState>;
-  evolvedSourceIds: Set<string>;
   fundable: Record<string, CopyTradeFundable>;
   online: boolean;
   busy: string | null;
   onEdit?: (c: CopyTradingConfig) => void;
   onAct: (action: "start" | "stop" | "delete" | "evolve", id: string) => void;
+  onDuplicate?: (c: CopyTradingConfig) => void;
+  canDuplicate?: boolean;
   editView?: { configId: string; content: React.ReactNode };
   returningConfigId?: string | null;
   foreign?: boolean;
@@ -400,26 +416,28 @@ function ConfigList(props: {
   if (props.list.length === 0) {
     return props.emptyText ? <p className={styles.empty}>{props.emptyText}</p> : null;
   }
+  const pairs = pairConfigs(props.list);
   return (
     <div className={styles.cards}>
-      {props.list.map((c) => {
-        if (props.editView?.configId === c.id) {
-          return <React.Fragment key={c.id}>{props.editView.content}</React.Fragment>;
+      {pairs.map((pair) => {
+        const editing = [pair.original?.id, pair.evolved?.id].includes(props.editView?.configId);
+        if (editing) {
+          return <React.Fragment key={pair.key}>{props.editView?.content}</React.Fragment>;
         }
         return (
-          <ConfigCard
-            key={c.id}
-            config={c}
-            state={props.states[c.id]}
-            sourceState={c.evolution ? props.states[c.evolution.sourceConfigId] : undefined}
-            hasEvolved={props.evolvedSourceIds.has(c.id)}
-            fundable={props.fundable[`${c.walletAddress}:${c.network}`] ?? null}
+          <ConfigGroupCard
+            key={pair.key}
+            pair={pair}
+            states={props.states}
+            fundable={props.fundable}
             online={props.online}
             busy={props.busy}
             onEdit={props.onEdit}
             onAct={props.onAct}
+            onDuplicate={props.onDuplicate}
+            canDuplicate={props.canDuplicate}
             foreign={props.foreign}
-            returning={props.returningConfigId === c.id}
+            returning={[pair.original?.id, pair.evolved?.id].includes(props.returningConfigId ?? undefined)}
           />
         );
       })}
@@ -427,79 +445,159 @@ function ConfigList(props: {
   );
 }
 
-function ConfigCard(props: {
+type ConfigPair = {
+  key: string;
+  original?: CopyTradingConfig;
+  evolved?: CopyTradingConfig;
+};
+
+function pairConfigs(configs: CopyTradingConfig[]): ConfigPair[] {
+  const evolvedBySource = new Map<string, CopyTradingConfig[]>();
+  for (const config of configs) {
+    const sourceId = config.evolution?.sourceConfigId;
+    if (!sourceId) continue;
+    evolvedBySource.set(sourceId, [...(evolvedBySource.get(sourceId) ?? []), config]);
+  }
+  const result: ConfigPair[] = [];
+  const used = new Set<string>();
+  for (const original of configs.filter((config) => !config.evolution)) {
+    const evolved = evolvedBySource.get(original.id) ?? [];
+    result.push({ key: original.id, original, evolved: evolved[0] });
+    used.add(original.id);
+    if (evolved[0]) used.add(evolved[0].id);
+  }
+  for (const config of configs) {
+    if (used.has(config.id)) continue;
+    result.push({ key: config.id, evolved: config.evolution ? config : undefined, original: config.evolution ? undefined : config });
+  }
+  return result;
+}
+
+function ConfigGroupCard(props: {
+  pair: ConfigPair;
+  states: Record<string, CopyTradeRuntimeState>;
+  fundable: Record<string, CopyTradeFundable>;
+  online: boolean;
+  busy: string | null;
+  onEdit?: (c: CopyTradingConfig) => void;
+  onAct: (action: "start" | "stop" | "delete" | "evolve", id: string) => void;
+  onDuplicate?: (c: CopyTradingConfig) => void;
+  canDuplicate?: boolean;
+  foreign?: boolean;
+  returning?: boolean;
+}) {
+  const { pair } = props;
+  const [chooserOpen, setChooserOpen] = React.useState(false);
+  const representative = pair.original ?? pair.evolved!;
+  const canAdd = Boolean(props.canDuplicate && props.onDuplicate && !props.foreign);
+
+  return (
+    <div className={styles.configUnit}>
+      <div className={`${styles.configRow}${canAdd ? "" : ` ${styles.configRowSolo}`}`}>
+        <div className={`${styles.card}${props.foreign ? ` ${styles.foreign}` : ""}${props.returning ? ` ${styles.cardReturnFallback}` : ""}`}>
+          {pair.original && pair.evolved ? (
+            <PairedConfigCard
+              original={pair.original}
+              evolved={pair.evolved}
+              originalState={props.states[pair.original.id]}
+              evolvedState={props.states[pair.evolved.id]}
+              fundable={props.fundable[`${pair.original.walletAddress}:${pair.original.network}`] ?? null}
+              online={props.online}
+              busy={props.busy}
+              onEdit={props.onEdit}
+              onAct={props.onAct}
+            />
+          ) : (
+            <SingleConfigCard
+              config={representative}
+              state={props.states[representative.id]}
+              sourceState={representative.evolution ? props.states[representative.evolution.sourceConfigId] : undefined}
+              fundable={props.fundable[`${representative.walletAddress}:${representative.network}`] ?? null}
+              online={props.online}
+              busy={props.busy}
+              onEdit={props.onEdit}
+              onAct={props.onAct}
+              onAddControl={representative.evolution && canAdd ? () => setChooserOpen(true) : undefined}
+            />
+          )}
+        </div>
+        {canAdd ? (
+          <button
+            type="button"
+            className={styles.addRail}
+            aria-expanded={chooserOpen}
+            aria-label={`Add another copy of ${shortAddr(representative.targetAddress)}`}
+            title="Add another copy of this wallet"
+            onClick={() => setChooserOpen((open) => !open)}
+          >
+            <span><BIcon name="plus" size={15} /></span>
+          </button>
+        ) : null}
+      </div>
+      {chooserOpen && canAdd ? (
+        <div className={styles.duplicateChooser}>
+          <div className={styles.duplicateHead}>
+            <span>Duplicate {shortAddr(representative.targetAddress)} as</span>
+            <button type="button" aria-label="Close duplicate choices" onClick={() => setChooserOpen(false)}>×</button>
+          </div>
+          <div className={styles.duplicateChoices}>
+            <button type="button" onClick={() => { props.onDuplicate!(representative); setChooserOpen(false); }}>
+              <b>Basic copy</b>
+              <span>Same target and limits. Starts in dry-run.</span>
+            </button>
+            <button
+              type="button"
+              className={styles.agentChoice}
+              disabled={props.busy != null || !pair.original || Boolean(pair.evolved)}
+              onClick={() => { if (pair.original) props.onAct("evolve", pair.original.id); setChooserOpen(false); }}
+            >
+              <b>{pair.evolved ? "Agent copy already paired" : "Agent-analyzed copy"}</b>
+              <span>{pair.evolved ? "This original already has a research-assisted twin." : "Creates a fair head-to-head with an inherited baseline."}</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SingleConfigCard(props: {
   config: CopyTradingConfig;
   state?: CopyTradeRuntimeState;
   sourceState?: CopyTradeRuntimeState;
-  hasEvolved: boolean;
   fundable?: CopyTradeFundable | null;
   online: boolean;
   busy: string | null;
   onEdit?: (c: CopyTradingConfig) => void;
   onAct: (action: "start" | "stop" | "delete" | "evolve", id: string) => void;
-  foreign?: boolean;
-  returning?: boolean;
+  onAddControl?: () => void;
 }) {
   const { config, state, online } = props;
   const [expanded, setExpanded] = React.useState(false);
   const detailsId = React.useId();
-  const pill = !config.enabled
-    ? { cls: styles.pillStop, text: "Stopped" }
-    : !online
-    ? { cls: styles.pillStop, text: "Offline" }
-    : config.dryRun
-    ? { cls: styles.pillDry, text: "Dry-run" }
-    : { cls: styles.pillRun, text: "Live" };
   const recent = (state?.events ?? []).slice(-3).reverse();
   const summary = state ? summarizeState(state) : null;
   const paper = config.dryRun ? state?.paper : undefined;
   const openCount = Object.keys((config.dryRun ? state?.paper?.positions : state?.openPositions) ?? {}).length;
   const paperSummary = paper ? paperPortfolioSummary(paper) : null;
   const evolutionComparison = config.evolution ? compareCopyTradeEvolution(state, props.sourceState) : null;
+  const pill = configStatus(config, online);
 
   return (
-    <div
-      className={`${styles.card}${props.foreign ? ` ${styles.foreign}` : ""}${props.returning ? ` ${styles.cardReturnFallback}` : ""}`}
-      style={{ viewTransitionName: configViewTransitionName(config.id) }}
-    >
-      <div className={styles.cardHead}>
-        <span className="ti" style={{ flex: "0 0 auto" }}><BIcon name="copy" size={15} /></span>
-        <span className={styles.cardTitle}>
-          <b>{config.label?.trim() || `Copy ${shortAddr(config.targetAddress)}`}</b>
-          <span>{shortAddr(config.targetAddress)} · {copyTradeNetworkLabel(config.network)} · max ${config.maxCopyUsd}/trade</span>
-        </span>
-        <span className={`${styles.pill} ${pill.cls}`}>{pill.text}</span>
-        {config.evolution ? <span className={`${styles.pill} ${styles.pillEvolved}`}>Agent analyzed</span> : null}
-        {state?.lastError && config.enabled ? <span className={`${styles.pill} ${styles.pillErr}`}>err</span> : null}
-      </div>
+    <div style={{ viewTransitionName: configViewTransitionName(config.id) }}>
+      <ConfigHeader config={config} state={state} status={pill} />
 
-      {props.fundable && !config.dryRun ? (
-        <div className={styles.meta} title="What the copy-trader can spend from this wallet to mirror copied buys">
-          <span>Available to trade <b>{fmtUsd(props.fundable.totalUsd)}</b></span>
-          {props.fundable.assets.map((asset) => (
-            <span key={asset.symbol}>{asset.symbol} <b>{fmtUsd(asset.usd)}</b></span>
-          ))}
-          {props.fundable.assets.length === 0 ? <span>no spendable balance</span> : null}
-        </div>
-      ) : null}
-
+      {props.fundable && !config.dryRun ? <FundingSummary fundable={props.fundable} /> : null}
       {state ? (
         config.dryRun ? (
           <PaperPortfolioOverview summary={paperSummary} simulatedTrades={paper?.mirrored ?? 0} openCount={openCount} comparison={evolutionComparison} />
         ) : (
           <div className={styles.meta}>
-            <span>signals <b>{summary?.signalCount ?? 0}</b></span>
-            <span>mirrored <b>{state.stats.mirrored}</b></span>
-            <span>skipped <b>{state.stats.skipped}</b></span>
-            <span>errors <b>{state.stats.errors}</b></span>
-            <span>open <b>{openCount}</b></span>
+            <span>Signals <b>{summary?.signalCount ?? 0}</b></span><span>Mirrored <b>{state.stats.mirrored}</b></span>
+            <span>Skipped <b>{state.stats.skipped}</b></span><span>Errors <b>{state.stats.errors}</b></span><span>Open <b>{openCount}</b></span>
           </div>
         )
-      ) : config.enabled ? (
-        <div className={styles.meta}>
-          <span>{online ? "waiting for first poll" : "daemon offline"}</span>
-        </div>
-      ) : null}
+      ) : config.enabled ? <div className={styles.meta}><span>{online ? "Waiting for first poll" : "Daemon offline"}</span></div> : null}
 
       {!expanded && recent.length ? (
         <div className={styles.events}>
@@ -514,6 +612,13 @@ function ConfigCard(props: {
         </div>
       ) : null}
 
+      {config.evolution && evolutionComparison?.reviews === 0 ? (
+        <div className={styles.unmeasured}>
+          <span>No original result to race against yet — <b>the edge is unmeasured</b>.</span>
+          {props.onAddControl ? <button type="button" onClick={props.onAddControl}>Add a control copy</button> : null}
+        </div>
+      ) : null}
+
       {expanded ? <ConfigPerformance id={detailsId} config={config} state={state} sourceState={props.sourceState} online={online} fundable={props.fundable} /> : null}
 
       <div className={styles.actions}>
@@ -523,7 +628,7 @@ function ConfigCard(props: {
           <BBtn variant="primary" sm disabled={props.busy != null} onClick={() => props.onAct("start", config.id)}>Start</BBtn>
         )}
         {props.onEdit ? <BBtn variant="ghost" sm disabled={props.busy != null} onClick={() => props.onEdit!(config)}>Edit</BBtn> : null}
-        {!config.evolution && !props.hasEvolved ? (
+        {!config.evolution ? (
           <BBtn variant="ghost" sm disabled={props.busy != null} onClick={() => props.onAct("evolve", config.id)}>Create agent-analyzed copy</BBtn>
         ) : null}
         <BBtn variant="ghost" sm aria-expanded={expanded} aria-controls={detailsId} onClick={() => setExpanded((open) => !open)}>
@@ -535,6 +640,243 @@ function ConfigCard(props: {
       </div>
     </div>
   );
+}
+
+function PairedConfigCard(props: {
+  original: CopyTradingConfig;
+  evolved: CopyTradingConfig;
+  originalState?: CopyTradeRuntimeState;
+  evolvedState?: CopyTradeRuntimeState;
+  fundable?: CopyTradeFundable | null;
+  online: boolean;
+  busy: string | null;
+  onEdit?: (c: CopyTradingConfig) => void;
+  onAct: (action: "start" | "stop" | "delete" | "evolve", id: string) => void;
+}) {
+  const { original, evolved, originalState, evolvedState } = props;
+  const [openDetails, setOpenDetails] = React.useState<"original" | "agent" | null>(null);
+  const leftId = React.useId();
+  const rightId = React.useId();
+  const originalPaper = originalState?.paper ? paperPortfolioSummary(originalState.paper) : null;
+  const evolvedPaper = evolvedState?.paper ? paperPortfolioSummary(evolvedState.paper) : null;
+  const comparison = compareCopyTradeEvolution(evolvedState, originalState);
+  const originalStatus = configStatus(original, props.online);
+  const evolvedStatus = configStatus(evolved, props.online);
+  const sharedStatus = originalStatus.text === evolvedStatus.text ? originalStatus : { cls: styles.pillStop, text: "Mixed" };
+  const toggleDetails = (side: "original" | "agent") => {
+    setOpenDetails((current) => current === side ? null : side);
+  };
+
+  return (
+    <div style={{ viewTransitionName: configViewTransitionName(original.id) }}>
+      <ConfigHeader config={original} state={originalState} status={sharedStatus} paired />
+      <LeadBanner comparison={comparison} />
+
+      <div className={styles.raceGrid}>
+        <RaceSide
+          label="Original"
+          config={original}
+          state={originalState}
+          summary={originalPaper}
+          leading={(comparison.returnDeltaPct ?? 0) <= 0}
+          busy={props.busy}
+          onEdit={props.onEdit}
+          onAct={props.onAct}
+        />
+        <div className={styles.versus}>
+          <span>VS</span>
+          <small>same target<br />same start</small>
+        </div>
+        <RaceSide
+          label="Agent"
+          config={evolved}
+          state={evolvedState}
+          summary={evolvedPaper}
+          leading={(comparison.returnDeltaPct ?? 0) > 0}
+          busy={props.busy}
+          onEdit={props.onEdit}
+          onAct={props.onAct}
+          agent
+        />
+      </div>
+
+      <ComparisonRows original={originalPaper} evolved={evolvedPaper} originalState={originalState} evolvedState={evolvedState} />
+      <Disagreements comparison={comparison} state={evolvedState} />
+
+      <div className={styles.pairDataButtons}>
+        <button type="button" data-open={openDetails === "original" ? "true" : undefined} aria-expanded={openDetails === "original"} aria-controls={leftId} onClick={() => toggleDetails("original")}>
+          {openDetails === "original" ? "Hide original data" : "Original data"}<span className={styles.chev} data-open={openDetails === "original" ? "true" : undefined}><BIcon name="chevron" size={12} /></span>
+        </button>
+        <span className={styles.pairDot} />
+        <button type="button" data-open={openDetails === "agent" ? "true" : undefined} aria-expanded={openDetails === "agent"} aria-controls={rightId} onClick={() => toggleDetails("agent")}>
+          {openDetails === "agent" ? "Hide agent data" : "Agent data & Sol reviews"}<span className={styles.chev} data-open={openDetails === "agent" ? "true" : undefined}><BIcon name="chevron" size={12} /></span>
+        </button>
+      </div>
+      {openDetails ? (
+        <div className={styles.pairDetails}>
+          {openDetails === "original" ? (
+            <ConfigPerformance id={leftId} config={original} state={originalState} online={props.online} fundable={props.fundable} />
+          ) : (
+            <ConfigPerformance id={rightId} config={evolved} state={evolvedState} sourceState={originalState} online={props.online} fundable={props.fundable} />
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ConfigHeader(props: {
+  config: CopyTradingConfig;
+  state?: CopyTradeRuntimeState;
+  status: { cls: string; text: string };
+  paired?: boolean;
+}) {
+  const label = props.config.label?.replace(/\s*·\s*Agent analyzed\s*$/i, "").trim()
+    || `Copy ${shortAddr(props.config.targetAddress)}`;
+  return (
+    <div className={styles.cardHead}>
+      <span className={styles.copyIcon}><BIcon name="copy" size={15} /></span>
+      <span className={styles.cardTitle}>
+        <b>{label}{props.paired ? <span className={styles.pairedLabel}>Original vs agent</span> : null}</b>
+        <span>{shortAddr(props.config.targetAddress)} · {copyTradeNetworkLabel(props.config.network)} · max ${props.config.maxCopyUsd}/trade</span>
+      </span>
+      <span className={`${styles.pill} ${props.status.cls}`}>{props.status.text}</span>
+      {!props.paired && props.config.evolution ? <span className={`${styles.pill} ${styles.pillEvolved}`}>Agent analyzed</span> : null}
+      {props.state?.lastError && props.config.enabled ? <span className={`${styles.pill} ${styles.pillErr}`}>Error</span> : null}
+    </div>
+  );
+}
+
+function RaceSide(props: {
+  label: string;
+  config: CopyTradingConfig;
+  state?: CopyTradeRuntimeState;
+  summary: PaperPortfolioSummary | null;
+  leading: boolean;
+  busy: string | null;
+  onEdit?: (c: CopyTradingConfig) => void;
+  onAct: (action: "start" | "stop" | "delete" | "evolve", id: string) => void;
+  agent?: boolean;
+}) {
+  return (
+    <div className={`${styles.raceSide}${props.leading ? ` ${styles.raceLeading}` : ""}`}>
+      <div className={styles.raceSideHead}>
+        <span className={styles.miniActions}>
+          <button type="button" title={props.config.enabled ? "Stop" : "Start"} aria-label={`${props.config.enabled ? "Stop" : "Start"} ${props.label} copy`} disabled={props.busy != null} onClick={() => props.onAct(props.config.enabled ? "stop" : "start", props.config.id)}>
+            {props.config.enabled ? <StopIcon /> : <BIcon name="activity" size={11} />}
+          </button>
+          {props.onEdit ? <button type="button" title="Edit" aria-label={`Edit ${props.label} copy`} disabled={props.busy != null} onClick={() => props.onEdit!(props.config)}><EditIcon /></button> : null}
+          <button type="button" title="Remove" aria-label={`Remove ${props.label} copy`} disabled={props.busy != null} onClick={() => props.onAct("delete", props.config.id)}><RemoveIcon /></button>
+        </span>
+        <span className={`${styles.kind} ${props.agent ? styles.agentKind : ""}`}>{props.label}</span>
+        {props.leading ? <span className={styles.crown} title="Leading"><CrownIcon /></span> : null}
+      </div>
+      {props.summary ? (
+        <>
+          <strong>{fmtUsd(props.summary.equityUsd)}</strong>
+          <small className={metricClass(props.summary.totalPnlUsd)}>{fmtSignedUsd(props.summary.totalPnlUsd)} · {fmtSignedPercent(props.summary.returnPct)}</small>
+        </>
+      ) : <span className={styles.raceWaiting}>Waiting for portfolio data</span>}
+    </div>
+  );
+}
+
+function LeadBanner(props: { comparison: CopyTradeEvolutionComparison }) {
+  const delta = props.comparison.returnDeltaPct;
+  const label = delta == null ? "Head-to-head collecting evidence" : delta > 0 ? "Agent leads" : delta < 0 ? "Original leads" : "Even race";
+  const progress = Math.min(100, (props.comparison.promotion.maturedSamples / Math.max(1, props.comparison.promotion.requiredSamples)) * 100);
+  return (
+    <div className={styles.leadBanner}>
+      <CrownIcon />
+      <span>{label}{delta != null ? <> by <b>{fmtSignedPoints(Math.abs(delta))}</b></> : null}</span>
+      <span className={styles.evidenceTrack}><i style={{ width: `${progress}%` }} /></span>
+      <small>{fmtInt(props.comparison.promotion.maturedSamples)}/{fmtInt(props.comparison.promotion.requiredSamples)} evidence</small>
+    </div>
+  );
+}
+
+function ComparisonRows(props: {
+  original: PaperPortfolioSummary | null;
+  evolved: PaperPortfolioSummary | null;
+  originalState?: CopyTradeRuntimeState;
+  evolvedState?: CopyTradeRuntimeState;
+}) {
+  const rows = [
+    { label: "Portfolio", left: props.original ? fmtUsd(props.original.equityUsd) : "—", right: props.evolved ? fmtUsd(props.evolved.equityUsd) : "—", leftValue: props.original?.equityUsd ?? 0, rightValue: props.evolved?.equityUsd ?? 0 },
+    { label: "Profit", left: props.original ? fmtSignedUsd(props.original.totalPnlUsd) : "—", right: props.evolved ? fmtSignedUsd(props.evolved.totalPnlUsd) : "—", leftValue: props.original?.totalPnlUsd ?? 0, rightValue: props.evolved?.totalPnlUsd ?? 0 },
+    { label: "Exec costs", left: props.original ? fmtUsd(props.original.executionCostsUsd) : "—", right: props.evolved ? fmtUsd(props.evolved.executionCostsUsd) : "—", leftValue: props.original?.executionCostsUsd ?? 0, rightValue: props.evolved?.executionCostsUsd ?? 0 },
+    { label: "Sim trades", left: fmtInt(props.originalState?.paper?.mirrored ?? 0), right: fmtInt(props.evolvedState?.paper?.mirrored ?? 0), leftValue: props.originalState?.paper?.mirrored ?? 0, rightValue: props.evolvedState?.paper?.mirrored ?? 0 },
+    { label: "Open", left: fmtInt(Object.keys(props.originalState?.paper?.positions ?? {}).length), right: fmtInt(Object.keys(props.evolvedState?.paper?.positions ?? {}).length), leftValue: Object.keys(props.originalState?.paper?.positions ?? {}).length, rightValue: Object.keys(props.evolvedState?.paper?.positions ?? {}).length },
+  ];
+  return (
+    <div className={styles.comparisonRows}>
+      {rows.map((row) => {
+        const span = Math.max(Math.abs(row.leftValue), Math.abs(row.rightValue), 1);
+        return (
+          <div className={styles.comparisonRow} key={row.label}>
+            <span className={styles.leftValue}>{row.left}</span>
+            <span className={styles.leftTrack}><i style={{ width: `${Math.abs(row.leftValue) / span * 100}%` }} /></span>
+            <span className={styles.comparisonLabel}>{row.label}</span>
+            <span className={styles.rightTrack}><i style={{ width: `${Math.abs(row.rightValue) / span * 100}%` }} /></span>
+            <span className={styles.rightValue}>{row.right}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Disagreements(props: { comparison: CopyTradeEvolutionComparison; state?: CopyTradeRuntimeState }) {
+  const reviews = (props.state?.agentAnalysis?.reviews ?? []).slice(-3).reverse();
+  if (!reviews.length) return null;
+  return (
+    <div className={styles.disagreements}>
+      <div>Where they disagreed</div>
+      {reviews.map((review) => {
+        const retrospective = props.comparison.learning.latest.find((item) => item.symbol === review.symbol);
+        return (
+          <div className={styles.disagreementRow} key={`${review.targetTxRef}:${review.reviewedAt}`}>
+            <span><b>Mirrored {review.symbol}</b><small>original path</small></span>
+            <em className={metricClass(retrospective?.pairedDeltaPct ?? 0)}>{retrospective ? fmtSignedPoints(retrospective.pairedDeltaPct) : review.closeExecuted ? "different" : "same"}</em>
+            <span><b>{review.closeExecuted ? "Closed early" : review.decision === "uncertain" ? "Stayed uncertain" : "Kept"}</b><small>{review.riskFlags?.[0] || `${Math.round((review.calibratedConfidence ?? review.confidence) * 100)}% confidence`}</small></span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function FundingSummary(props: { fundable: CopyTradeFundable }) {
+  return (
+    <div className={styles.meta} title="What the copy-trader can spend from this wallet to mirror copied buys">
+      <span>Available to trade <b>{fmtUsd(props.fundable.totalUsd)}</b></span>
+      {props.fundable.assets.map((asset) => <span key={asset.symbol}>{asset.symbol} <b>{fmtUsd(asset.usd)}</b></span>)}
+      {props.fundable.assets.length === 0 ? <span>No spendable balance</span> : null}
+    </div>
+  );
+}
+
+function configStatus(config: CopyTradingConfig, online: boolean): { cls: string; text: string } {
+  if (!config.enabled) return { cls: styles.pillStop, text: "Stopped" };
+  if (!online) return { cls: styles.pillStop, text: "Offline" };
+  if (config.dryRun) return { cls: styles.pillDry, text: "Dry-run" };
+  return { cls: styles.pillRun, text: "Live" };
+}
+
+function StopIcon() {
+  return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round"><rect x="7" y="7" width="10" height="10" rx="2" /></svg>;
+}
+
+function EditIcon() {
+  return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z" /><path d="M15 5l4 4" /></svg>;
+}
+
+function RemoveIcon() {
+  return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M5 7h14" /><path d="M9 7V4h6v3" /><path d="m7 7 1 13h8l1-13" /></svg>;
+}
+
+function CrownIcon() {
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8l4.5 4L12 5l3.5 7L20 8l-1.8 10H5.8z" /></svg>;
 }
 
 function PaperPortfolioOverview(props: {
@@ -650,6 +992,8 @@ function ConfigPerformance(props: {
   const brainWaiting = brainSyncReceipts.length - brainSynced;
   const comparison = config.evolution ? compareCopyTradeEvolution(state, props.sourceState) : null;
   const loopStatus = !config.enabled ? "Stopped" : !online ? "Offline" : state?.running ? "Running" : "Waiting";
+  const currentHealth = state?.lastError ? "Needs attention" : loopStatus === "Running" ? "Healthy" : loopStatus;
+  const currentHealthDanger = Boolean(state?.lastError || (config.enabled && !online));
   const lastEvent = summary?.lastEventAt ? fmtAgo(summary.lastEventAt) : "none";
 
   return (
@@ -674,7 +1018,7 @@ function ConfigPerformance(props: {
               <DetailMetric label="Signals" value={fmtInt(summary?.signalCount ?? 0)} />
               <DetailMetric label="Simulated trades" value={fmtInt(paper.mirrored)} />
               <DetailMetric label="Skipped" value={fmtInt(state.stats.skipped)} />
-              <DetailMetric label="Errors" value={fmtInt(state.stats.errors)} danger={state.stats.errors > 0} />
+              <DetailMetric label="Current health" value={currentHealth} danger={currentHealthDanger} />
               <DetailMetric label="Open" value={fmtInt(openPositions.length)} />
               <DetailMetric label="Position cost" value={fmtUsd(paperSummary.positionCostUsd)} />
               <DetailMetric label="Execution costs" value={fmtUsd(paperSummary.executionCostsUsd)} />
@@ -689,11 +1033,17 @@ function ConfigPerformance(props: {
               <DetailMetric label="Dry-run" value={fmtInt(summary?.dryRunActionCount ?? 0)} />
               <DetailMetric label="Mirrored" value={fmtInt(state.stats.mirrored)} />
               <DetailMetric label="Skipped" value={fmtInt(state.stats.skipped)} />
-              <DetailMetric label="Errors" value={fmtInt(state.stats.errors)} danger={state.stats.errors > 0} />
+              <DetailMetric label="Current health" value={currentHealth} danger={currentHealthDanger} />
               <DetailMetric label="Open" value={fmtInt(openPositions.length)} />
               <DetailMetric label="Logged USD" value={fmtUsd(summary?.loggedUsd ?? 0)} />
             </div>
           )}
+
+          {state.stats.errors > 0 ? (
+            <p className={styles.detailMuted}>
+              Lifetime processing failures: <b>{fmtInt(state.stats.errors)}</b>. This includes recovered RPC and provider outages; it is not a count of completed trades or investment losses.
+            </p>
+          ) : null}
 
           {paper && props.fundable ? (
             <div className={styles.detailBlock}>

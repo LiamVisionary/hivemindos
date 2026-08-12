@@ -1,0 +1,669 @@
+.preview {
+  --post-bg: #000;
+  --post-surface: #16181c;
+  --post-surface-2: #202327;
+  --post-border: #2f3336;
+  --post-text: #e7e9ea;
+  --post-muted: #71767b;
+  --platform-accent: #1d9bf0;
+  width: min(680px, calc(100% - 36px));
+  margin: 18px auto 0;
+  overflow: hidden;
+  color: var(--post-text);
+  background: var(--post-bg);
+  border: 1px solid var(--post-border);
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.preview[data-platform="reddit"] {
+  --post-bg: #1a1a1b;
+  --post-surface: #272729;
+  --post-surface-2: #343536;
+  --post-border: #343536;
+  --post-text: #d7dadc;
+  --post-muted: #818384;
+  --platform-accent: #ff4500;
+  border-radius: 10px;
+}
+
+.preview[data-platform="linkedin"] {
+  --post-bg: #1b1f23;
+  --post-surface: #22272b;
+  --post-surface-2: #38434f;
+  --post-border: #38434f;
+  --post-text: #f4f2ee;
+  --post-muted: #b0b4b7;
+  --platform-accent: #70b5f9;
+  border-radius: 8px;
+}
+
+.preview[data-platform="facebook"] {
+  --post-bg: #242526;
+  --post-surface: #3a3b3c;
+  --post-surface-2: #3e4042;
+  --post-border: #3e4042;
+  --post-text: #e4e6eb;
+  --post-muted: #b0b3b8;
+  --platform-accent: #2d88ff;
+  border-radius: 10px;
+}
+
+.preview[data-platform="telegram"] {
+  --post-bg: #0e1621;
+  --post-surface: #182533;
+  --post-surface-2: #2b5278;
+  --post-border: #253442;
+  --post-text: #f5f5f5;
+  --post-muted: #a8b6c2;
+  --platform-accent: #64b5ef;
+  border-radius: 12px;
+}
+
+.preview[data-platform="farcaster"] {
+  --post-bg: #17151f;
+  --post-surface: #211d2b;
+  --post-surface-2: #342b46;
+  --post-border: #3a3348;
+  --post-text: #f5f3f8;
+  --post-muted: #a9a3b2;
+  --platform-accent: #8a63d2;
+  border-radius: 12px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.editor {
+  display: block;
+  min-width: 0;
+}
+
+.textarea {
+  display: block;
+  width: 100%;
+  min-height: 76px;
+  padding: 0;
+  overflow-y: auto;
+  color: var(--post-text);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  outline: 0;
+  resize: vertical;
+  field-sizing: content;
+  font: inherit;
+  line-height: 1.48;
+  white-space: pre-wrap;
+}
+
+.textarea:focus-visible {
+  outline: 2px solid var(--platform-accent);
+  outline-offset: 5px;
+}
+
+.textarea::selection {
+  color: var(--post-text);
+  background: color-mix(in srgb, var(--platform-accent) 38%, transparent);
+}
+
+.avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  color: #fff;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--platform-accent) 78%, #fff), color-mix(in srgb, var(--platform-accent) 70%, #101114));
+  border: 1px solid color-mix(in srgb, var(--platform-accent) 55%, #fff 18%);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.025em;
+}
+
+.avatar[data-avatar-platform="linkedin"] {
+  border-radius: 5px;
+}
+
+.avatar[data-avatar-platform="facebook"] {
+  background: linear-gradient(145deg, #5f9df7, #0866ff);
+}
+
+.avatar[data-avatar-platform="telegram"] {
+  background: linear-gradient(145deg, #6fc6f3, #278cc4);
+}
+
+.identityRow,
+.profileHeader,
+.targetHeader,
+.redditHeader,
+.telegramBubble header {
+  display: flex;
+  align-items: center;
+}
+
+.identityRow {
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--post-muted);
+}
+
+.identityRow > span,
+.profileIdentity,
+.targetIdentity,
+.redditHeader > span:not(.brand, .redditJoin) {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.identityRow strong,
+.profileIdentity strong,
+.targetIdentity strong,
+.redditHeader strong {
+  color: var(--post-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.identityRow span span,
+.profileIdentity span,
+.targetIdentity span,
+.redditHeader span span {
+  color: var(--post-muted);
+  font-size: 12px;
+}
+
+.xPost,
+.farcasterPost {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  padding: 15px 16px 8px;
+}
+
+.xBody,
+.farcasterBody {
+  min-width: 0;
+}
+
+.xBody .editor,
+.farcasterBody .editor {
+  margin-top: 5px;
+}
+
+.xBody .textarea,
+.farcasterBody .textarea {
+  min-height: 92px;
+  font-size: 16px;
+  line-height: 1.34;
+}
+
+.replying {
+  margin-top: 4px;
+  color: var(--post-muted);
+  font-size: 13px;
+}
+
+.replying span {
+  color: var(--platform-accent);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  margin-top: 8px;
+  color: var(--post-muted);
+  border-top: 1px solid var(--post-border);
+}
+
+.action {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.preview[data-platform="x"] .action:first-child,
+.preview[data-platform="telegram"] strong {
+  color: var(--platform-accent);
+}
+
+.target {
+  margin: 0 16px 14px 72px;
+  padding: 11px 12px;
+  color: var(--post-text);
+  background: color-mix(in srgb, var(--post-surface) 82%, transparent);
+  border: 1px solid var(--post-border);
+  border-radius: 12px;
+}
+
+.target[data-mode="reply"] {
+  position: relative;
+  margin: 14px 16px 0;
+  border-radius: 12px 12px 5px 5px;
+}
+
+.target[data-mode="reply"]::after {
+  position: absolute;
+  bottom: -16px;
+  left: 21px;
+  width: 2px;
+  height: 16px;
+  background: var(--post-border);
+  content: "";
+}
+
+.targetHeader {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.targetHeader a {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  color: var(--platform-accent);
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.target p {
+  margin: 8px 0 0;
+  color: var(--post-text);
+  font-size: 13px;
+  line-height: 1.42;
+  white-space: pre-wrap;
+}
+
+.targetMetrics {
+  margin-top: 8px;
+  color: var(--post-muted);
+  font-size: 10px;
+}
+
+.redditHeader {
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--post-surface);
+  border-bottom: 1px solid var(--post-border);
+}
+
+.brand {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  color: #fff;
+  background: var(--platform-accent);
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.redditHeader > span:not(.brand, .redditJoin) {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+
+.redditJoin {
+  margin-left: auto;
+  padding: 6px 13px;
+  color: #fff;
+  background: #0b7ad1;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.redditPost {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  padding: 15px 14px 10px;
+}
+
+.voteRail {
+  display: flex;
+  align-items: center;
+  align-self: start;
+  flex-direction: column;
+  gap: 5px;
+  color: var(--post-muted);
+}
+
+.voteRail strong {
+  color: var(--platform-accent);
+  font-size: 10px;
+  font-weight: 600;
+  writing-mode: vertical-rl;
+}
+
+.redditBody {
+  min-width: 0;
+}
+
+.redditBody h2 {
+  margin: 0 0 9px;
+  color: var(--post-text);
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.28;
+}
+
+.redditBody h2.placeholderTitle {
+  color: var(--post-muted);
+}
+
+.redditBody .textarea {
+  min-height: 84px;
+  font-size: 14px;
+}
+
+.redditBody .actions {
+  justify-content: flex-start;
+  gap: 18px;
+}
+
+.standardPost {
+  padding: 14px 16px 8px;
+}
+
+.profileHeader {
+  gap: 10px;
+}
+
+.profileHeader > svg {
+  margin-left: auto;
+  color: var(--post-muted);
+}
+
+.profileIdentity {
+  flex: 1;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.profileIdentity span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.standardPost > .editor {
+  margin: 15px 0 5px;
+}
+
+.standardPost .textarea {
+  min-height: 112px;
+  font-size: 15px;
+}
+
+.engagementSummary {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  color: var(--post-muted);
+  border-bottom: 1px solid var(--post-border);
+  font-size: 11px;
+}
+
+.standardPost .actions {
+  padding: 9px 8px 3px;
+  margin: 0;
+  border-top: 0;
+}
+
+.preview[data-platform="linkedin"] .action:first-child {
+  color: var(--platform-accent);
+}
+
+.telegramScene {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 32px;
+  align-items: end;
+  gap: 9px;
+  min-height: 250px;
+  padding: 22px 16px;
+  background-color: var(--post-bg);
+  background-image:
+    radial-gradient(circle at 12% 22%, rgba(100, 181, 239, 0.055) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 78% 70%, rgba(100, 181, 239, 0.05) 0 2px, transparent 2.5px);
+  background-size: 58px 58px, 72px 72px;
+}
+
+.telegramBubble {
+  position: relative;
+  min-width: 0;
+  padding: 10px 12px 7px;
+  background: var(--post-surface);
+  border-radius: 12px 12px 12px 4px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.telegramBubble::before {
+  position: absolute;
+  bottom: 0;
+  left: -7px;
+  width: 10px;
+  height: 10px;
+  background: linear-gradient(135deg, transparent 50%, var(--post-surface) 51%);
+  content: "";
+}
+
+.telegramBubble header {
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.telegramBubble header strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.telegramBubble header span,
+.telegramBubble footer {
+  color: var(--post-muted);
+  font-size: 10px;
+}
+
+.telegramBubble .textarea {
+  min-height: 100px;
+  font-size: 14px;
+  line-height: 1.42;
+}
+
+.telegramBubble footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 5px;
+}
+
+.telegramBubble footer span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.telegramForward {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  color: var(--post-muted);
+  background: rgba(0, 0, 0, 0.28);
+  border-radius: 50%;
+}
+
+.farcasterPost {
+  padding-top: 17px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--platform-accent) 6%, transparent), transparent 40%);
+}
+
+.farcasterBody .textarea {
+  min-height: 106px;
+}
+
+.farcasterBody .actions {
+  color: color-mix(in srgb, var(--platform-accent) 58%, var(--post-muted));
+}
+
+:global([data-theme="hive-light"]) .preview,
+:global(.sc-shell[data-fr-theme="light"]) .preview {
+  color-scheme: light;
+  box-shadow: 0 12px 28px rgba(63, 47, 30, 0.09);
+}
+
+:global([data-theme="hive-light"]) .preview[data-platform="x"],
+:global(.sc-shell[data-fr-theme="light"]) .preview[data-platform="x"] {
+  --post-bg: #fff;
+  --post-surface: #f7f9f9;
+  --post-surface-2: #eff3f4;
+  --post-border: #cfd9de;
+  --post-text: #0f1419;
+  --post-muted: #536471;
+}
+
+:global([data-theme="hive-light"]) .preview[data-platform="reddit"],
+:global(.sc-shell[data-fr-theme="light"]) .preview[data-platform="reddit"] {
+  --post-bg: #fff;
+  --post-surface: #f6f7f8;
+  --post-surface-2: #edeff1;
+  --post-border: #ccc;
+  --post-text: #1a1a1b;
+  --post-muted: #576f76;
+}
+
+:global([data-theme="hive-light"]) .preview[data-platform="linkedin"],
+:global(.sc-shell[data-fr-theme="light"]) .preview[data-platform="linkedin"] {
+  --post-bg: #fff;
+  --post-surface: #f3f2ef;
+  --post-surface-2: #e0dfdc;
+  --post-border: #d6cec2;
+  --post-text: #191919;
+  --post-muted: #666;
+  --platform-accent: #0a66c2;
+}
+
+:global([data-theme="hive-light"]) .preview[data-platform="facebook"],
+:global(.sc-shell[data-fr-theme="light"]) .preview[data-platform="facebook"] {
+  --post-bg: #fff;
+  --post-surface: #f0f2f5;
+  --post-surface-2: #ced0d4;
+  --post-border: #ced0d4;
+  --post-text: #050505;
+  --post-muted: #65676b;
+  --platform-accent: #0866ff;
+}
+
+:global([data-theme="hive-light"]) .preview[data-platform="telegram"],
+:global(.sc-shell[data-fr-theme="light"]) .preview[data-platform="telegram"] {
+  --post-bg: #d8e6ee;
+  --post-surface: #fff;
+  --post-surface-2: #effdde;
+  --post-border: #c5d6df;
+  --post-text: #17212b;
+  --post-muted: #70808d;
+  --platform-accent: #168acd;
+}
+
+:global([data-theme="hive-light"]) .preview[data-platform="farcaster"],
+:global(.sc-shell[data-fr-theme="light"]) .preview[data-platform="farcaster"] {
+  --post-bg: #fff;
+  --post-surface: #f8f5fb;
+  --post-surface-2: #eee7f4;
+  --post-border: #ddd4e6;
+  --post-text: #241f2d;
+  --post-muted: #6c6375;
+  --platform-accent: #7c4dbd;
+}
+
+@media (max-width: 700px) {
+  .preview {
+    width: calc(100% - 24px);
+    margin-top: 12px;
+  }
+
+  .xPost,
+  .farcasterPost {
+    grid-template-columns: 36px minmax(0, 1fr);
+    padding-inline: 12px;
+  }
+
+  .avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 10px;
+  }
+
+  .actions {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .target {
+    margin-inline: 12px;
+  }
+
+  .redditPost {
+    grid-template-columns: 1fr;
+  }
+
+  .voteRail {
+    justify-content: flex-start;
+    flex-direction: row;
+  }
+
+  .voteRail strong {
+    writing-mode: initial;
+  }
+
+  .telegramScene {
+    grid-template-columns: 36px minmax(0, 1fr);
+    padding-inline: 12px;
+  }
+
+  .telegramForward {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .textarea {
+    scroll-behavior: auto;
+  }
+}

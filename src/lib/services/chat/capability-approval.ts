@@ -13,9 +13,15 @@ import {
 import { githubCapabilityForContextId } from "@/lib/services/github-capability-catalog";
 import { readInstallableServiceStatus } from "@/lib/services/installable-services";
 import { isConcreteHyperframesVideoRequest } from "@/lib/services/chat/hyperframes-prompt";
+import { applyAppPreferences, readAppPreferences } from "@/lib/services/fleet/app-preferences";
+import {
+  chatPermissionModeSkipsReadyCapabilityReview,
+  normalizeChatPermissionMode,
+  type ChatPermissionMode,
+} from "@/lib/types/chat-permissions";
 
 const CAPABILITY_SEARCH_KINDS = ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "connector", "runtime"] as const;
-const MAX_CANDIDATES_PER_ITEM = 5;
+const MAX_CANDIDATES_PER_ITEM = 8;
 const SEARCH_CANDIDATE_LIMIT = 80;
 
 type CapabilityIntent = {
@@ -27,7 +33,7 @@ type CapabilityIntent = {
   candidatePattern: RegExp;
   primaryCandidatePattern?: RegExp;
   preferredCandidatePattern?: RegExp;
-  rejectCandidate?: (context: CapabilityRequestContext, candidateText: string) => boolean;
+  rejectCandidate?: (context: CapabilityRequestContext, candidateText: string, candidate: ContextIndexItem) => boolean;
 };
 
 type CapabilityRequestContext = {
@@ -178,11 +184,24 @@ export const CAPABILITY_APPROVAL_INTENTS: CapabilityIntent[] = [
     id: "video-generation",
     label: "Video generation",
     reason: "Create or assemble the requested video, animation, reel, or motion asset.",
-    query: "video generation animation reel clip image to video short video assembly generative media",
+    query: "text-to-video image-to-video generative video API connected media MCP",
     matches: (task) => !/\bdownload(?:s|ed|ing)?\b/i.test(task)
       && /\b(video|animation|reel|clip|movie|motion\s+graphic|image[-\s]?to[-\s]?video)\b/i.test(task),
-    candidatePattern: /\b(video\s+(?:generation|generator|assembly|render)|animation|image.?to.?video|text.?to.?video|short-video|seedance|higgsfield|hyperframes|generative\s+(?:video|media)|media\s+studio)\b/i,
-    preferredCandidatePattern: /\b(media\s+studio|muapi-seedance-video|higgsfield-generate|hyperframes|short-video-assembly)\b/i,
+    candidatePattern: /\b(video[-\s]+(?:generation|generator|assembly|render)|animation|image.?to.?video|text.?to.?video|short[-\s]+video|generative[-\s]+(?:video|media)(?:[-\s]+mcp)?|media[-\s]+(?:generation|studio|gateway)|generate[-\s]+(?:hosted[-\s]+)?media|hosted[-\s]+media|app\s+kind:\s*media)\b/i,
+    rejectCandidate: (context, candidate, candidateItem) => {
+      const requestedVideoWork = context.intentTaskContext || context.task;
+      const candidateIdentity = `${candidateItem.id} ${candidateItem.title}`;
+      if (/\b(video[-\s]+render[-\s]+qa|video[-\s]+generator[-\s]+prompting|prompt[-\s]+optimizer)\b/i.test(candidateIdentity)) return true;
+      if (!/\b(launch|promo|startup|product\s+demo)\b/i.test(requestedVideoWork)
+        && /\b(?:launch|startup|product[-\s]+demo|viral[-\s]+startup)[-\s]+video\b/i.test(candidateIdentity)) return true;
+      if (/\bwebsite-to-video\b/i.test(candidate)
+        && !/\b(?:existing|current|live)\s+(?:website|site)|\b(?:website|site)\s+(?:tour|showcase|capture)|\burl\b|https?:\/\//i.test(requestedVideoWork)) return true;
+      if (/\bpr-to-video\b/i.test(candidate) && !/\b(?:pull\s+request|github\s+pr|pr\s*#?\d+)\b/i.test(requestedVideoWork)) return true;
+      if (/\bremotion-to-hyperframes\b/i.test(candidate) && !/\bremotion\b/i.test(requestedVideoWork)) return true;
+      if (/\bshort-video-assembly\b/i.test(candidate)
+        && !/\b(?:assemble|combine|concatenate|edit|existing|mux|narration|stitch|subtitles?|clips?|footage|music)\b/i.test(requestedVideoWork)) return true;
+      return false;
+    },
   },
   {
     id: "presentation",
@@ -428,6 +447,7 @@ function toCandidate(item: ContextIndexItem): CapabilityCandidate {
     kind: item.kind,
     availability: isSetupRequired(item) ? "setup-required" : "ready",
     locator: candidateLocator(item),
+    machineName: item.machineName,
     setupOptions: githubCapability?.setupOptions.map((option) => ({ ...option })),
   };
 }
@@ -492,7 +512,7 @@ function dedupeEquivalentCandidates(items: ContextIndexItem[]) {
 }
 
 const GENERIC_TASK_WORDS = new Set([
-  "analyze", "app", "application", "billing", "build", "capability", "card", "checkout", "code", "create", "daily", "dashboard", "deploy", "design", "develop", "draw", "generate", "generation", "host", "hourly", "implement", "install", "interface", "make", "monthly", "payment", "payments", "produce", "prototype", "publish", "record", "refactor", "render", "repair", "report", "research", "schedule", "scheduled", "send", "service", "setup", "ship", "spreadsheet", "the", "this", "from", "use", "using", "weekly", "workflow", "write",
+  "analyze", "app", "application", "billing", "build", "capability", "card", "checkout", "code", "cool", "create", "daily", "dashboard", "deploy", "design", "develop", "draw", "generate", "generation", "host", "hourly", "implement", "install", "interface", "make", "monthly", "pair", "payment", "payments", "produce", "prototype", "publish", "record", "refactor", "render", "repair", "report", "research", "schedule", "scheduled", "send", "service", "setup", "ship", "spreadsheet", "the", "this", "from", "use", "using", "weekly", "workflow", "write",
 ]);
 
 function distinctiveTaskTokens(taskContext: string) {
@@ -514,7 +534,7 @@ function candidateSortScore(intent: CapabilityIntent, item: ContextIndexItem, co
   const text = candidateText(item);
   const directText = directCandidateText(item);
   if (!intent.candidatePattern.test(directText)) return null;
-  if (intent.rejectCandidate?.(context, directText)) return null;
+  if (intent.rejectCandidate?.(context, directText, item)) return null;
   if (/\b(swarm-goal|work\s+board\s+delegat|queen\s+bee\s+orchestrat)\b/i.test(directText)) return null;
   const titleAndId = `${item.id} ${item.title}`.toLowerCase();
   const fullText = text.toLowerCase();
@@ -537,7 +557,6 @@ function rankCandidates(intent: CapabilityIntent, items: ContextIndexItem[], con
       return score === null ? [] : [{ item, score }];
     })
     .sort((left, right) => right.score - left.score || left.item.title.localeCompare(right.item.title))
-    .slice(0, MAX_CANDIDATES_PER_ITEM)
     .map((entry) => toCandidate(entry.item));
 }
 
@@ -576,11 +595,18 @@ function selectedIntents(task: string) {
 }
 
 function taskClauses(task: string) {
-  return task.split(/\s*(?:[,;]|\bthen\b|\band\b|\bafter\b)\s*/i).map((clause) => clause.trim()).filter(Boolean);
+  return task.split(/\s*(?:[,;]|[.!?](?=\s|$)|\bthen\b|\band\b|\bafter\b)\s*/i).map((clause) => clause.trim()).filter(Boolean);
 }
 
-function capabilityPlanReviewMode(items: CapabilityApprovalItem[]) {
-  if (items.length !== 1) return "ask" as const;
+function capabilityPlanReviewMode(items: CapabilityApprovalItem[], permissionMode: ChatPermissionMode) {
+  if (items.length !== 1) {
+    if (!items.length || !chatPermissionModeSkipsReadyCapabilityReview(permissionMode)) return "ask" as const;
+    const allSelectedCapabilitiesReady = items.every((item) => {
+      const candidate = selectedCapability(item);
+      return candidate?.availability === "ready" && item.decision === "use";
+    });
+    return allSelectedCapabilitiesReady ? "automatic" as const : "ask" as const;
+  }
   const item = items[0];
   const candidate = selectedCapability(item);
   if (candidate?.availability !== "ready" || item.decision !== "use") return "ask" as const;
@@ -611,13 +637,17 @@ export async function buildCapabilityApprovalPlan(input: {
   vaultPath?: string;
   origin: string;
   connectedApps?: ContextConnectedApp[];
+  permissionMode?: ChatPermissionMode;
   workingDirectory?: string;
   search?: typeof searchContextIndexBatch;
   now?: number;
 }): Promise<CapabilityApprovalPlan> {
   const task = input.task.trim();
   const intents = selectedIntents(task);
-  const connectedApps = input.connectedApps ?? await connectedAppsForTaskRetrieval(input.origin).catch(() => undefined);
+  const discoveredConnectedApps = input.connectedApps ?? await connectedAppsForTaskRetrieval(input.origin).catch(() => undefined);
+  const connectedApps = input.connectedApps === undefined && discoveredConnectedApps
+    ? applyAppPreferences(discoveredConnectedApps, await readAppPreferences().catch(() => []))
+    : discoveredConnectedApps;
   const search = input.search ?? searchContextIndexBatch;
   const results = await search({
     vaultPath: input.vaultPath,
@@ -634,7 +664,7 @@ export async function buildCapabilityApprovalPlan(input: {
     });
     const candidates = await resolveInstalledCandidates(dedupeCandidateImplementations(builtIn
       ? [builtIn, ...ranked.filter((candidate) => candidate.id !== builtIn.id)]
-      : ranked));
+      : ranked).slice(0, MAX_CANDIDATES_PER_ITEM));
     const availableCandidates = candidates.length ? candidates : [unavailableCandidate(intent)];
     const selected = availableCandidates[0];
     return {
@@ -650,7 +680,7 @@ export async function buildCapabilityApprovalPlan(input: {
   const createdAt = input.now ?? Date.now();
   return {
     version: 1,
-    reviewMode: capabilityPlanReviewMode(items),
+    reviewMode: capabilityPlanReviewMode(items, normalizeChatPermissionMode(input.permissionMode)),
     id: stableId(`${input.agentId}:${input.chatStorageKey}:${task}:${createdAt}`),
     task,
     agentId: input.agentId,
@@ -683,6 +713,7 @@ export function normalizeCapabilityApprovalPlan(value: unknown): CapabilityAppro
       candidate && typeof candidate.id === "string" && typeof candidate.name === "string" && (candidate.availability === "ready" || candidate.availability === "setup-required"),
     )).slice(0, MAX_CANDIDATES_PER_ITEM).map((candidate) => ({
       ...candidate,
+      machineName: cleanInstruction(candidate.machineName, 160) || undefined,
       setupOptions: Array.isArray(candidate.setupOptions)
         ? candidate.setupOptions.reduce<CapabilitySetupOption[]>((options, option) => {
             if (!option || typeof option !== "object") return options;
@@ -738,7 +769,7 @@ export function capabilityApprovalContinuationPrompt(plan: CapabilityApprovalPla
   const lines = [
     CAPABILITY_APPROVAL_CONTINUATION_MARKER,
     automatic
-      ? "HivemindOS selected this ready capability automatically. Continue the original task now; this capability choice does not bypass spend, secret, deploy, destructive-action, external-send, or runtime permission gates."
+      ? "HivemindOS found ready capabilities automatically. Fixed infrastructure choices remain selected; when multiple viable ready options are listed, the worker model must choose from their actual task fit and runtime evidence. This does not bypass spend, secret, deploy, destructive-action, external-send, or runtime permission gates."
       : "The user approved this capability plan. Continue the original task now and treat this approval as authorization only for the capability setup described below; existing spend, secret, deploy, and destructive-action gates still apply.",
     "",
     `Original task: ${plan.task}`,
@@ -747,6 +778,20 @@ export function capabilityApprovalContinuationPrompt(plan: CapabilityApprovalPla
   ];
   for (const item of included) {
     const capability = selectedCapability(item);
+    const readyOptions = automatic ? item.candidates.filter((candidate) => candidate.availability === "ready") : [];
+    const modelSelects = automatic && capability?.id !== "hive-action:apps.build" && readyOptions.length > 1;
+    if (modelSelects) {
+      lines.push(`- ${item.label}: model-select the best ready option for the original task. Candidate order is discovery-only and is not a recommendation.`);
+      lines.push("  Compare required inputs, exact task fit, confirmed readiness, configured user preferences, side-effect controls, cost policy, and output needs using only available evidence; do not invent provider quality or price claims.");
+      for (const candidate of readyOptions) {
+        lines.push(`  - ${candidate.name}${candidate.machineName ? ` on ${candidate.machineName}` : ""} (already available)`);
+        lines.push(`    Capability id: ${candidate.id}`);
+        if (candidate.locator) lines.push(`    Capability locator: ${candidate.locator}`);
+        if (candidate.summary) lines.push(`    Evidence: ${candidate.summary}`);
+      }
+      if (item.instructions) lines.push(`  User instruction: ${item.instructions}`);
+      continue;
+    }
     lines.push(`- ${item.label}: ${capability?.name ?? "agent-selected capability"}${capability?.availability === "setup-required" ? " (setup/install approved)" : " (already available)"}`);
     if (capability?.id) lines.push(`  Capability id: ${capability.id}`);
     if (capability?.locator) lines.push(`  Capability locator: ${capability.locator}`);

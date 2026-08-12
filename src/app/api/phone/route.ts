@@ -16,13 +16,14 @@ import {
   startAgentMobileCall,
   type AgentCallIdentity,
 } from "@/lib/services/phone/call-gateway";
-import { streamLocalTtsSpeech } from "@/lib/services/phone/local-tts";
+import { streamLocalTtsPcm } from "@/lib/services/phone/local-tts";
 import {
+  buildPhoneRuntimeVoiceUserText,
+  phoneVoiceHistoryFromEvents,
   readRuntimeResponseText,
-  sseErrorFromPayload,
-  sseTextFromPayload,
   voiceOptimizedAgent,
 } from "@/lib/services/phone/runtime-voice-turn";
+import { getVoiceRun } from "@/lib/services/phone/voice-runs";
 import {
   errorDetail,
   handleVoiceRunGetAction,
@@ -44,6 +45,7 @@ import { cacheGeneratedImageForPhone } from "@/lib/services/chat/generated-media
 import { signedGeneratedMediaUrl } from "@/lib/services/chat/generated-media-signing";
 import { registerPushDevice } from "@/lib/services/push/mobile-push";
 import { runPhoneShortcutAction } from "@/lib/services/phone/shortcut-actions";
+import { pipeRuntimeVoiceToLocalTts } from "@/lib/services/phone/local-tts-runtime-stream";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -356,6 +358,31 @@ function anyAbortSignal(signals: AbortSignal[]) {
   return controller.signal;
 }
 
+function localSiblingApiUrl(request: NextRequest, path: string) {
+  const port = Number(process.env.PORT);
+  const origin = Number.isInteger(port) && port > 0 && port <= 65_535
+    ? `http://127.0.0.1:${port}`
+    : request.nextUrl.origin;
+  return new URL(path, origin);
+}
+
+/** Mirror the desktop Queen overlay's session prewarm. The iPhone already
+ * synthesizes a silent `Ready.` clip to load the saved Qwen voice; this also
+ * asks the shared Queen route to establish the selected brain's reusable TLS
+ * path and warm the briefing cache while that clip is being generated. */
+function prewarmQueenVoicePipeline(request: NextRequest) {
+  const url = localSiblingApiUrl(request, "/api/queen-bee/voice");
+  void fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
+    body: JSON.stringify({ action: "speak-prewarm" }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(20_000),
+  })
+    .then((response) => response.body?.cancel())
+    .catch(() => undefined);
+}
+
 function spokenVoiceRuntimeFailure(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || "");
   if (/missing runtime chat url/i.test(message))
@@ -424,7 +451,7 @@ async function fetchRuntimeVoiceTurn(
       message,
     },
   });
-  return fetch(new URL("/api/chat/agent-runtime", request.url), {
+  return fetch(localSiblingApiUrl(request, "/api/chat/agent-runtime"), {
     method: "POST",
     headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
     body: JSON.stringify({
@@ -433,9 +460,18 @@ async function fetchRuntimeVoiceTurn(
         {
           role: "system",
           content:
-            "You are speaking on a live phone call. Reply directly in one or two short spoken sentences. Do not explain your reasoning, quote instructions, mention providers, or include preambles.",
+            "You are the speaking agent on a live phone call. Treat the user's latest input as words you heard aloud and reply naturally in first person. Never mention chat, text, transcription, input modality, or an inability to receive audio. Be concise by default, but fully answer requested briefings and reports. Do not explain your reasoning, quote instructions, mention providers, or include preambles.",
         },
-        { role: "user", content: message },
+        {
+          role: "user",
+          // Most runtime adapters keep only the latest user message. Carry
+          // the call contract here too so Solara inhabits the phone call
+          // instead of replying as a text-only computer agent.
+          content: buildPhoneRuntimeVoiceUserText(
+            message,
+            agent.name || "Queen Bee",
+          ),
+        },
       ],
       runtimeSessionId:
         typeof body.runtimeSessionId === "string"
@@ -448,6 +484,62 @@ async function fetchRuntimeVoiceTurn(
     signal:
       signal ??
       linkedAbortSignal([request.signal], VOICE_RUNTIME_TURN_TIMEOUT_MS),
+  });
+}
+
+async function isCrownedQueenVoiceAgent(agent: ResolvedVoiceCallAgent) {
+  if (agent.beeRole === "queen") return true;
+  const [storedProfiles, vaultProfiles] = await Promise.all([
+    readStoredAgentProfilesStrict().catch(() => []),
+    readVaultAgentProfiles().catch(() => []),
+  ]);
+  const queen = crownedQueenProfile(storedProfiles)
+    ?? crownedQueenProfile(vaultProfiles);
+  if (!queen) return false;
+  return queen.id === agent.id
+    || Boolean(queen.agentId && agent.agentId && queen.agentId === agent.agentId);
+}
+
+/** Queen calls use the same context-rich conversation stream as the desktop
+ * overlay. This keeps Shared Brain/open-work context, the configured Calls
+ * brain, provider fallbacks, and sentence-level speech deltas authoritative
+ * instead of treating the Queen as a generic stateless runtime agent. */
+async function fetchQueenVoiceTurn(
+  request: NextRequest,
+  body: Record<string, unknown>,
+  agent: ResolvedVoiceCallAgent,
+  signal: AbortSignal,
+) {
+  const message = typeof body.message === "string" ? body.message.trim() : "";
+  if (!message) throw new Error("A spoken request is required.");
+  const queenVoiceUrl = localSiblingApiUrl(request, "/api/queen-bee/voice");
+  const voiceRun = await getVoiceRun(voiceRunIdFromBody(body) || "").catch(() => null);
+  const history = phoneVoiceHistoryFromEvents(voiceRun?.events ?? [], message);
+  await recordVoiceRunEvent(voiceRunIdFromBody(body), {
+    type: "runtime.turn.started",
+    speaker: "system",
+    text: "Queen Bee voice turn started.",
+    payload: {
+      agentId: agent.id,
+      agentName: agent.name,
+      runtime: agent.runtime,
+      orchestrator: "queen-bee-converse-stream",
+      internalOrigin: queenVoiceUrl.origin,
+      requestOrigin: request.nextUrl.origin,
+      message,
+    },
+  });
+  return fetch(queenVoiceUrl, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...internalApiAuthHeaders() },
+    body: JSON.stringify({
+      action: "converse-stream",
+      transcript: message,
+      history,
+      scheduledCallPreparation: body.scheduledCallPreparation === true,
+    }),
+    cache: "no-store",
+    signal,
   });
 }
 
@@ -558,66 +650,6 @@ async function streamAgentVoiceTurn(
   });
 }
 
-function pullSpeakableSegments(
-  text: string,
-  force = false,
-  options?: { fastFirstSegment?: boolean },
-) {
-  const segments: string[] = [];
-  let rest = text;
-  for (;;) {
-    const match = /[.!?。！？](?:\s+|$)|\n{2,}/.exec(rest);
-    if (!match) break;
-    const end = match.index + match[0].length;
-    const segment = rest.slice(0, end).trim();
-    if (segment) segments.push(segment);
-    rest = rest.slice(end).trimStart();
-  }
-  if (
-    !force &&
-    options?.fastFirstSegment &&
-    !segments.length &&
-    rest.length > 42
-  ) {
-    const clauseMatch = /[,;:](?:\s+|$)|\s+-\s+/.exec(rest);
-    const clauseEnd =
-      clauseMatch && clauseMatch.index > 18 && clauseMatch.index < 70
-        ? clauseMatch.index + clauseMatch[0].length
-        : -1;
-    const splitAt = clauseEnd > 0 ? clauseEnd : rest.lastIndexOf(" ", 56);
-    if (splitAt > 24) {
-      const segment = rest.slice(0, splitAt).trim();
-      if (segment) segments.push(segment);
-      rest = rest.slice(splitAt).trimStart();
-    }
-  }
-  if (!force && rest.length > 90) {
-    const clauseAt = Math.max(
-      rest.lastIndexOf(",", 90),
-      rest.lastIndexOf(";", 90),
-      rest.lastIndexOf(":", 90),
-      rest.lastIndexOf(" - ", 90),
-    );
-    const splitAt = clauseAt > 36 ? clauseAt + 1 : rest.lastIndexOf(" ", 76);
-    if (splitAt > 36) {
-      const segment = rest.slice(0, splitAt).trim();
-      if (segment) segments.push(segment);
-      rest = rest.slice(splitAt).trimStart();
-    }
-  }
-  if (force && rest.trim()) {
-    segments.push(rest.trim());
-    rest = "";
-  }
-  return { rest, segments };
-}
-
-function isUnspeakableVoicePreamble(text: string) {
-  return /^\s*(?:we need|we are asked|the user asked|i need to|let's|first,|the scenario says|the instruction says)/i.test(
-    text,
-  );
-}
-
 async function streamAgentLocalTtsAudio(
   request: NextRequest,
   body: Record<string, unknown>,
@@ -631,7 +663,15 @@ async function streamAgentLocalTtsAudio(
   const voice = typeof localTts.voice === "string" ? localTts.voice.trim() : "";
   const message = typeof body.message === "string" ? body.message.trim() : "";
   const voiceRunId = voiceRunIdFromBody(body);
-  const voiceAgent = body.agent && typeof body.agent === "object" ? (body.agent as AgentProfile) : null;
+  const rawVoiceAgent = body.agent && typeof body.agent === "object"
+    ? (body.agent as ResolvedVoiceCallAgent)
+    : null;
+  const voiceAgent = rawVoiceAgent
+    ? await resolveVoiceCallAgent(rawVoiceAgent)
+    : null;
+  const queenVoice = voiceAgent
+    ? await isCrownedQueenVoiceAgent(voiceAgent)
+    : false;
   if (!appId) throw new Error("A validated local TTS app is required.");
   if (!message) throw new Error("A spoken request is required.");
   await recordVoiceRunEvent(voiceRunId, {
@@ -650,15 +690,42 @@ async function streamAgentLocalTtsAudio(
     () => runtimeConnectAbort.abort(),
     VOICE_RUNTIME_CONNECT_TIMEOUT_MS,
   );
-  const runtimeResponse = await fetchRuntimeVoiceTurn(
-    request,
-    body,
-    anyAbortSignal([
-      request.signal,
-      streamAbort.signal,
-      runtimeConnectAbort.signal,
-    ]),
-  ).finally(() => clearTimeout(runtimeConnectTimeout));
+  const runtimeSignal = anyAbortSignal([
+    request.signal,
+    streamAbort.signal,
+    runtimeConnectAbort.signal,
+  ]);
+  let runtimeResponse: Response;
+  try {
+    runtimeResponse = await (queenVoice && voiceAgent
+      ? fetchQueenVoiceTurn(request, body, voiceAgent, runtimeSignal)
+      : fetchRuntimeVoiceTurn(request, body, runtimeSignal));
+  } catch (error) {
+    clearTimeout(runtimeConnectTimeout);
+    const detail = errorDetail(error);
+    recordVoiceTurnFailure(voiceAgent, "runtime-connect", {
+      error,
+      appId,
+      model,
+      voice,
+      aborted: runtimeSignal.aborted,
+    });
+    await recordVoiceRunEvent(voiceRunId, {
+      type: "runtime.turn.failed",
+      speaker: "system",
+      text: queenVoice
+        ? "Queen Bee voice turn failed to connect."
+        : "Runtime voice turn failed to connect.",
+      detail,
+      payload: { orchestrator: queenVoice ? "queen-bee-converse-stream" : "agent-runtime" },
+    });
+    return Response.json(
+      { ok: false, error: detail },
+      { status: runtimeSignal.aborted ? 504 : 502 },
+    );
+  } finally {
+    clearTimeout(runtimeConnectTimeout);
+  }
   if (!runtimeResponse.ok) {
     const text = await readRuntimeResponseText(runtimeResponse).catch(
       (error) =>
@@ -694,6 +761,9 @@ async function streamAgentLocalTtsAudio(
       { status: 502 },
     );
   }
+  const queenConverseStream = runtimeResponse.headers
+    .get("content-type")
+    ?.includes("application/x-ndjson") === true;
 
   const encoderHeaders = new Headers();
   encoderHeaders.set("Content-Type", "audio/pcm");
@@ -712,7 +782,9 @@ async function streamAgentLocalTtsAudio(
   );
   encoderHeaders.set(
     "x-hivemindos-orchestrator",
-    "local-tts-agent-audio-stream",
+    queenConverseStream
+      ? "queen-bee-converse-stream"
+      : "local-tts-agent-audio-stream",
   );
   if (typeof localTts.streamingImplementation === "string") {
     encoderHeaders.set(
@@ -722,145 +794,21 @@ async function streamAgentLocalTtsAudio(
   }
 
   const readable = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      const runtimeReader = runtimeResponse.body?.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let pendingText = "";
-      let spokenText = "";
-      let spoke = false;
-
-      const speakSegment = async (segment: string) => {
-        const text = segment.trim();
-        if (!text) return;
-        if (isUnspeakableVoicePreamble(text)) return;
-        spoke = true;
-        const ttsText = /[.!?。！？]$/.test(text) ? text : `${text}.`;
-        spokenText = `${spokenText} ${ttsText}`.trim().slice(-2_000);
-        const ttsResponse = await streamLocalTtsSpeech({
-          origin: request.nextUrl.origin,
-          appId,
-          model,
-          voice,
-          text: ttsText,
-          utteranceId: `voice_${Date.now()}`,
-          signal: streamSignal,
-        });
-        if (!ttsResponse.ok || !ttsResponse.body) {
-          const errorText = await ttsResponse.text().catch(() => "");
-          throw new Error(
-            errorText || `Local TTS returned HTTP ${ttsResponse.status}.`,
-          );
-        }
-        const ttsReader = ttsResponse.body.getReader();
-        try {
-          for (;;) {
-            const { value, done } = await ttsReader.read();
-            if (done) break;
-            if (value?.byteLength) controller.enqueue(value);
-          }
-        } finally {
-          await ttsReader.cancel().catch(() => undefined);
-        }
-      };
-
-      const acceptText = async (chunk: string, force = false) => {
-        pendingText += chunk;
-        const pulled = pullSpeakableSegments(pendingText, force, {
-          fastFirstSegment: !spoke,
-        });
-        pendingText = pulled.rest;
-        for (const segment of pulled.segments) await speakSegment(segment);
-      };
-
-      try {
-        while (runtimeReader) {
-          const { value, done } = await runtimeReader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const frames = buffer.split(/\n\n/);
-          buffer = frames.pop() ?? "";
-          for (const frame of frames) {
-            const data = frame
-              .split(/\n/)
-              .filter((line) => line.startsWith("data: "))
-              .map((line) => line.slice(6))
-              .join("\n");
-            if (data === "[DONE]") continue;
-            const error = sseErrorFromPayload(data);
-            if (error) throw new Error(error);
-            await acceptText(sseTextFromPayload(data));
-          }
-        }
-        if (buffer) {
-          const data = buffer
-            .split(/\n/)
-            .filter((line) => line.startsWith("data: "))
-            .map((line) => line.slice(6))
-            .join("\n");
-          const error = sseErrorFromPayload(data);
-          if (error) throw new Error(error);
-          await acceptText(sseTextFromPayload(data));
-        }
-        await acceptText("", true);
-        if (!spoke)
-          await speakSegment(
-            "The agent completed the request without a spoken response.",
-          );
-        controller.close();
-        await recordVoiceRunEvent(voiceRunId, {
-          type: "agent.caption",
-          speaker: "agent",
-          text: spokenText || "The agent completed the request without a spoken response.",
-        });
-        await recordVoiceRunEvent(voiceRunId, {
-          type: "runtime.turn.completed",
-          speaker: "system",
-          text: "Local TTS runtime turn completed.",
-          payload: { appId, model, voice },
-        });
-      } catch (error) {
-        recordVoiceTurnFailure(voiceAgent, "stream", {
-          error,
-          appId,
-          model,
-          voice,
-          aborted: streamSignal.aborted,
-          spoke,
-        });
-        await recordVoiceRunEvent(voiceRunId, {
-          type: "runtime.turn.failed",
-          speaker: "system",
-          text: "Local TTS runtime turn failed.",
-          detail: errorDetail(error),
-          payload: { appId, model, voice, spoke },
-        });
-        if (spokenText) {
-          await recordVoiceRunEvent(voiceRunId, {
-            type: "agent.caption",
-            speaker: "agent",
-            text: spokenText,
-          });
-        }
-        if (!spoke && !streamSignal.aborted) {
-          try {
-            const fallbackText = spokenVoiceRuntimeFailure(error);
-            await speakSegment(fallbackText);
-            await recordVoiceRunEvent(voiceRunId, {
-              type: "agent.caption",
-              speaker: "agent",
-              text: fallbackText,
-            });
-            controller.close();
-            return;
-          } catch {
-            // Fall through to the real stream error when even the fallback cannot be spoken.
-          }
-        }
-        controller.error(error);
-      } finally {
-        await runtimeReader?.cancel().catch(() => undefined);
-      }
+    start(controller) {
+      return pipeRuntimeVoiceToLocalTts({
+        controller,
+        runtimeResponse,
+        queenConverseStream,
+        requestOrigin: request.nextUrl.origin,
+        appId,
+        model,
+        voice,
+        voiceRunId,
+        streamSignal,
+        voiceAgent,
+        recordFailure: recordVoiceTurnFailure,
+        spokenRuntimeFailure: spokenVoiceRuntimeFailure,
+      });
     },
     cancel() {
       streamAbort.abort();
@@ -1528,6 +1476,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (body.action === "local-tts-speech-stream") {
+      const utteranceId =
+        typeof body.utteranceId === "string" ? body.utteranceId.trim() : "";
+      if (utteranceId.startsWith("queen_prewarm_")) {
+        prewarmQueenVoicePipeline(request);
+      }
       const localTts =
         body.localTts && typeof body.localTts === "object"
           ? (body.localTts as Record<string, unknown>)
@@ -1541,14 +1494,27 @@ export async function POST(request: NextRequest) {
       const text = typeof body.input === "string" ? body.input.trim() : "";
       if (!appId) throw new Error("A validated local TTS app is required.");
       if (!text) throw new Error("Speech text is required.");
-      return streamLocalTtsSpeech({
+      const stream = await streamLocalTtsPcm({
         origin: request.nextUrl.origin,
         appId,
         model,
         voice,
         text,
-        utteranceId:
-          typeof body.utteranceId === "string" ? body.utteranceId : undefined,
+        signal: request.signal,
+      });
+      if (!stream.ok) {
+        return NextResponse.json(
+          { ok: false, error: stream.error },
+          { status: 502 },
+        );
+      }
+      return new Response(stream.body, {
+        headers: {
+          "Content-Type": "audio/pcm",
+          "x-audio-sample-rate": String(stream.sampleRate),
+          "x-audio-channels": String(stream.channels),
+          "Cache-Control": "no-store, no-transform",
+        },
       });
     }
 

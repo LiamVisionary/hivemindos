@@ -631,7 +631,7 @@
 :global(:root[data-theme="hive-light"]) .walletSkeletonPanel {
   --skeleton-base: rgba(92, 75, 45, 0.16);
   --skeleton-sheen: rgba(184, 130, 22, 0.30);
-  --skeleton-sheen-honey: rgba(255, 212, 90, 0.4);
+  --skeleton-sheen-honey: rgba(138, 90, 42, 0.18);
   --skeleton-tile-border: rgba(92, 75, 45, 0.28);
   --skeleton-tile-glow: rgba(184, 130, 22, 0.14);
 }
@@ -714,9 +714,9 @@
 }
 
 :global(:root[data-theme="hive-light"]) .hiveRail {
-  border-color: rgba(185, 139, 47, 0.32);
+  border-color: rgba(138, 90, 42, 0.32);
   background:
-    linear-gradient(180deg, rgba(212, 180, 111, 0.18), transparent 50%),
+    linear-gradient(180deg, rgba(138, 90, 42, 0.05), transparent 50%),
     var(--surface);
 }
 
@@ -727,7 +727,7 @@
 
 :global(:root[data-theme="hive-light"]) .hiveRailStats > div,
 :global(:root[data-theme="hive-light"]) .hiveRailDetails {
-  border-color: rgba(185, 139, 47, 0.2);
+  border-color: rgba(138, 90, 42, 0.2);
 }
 
 :global(:root[data-theme="hive-light"]) .walletSegmented,
@@ -740,7 +740,7 @@
 }
 
 :global(:root[data-theme="hive-light"]) .walletSegmentActive {
-  background: rgba(176, 127, 28, 0.16);
+  background: rgba(138, 90, 42, 0.16);
   color: var(--accent-strong);
 }
 
@@ -761,7 +761,7 @@
 }
 
 :global(:root[data-theme="hive-light"]) .walletBackBtn:hover {
-  background: rgba(176, 127, 28, 0.12);
+  background: rgba(138, 90, 42, 0.12);
   color: var(--accent-strong);
 }
 
@@ -779,11 +779,11 @@
 
 :global(:root[data-theme="hive-light"]) .hiveRailRecipient input:focus {
   border-color: var(--accent-strong);
-  outline-color: rgba(176, 127, 28, 0.24);
+  outline-color: rgba(138, 90, 42, 0.24);
 }
 
 :global(:root[data-theme="hive-light"]) .hiveRailRecipient input[aria-invalid="true"] {
-  border-color: rgba(192, 82, 77, 0.64);
+  border-color: rgba(181, 72, 59, 0.64);
 }
 
 :global(:root[data-theme="hive-light"]) .walletSkeletonPanel {
@@ -793,5 +793,5 @@
 
 :global(:root[data-theme="hive-light"]) .walletSkeletonBlock,
 :global(:root[data-theme="hive-light"]) .walletSkeletonCircle {
-  background: linear-gradient(90deg, rgba(92, 75, 45, 0.14), rgba(176, 127, 28, 0.18), rgba(92, 75, 45, 0.14));
+  background: linear-gradient(90deg, rgba(92, 75, 45, 0.14), rgba(138, 90, 42, 0.18), rgba(92, 75, 45, 0.14));
 }

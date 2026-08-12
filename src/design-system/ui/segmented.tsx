@@ -5,7 +5,7 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 /* Segmented — a pill segmented control for view/mode switching.
-   `subtle` (honey-soft active tint) or `solid` (honey fill + dark text). */
+   Active options use the mobile app's tonal pressed surface. */
 
 type SegmentedOption = { value: string; label?: React.ReactNode; tone?: "default" | "sell" };
 
@@ -44,7 +44,7 @@ function Segmented({ options, value, defaultValue, onChange, variant = "subtle",
           variant === "solid"
             ? o.tone === "sell"
               ? "bg-[var(--danger)] text-[#2a0f0c]"
-              : "bg-primary text-primary-foreground"
+              : "bg-[var(--honey-fill)] text-[var(--fg)]"
             : "bg-[var(--honey-soft)] text-[var(--honey)]";
         return (
           <button

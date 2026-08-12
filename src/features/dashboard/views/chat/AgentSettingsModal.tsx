@@ -1019,7 +1019,7 @@ export function AgentSettingsModal(props: any) {
         fundingWalletKind: hivemindosModelsConfig.fundingWalletKind || "",
         fundingWalletLabel: hivemindosModelsConfig.fundingWalletLabel || "",
         lastCheckoutSessionId: hivemindosModelsConfig.lastCheckoutSessionId || "",
-        lastCreditBalanceUsd: hivemindosModelsConfig.lastCreditBalanceUsd || "",
+        lastCreditBalanceCredits: hivemindosModelsConfig.lastCreditBalanceCredits || "",
         lastCreditBalanceLabel: hivemindosModelsConfig.lastCreditBalanceLabel || "",
         lastCreditCheckedAt: hivemindosModelsConfig.lastCreditCheckedAt || "",
         lastCheckedAt: hivemindosModelsConfig.lastCheckedAt || "",

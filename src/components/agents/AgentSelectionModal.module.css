@@ -447,7 +447,7 @@
 :global(:root[data-theme="hive-light"]) .panel {
   border-color: var(--line);
   background:
-    radial-gradient(circle at 18% 0%, rgba(185, 139, 47, 0.12), transparent 32%),
+    radial-gradient(circle at 18% 0%, rgba(138, 90, 42, 0.12), transparent 32%),
     var(--surface);
   box-shadow: 0 28px 80px rgba(82, 61, 22, 0.18);
   color: var(--foreground);
@@ -506,9 +506,9 @@
 }
 
 :global(:root[data-theme="hive-light"]) .expanded {
-  border-color: rgba(185, 139, 47, 0.42);
+  border-color: rgba(138, 90, 42, 0.42);
   background:
-    radial-gradient(circle at 18% 18%, rgba(212, 180, 111, 0.2), transparent 42%),
+    radial-gradient(circle at 18% 18%, rgba(138, 90, 42, 0.05), transparent 42%),
     var(--surface-strong);
 }
 

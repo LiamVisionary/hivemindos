@@ -69,7 +69,7 @@ const fusionSkills: FusionSkillCard[] = [
     slug: "hive-skill-fusion",
     description: "Turns a natural-language capability request into a durable shared skill by discovering and combining the best available tools, apps, agents, credentials, and delivery channels.",
     signal: "Reusable skill synthesis",
-    accent: "#5f8f5a",
+    accent: "#6b8f5e",
     kind: "skill",
   },
   {

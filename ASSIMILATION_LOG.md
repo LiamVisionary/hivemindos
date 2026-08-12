@@ -18896,3 +18896,453 @@ also can we add long actions in telegram? like in the menu that appears when i h
 - Source: verify-assimilation-manifest
 - Decision: passed
 - Reason: ASSIMILATION.fleet-watchdog-stale-cache.json: 4 concrete reuse entries, 3 substantive
+
+## 2026-08-10T06:03:13.000000+00:00 - correction
+
+- Request: Add Earned Scale and A/B test before versus after with real, non-deterministic work.
+- Source: real-hivemindos-workboard-ab
+- Query: baseline versus Earned Scale checkpoint through actual Work Board code repair, hidden tests, independent review, settlement, and rollback
+- Decision: revise
+- Reason: Three treatment cards completed 3/3 versus baseline 2/3 because one baseline completion failed independent proof review, while all six repositories passed visible and hidden tests. The +33.3-point proof/coordination delta is directionally useful, but it is one paired win with two ties (two-sided sign test p=1.0), provider usage is estimated, and the treatment finals did not visibly exercise every checkpoint signal; no code-quality gain is established.
+- Selected backbone: scripts/benchmark-earned-scale-workboard.mjs
+- Assimilated: Real Work Board pickup, fixed Sol worker/reviewer identities, isolated git workspaces and vaults, blind hidden graders, settlement receipts, and reverse-patch rehearsal.
+- Not assimilated: The text-only pairwise preference as proof of deliverable improvement; the invalid preliminary Work Board launch whose custom fetch wrapper reintroduced a 300-second headers timeout.
+- Verification: Final artifact .outputs/benchmarks/earned-scale-workboard-2026-08-10T05-27-37-997Z/report.json; baseline accepted 2/3, treatment 3/3; visible and hidden tests 6/6; decision revise.
+- Note: This appends to and refines the earlier live revise decision; it does not rewrite or delete failed experiment evidence.
+
+## 2026-08-10T06:08:00.000000+00:00 - grading-correction
+
+- Request: Add Earned Scale and A/B test before versus after with real, non-deterministic work.
+- Source: real-hivemindos-workboard-ab
+- Decision: revise
+- Reason: The rejected baseline's claim and fail-closed `loop.eval-blocked` needs-human state were persisted, so it passed the workspace/rollback/settlement architecture boundary even though proof review and completion coordination failed.
+- Verification: Architecture is 3/3 in both conditions; proof and completion remain baseline 2/3 versus treatment 3/3. Raw Work Board events and prior experiment snapshots remain preserved.
+- Note: This is an append-only interpretation correction; it does not modify the run outcome or promote the intervention to retain.
+## 2026-08-10T20:00:21.294220+00:00 - shared-brain
+
+- Request: Stop fleet-watchdog restart and Telegram escalation spam for collector chat HTTP 502 spawn hermes ENOENT
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Operations/Agent Notifications/notifications/2026/07/30/fleet-watchdog-hivemindos-desktop-p9op59u-collector-needs-human-attention.md
+  - Decision: inspected
+  - Reason: confirmed the deterministic missing-Hermes incident predates this report and restarts never repaired it
+## 2026-08-10T20:00:21.339824+00:00 - local-search
+
+- Request: Stop fleet-watchdog restart and Telegram escalation spam for collector chat HTTP 502 spawn hermes ENOENT
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- scripts/fleet-health-watchdog.mjs
+  - Decision: selected
+  - Reason: contains the real collector probe, remediation-proof branch, long-cadence unreachable incident, and live env reread
+- scripts/lib/fleet-watchdog-escalation.mjs
+  - Decision: selected-donor
+  - Reason: contains the existing reset-on-deep-recovery primitive
+- scripts/test-fleet-watchdog-escalation.mjs
+  - Decision: selected-donor
+  - Reason: contains the hermetic policy and source-wiring regression suite
+## 2026-08-10T20:07:00.475021+00:00 - assimilation-manifest
+
+- Request: Stop fleet-watchdog restart and Telegram escalation spam for collector chat HTTP 502 spawn hermes ENOENT
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project:hivemind-os:scripts/fleet-health-watchdog.mjs => scripts/fleet-health-watchdog.mjs, local-project:hivemind-os:scripts/lib/fleet-watchdog-escalation.mjs => scripts/fleet-health-watchdog.mjs, local-project:hivemind-os:scripts/test-fleet-watchdog-escalation.mjs => scripts/test-fleet-watchdog-escalation.mjs
+- Verification: Wrote ASSIMILATION.fleet-watchdog-runtime-capability.json with 3 entries and custom_code_assessment=balanced.
+## 2026-08-10T20:07:00.592429+00:00 - verification
+
+- Request: Stop fleet-watchdog restart and Telegram escalation spam for collector chat HTTP 502 spawn hermes ENOENT
+- Source: verify-assimilation-manifest
+- Decision: below-threshold
+- Reason: ASSIMILATION.fleet-watchdog-runtime-capability.json: below-threshold: need at least 3 substantive code/config reuse entries; found 2. Search for stronger donors before finalizing.
+## 2026-08-10T20:07:16.788019+00:00 - assimilation-manifest
+
+- Request: Stop fleet-watchdog restart and Telegram escalation spam for collector chat HTTP 502 spawn hermes ENOENT
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local-project:hivemind-os:scripts/fleet-health-watchdog.mjs => scripts/fleet-health-watchdog.mjs, local-project:hivemind-os:scripts/lib/fleet-watchdog-escalation.mjs => scripts/fleet-health-watchdog.mjs, local-project:hivemind-os:scripts/lib/fleet-watchdog-discovery.mjs => scripts/lib/fleet-watchdog-discovery.mjs, local-project:hivemind-os:scripts/test-fleet-watchdog-escalation.mjs => scripts/test-fleet-watchdog-escalation.mjs
+- Verification: Wrote ASSIMILATION.fleet-watchdog-runtime-capability.json with 4 entries and custom_code_assessment=balanced.
+## 2026-08-10T20:07:16.895542+00:00 - verification
+
+- Request: Stop fleet-watchdog restart and Telegram escalation spam for collector chat HTTP 502 spawn hermes ENOENT
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.fleet-watchdog-runtime-capability.json: 4 concrete reuse entries, 3 substantive
+## 2026-08-10T20:07:16.971376+00:00 - verification
+
+- Request: Stop fleet-watchdog restart and Telegram escalation spam for collector chat HTTP 502 spawn hermes ENOENT
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Manifest verifier passed with three substantive adapted-code entries plus the adapted regression suite.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- ASSIMILATION.fleet-watchdog-runtime-capability.json
+  - Decision: selected
+  - Reason: verified concrete local-project reuse manifest
+## 2026-08-10T20:13:04.550347+00:00 - verification
+
+- Request: Stop fleet-watchdog restart and Telegram escalation spam for collector chat HTTP 502 spawn hermes ENOENT
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.fleet-watchdog-runtime-capability.json: 4 concrete reuse entries, 3 substantive
+## 2026-08-10T20:25:34.455406+00:00 - final
+
+- Request: Stop fleet-watchdog restart and Telegram escalation spam for collector chat HTTP 502 spawn hermes ENOENT
+- Source: local-project:hivemind-os
+- Decision: selected
+- Reason: Capability-aware fix committed and pushed; corrected watchdog processes rolled out to the three confirmed hosts; post-rollout cycles are healthy with no new watchdog alerts or Hermes ENOENT events.
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- fd18098e
+  - Decision: selected
+  - Reason: watchdog capability fix pushed to main
+- a62d95fc
+  - Decision: selected
+  - Reason: rollout verification recorded in changelog
+## 2026-08-10T23:37:34.742199+00:00 - shared-brain
+
+- Request: replace the copy trading UI with this completely.
+- Source: hive-brain full-vault
+- Query: `copy trading UI redesign head-to-head original versus agent analyzed HivemindOS dashboard`
+- Decision: selected-donor
+- Reason: Confirmed the product contract for isolated original versus agent-analyzed twins and required comparison evidence.
+
+### Candidates
+- HivemindOS Docs/for-users/features/copy-trading-agent-analysis.md
+  - Decision: selected-donor
+  - Reason: Defines the comparison semantics and data that the redesign must preserve
+  - Path: `docs/for-users/features/copy-trading-agent-analysis.md`
+## 2026-08-10T23:37:34.916333+00:00 - triage
+
+- Request: replace the copy trading UI with this completely.
+- Source: user-pinned local folder
+- Query: `/Users/liam/Downloads/Copytrading UI redesign`
+- Decision: selected
+- Reason: The user-supplied Design Component is authoritative for layout, hierarchy, interaction model, colors, and responsive card composition; support.js was inspected as inert bundled runtime and not executed.
+- Selected backbone: user-source:/Users/liam/Downloads/Copytrading UI redesign/Copytrading Redesign.dc.html
+
+### Candidates
+- /Users/liam/Downloads/Copytrading UI redesign/Copytrading Redesign.dc.html
+  - Decision: selected
+  - Reason: Authoritative full redesign with paired, basic-only, and agent-only states
+  - Path: `Copytrading Redesign.dc.html`
+- /Users/liam/Downloads/Copytrading UI redesign/uploads/Screenshot 2026-08-10 at 6.49.37 PM.png
+  - Decision: selected-donor
+  - Reason: Visual reference for current card density and typography
+  - Path: `uploads/Screenshot 2026-08-10 at 6.49.37 PM.png`
+- /Users/liam/Downloads/Copytrading UI redesign/support.js
+  - Decision: rejected
+  - Reason: Bundled Design Component runtime is not needed or safe to ship in the Next.js app; only source markup and styles are assimilated
+  - Path: `support.js`
+## 2026-08-10T23:37:35.037024+00:00 - local-search
+
+- Request: replace the copy trading UI with this completely.
+- Source: current workspace
+- Query: `copy trading route panel comparison state API`
+- Decision: selected-donor
+- Reason: The existing clean CopyTradingPanel, copy-trading types, paper summary, and evolution comparison service provide the real data and mutation call chain.
+- Selected backbone: local-project:hivemind-os
+- Note: Current copy-trading component and CSS were clean before edits; adjacent trade shell files have unrelated uncommitted changes and will be left untouched.
+
+### Candidates
+- src/components/trade/CopyTradingPanel.tsx
+  - Decision: selected-donor
+  - Reason: Retain live polling, install, upsert, lifecycle, evolve, and detail behavior
+  - Path: `src/components/trade/CopyTradingPanel.tsx`
+- src/lib/services/copy-trading/evolution.ts
+  - Decision: selected-donor
+  - Reason: Retain canonical original-versus-agent comparison and promotion evidence
+  - Path: `src/lib/services/copy-trading/evolution.ts`
+- src/lib/services/copy-trading/paper.ts
+  - Decision: selected-donor
+  - Reason: Retain canonical portfolio arithmetic
+  - Path: `src/lib/services/copy-trading/paper.ts`
+- public GitHub
+  - Decision: not-assimilated
+  - Reason: No gap remains after the authoritative user source and the existing repository implementation, so public discovery is unnecessary
+## 2026-08-10T23:55:54.731452+00:00 - assimilation-manifest
+
+- Request: replace the copy trading UI with this completely.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: user-pinned-copytrading-redesign:Copytrading Redesign.dc.html => src/components/trade/CopyTradingPanel.tsx, user-pinned-copytrading-redesign:Copytrading Redesign.dc.html => src/components/trade/CopyTradingPanel.module.css, hivemind-os:src/components/trade/CopyTradingPanel.tsx => src/components/trade/CopyTradingPanel.tsx, hivemind-os:src/lib/services/copy-trading/evolution.ts => src/components/trade/CopyTradingPanel.tsx
+- Verification: Wrote ASSIMILATION.copy-trading-ui-redesign.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-08-10T23:55:54.866954+00:00 - verification
+
+- Request: replace the copy trading UI with this completely.
+- Source: verify-assimilation-manifest
+- Decision: below-threshold
+- Reason: ASSIMILATION.copy-trading-ui-redesign.json: below-threshold: need at least 3 substantive code/config reuse entries; found 2. Search for stronger donors before finalizing.
+## 2026-08-10T23:56:19.902788+00:00 - assimilation-manifest
+
+- Request: replace the copy trading UI with this completely.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: user-pinned-copytrading-redesign:Copytrading Redesign.dc.html => src/components/trade/CopyTradingPanel.tsx, user-pinned-copytrading-redesign:Copytrading Redesign.dc.html => src/components/trade/CopyTradingPanel.module.css, hivemind-os:src/components/trade/CopyTradingPanel.tsx => src/components/trade/CopyTradingPanel.tsx, hivemind-os:src/lib/services/copy-trading/evolution.ts => src/components/trade/CopyTradingPanel.tsx
+- Verification: Wrote ASSIMILATION.copy-trading-ui-redesign.json with 4 entries and custom_code_assessment=mostly_assimilated.
+## 2026-08-10T23:56:20.083400+00:00 - verification
+
+- Request: replace the copy trading UI with this completely.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.copy-trading-ui-redesign.json: 4 concrete reuse entries, 3 substantive
+## 2026-08-10T23:57:47.476788+00:00 - verification
+
+- Request: replace the copy trading UI with this completely.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.copy-trading-ui-redesign.json: 4 concrete reuse entries, 3 substantive
+## 2026-08-10T23:58:23.262034+00:00 - final
+
+- Request: replace the copy trading UI with this completely.
+- Source: user-pinned redesign plus local copy-trading implementation
+- Decision: selected
+- Reason: The supplied redesign now replaces the live copy-trading surface while preserving polling, daemon setup, config lifecycle, pair evolution, paper comparison, details, and per-config removal.
+- Selected backbone: user-pinned-copytrading-redesign plus hivemind-os CopyTradingPanel
+- Assimilated: paired Original-vs-Agent race, lead/evidence banner, metrics, disagreements, compact add rail, dark/light responsive styling
+- Not assimilated: support.js bundled prototype runtime
+- Verification: 80/80 focused tests, zero-warning focused ESLint, whole-project TypeScript, scoped whitespace, authenticated real-route dark/light/mobile review, and 4-entry/3-substantive manifest passed.
+
+### Candidates
+- ASSIMILATION.copy-trading-ui-redesign.json
+  - Decision: selected
+  - Reason: verified concrete source-to-target reuse manifest
+  - Path: `ASSIMILATION.copy-trading-ui-redesign.json`
+## 2026-08-11T16:08:55.598002+00:00 - shared-brain
+
+- Request: Make the Socials route drafted posts look like their actual social media platforms: X styling for X, Reddit styling for Reddit, and equivalent styling for every supported platform.
+- Source: shared-brain
+- Decision: inspected
+- Reason: Full-vault recall returned no stronger reusable platform-preview implementation than the pinned HivemindOS route.
+
+### Candidates
+- HivemindOS Socials route
+  - Decision: selected
+  - Reason: pinned source already owns platform data, edit state, and review actions
+  - Path: `src/components/socials/SocialQueueWorkspace.tsx`
+## 2026-08-11T16:08:55.650518+00:00 - local-search
+
+- Request: Make the Socials route drafted posts look like their actual social media platforms: X styling for X, Reddit styling for Reddit, and equivalent styling for every supported platform.
+- Source: current-workspace
+- Decision: selected-backbone
+- Reason: Pinned workspace contains the queue editor, engagement target data, scoped theme tokens, and platform matrix needed for a surgical extraction.
+
+### Candidates
+- src/components/socials/SocialQueueWorkspace.tsx
+  - Decision: selected
+  - Reason: reuse account and engagement preview data plus edit contract
+- src/components/socials/socials.css
+  - Decision: selected-donor
+  - Reason: reuse Socials scoped palette and hive-light conventions
+- src/lib/services/socials/socials-types.ts
+  - Decision: selected-donor
+  - Reason: reuse exhaustive SocialPlatform and SocialQueueItem contracts
+## 2026-08-11T16:08:55.703398+00:00 - local-search
+
+- Request: Make the Socials route drafted posts look like their actual social media platforms: X styling for X, Reddit styling for Reddit, and equivalent styling for every supported platform.
+- Source: local-index
+- Decision: rejected
+- Reason: The local assimilation indexes were checked; indexed candidates did not improve on the pinned in-repo data and interaction contracts.
+
+### Candidates
+- local assimilation index
+  - Decision: rejected
+  - Reason: no closer React/Next platform-preview donor than the current Socials implementation
+## 2026-08-11T16:08:55.751640+00:00 - public-search
+
+- Request: Make the Socials route drafted posts look like their actual social media platforms: X styling for X, Reddit styling for Reddit, and equivalent styling for every supported platform.
+- Source: github
+- Decision: not-assimilated
+- Reason: Skipped live public GitHub search because the pinned HivemindOS source fully covers the feature contract and external UI-clone code would add licensing and integration risk without filling a gap.
+
+### Candidates
+- public GitHub
+  - Decision: rejected
+  - Reason: no unresolved capability gap after pinned-source audit
+## 2026-08-11T16:22:17.191866+00:00 - assimilation-manifest
+
+- Request: Make the Socials route drafted posts look like their actual social media platforms: X styling for X, Reddit styling for Reddit, and equivalent styling for every supported platform.
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: local:hivemind-os:src/components/socials/SocialQueueWorkspace.tsx => src/components/socials/PlatformPostPreview.tsx, local:hivemind-os:src/components/simulation/outputs.tsx => src/components/socials/PlatformPostPreview.tsx, local:hivemind-os:src/components/socials/socials.css => src/components/socials/PlatformPostPreview.module.css, local:hivemind-os:src/lib/services/socials/socials-types.ts => src/components/socials/PlatformPostPreview.tsx
+- Verification: Wrote ASSIMILATION.social-platform-previews.json with 4 entries and custom_code_assessment=balanced.
+## 2026-08-11T16:22:17.298177+00:00 - verification
+
+- Request: Make the Socials route drafted posts look like their actual social media platforms: X styling for X, Reddit styling for Reddit, and equivalent styling for every supported platform.
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.social-platform-previews.json: 4 concrete reuse entries, 3 substantive
+## 2026-08-11T16:22:17.353254+00:00 - verification
+
+- Request: Make the Socials route drafted posts look like their actual social media platforms: X styling for X, Reddit styling for Reddit, and equivalent styling for every supported platform.
+- Source: current-workspace
+- Decision: verified
+- Reason: The four-entry scoped assimilation manifest passed verification; live and focused checks confirm the adapted preview contract remains wired.
+
+### Candidates
+- ASSIMILATION.social-platform-previews.json
+  - Decision: selected
+  - Reason: verified four concrete adapted/style-adapted mappings
+## 2026-08-11T16:23:31.704994+00:00 - final
+
+- Request: Make the Socials route drafted posts look like their actual social media platforms: X styling for X, Reddit styling for Reddit, and equivalent styling for every supported platform.
+- Source: current-workspace
+- Decision: selected
+- Reason: Platform-native previews for all six supported SocialPlatform values are implemented, scoped, tested, and live-verified without changing queue or delivery behavior.
+
+### Candidates
+- src/components/socials/PlatformPostPreview.tsx
+  - Decision: selected
+  - Reason: final platform-specific preview layer
+- src/components/socials/PlatformPostPreview.module.css
+  - Decision: selected
+  - Reason: final responsive dark/light platform styling
+## 2026-08-11T16:33:47.641060+00:00 - shared-brain
+
+- Request: Fix the copy-trading dashboard so historical errors are not presented as a current fault
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- Memory/Distillations/Agent Memory/decision/2026-08-07-copy-trading-v3-retrospective-paper-learning-contract-10e3090978.md
+  - Decision: selected
+  - Reason: preserves the continuously running dry-run source and agent-analyzed configs without resetting evidence
+## 2026-08-11T16:33:47.709952+00:00 - local-search
+
+- Request: Fix the copy-trading dashboard so historical errors are not presented as a current fault
+- Source: local-project:hivemind-os
+- Selected backbone: local-project:hivemind-os
+
+### Candidates
+- src/components/trade/CopyTradingPanel.tsx
+  - Decision: selected
+  - Reason: existing lastError health row and DetailMetric component provide the exact current-versus-lifetime presentation primitives
+- scripts/test-copy-trading.mjs
+  - Decision: selected-donor
+  - Reason: existing source-contract UI test provides the focused regression location
+- src/lib/services/copy-trading/engine.ts
+  - Decision: inspected
+  - Reason: confirms stats.errors is lifetime cumulative while lastError clears after a successful poll
+## 2026-08-11T16:33:47.859715+00:00 - public-search
+
+- Request: Fix the copy-trading dashboard so historical errors are not presented as a current fault
+- Source: public-github
+- Decision: not-assimilated
+- Reason: Skipped: the pinned project already contains the authoritative runtime fields, UI primitives, and focused tests; external code would add no missing capability.
+- Selected backbone: local-project:hivemind-os
+## 2026-08-11T16:35:03.727158+00:00 - assimilation-manifest
+
+- Request: Fix the copy-trading dashboard so historical errors are not presented as a current fault
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: LiamVisionary/hivemindos:src/components/trade/CopyTradingPanel.tsx => src/components/trade/CopyTradingPanel.tsx, LiamVisionary/hivemindos:src/components/trade/CopyTradingPanel.tsx => src/components/trade/CopyTradingPanel.tsx, LiamVisionary/hivemindos:scripts/test-copy-trading.mjs => scripts/test-copy-trading.mjs
+- Verification: Wrote ASSIMILATION.copy-trading-error-health.json with 3 entries and custom_code_assessment=mostly_assimilated.
+## 2026-08-11T16:35:03.867616+00:00 - verification
+
+- Request: Fix the copy-trading dashboard so historical errors are not presented as a current fault
+- Source: verify-assimilation-manifest
+- Decision: below-threshold
+- Reason: ASSIMILATION.copy-trading-error-health.json: below-threshold: need at least 3 substantive code/config reuse entries; found 2. Search for stronger donors before finalizing.
+## 2026-08-11T16:35:29.586214+00:00 - verification
+
+- Request: Fix the copy-trading dashboard so historical errors are not presented as a current fault
+- Source: local-project:hivemind-os
+- Decision: below-threshold
+- Reason: This surgical fix has two substantive in-place code adaptations and one focused test adaptation; adding a third production abstraction solely to satisfy the manifest count would broaden scope without improving behavior.
+## 2026-08-12T14:43:33.379344+00:00 - shared-brain
+
+- Request: fill in all the gaps thoroughly and test end to end
+- Source: shared-brain
+- Selected backbone: local-project:hivemind-os
+- Note: Full-vault recall confirmed the Work Board and Queen Bee surfaces are the authoritative project context.
+
+### Candidates
+- HivemindOS Docs/for-users/features/work-and-scheduler.md
+  - Decision: selected
+  - Reason: documents the existing swarm-goal and Work Board contract
+  - Path: `shared brain full-vault hit`
+## 2026-08-12T14:43:33.478737+00:00 - triage
+
+- Request: fill in all the gaps thoroughly and test end to end
+- Source: current-workspace
+- Selected backbone: local-project:hivemind-os
+- Note: The current repository is the pinned and authoritative backbone; external candidates are unnecessary unless a capability remains missing after tracing.
+
+### Candidates
+- src/lib/services/loops/loop-templates.ts
+  - Decision: selected
+  - Reason: canonical evidence-gated loop factory
+  - Path: `existing source`
+- src/lib/services/queen-bee/prd-decomposition.ts
+  - Decision: selected
+  - Reason: canonical PRD task creation path
+  - Path: `existing source`
+- src/lib/services/queen-bee/autonomous-worker.ts
+  - Decision: selected
+  - Reason: canonical independent evaluator path
+  - Path: `existing source`
+- src/lib/services/code-intelligence/service.ts
+  - Decision: selected-donor
+  - Reason: canonical code graph and fallback router
+  - Path: `existing source`
+## 2026-08-12T15:17:44.464935+00:00 - implementation
+
+- Request: fill in all the gaps thoroughly and test end to end
+- Source: local-project:hivemind-os+DeusData/codebase-memory-mcp@v0.10.2
+- Decision: adapted_code
+- Reason: Reused the canonical loop template builder, real Work Board route/storage patterns, autonomous independent-review contract, and audited current engine CLI/config contracts.
+- Selected backbone: local-project:hivemind-os
+- Assimilated: DeusData/codebase-memory-mcp:src/main.c+docs/CONFIGURATION.md=>src/lib/services/code-intelligence/codebase-memory-provider.ts
+- Note: Kept explicit loops authoritative, reused existing verifier registry and completion boundary, and adapted audited 0.10.2 args-file/format/cache/root behavior.
+## 2026-08-12T15:17:44.612959+00:00 - assimilation-manifest
+
+- Request: fill in all the gaps thoroughly and test end to end
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/lib/services/loops/loop-templates.ts => src/lib/services/queen-bee/task-loop-policy.ts, hivemind-os:scripts/test-loop-kanban-real-tasks.mjs => scripts/test-queen-bee-default-loops.mjs, DeusData/codebase-memory-mcp:src/main.c => src/lib/services/code-intelligence/codebase-memory-provider.ts, hivemind-os:scripts/test-queen-bee-autonomous-pickup.mjs => scripts/test-queen-bee-default-loops.mjs
+- Verification: Wrote ASSIMILATION.fill-agent-engineering-gaps.json with 4 entries and custom_code_assessment=balanced.
+## 2026-08-12T15:17:44.796018+00:00 - verification
+
+- Request: fill in all the gaps thoroughly and test end to end
+- Source: verify-assimilation-manifest
+- Decision: below-threshold
+- Reason: ASSIMILATION.fill-agent-engineering-gaps.json: below-threshold: need at least 3 substantive code/config reuse entries; found 2. Search for stronger donors before finalizing.
+## 2026-08-12T15:18:00.098981+00:00 - assimilation-manifest
+
+- Request: fill in all the gaps thoroughly and test end to end
+- Source: selected-github-code
+- Decision: assimilated
+- Assimilated: hivemind-os:src/lib/services/loops/loop-templates.ts => src/lib/services/queen-bee/task-loop-policy.ts, hivemind-os:src/lib/services/queen-bee/control-plane.ts => src/lib/services/queen-bee/control-plane.ts, hivemind-os:src/lib/services/queen-bee/prd-decomposition.ts => src/lib/services/queen-bee/prd-decomposition.ts, DeusData/codebase-memory-mcp:src/main.c => src/lib/services/code-intelligence/codebase-memory-provider.ts, hivemind-os:scripts/test-loop-kanban-real-tasks.mjs => scripts/test-queen-bee-default-loops.mjs
+- Verification: Wrote ASSIMILATION.fill-agent-engineering-gaps.json with 5 entries and custom_code_assessment=balanced.
+## 2026-08-12T15:18:00.252593+00:00 - verification
+
+- Request: fill in all the gaps thoroughly and test end to end
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.fill-agent-engineering-gaps.json: 5 concrete reuse entries, 4 substantive
+## 2026-08-12T15:32:06.510116+00:00 - verification
+
+- Request: fill in all the gaps thoroughly and test end to end
+- Source: local-project:hivemind-os+audited-engine
+- Decision: selected
+- Reason: Focused and real-path checks passed; assimilation manifest verified with four substantive code/config entries.
+- Verification: pnpm test:swarm-goal; pnpm test:queen-bee:default-loops; pnpm test:planner-dependencies; pnpm test:queen-bee:autonomous; pnpm test:loop-blocking; pnpm test:loop-runner; pnpm test:engineering-discipline; pnpm test:code-intelligence; pnpm test:code-intelligence:real; KANBAN_TEST_BASE_URL=http://127.0.0.1:5021 pnpm test:kanban; focused eslint; tsc; verify_assimilation_manifest.py ASSIMILATION.fill-agent-engineering-gaps.json
+- Note: Full graph E2E passed at 103310 nodes / 355807 edges. Initial full gate was 276/281 with five unrelated shared-worktree reds; final gate delta follows.
+## 2026-08-12T15:50:50.198139+00:00 - final
+
+- Request: fill in all the gaps thoroughly and test end to end
+- Source: local-project:hivemind-os+DeusData/codebase-memory-mcp@v0.10.2
+- Decision: selected
+- Reason: Automatic evidence composition and the persistent graph are implemented and verified through their actual local routes; unrelated shared-worktree reds are isolated.
+- Verification: Final real graph E2E: full index 103365 nodes / 355736 edges; status/search/trace/snippet/architecture/diff/.env exclusion all engine-backed. Queen Bee act-mode route/storage, explicit policy dedupe, PRD child loops, autonomous reviewer, live Work Board API, lint, and TypeScript green.
+- Note: No commit, push, deploy, live model-provider call, live fleet task, or automatic git commit was performed. Work Board receipts/session state remain the durable handoff mechanism; destructive/outward authority remains explicit.
+## 2026-08-12T15:50:50.430667+00:00 - verification
+
+- Request: fill in all the gaps thoroughly and test end to end
+- Source: verify-assimilation-manifest
+- Decision: passed
+- Reason: ASSIMILATION.fill-agent-engineering-gaps.json: 5 concrete reuse entries, 4 substantive

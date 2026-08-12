@@ -36,6 +36,7 @@ import {
   SOMA_VERTEX,
   clamp,
   hashUnit,
+  lightPulseColorInto,
   linearizeSRGB,
   makeNodeGlowAtlas,
   makeDotTexture,
@@ -47,7 +48,6 @@ import {
 } from "./brain-synapse-gpu";
 
 export type { SynapseNodeTone };
-
 export type SynapseNodeInput = {
   activity: number; // 0..1 recent edits + agent access; drives glow only
   cluster: string; // real folder/tag grouping; drives layout anchor
@@ -482,6 +482,7 @@ class SynapseEngine {
     }
     this.fiberTubes?.setTheme(this.palette.light);
     this.dendrites?.setTheme(this.palette.light);
+    if (this.soma) (this.soma.material as THREE.ShaderMaterial).depthWrite = this.palette.light;
     this.applyNodeVisuals();
     this.applyFiberVisuals();
   }
@@ -527,9 +528,9 @@ class SynapseEngine {
       this.nodeTints[index * 3 + 2] = this.tmpColor.b;
       if (haloTint && haloAlpha) {
         haloTint.setXYZ(index, this.tmpColor.r, this.tmpColor.g, this.tmpColor.b);
-        const base = this.palette.light ? 0.12 : 0.14;
-        // Capped so a selected hub reads as a bright cell, not a glow blob.
-        haloAlpha.setX(index, Math.min(this.palette.light ? 0.18 : 0.2, base + glow * 0.06) * (dim ? 0.3 : 1));
+        const base = this.palette.light ? 0.07 : 0.14;
+        // Halos remain translucent; the soma itself carries the opaque color.
+        haloAlpha.setX(index, Math.min(this.palette.light ? 0.12 : 0.2, base + glow * 0.06) * (dim ? 0.3 : 1));
       }
     });
     tintAttr.needsUpdate = true;
@@ -598,9 +599,9 @@ class SynapseEngine {
         const target = this.nodes[fiber.targetIndex];
         const lit = this.selectedId !== null
           && (source.id === this.selectedId || target.id === this.selectedId) ? 1 : 0;
-        this.tmpColor.copy(lit
-          ? (this.palette.light ? this.palette.honey : linearizeSRGB(this.tmpColorB.set(DARK_LIT_TINT)))
-          : (this.palette.light ? this.palette.live : linearizeSRGB(this.tmpColorB.set(DARK_PULSE_TINT))));
+        this.tmpColor.copy(this.palette.light
+          ? lightPulseColorInto(this.tmpColorB)
+          : linearizeSRGB(this.tmpColorB.set(lit ? DARK_LIT_TINT : DARK_PULSE_TINT)));
         for (let p = 0; p < assignment.count; p += 1) {
           const slot = assignment.slot + p;
           pulseLit.setX(slot, lit);
@@ -611,8 +612,8 @@ class SynapseEngine {
       pulseTint.needsUpdate = true;
     }
     const dimUnlit = Boolean(this.selectedId);
-    this.fiberTubes?.setOpacity(this.palette.light ? (dimUnlit ? 0.075 : 0.18) : (dimUnlit ? 0.22 : 0.52));
-    this.dendrites?.setOpacity(this.palette.light ? (dimUnlit ? 0.07 : 0.16) : (dimUnlit ? 0.34 : 0.8));
+    this.fiberTubes?.setOpacity(this.palette.light ? (dimUnlit ? 0.46 : 0.96) : (dimUnlit ? 0.22 : 0.52));
+    this.dendrites?.setOpacity(this.palette.light ? (dimUnlit ? 0.32 : 0.72) : (dimUnlit ? 0.34 : 0.8));
     (this.fiberLines.material as THREE.ShaderMaterial).uniforms.uSelDim.value = dimUnlit ? 0.35 : 1;
     if (this.pulsePoints) {
       (this.pulsePoints.material as THREE.ShaderMaterial).uniforms.uSelDim.value = dimUnlit ? 0.35 : 1;
@@ -803,7 +804,7 @@ class SynapseEngine {
       vertexShader: SOMA_VERTEX,
       fragmentShader: SOMA_FRAGMENT,
       transparent: true,
-      depthWrite: false,
+      depthWrite: this.palette.light,
       blending: this.palette.light ? THREE.NormalBlending : THREE.AdditiveBlending,
     }));
     this.soma = new THREE.InstancedMesh(sphereGeometry, somaMaterial, count);

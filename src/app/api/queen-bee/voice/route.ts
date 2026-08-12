@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { discoverQueenBeeFleetSnapshot } from "@/lib/services/queen-bee/fleet-snapshot";
 import {
   coerceActingWalletSource,
+  prewarmQueenVoiceBrain,
   runQueenBeeAgentTurn,
   runQueenBeeVoiceTurn,
   submitQueenBeeVoiceTask,
@@ -21,8 +22,6 @@ import {
   writeQueenBeeVoice,
 } from "@/lib/services/queen-bee/voice-settings";
 import { providerCatalogEntry } from "@/lib/config/provider-catalog";
-import { openAiOAuthSupportsChatModel } from "@/lib/config/openai-provider-routing";
-import { openAiOAuthConfigured, preferOpenAiApiKey } from "@/lib/services/openai-oauth";
 import { isXaiOAuthProvider } from "@/lib/services/xai-oauth-inference-contract";
 import {
   LOCAL_TTS_RUNTIME,
@@ -64,6 +63,7 @@ import {
   queenRealtimeTools,
 } from "@/lib/services/queen-bee/queen-brain";
 import { runXAccountReadTool } from "@/lib/services/x-latest-post";
+import { readQueenWalletBalances } from "@/lib/services/queen-bee/wallet-balance-read";
 import { coerceXAccountReadToolInput } from "@/lib/services/x-account-tool-contract";
 import { queenModelTransparencyNote } from "@/lib/services/queen-bee/model-transparency";
 import {
@@ -80,6 +80,7 @@ import {
   inputTranscriptionForVoiceRuntime,
   resolveVoiceRuntime,
 } from "@/lib/config/voice-call-providers";
+import { prewarmResilientHttpsOrigin } from "@/lib/net/resilient-https-fetch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -194,6 +195,12 @@ export async function POST(request: NextRequest) {
       const result = await runXAccountReadTool(coerceXAccountReadToolInput(body));
       return NextResponse.json({ ok: true, result });
     }
+    if (body.action === "read-wallet-balances") {
+      return NextResponse.json({
+        ok: true,
+        result: await readQueenWalletBalances(String(body.query ?? "wallet balances")),
+      });
+    }
     if (body.action === "chat-turn") {
       return await runQueenChatTurn(body, request.nextUrl.origin);
     }
@@ -241,36 +248,10 @@ async function resolveVoiceChatBrainPlan(): Promise<VoiceChatBrainPlan> {
   const defaults = await readQueenBeeBrainDefaults().catch(() => null);
   if (defaults?.model) {
     const provider = defaults.provider || "openai-api";
-    // ChatGPT OAuth (the user's subscription credentials, connected in-app
-    // and fleet-shared via the hive env) is PREFERRED wherever it can serve
-    // the model: it IS the credential behind openai-codex agents, and for
-    // key-based OpenAI selections it wins over OPENAI_API_KEY unless the
-    // user set OPENAI_PREFER_API_KEY. The ChatGPT backend only serves the
-    // codex-era model families (gpt-5*/o*/codex*), so others stay key-based.
-    const oauthReady =
-      (await openAiOAuthConfigured().catch(() => false)) &&
-      !(await preferOpenAiApiKey().catch(() => false));
-    const oauthServable = openAiOAuthSupportsChatModel(defaults.model);
-    const openAiFamily =
-      provider === "openai" || provider === "openai-api" || provider === "openai-codex";
-    if (oauthReady && oauthServable && openAiFamily) {
-      return {
-        kind: "direct",
-        provider: "openai-oauth",
-        model: defaults.model,
-        label: `${defaults.agentName || "the agent"}'s model (${defaults.model} via ChatGPT OAuth)`,
-        statusAgent: {
-          id: defaults.agentId,
-          name: defaults.agentName,
-          provider: "openai-oauth",
-          model: defaults.model,
-        },
-      };
-    }
-    // Direct-callable = the server holds the SAME credential the agent uses
-    // (a key-based catalog provider read from the shared hive env). OAuth-held
-    // providers (openai-codex, copilot) keep the turn inside the
-    // agent's own runtime — never a silent credential substitution.
+    // Voice uses the Queen's configured provider exactly. In particular, an
+    // openai-api Queen must not be silently moved onto the ChatGPT OAuth
+    // backend: that changes both credential semantics and latency behavior.
+    // OAuth-held providers (openai-codex, copilot) stay runtime-owned.
     const directCallable =
       provider === "openai" ||
       provider === "openai-api" ||
@@ -612,6 +593,7 @@ async function runConversationTurn(
       marks,
       progress: turnId ? (label) => markVoiceTurnStage(turnId, label) : undefined,
       voiceBrain: await resolveVoiceChatBrainPlan(),
+      scheduledCallPreparation: body.scheduledCallPreparation === true,
     });
     await appendVoiceTurnTelemetry({
       ok: true,
@@ -640,6 +622,7 @@ async function runConversationTurn(
 // still writing, instead of waiting for the full reply.
 //   {type:"speech", text}   incremental spoken-reply text — the concatenation
 //                           (since the last reset) is exactly what to speak
+//   {type:"status", text}   short non-canonical acknowledgement when a tool starts
 //   {type:"reset"}          a failed model attempt's speech must be discarded
 //   {type:"done", ok:true, transcript, reply, taskId?, taskTitle?, created?, route?}
 //   {type:"error", error}
@@ -677,6 +660,12 @@ async function runConversationTurnStream(
           closed = true; // client went away; the turn keeps running
         }
       };
+      // Flush the NDJSON response immediately. Without a first frame, Node's
+      // server-side fetch can wait for the model's first token before exposing
+      // the response headers; the phone then mistakes a slow Queen turn for a
+      // failed connection and aborts it at 30 seconds. Desktop readers ignore
+      // unknown event types, so this is additive to the shared wire contract.
+      emit({ type: "ready" });
       void (async () => {
         try {
           const result = await runQueenBeeVoiceTurn({
@@ -704,12 +693,16 @@ async function runConversationTurnStream(
               speechChars += text.length;
               emit({ type: "speech", text });
             },
+            onStatusSpeech: (text) => {
+              emit({ type: "status", text });
+            },
             onSpeechReset: () => {
               resets += 1;
               speechChars = 0;
               emit({ type: "reset" });
             },
             voiceBrain: await resolveVoiceChatBrainPlan(),
+            scheduledCallPreparation: body.scheduledCallPreparation === true,
           });
           emit({ type: "done", ok: true, transcript, ...result });
           await appendVoiceTurnTelemetry({
@@ -902,6 +895,21 @@ async function speakViaLocalTts(
 // prewarm success also re-closes the failure breaker (recovery probe).
 async function prewarmSpokenReplyEngine(request: NextRequest) {
   const startedAt = Date.now();
+  // Overlay-open already warms TTS; establish the selected brain's TLS path
+  // in parallel so a blackholed first provider connection is recovered during
+  // the greeting rather than during the user's first spoken turn.
+  void resolveVoiceChatBrainPlan()
+    .then((plan) => {
+      void prewarmQueenVoiceBrain(plan).catch(() => undefined);
+      if (plan.kind !== "direct") return;
+      if (plan.provider === "openai-oauth") {
+        return prewarmResilientHttpsOrigin("https://chatgpt.com");
+      }
+      if (plan.provider === "openai" || plan.provider === "openai-api") {
+        return prewarmResilientHttpsOrigin("https://api.openai.com");
+      }
+    })
+    .catch(() => undefined);
   // Voice-session start: warm the business report (email + integration counts,
   // both network hops) so the spoken digest can include them from cache without
   // ever blocking a turn. Fire-and-forget — the warmer owns its own errors and

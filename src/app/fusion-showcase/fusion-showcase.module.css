@@ -1,25 +1,25 @@
 .page {
-  --fusion-paper: #f1ede3;
+  --fusion-paper: #f5efe6;
   --fusion-paper-soft: #f8f4ec;
-  --fusion-panel: #fbf8f1;
-  --fusion-panel-soft: #f4efe4;
+  --fusion-panel: #f8f4ee;
+  --fusion-panel-soft: #f0e8d8;
   --fusion-line: #d8cdbb;
-  --fusion-fg: #221d14;
+  --fusion-fg: #4a3a2a;
   --fusion-strong: #19140c;
-  --fusion-muted: #6f6657;
-  --fusion-subtle: #5e574b;
-  --fusion-live: #5f8f5a;
+  --fusion-muted: #a09080;
+  --fusion-subtle: #8a7a6a;
+  --fusion-live: #6b8f5e;
   --fusion-live-strong: #466f42;
-  --fusion-honey: #936811;
-  --fusion-honey-strong: #7c550b;
+  --fusion-honey: #8a5a2a;
+  --fusion-honey-strong: #8a5a2a;
   --fusion-violet: #7f6bb2;
   --fusion-blue: #4d769f;
   min-height: 100vh;
   padding: 42px 26px 56px;
   color: var(--fusion-fg);
   background:
-    radial-gradient(circle at 18% 16%, rgba(176, 127, 28, 0.12), transparent 24rem),
-    radial-gradient(circle at 84% 76%, rgba(95, 143, 90, 0.14), transparent 24rem),
+    radial-gradient(circle at 18% 16%, rgba(138, 90, 42, 0.12), transparent 24rem),
+    radial-gradient(circle at 84% 76%, rgba(107, 143, 94, 0.14), transparent 24rem),
     linear-gradient(180deg, var(--fusion-paper) 0%, var(--fusion-paper-soft) 56%, #f6f0e3 100%);
 }
 
@@ -75,7 +75,7 @@
   border-radius: 8px;
   background:
     linear-gradient(135deg, rgba(251, 248, 241, 0.96), rgba(244, 239, 228, 0.92)),
-    radial-gradient(circle at 14% 16%, rgba(95, 143, 90, 0.16), transparent 18rem);
+    radial-gradient(circle at 14% 16%, rgba(107, 143, 94, 0.16), transparent 18rem);
   box-shadow: 0 20px 50px rgba(82, 61, 22, 0.12);
 }
 
@@ -108,7 +108,7 @@
   border-radius: 8px;
   background:
     linear-gradient(180deg, rgba(251, 248, 241, 0.9), rgba(244, 239, 228, 0.86)),
-    linear-gradient(90deg, rgba(95, 143, 90, 0.1), rgba(176, 127, 28, 0.1), rgba(127, 107, 178, 0.08));
+    linear-gradient(90deg, rgba(107, 143, 94, 0.1), rgba(138, 90, 42, 0.1), rgba(127, 107, 178, 0.08));
 }
 
 .workflowTrack {
@@ -481,14 +481,14 @@
 .aeonArt::before {
   width: 230px;
   height: 230px;
-  border: 2px dashed rgba(95, 143, 90, 0.3);
+  border: 2px dashed rgba(107, 143, 94, 0.3);
 }
 
 .skillFusionArt::after,
 .aeonArt::after {
   width: 142px;
   height: 142px;
-  border: 1px solid rgba(176, 127, 28, 0.24);
+  border: 1px solid rgba(138, 90, 42, 0.24);
 }
 
 .visualCore,
@@ -511,8 +511,8 @@
   background:
     linear-gradient(135deg, var(--fusion-panel), #eef5e8);
   box-shadow:
-    0 10px 24px rgba(95, 143, 90, 0.14),
-    0 0 0 10px rgba(95, 143, 90, 0.08);
+    0 10px 24px rgba(107, 143, 94, 0.14),
+    0 0 0 10px rgba(107, 143, 94, 0.08);
 }
 
 .visualCore svg {

@@ -8,12 +8,13 @@ import type { CompanyEmailThread, CompanyMailbox, MailReaderContext, MailReaderR
 // ── Outreach Engine (maps-agency outbox) mail provider ───────────────────────
 // A company's deterministic operations engine (its domain code repo, e.g.
 // maps-agency) runs the real outreach pipeline and appends every generated/sent
-// message to state/messages/outbox.tracked.jsonl. THAT log — not any AgentMail
+// message to state/messages/outbox.jsonl. THAT log — not any AgentMail
 // inbox keyed to the crew's agent ids — is the source of truth for what the
 // company actually sent and what's queued. The engine sends from a shared inbox
 // (e.g. liamvisionary@agentmail.to) whose AgentMail client_id isn't one of the
 // crew's, so the agentmail provider can't see these; we read the outbox directly
-// so the Emails tab reflects the real campaign. Registered as a provider in
+// and hydrate delivered rows from that shared AgentMail inbox so the Emails tab
+// reflects both the real campaign and live replies. Registered as a provider in
 // agent-mailboxes.ts (one entry + this reader); the API route and UI are generic.
 //
 // Scoping: the outbox lives INSIDE this company's own engine repo, so its rows are
@@ -22,12 +23,19 @@ import type { CompanyEmailThread, CompanyMailbox, MailReaderContext, MailReaderR
 // stamped for a different company. Read-only, local file, bounded work.
 
 const OUTREACH_ENGINE_LABEL = "Outreach Engine";
-const MAPS_AGENCY_OUTBOX_RELATIVE = join("state", "messages", "outbox.tracked.jsonl");
+const MAPS_AGENCY_OUTBOX_RELATIVES = [
+  join("state", "messages", "outbox.jsonl"),
+  // Compatibility fallback for older installs whose raw outbox is absent.
+  join("state", "messages", "outbox.tracked.jsonl"),
+];
 const OUTREACH_OUTBOX_MAX_LINES = 5000; // bound parse work on a large append log
 const OUTREACH_OUTBOX_MAX_THREADS = 150; // bound threads emitted to the UI
+const OUTREACH_AGENTMAIL_SYNC_LIMIT = 50; // bound live per-thread reply probes
+const DEFAULT_AGENTMAIL_API_BASE_URL = "https://api.agentmail.to";
 
 type OutboxRow = {
   message_id?: string;
+  thread_id?: string;
   lead_id?: string;
   company_id?: string;
   to?: string;
@@ -36,6 +44,7 @@ type OutboxRow = {
   body?: string;
   business_name?: string;
   status?: string;
+  provider?: string;
   external_send?: boolean;
   send_blockers?: unknown;
   sent_at?: string;
@@ -43,6 +52,40 @@ type OutboxRow = {
   triggered_at?: string;
   scheduled_for?: string;
   attachments?: unknown;
+};
+
+type AgentMailOutreachMessage = {
+  message_id?: string;
+  timestamp?: string;
+  created_at?: string;
+  updated_at?: string;
+  from?: unknown;
+  to?: unknown;
+  preview?: string;
+  text?: string;
+  extracted_text?: string;
+};
+
+type AgentMailOutreachThread = {
+  thread_id?: string;
+  subject?: string;
+  preview?: string;
+  senders?: unknown;
+  recipients?: unknown;
+  labels?: unknown;
+  sent_timestamp?: string;
+  received_timestamp?: string;
+  timestamp?: string;
+  updated_at?: string;
+  created_at?: string;
+  message_count?: number;
+  messages?: AgentMailOutreachMessage[];
+};
+
+type AgentMailReplySync = {
+  attempted: number;
+  failures: number;
+  byThreadId: Map<string, AgentMailOutreachThread>;
 };
 
 async function resolveMapsAgencyOutboxPath(ctx: MailReaderContext): Promise<string | undefined> {
@@ -58,7 +101,11 @@ async function resolveMapsAgencyOutboxPath(ctx: MailReaderContext): Promise<stri
     localPath = undefined;
   }
   if (!localPath) return undefined;
-  return join(localPath, MAPS_AGENCY_OUTBOX_RELATIVE);
+  for (const relative of MAPS_AGENCY_OUTBOX_RELATIVES) {
+    const candidate = join(localPath, relative);
+    if (existsSync(candidate)) return candidate;
+  }
+  return join(localPath, MAPS_AGENCY_OUTBOX_RELATIVES[0]);
 }
 
 type ScopedOutbox = { found: boolean; owned: boolean; rows: OutboxRow[] };
@@ -116,6 +163,7 @@ export async function readMapsAgencyOutboxForCompany(ctx: MailReaderContext): Pr
   }
 
   const senderAddress = mostCommonInbox(rows) || (await hiveEnvValue("AGENTMAIL_INBOX"))?.trim() || "outreach inbox";
+  const replySync = await readAgentMailOutreachThreads(rows, senderAddress);
 
   // Collapse a lead's multiple touches (initial + follow-ups) into one thread.
   const groups = new Map<string, OutboxRow[]>();
@@ -128,40 +176,58 @@ export async function readMapsAgencyOutboxForCompany(ctx: MailReaderContext): Pr
 
   let delivered = 0;
   let queued = 0;
+  let replied = 0;
   const blockerCounts = new Map<string, number>();
   const threads: CompanyEmailThread[] = [];
   for (const [key, list] of groups) {
     const sorted = list.slice().sort((left, right) => outboxRowTime(right) - outboxRowTime(left));
     const latest = sorted[0];
-    const sentRow = sorted.find((row) => row.external_send === true && row.status === "delivered");
+    const sentRow = sorted.find(isDeliveredOutboxRow);
     const isDelivered = Boolean(sentRow);
     const sentAt = sentRow ? outboxRowTime(sentRow) : 0;
+    const liveThread = sorted
+      .map((row) => (row.thread_id || "").trim())
+      .filter(Boolean)
+      .map((threadId) => replySync.byThreadId.get(threadId))
+      .find(Boolean);
+    const latestInbound = liveThread ? latestInboundMessage(liveThread, senderAddress) : undefined;
+    const hasReply = Boolean(latestInbound || liveThread?.received_timestamp);
     if (isDelivered) delivered += 1;
     else queued += 1;
+    if (hasReply) replied += 1;
     const blocker = isDelivered ? "" : summarizeBlocker(latest.send_blockers);
     if (!isDelivered && blocker) blockerCounts.set(blocker, (blockerCounts.get(blocker) || 0) + 1);
+    const providerCorrespondents = liveThread ? agentMailCorrespondents(liveThread, senderAddress) : [];
     const correspondent = (latest.business_name || latest.to || "").trim();
-    const snippet = compactPreview(latest.body);
+    const outboundSnippet = compactPreview(latest.body);
+    const replySnippet = latestInbound ? compactPreview(agentMailMessageBody(latestInbound)) : "";
+    const snippet = replySnippet || compactPreview(liveThread?.preview) || outboundSnippet;
+    const updatedAt = Math.max(outboxRowTime(latest), agentMailThreadTime(liveThread));
+    const body = hasReply
+      ? `Latest reply:\n${replySnippet || compactPreview(liveThread?.preview) || "Reply received."}\n\nOriginal outreach:\n${(latest.body || "").slice(0, 10000)}`
+      : (latest.body || "").slice(0, 12000);
     threads.push({
       id: `maps-agency-outbox:${ctx.companyId}:${key}`,
       provider: "maps-agency-outbox",
       providerLabel: OUTREACH_ENGINE_LABEL,
       inboxAddress: (sentRow?.inbox || latest.inbox || senderAddress).trim(),
-      threadId: key,
-      subject: (latest.subject || "").trim() || "(no subject)",
+      threadId: (liveThread?.thread_id || sentRow?.thread_id || latest.thread_id || key).trim(),
+      subject: (liveThread?.subject || latest.subject || "").trim() || "(no subject)",
       preview: isDelivered ? snippet : `Queued — ${blocker || latest.status || "not sent"}${snippet ? ` · ${snippet}` : ""}`,
-      correspondents: correspondent ? [correspondent] : [],
-      direction: isDelivered ? "outbound" : "queued",
-      messageCount: list.length,
+      correspondents: providerCorrespondents.length > 0 ? providerCorrespondents : correspondent ? [correspondent] : [],
+      direction: isDelivered ? (hasReply ? "mixed" : "outbound") : "queued",
+      messageCount: Math.max(list.length, Math.round(Number(liveThread?.message_count) || 0)),
       // Outreach emails carry no real file attachments — the outbox "attachments"
       // field holds CTA/booking/preview links, surfaced as openable links instead.
       attachmentCount: 0,
-      body: (latest.body || "").slice(0, 12000),
+      body,
       links: extractOutboxLinks(latest),
       attachments: [],
-      updatedAt: outboxRowTime(latest),
+      updatedAt,
       ...(sentAt ? { sentAt } : {}),
-      labels: isDelivered ? ["delivered"] : blocker ? ["queued", blocker] : ["queued"],
+      labels: isDelivered
+        ? hasReply ? ["delivered", "reply received"] : ["delivered"]
+        : blocker ? ["queued", blocker] : ["queued"],
     });
   }
   threads.sort((left, right) => right.updatedAt - left.updatedAt);
@@ -176,8 +242,107 @@ export async function readMapsAgencyOutboxForCompany(ctx: MailReaderContext): Pr
     },
   ];
   const topBlocker = [...blockerCounts.entries()].sort((left, right) => right[1] - left[1])[0];
-  const note = `${delivered} sent · ${queued} queued${topBlocker ? ` (${topBlocker[1]} ${topBlocker[0]})` : ""}`;
+  const syncNote = replySync.failures > 0 ? ` · ${replySync.failures}/${replySync.attempted} reply checks unavailable` : "";
+  const note = `${delivered} sent · ${replied} replied · ${queued} queued${topBlocker ? ` (${topBlocker[1]} ${topBlocker[0]})` : ""}${syncNote}`;
   return { connected: true, mailboxes, threads: threads.slice(0, OUTREACH_OUTBOX_MAX_THREADS), note };
+}
+
+async function readAgentMailOutreachThreads(rows: OutboxRow[], inboxAddress: string): Promise<AgentMailReplySync> {
+  const threadIds = [...new Set(rows
+    .filter(isDeliveredOutboxRow)
+    .map((row) => (row.thread_id || "").trim())
+    .filter(Boolean))]
+    .slice(0, OUTREACH_AGENTMAIL_SYNC_LIMIT);
+  if (threadIds.length === 0) return { attempted: 0, failures: 0, byThreadId: new Map() };
+
+  const token = (await hiveEnvValue("AGENTMAIL_API_KEY"))?.trim();
+  if (!token) return { attempted: 0, failures: 0, byThreadId: new Map() };
+  const configuredBase = (await hiveEnvValue("AGENTMAIL_API_BASE_URL"))
+    || (await hiveEnvValue("AGENTMAIL_API_URL"))
+    || DEFAULT_AGENTMAIL_API_BASE_URL;
+  let apiBaseUrl: string;
+  try {
+    const parsed = new URL(configuredBase);
+    if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error("invalid AgentMail URL");
+    parsed.pathname = parsed.pathname.replace(/\/$/, "");
+    apiBaseUrl = parsed.toString().replace(/\/$/, "");
+  } catch {
+    return { attempted: threadIds.length, failures: threadIds.length, byThreadId: new Map() };
+  }
+
+  const entries = await Promise.all(threadIds.map(async (threadId) => {
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/v0/inboxes/${encodeURIComponent(inboxAddress)}/threads/${encodeURIComponent(threadId)}`,
+        {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+          cache: "no-store",
+          signal: AbortSignal.timeout(6_000),
+        },
+      );
+      if (!response.ok) return undefined;
+      const thread = await response.json() as AgentMailOutreachThread;
+      return thread.thread_id ? [threadId, thread] as const : undefined;
+    } catch {
+      return undefined;
+    }
+  }));
+  const byThreadId = new Map(entries.filter((entry): entry is readonly [string, AgentMailOutreachThread] => Boolean(entry)));
+  return { attempted: threadIds.length, failures: threadIds.length - byThreadId.size, byThreadId };
+}
+
+function isDeliveredOutboxRow(row: OutboxRow): boolean {
+  if (row.status !== "delivered") return false;
+  // Current senders stamp external_send explicitly. Historical AgentMail rows
+  // predate that field but carry provider + real message/thread receipts; keep
+  // them visible as sent without ever treating fixture rows as customer mail.
+  return row.external_send === true
+    || (row.provider === "agentmail" && Boolean(row.message_id) && Boolean(row.thread_id));
+}
+
+function latestInboundMessage(thread: AgentMailOutreachThread, inboxAddress: string): AgentMailOutreachMessage | undefined {
+  const self = inboxAddress.trim().toLowerCase();
+  return (thread.messages ?? [])
+    .filter((message) => !agentMailAddresses(message.from).some((address) => address.toLowerCase().includes(self)))
+    .sort((left, right) => agentMailMessageTime(right) - agentMailMessageTime(left))[0];
+}
+
+function agentMailMessageBody(message: AgentMailOutreachMessage): string {
+  return String(message.text || message.extracted_text || message.preview || "");
+}
+
+function agentMailCorrespondents(thread: AgentMailOutreachThread, inboxAddress: string): string[] {
+  const self = inboxAddress.trim().toLowerCase();
+  return [...new Set([
+    ...agentMailAddresses(thread.senders),
+    ...agentMailAddresses(thread.recipients),
+  ].filter((address) => !self || !address.toLowerCase().includes(self)))];
+}
+
+function agentMailAddresses(value: unknown): string[] {
+  if (Array.isArray(value)) return value.flatMap(agentMailAddresses);
+  if (typeof value === "string" && value.trim()) return [value.trim()];
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const candidate = record.email || record.address || record.name;
+    return typeof candidate === "string" && candidate.trim() ? [candidate.trim()] : [];
+  }
+  return [];
+}
+
+function agentMailThreadTime(thread: AgentMailOutreachThread | undefined): number {
+  if (!thread) return 0;
+  return parseOutboxTimeMs(thread.updated_at)
+    || parseOutboxTimeMs(thread.timestamp)
+    || parseOutboxTimeMs(thread.received_timestamp)
+    || parseOutboxTimeMs(thread.sent_timestamp)
+    || parseOutboxTimeMs(thread.created_at);
+}
+
+function agentMailMessageTime(message: AgentMailOutreachMessage): number {
+  return parseOutboxTimeMs(message.updated_at)
+    || parseOutboxTimeMs(message.timestamp)
+    || parseOutboxTimeMs(message.created_at);
 }
 
 // The engine writes send-blocker strings like "OUTREACH_PHYSICAL_ADDRESS is not

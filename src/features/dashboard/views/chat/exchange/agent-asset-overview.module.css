@@ -90,8 +90,8 @@
 }
 
 .chip[data-tone="warn"] {
-  color: var(--honey);
-  border-color: color-mix(in srgb, var(--honey) 35%, transparent);
+  color: var(--warning);
+  border-color: color-mix(in srgb, var(--warning) 35%, transparent);
 }
 
 .chip[data-tone="danger"] {

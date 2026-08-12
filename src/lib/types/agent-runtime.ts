@@ -309,7 +309,7 @@ export interface HivemindosModelsAgentConfig {
   fundingWalletKind?: "personal" | "agent";
   fundingWalletLabel?: string;
   lastCheckoutSessionId?: string;
-  lastCreditBalanceUsd?: string;
+  lastCreditBalanceCredits?: string;
   lastCreditBalanceLabel?: string;
   lastCreditCheckedAt?: string;
   lastCheckedAt?: string;

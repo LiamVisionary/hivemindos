@@ -45,9 +45,9 @@ const RESPONSE_HEADER_ALLOWLIST = new Set([
   "x-payment-response",
   "www-authenticate",
   "x402-version",
-  "x-hivemindos-credit-top-up-usd",
-  "x-hivemindos-credit-debited-usd",
-  "x-hivemindos-credit-balance-usd",
+  "x-hivemindos-credit-top-up-credits",
+  "x-hivemindos-credit-debited-credits",
+  "x-hivemindos-credit-balance-credits",
 ]);
 
 type OfficialBaseResolution = {
@@ -117,6 +117,26 @@ export async function proxyOfficialPaidAgentCreditCheckoutRequest(request: NextR
 
 export async function proxyOfficialPaidAgentCreditBalanceRequest(request: NextRequest, slug: string): Promise<Response> {
   return proxyOfficialPaidAgentRequestPath(request, slug, ["credits", "balance"], "GET");
+}
+
+export async function proxyOfficialPaidAgentCreditConsolidationRequest(request: NextRequest, slug: string): Promise<Response> {
+  return proxyOfficialPaidAgentRequestPath(request, slug, ["credits", "consolidate"], "POST");
+}
+
+export async function proxyOfficialPaidAgentCreditSubscriptionPlansRequest(request: NextRequest, slug: string): Promise<Response> {
+  return proxyOfficialPaidAgentRequestPath(request, slug, ["credits", "subscription", "plans"], "GET");
+}
+
+export async function proxyOfficialPaidAgentCreditSubscriptionStatusRequest(request: NextRequest, slug: string): Promise<Response> {
+  return proxyOfficialPaidAgentRequestPath(request, slug, ["credits", "subscription"], "GET");
+}
+
+export async function proxyOfficialPaidAgentCreditSubscriptionCheckoutRequest(request: NextRequest, slug: string): Promise<Response> {
+  return proxyOfficialPaidAgentRequestPath(request, slug, ["credits", "subscription", "checkout"], "POST");
+}
+
+export async function proxyOfficialPaidAgentCreditSubscriptionCancelRequest(request: NextRequest, slug: string): Promise<Response> {
+  return proxyOfficialPaidAgentRequestPath(request, slug, ["credits", "subscription", "cancel"], "POST");
 }
 
 export type OfficialGatewayModel = {

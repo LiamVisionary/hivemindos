@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-08-11",
+  "note": "Authored operating rows for direct-response AI UGC performance creative: transformation briefs, public-ad research coding, hook shapes, five-beat scripts, storyboard QA, controlled variants, claim gates, and handoff templates. These rows paraphrase useful mechanisms from the user-supplied article beginning 'Which means anyone can run ads now' but omit its competitor counts, impression claims, costs, accuracy comparisons, research volume, generation volume, and model-quality claims. They are starting hypotheses, not measured results. The full procedure lives in the shared skill ai-ugc-production-pipeline and its performance-creative reference. Hard rules: distinguish observed ad-library facts from performance inference, keep expression original, use only approved proof, review vulnerable-category claims, verify the exact model/runtime before applying syntax, approve the storyboard before paid generation, change one variable per variant, and require approval before spend, upload, publication, or private-asset transfer. Slots are UPPERCASE so an unfilled template trips the deliverable acceptance gate.",
+  "count": 57,
+  "omitted": "Current ad-platform delivery fields, spend/impression data, model availability, duration/reference/audio/editing limits, provider prices, universal script pace, fixed research sample sizes, and universal performance thresholds are intentionally absent because they are volatile, account-specific, or unverified. Resolve them from current primary evidence, the selected runtime, and owned analytics.",
+  "volatile": ["ad library fields and availability", "model and regional availability", "duration and reference limits", "generation price", "platform disclosure and claim rules"],
+  "transformationFields": [
+    { "id": "PCT01", "field": "audience", "question": "who experiences the moment, and which lawful, respectful context makes it recognizable" },
+    { "id": "PCT02", "field": "painful moment", "question": "what observable moment can the first frame or problem beat show without diagnosing or degrading the viewer" },
+    { "id": "PCT03", "field": "current-state cost", "question": "what practical or emotional cost follows from the current workflow or misunderstanding" },
+    { "id": "PCT04", "field": "desired after-state", "question": "what plausible transformation can the product support without promising an unverified outcome" },
+    { "id": "PCT05", "field": "mechanism", "question": "what exact product action produces value and can be demonstrated honestly" },
+    { "id": "PCT06", "field": "approved proof", "question": "which owned demonstration, scoped metric, licensed testimonial, or sourced comparison may appear" },
+    { "id": "PCT07", "field": "conversion event", "question": "what single next action and downstream event determine whether the creative created business value" }
+  ],
+  "researchFields": [
+    { "id": "PCR01", "field": "source evidence", "capture": "source URL, advertiser, platform, geography if exposed, and capture timestamp" },
+    { "id": "PCR02", "field": "delivery state", "capture": "active or inactive status exactly as exposed; do not translate active into profitable" },
+    { "id": "PCR03", "field": "visible dates and variants", "capture": "start date and related variants only when the public source exposes them" },
+    { "id": "PCR04", "field": "opening line", "capture": "the first spoken idea, paraphrased in public deliverables" },
+    { "id": "PCR05", "field": "first visible action", "capture": "what communicates before dialogue or captions are understood" },
+    { "id": "PCR06", "field": "audience callout", "capture": "the person or situation the opener appears to select" },
+    { "id": "PCR07", "field": "pain and reframe", "capture": "the current belief, blamed cause, and proposed alternative cause" },
+    { "id": "PCR08", "field": "mechanism or demo", "capture": "what the product visibly does and how specifically the script explains it" },
+    { "id": "PCR09", "field": "objection", "capture": "need, trust, effort, urgency, price, desire, or another doubt addressed" },
+    { "id": "PCR10", "field": "proof", "capture": "demonstration, scoped data, licensed testimonial, comparison, authority, or none" },
+    { "id": "PCR11", "field": "CTA", "capture": "qualification language and the requested next action" },
+    { "id": "PCR12", "field": "format family", "capture": "confessional, challenge, demo, transformation, interview, news-like, silent visual, or another reusable structure" },
+    { "id": "PCR13", "field": "confidence and rights", "capture": "observed fact versus inference plus footage, likeness, music, trademark, testimonial, and claim concerns" }
+  ],
+  "hookShapes": [
+    { "id": "PCH01", "shape": "audience label", "skeleton": "[AUDIENCE], this is for the moment when [PAINFUL MOMENT].", "guardrail": "use only when the label is lawful, respectful, relevant, and not a proxy for discrimination" },
+    { "id": "PCH02", "shape": "yes-question", "skeleton": "Do you [RECOGNIZABLE ACTION] and still get [UNWANTED RESULT]?", "guardrail": "the premise must be common enough to recognize and specific enough to answer honestly" },
+    { "id": "PCH03", "shape": "if-then reframe", "skeleton": "If [PAINFUL MOMENT], the first thing to check is [REFRAME].", "guardrail": "present a testable reframe, not a diagnosis or universal causal claim" },
+    { "id": "PCH04", "shape": "counterintuitive result", "skeleton": "[SURPRISING RESULT] happened because [EXPLAINABLE MECHANISM].", "guardrail": "the result and mechanism require approved proof; do not rely on shock alone" }
+  ],
+  "scriptBeats": [
+    { "id": "PCB01", "beat": "hook", "job": "select the intended viewer and stop the scroll", "required": "one line, one performance choice, and one first-frame action that point at the same idea" },
+    { "id": "PCB02", "beat": "problem", "job": "make the painful moment and current-state cost concrete", "required": "an observable situation without humiliation, diagnosis, or fabricated causality" },
+    { "id": "PCB03", "beat": "demo", "job": "show or state the product implementation", "required": "a concrete action and result; prepared UI or post-production when text accuracy matters" },
+    { "id": "PCB04", "beat": "proof", "job": "answer the most important objection", "required": "approved evidence with scope, or an explicit proof gap instead of invention" },
+    { "id": "PCB05", "beat": "CTA", "job": "qualify and direct the viewer", "required": "one lawful next action without false urgency or disguised navigation" }
+  ],
+  "storyboardChecks": [
+    { "id": "PCS01", "check": "first-frame comprehension", "pass": "the target viewer can infer the topic before dialogue begins" },
+    { "id": "PCS02", "check": "credible casting", "pass": "the synthetic or consented character fits the audience without copying a real creator" },
+    { "id": "PCS03", "check": "native visual texture", "pass": "camera, light, room, skin, wardrobe, and performance fit the chosen phone-native or deliberate production style" },
+    { "id": "PCS04", "check": "one visible action", "pass": "each beat has one primary state change that can finish inside its timing budget" },
+    { "id": "PCS05", "check": "hand and prop jobs", "pass": "every visible hand and prop has one clear, physically plausible role" },
+    { "id": "PCS06", "check": "performance mode", "pass": "spoken-to-camera and insert or voiceover beats are named and cannot be confused" },
+    { "id": "PCS07", "check": "observable end state", "pass": "every beat ends with a visible state the next beat can inherit" },
+    { "id": "PCS08", "check": "continuity", "pass": "identity, wardrobe, voice, time, geography, prop counts, and ownership remain coherent" },
+    { "id": "PCS09", "check": "board exclusion", "pass": "labels, arrows, frame numbers, logos, timing strips, and annotations are explicitly excluded from final footage" },
+    { "id": "PCS10", "check": "accuracy handoff", "pass": "UI, packaging text, subtitles, formulas, and numeric displays move to controlled references or post-production when exactness matters" }
+  ],
+  "variantDimensions": [
+    { "id": "PCV01", "dimension": "hook", "holdConstant": "speaker, setting, body, demo, proof, CTA, and production treatment" },
+    { "id": "PCV02", "dimension": "first-frame action", "holdConstant": "spoken hook, speaker, setting, remaining beats, proof, and CTA" },
+    { "id": "PCV03", "dimension": "speaker", "holdConstant": "script, setting function, shots, proof, CTA, and edit" },
+    { "id": "PCV04", "dimension": "setting", "holdConstant": "speaker, script, beat functions, proof, CTA, and camera role" },
+    { "id": "PCV05", "dimension": "objection", "holdConstant": "hook, problem, demo, speaker, setting, and CTA" },
+    { "id": "PCV06", "dimension": "proof treatment", "holdConstant": "hook, problem, demo, speaker, setting, and CTA; proof remains approved" },
+    { "id": "PCV07", "dimension": "CTA", "holdConstant": "hook, problem, demo, proof, speaker, setting, and edit" }
+  ],
+  "claimGates": [
+    { "id": "PCG01", "risk": "ad-library performance inference", "gate": "label activity, dates, and visible variants as observed; label winner, spend, conversion, and profit as unknown without owned evidence" },
+    { "id": "PCG02", "risk": "competitor expression", "gate": "reuse the structural lesson while making script, footage, casting, voice, brand devices, and proof original or licensed" },
+    { "id": "PCG03", "risk": "health or body-image harm", "gate": "remove humiliation and diagnosis; require approved mechanism, scoped evidence, disclosures, and category review" },
+    { "id": "PCG04", "risk": "accuracy or comparative claim", "gate": "identify the measurement method, source, scope, and approval; otherwise omit the number" },
+    { "id": "PCG05", "risk": "news, authority, or testimonial framing", "gate": "verify footage and likeness rights, do not fabricate coverage or endorsement, and label dramatization when required" },
+    { "id": "PCG06", "risk": "synthetic identity and voice", "gate": "use original or consented references, preserve disclosure obligations, and never impersonate a real person" },
+    { "id": "PCG07", "risk": "model capability claim", "gate": "verify the exact account, region, runtime, version, live schema, and limits before promising duration, references, audio, editing, resolution, or continuity" }
+  ],
+  "communicationTemplates": [
+    { "id": "PCK01", "moment": "transformation brief", "template": "Audience: [AUDIENCE]\nPainful moment: [PAINFUL MOMENT]\nCurrent-state cost: [CURRENT STATE COST]\nDesired after-state: [DESIRED AFTER STATE]\nProduct mechanism: [PRODUCT MECHANISM]\nApproved proof: [APPROVED PROOF]\nForbidden claims: [FORBIDDEN CLAIMS]\nConversion event: [CONVERSION EVENT]" },
+    { "id": "PCK02", "moment": "research evidence row", "template": "Source: [SOURCE URL]\nCaptured: [CAPTURE TIME]\nObserved: [OBSERVED FACTS]\nInferred: [ANALYST INFERENCE]\nHook and first frame: [HOOK AND FIRST FRAME]\nProblem and reframe: [PROBLEM AND REFRAME]\nDemo, proof, CTA: [DEMO PROOF CTA]\nRights and claim risks: [RIGHTS AND CLAIM RISKS]" },
+    { "id": "PCK03", "moment": "storyboard card", "template": "Beat: [BEAT NAME]\nTiming budget: [TIMING BUDGET]\nMode: [PERFORMANCE MODE]\nShot and camera: [SHOT AND CAMERA]\nVisible action: [VISIBLE ACTION]\nSpoken line: [SPOKEN LINE]\nProps and hands: [PROP AND HAND JOBS]\nContinuity in: [CONTINUITY IN]\nEnd state: [END STATE]\nRisk or proof note: [RISK OR PROOF NOTE]" },
+    { "id": "PCK04", "moment": "controlled variant", "template": "Control asset: [CONTROL ASSET]\nChanged dimension: [CHANGED DIMENSION]\nOld value: [OLD VALUE]\nNew value: [NEW VALUE]\nHypothesis: [HYPOTHESIS]\nHeld constant: [HELD CONSTANT]\nApproval: [APPROVAL]\nReview metrics: [REVIEW METRICS]" }
+  ]
+}

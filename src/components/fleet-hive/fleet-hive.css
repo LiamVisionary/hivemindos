@@ -28,6 +28,8 @@
   /* one warm accent — used sparingly */
   --honey: #e7b45c;
   --honey-2: #f0c879;
+  --honey-fill: var(--honey);
+  --on-honey: #1a1305;
   --honey-soft: rgba(231, 180, 92, 0.13);
   --honey-line: rgba(231, 180, 92, 0.32);
 
@@ -86,68 +88,68 @@
 }
 
 .fr-root[data-fr-theme="light"] {
-  --bg: #f4f6ee;
-  --bg-soft: #eef3e8;
-  --panel: #fffdf8;
-  --panel-2: #f8fbf5;
-  --panel-hi: #ffffff;
-  --line: rgba(44, 58, 47, 0.10);
-  --line-2: rgba(44, 58, 47, 0.16);
-  --line-3: rgba(44, 58, 47, 0.28);
+  --bg: #f5efe6;
+  --bg-soft: #f0e8d8;
+  --panel: #f8f4ee;
+  --panel-2: #f0e8d8;
+  --panel-hi: #fffaf4;
+  --line: #e8dcc8;
+  --line-2: rgba(74, 58, 42, 0.16);
+  --line-3: rgba(74, 58, 42, 0.28);
 
-  --fg: #1f241e;
-  --fg-2: #4e5a4e;
-  --fg-3: #5e574b;
-  --fg-4: #6f6657;
+  --fg: #4a3a2a;
+  --fg-2: #8a7a6a;
+  --fg-3: #8a7a6a;
+  --fg-4: #a09080;
 
-  --honey: #a97209;
-  --honey-2: #7d5404;
-  --honey-soft: rgba(169, 114, 9, 0.10);
-  --honey-line: rgba(169, 114, 9, 0.26);
+  --honey: #8a5a2a;
+  --honey-2: #8a5a2a;
+  --honey-fill: #f0e8d8;
+  --on-honey: #4a3a2a;
+  --honey-soft: rgba(138, 90, 42, 0.10);
+  --honey-line: rgba(138, 90, 42, 0.26);
 
-  /* cool mineral teal keeps "working" distinct from honey without the old
-     olive wash that muddied the light hive. */
-  --live: #207f78;
-  --live-soft: rgba(32, 127, 120, 0.12);
+  --live: #6b8f5e;
+  --live-soft: rgba(107, 143, 94, 0.12);
 
-  --danger: #b84b45;
-  --danger-soft: rgba(184, 75, 69, 0.11);
+  --danger: #b5483b;
+  --danger-soft: rgba(181, 72, 59, 0.11);
 
   --fr-cell-sheen: rgba(255, 255, 255, 0.72);
   --fr-queen-image-shadow: drop-shadow(0 7px 16px rgba(77, 55, 13, 0.28));
-  --fr-thread-lit: rgba(169, 114, 9, 0.32);
-  --fr-thread-idle: rgba(44, 58, 47, 0.08);
-  --fr-thread-flow: #956300;
-  --fr-machine-ready-fill: linear-gradient(180deg, #fffefa 0%, #f6f4ed 100%);
-  --fr-machine-ready-border: rgba(58, 70, 58, 0.26);
-  --fr-machine-working-fill: linear-gradient(180deg, #fffefa 0%, #f6f4ed 100%);
-  --fr-machine-working-border: rgba(58, 70, 58, 0.26);
-  --fr-machine-setup-fill: linear-gradient(180deg, #fffefa 0%, #f6f4ed 100%);
-  --fr-machine-setup-border: rgba(58, 70, 58, 0.26);
-  --fr-machine-failed-fill: linear-gradient(180deg, #fffefa 0%, #f6f4ed 100%);
-  --fr-machine-failed-border: rgba(184, 75, 69, 0.42);
-  --fr-agent-ready-fill: linear-gradient(180deg, #ffffff 0%, #f1f5ec 100%);
-  --fr-agent-ready-border: rgba(63, 82, 68, 0.24);
-  --fr-agent-working-fill: linear-gradient(180deg, #ffffff 0%, #f1f5ec 100%);
-  --fr-agent-working-border: rgba(63, 82, 68, 0.24);
-  --fr-agent-scheduled-fill: linear-gradient(180deg, #ffffff 0%, #f1f5ec 100%);
-  --fr-agent-scheduled-border: rgba(63, 82, 68, 0.24);
-  --fr-agent-setup-fill: linear-gradient(180deg, #ffffff 0%, #f1f5ec 100%);
-  --fr-agent-setup-border: rgba(63, 82, 68, 0.24);
-  --fr-agent-failed-fill: linear-gradient(180deg, #ffffff 0%, #f1f5ec 100%);
-  --fr-agent-failed-border: rgba(184, 75, 69, 0.45);
-  --fr-queen-fill: linear-gradient(180deg, #fff8df 0%, #f2c66c 100%);
+  --fr-thread-lit: rgba(138, 90, 42, 0.32);
+  --fr-thread-idle: rgba(74, 58, 42, 0.08);
+  --fr-thread-flow: #8a5a2a;
+  --fr-machine-ready-fill: var(--panel);
+  --fr-machine-ready-border: var(--line-2);
+  --fr-machine-working-fill: var(--panel);
+  --fr-machine-working-border: var(--line-2);
+  --fr-machine-setup-fill: var(--panel);
+  --fr-machine-setup-border: var(--line-2);
+  --fr-machine-failed-fill: var(--panel);
+  --fr-machine-failed-border: rgba(181, 72, 59, 0.42);
+  --fr-agent-ready-fill: var(--panel);
+  --fr-agent-ready-border: var(--line-2);
+  --fr-agent-working-fill: var(--panel);
+  --fr-agent-working-border: var(--line-2);
+  --fr-agent-scheduled-fill: var(--panel);
+  --fr-agent-scheduled-border: var(--line-2);
+  --fr-agent-setup-fill: var(--panel);
+  --fr-agent-setup-border: var(--line-2);
+  --fr-agent-failed-fill: var(--panel);
+  --fr-agent-failed-border: rgba(181, 72, 59, 0.45);
+  --fr-queen-fill: linear-gradient(180deg, #f0e8d8 0%, #e8dcc8 100%);
 
-  --nav-badge-bg: #d8a33c;
-  --nav-badge-fg: #1a1305;
-  --nav-badge-shadow: inset 0 0 0 1px rgba(106, 69, 5, 0.22), 0 1px 3px rgba(80, 60, 20, 0.16);
-  --act-primary-bg: linear-gradient(180deg, #e2f3ef 0%, #cfe9e2 100%);
-  --act-primary-hover-bg: linear-gradient(180deg, #d7eee8 0%, #bddfd6 100%);
-  --act-primary-border: rgba(32, 127, 120, 0.24);
-  --act-primary-fg: #0d5a4e;
-  --act-primary-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72), 0 12px 24px -22px rgba(32, 127, 120, 0.44);
+  --nav-badge-bg: var(--danger);
+  --nav-badge-fg: #f8f4ee;
+  --nav-badge-shadow: none;
+  --act-primary-bg: var(--honey);
+  --act-primary-hover-bg: color-mix(in srgb, var(--honey) 88%, #000);
+  --act-primary-border: transparent;
+  --act-primary-fg: #f8f4ee;
+  --act-primary-shadow: none;
 
-  --shadow: 0 1px 0 rgba(255, 255, 255, 0.58) inset, 0 18px 50px -30px rgba(49, 64, 43, 0.28);
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.58) inset, 0 18px 50px -30px rgba(74, 58, 42, 0.20);
 }
 
 .fr-root * { box-sizing: border-box; }
@@ -407,16 +409,16 @@
   --fr-legacy-label-halo-width: 1.55;
   --fr-legacy-working-glow: rgba(255, 253, 248, 0.64);
   --fr-machine-working-fill: linear-gradient(180deg, #ffffff 0%, #edf5f1 100%);
-  --fr-machine-working-border: rgba(32, 127, 120, 0.38);
-  --fr-machine-setup-fill: linear-gradient(180deg, #fffdf8 0%, #f7ecd8 100%);
-  --fr-machine-setup-border: rgba(169, 114, 9, 0.31);
+  --fr-machine-working-border: rgba(107, 143, 94, 0.38);
+  --fr-machine-setup-fill: linear-gradient(180deg, #f8f4ee 0%, #f7ecd8 100%);
+  --fr-machine-setup-border: rgba(138, 90, 42, 0.31);
   --fr-machine-failed-fill: linear-gradient(180deg, #fffaf8 0%, #f7e2de 100%);
   --fr-agent-working-fill: linear-gradient(180deg, #ffffff 0%, #eef6f2 100%);
-  --fr-agent-working-border: rgba(32, 127, 120, 0.4);
+  --fr-agent-working-border: rgba(107, 143, 94, 0.4);
   --fr-agent-scheduled-fill: linear-gradient(180deg, #fffef8 0%, #f7ead2 100%);
-  --fr-agent-scheduled-border: rgba(169, 114, 9, 0.3);
+  --fr-agent-scheduled-border: rgba(138, 90, 42, 0.3);
   --fr-agent-setup-fill: linear-gradient(180deg, #fffdfa 0%, #f6efe1 100%);
-  --fr-agent-setup-border: rgba(169, 114, 9, 0.26);
+  --fr-agent-setup-border: rgba(138, 90, 42, 0.26);
   --fr-agent-failed-fill: linear-gradient(180deg, #fffafa 0%, #f7e0dc 100%);
 }
 .fr-legacy-stage *,
@@ -825,7 +827,7 @@
 .fr-root[data-fr-theme="light"] .fr-hive-backdrop {
   background:
     radial-gradient(620px 620px at 48% 42%, rgba(255, 253, 248, 0.48), transparent 64%),
-    radial-gradient(900px 740px at 52% 58%, rgba(169, 114, 9, 0.025), transparent 76%),
+    radial-gradient(900px 740px at 52% 58%, rgba(138, 90, 42, 0.025), transparent 76%),
     linear-gradient(180deg, #fbfcf6 0%, #f0f3ea 100%);
 }
 .fr-hive-backdrop::before {
@@ -976,9 +978,9 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
 :root[data-theme="hive-light"][data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .commandShell {
   background:
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='41.569' viewBox='0 0 72 41.569'%3E%3Cg fill='none' stroke='%23362e1e' stroke-opacity='.045' stroke-width='1'%3E%3Cpath d='M12 0h24l12 20.784-12 20.785H12L0 20.784z'/%3E%3Cpath d='M48-20.784h24L84 0 72 20.784H48L36 0z'/%3E%3Cpath d='M48 20.784h24l12 20.785-12 20.784H48L36 41.569z'/%3E%3C/g%3E%3C/svg%3E"),
-    radial-gradient(circle at 16% 10%, rgba(176, 127, 28, 0.10), transparent 26rem),
-    radial-gradient(circle at 84% 18%, rgba(169, 114, 9, 0.055), transparent 28rem),
-    linear-gradient(140deg, #fbf8f1 0%, #f1ede3 52%, #f4efe4 100%);
+    radial-gradient(circle at 16% 10%, rgba(138, 90, 42, 0.10), transparent 26rem),
+    radial-gradient(circle at 84% 18%, rgba(138, 90, 42, 0.055), transparent 28rem),
+    linear-gradient(140deg, #f8f4ee 0%, #f5efe6 52%, #f0e8d8 100%);
   background-clip: content-box;
   background-size: 72px 41.569px, auto, auto, auto;
 }
@@ -1436,7 +1438,7 @@ html[data-liquid-glass]:not([data-liquid-glass="disabled"]).macDesktopChrome .co
   outline-offset: 0;
 }
 .fr-chat-input::placeholder { color: var(--fg-3); }
-.fr-chat-send { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 99px; border: 0; cursor: pointer; display: grid; place-items: center; background: var(--honey); color: #1a1305; transition: transform .16s, filter .16s; }
+.fr-chat-send { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 99px; border: 0; cursor: pointer; display: grid; place-items: center; background: var(--honey-fill, var(--honey)); color: #1a1305; transition: transform .16s, filter .16s; }
 .fr-chat-send:hover { filter: brightness(1.06); transform: translateY(-1px); }
 .fr-root .fr-chat-send:focus-visible { outline: none; outline-offset: 0; }
 /* voice toggle — secondary control left of send; honey-tinted while voice mode is live */

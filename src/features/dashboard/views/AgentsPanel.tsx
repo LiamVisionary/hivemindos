@@ -723,11 +723,11 @@ function FleetLayoutToggle({ layout, onChoose }: { layout: "hive" | "classic"; o
               letterSpacing: "0.04em",
               textTransform: "uppercase",
               background: active
-                ? (isLight ? "rgba(176,127,28,0.16)" : "rgba(231,180,92,0.16)")
+                ? (isLight ? "rgba(138, 90, 42,0.16)" : "rgba(231,180,92,0.16)")
                 : "transparent",
               color: active
-                ? (isLight ? "#936811" : "#e7b45c")
-                : (isLight ? "#5e574b" : "rgba(148,163,184,0.9)"),
+                ? (isLight ? "#8a5a2a" : "#e7b45c")
+                : (isLight ? "#8a7a6a" : "rgba(148,163,184,0.9)"),
               transition: "background 140ms ease, color 140ms ease",
             }}
           >

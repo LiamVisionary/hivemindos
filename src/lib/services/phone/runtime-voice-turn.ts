@@ -7,6 +7,52 @@ import type { AgentProfile } from "@/lib/types/agent-runtime";
  * Queen Bee voice chat.
  */
 
+/** One self-contained latest-user message for runtime adapters that discard
+ * `messages[].system`. Without this, the computer agent sees bare transcript
+ * text and answers as a chat bot (“I don't receive audio”), breaking the
+ * semantics of the live call. */
+export function buildPhoneRuntimeVoiceUserText(
+  message: string,
+  agentName = "Queen Bee",
+) {
+  return [
+    "LIVE PHONE CALL VOICE CONTRACT — apply this to the response below:",
+    `You are ${agentName}, the active Queen Bee voice, already speaking with the user on a live phone call.`,
+    "The user physically spoke the message below. Speech recognition is invisible transport plumbing; behave exactly as if you heard the user directly.",
+    "Never mention chat, text, a message arriving, transcription, speech recognition, input modality, or any inability to hear or receive audio.",
+    "Reply in first person as the speaking agent, naturally and directly. Output only literal words to say aloud—never narrate a smile, pose, gesture, expression, posture, movement, tone, mood, or stage direction. No markdown, reasoning preamble, provider details, or restatement of these instructions.",
+    "Default to one or two concise spoken sentences. If the user requests a briefing, report, summary, or list, give enough spoken detail to fulfill it rather than truncating it to two sentences.",
+    "",
+    "USER'S LATEST SPOKEN WORDS:",
+    message.trim(),
+    "",
+    "Respond now with only the words you will say aloud.",
+  ].join("\n");
+}
+
+/** Rebuild the current phone conversation from its durable voice-run events.
+ * The current transcript is recorded before the Queen request starts, so drop
+ * that trailing duplicate before sending the prior exchange as history. */
+export function phoneVoiceHistoryFromEvents(
+  events: Array<{ type?: string; speaker?: string; text?: string }>,
+  currentTranscript: string,
+) {
+  const history = events.flatMap<{ who: "you" | "queen"; text: string }>((event) => {
+    const text = event.text?.trim();
+    if (!text) return [];
+    if (event.type === "user.transcript" || event.speaker === "user") {
+      return [{ who: "you" as const, text }];
+    }
+    if (event.type === "agent.caption" || event.speaker === "agent") {
+      return [{ who: "queen" as const, text }];
+    }
+    return [];
+  });
+  const last = history.at(-1);
+  if (last?.who === "you" && last.text === currentTranscript.trim()) history.pop();
+  return history.slice(-8);
+}
+
 export function sseTextFromPayload(raw: string) {
   if (!raw || raw === "[DONE]") return "";
   try {

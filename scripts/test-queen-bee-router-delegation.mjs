@@ -7,12 +7,14 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 const {
   chooseQueenBeeDelegate,
   inferQueenBeeWorkerClass,
+  machineMatchesTarget,
   queenBeeMachineRoutingEligibility,
   rankQueenBeeDelegates,
 } = await import("../src/lib/services/queen-bee/router.ts");
 
 const urlBackedMachine = {
   key: "this-mac",
+  machineId: "hivemind-machine-top-level-id",
   collector: "http://127.0.0.1:8789",
   device: {
     self: true,
@@ -54,6 +56,21 @@ const urlBackedMachine = {
     },
   ],
 };
+
+assert.equal(
+  machineMatchesTarget(urlBackedMachine, "hivemind-machine-top-level-id"),
+  true,
+  "the canonical top-level machineId returned by fleet discovery is a valid hard pin",
+);
+{
+  const pinnedByFleetId = chooseQueenBeeDelegate({
+    title: "Implement",
+    body: "Implement the code change.",
+    skills: ["code"],
+  }, [urlBackedMachine], { targetMachineKey: "hivemind-machine-top-level-id" });
+  assert.equal(pinnedByFleetId.status, "delegated", "fleet machineId pin finds the advertised machine");
+  assert.equal(pinnedByFleetId.agent?.name, "Ada Lovelace");
+}
 
 {
   const workerClass = inferQueenBeeWorkerClass({
@@ -329,6 +346,49 @@ const urlBackedMachine = {
   assert.equal(queenBeeMachineRoutingEligibility(manuallyIgnored).mandatory, true, "manual ignore is a mandatory exclusion");
   const pinnedToIgnored = chooseQueenBeeDelegate(codeTask, [manuallyIgnored], { targetMachineKey: "idle-gpu" });
   assert.equal(pinnedToIgnored.status, "pending", "a pin never overrides the human's manual machine exclusion");
+}
+
+// A stamped project id is authoritative. Short fuzzy names such as "Ami"
+// must not match inside unrelated words such as "Liam" and steal routing.
+{
+  const mapsMachine = {
+    ...urlBackedMachine,
+    key: "maps-mac",
+    device: { ...urlBackedMachine.device, name: "Maps Mac" },
+    version: { projects: [{ projectId: "maps-agency-a7cf12abac", name: "maps-agency", localPath: "/projects/maps-agency" }] },
+    agents: [{ ...urlBackedMachine.agents[1], id: "maps-builder", name: "Maps Builder" }],
+  };
+  const amiMachine = {
+    ...urlBackedMachine,
+    key: "ami-mac",
+    device: { ...urlBackedMachine.device, name: "Ami Mac" },
+    version: { projects: [{ projectId: "ami-6323f942f4", name: "Ami", localPath: "/projects/ami" }] },
+    agents: [{ ...urlBackedMachine.agents[1], id: "ami-builder", name: "Ami Builder" }],
+  };
+  const registry = {
+    projects: [
+      { id: "maps-agency-a7cf12abac", name: "maps-agency", localPath: "/projects/maps-agency" },
+      { id: "ami-6323f942f4", name: "Ami", localPath: "/projects/ami" },
+    ],
+  };
+  const exact = chooseQueenBeeDelegate({
+    title: "Build Liam's website packet",
+    body: "Use the linked project checkout.",
+    skills: ["code"],
+    projectId: "maps-agency-a7cf12abac",
+    projectRegistry: registry,
+  }, [amiMachine, mapsMachine]);
+  assert.equal(exact.machine?.key, "maps-mac", "the stamped project id routes to its exact checkout");
+  assert.doesNotMatch(
+    chooseQueenBeeDelegate({
+      title: "Build Liam's website packet",
+      body: "No exact project was stamped.",
+      skills: ["code"],
+      projectRegistry: { projects: [registry.projects[1]] },
+    }, [amiMachine]).reason,
+    /GitLawb project registry matched Ami/i,
+    "three-letter project aliases do not fuzzy-match inside Liam",
+  );
 }
 
 console.log("Queen Bee router delegation tests passed.");

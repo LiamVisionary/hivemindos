@@ -9,7 +9,7 @@
 //   5. the code_* Hive actions carry correct MCP metadata.
 import assert from "node:assert/strict";
 import { register } from "node:module";
-import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -82,30 +82,37 @@ if (process.platform !== "win32") {
   const ref = repoRefFor(undefined);
   const stubDir = mkdtempSync(join(tmpdir(), "cbm-stub-"));
   const stubPath = join(stubDir, "codebase-memory-mcp");
+  const envCapturePath = join(stubDir, "engine-env.jsonl");
   const stub = `#!/usr/bin/env node
+const { appendFileSync, readFileSync, statSync } = require("node:fs");
 const argv = process.argv.slice(2).filter((a) => a !== "--json" && a !== "--progress");
 if (argv[0] === "--version") { process.stdout.write("codebase-memory-mcp 9.9.9-stub\\n"); process.exit(0); }
 if (argv[0] !== "cli") { process.stderr.write("bad usage\\n"); process.exit(1); }
+const argsFileIndex = argv.indexOf("--args-file");
+if (argsFileIndex < 0 || !argv[argsFileIndex + 1]) { process.stderr.write("missing --args-file\\n"); process.exit(1); }
+const argsPath = argv[argsFileIndex + 1];
+const toolArgs = JSON.parse(readFileSync(argsPath, "utf8"));
+if (process.env.STUB_ENV_CAPTURE) appendFileSync(process.env.STUB_ENV_CAPTURE, JSON.stringify({ tool: argv[1], argsPath, argsMode: statSync(argsPath).mode & 0o777, toolArgs, cacheDir: process.env.CBM_CACHE_DIR, allowedRoot: process.env.CBM_ALLOWED_ROOT }) + "\\n");
 const root = process.env.STUB_ROOT || "";
 const payloads = {
   index_status: { project: "stub", nodes: 1200, edges: 4300, status: "ready", root_path: root, git: {} },
   list_projects: { projects: [{ name: "stub", root_path: root, nodes: 1200, edges: 4300, size_bytes: 1 }] },
   index_repository: { project: "stub", status: "indexed", nodes: 1200, edges: 4300 },
-  search_graph: { total: 2, has_more: false, results: [
-    { name: "HandleRequest", qualified_name: "main.HandleRequest", label: "Function", file_path: "/r/main.go", in_degree: 3, out_degree: 5, signature: "func()", is_exported: true },
-    { name: "Server", qualified_name: "main.Server", label: "Class", file_path: "/r/server.go", in_degree: 0, out_degree: 2 } ] },
+  search_graph: { total: 2, has_more: false,
+    cols: ["qn", "label", "file", "lines", "in_degree", "out_degree", "signature", "is_exported"],
+    rows: [["main.HandleRequest", "Function", "/r/main.go", "10-20", 3, 5, "func()", true], ["main.Server", "Class", "/r/server.go", "22-40", 0, 2, "", false]] },
   trace_path: { function: "HandleRequest", direction: "both",
-    callers: [{ name: "main", qualified_name: "main.main", hop: 1 }],
-    callees: [{ name: "log", qualified_name: "log.Println", hop: 1, risk: "low" }] },
+    callers: { cols: ["name", "hop", "risk"], groups: [{ qn_prefix: "main", rows: [["main", 1, "low"]] }] },
+    callees: { cols: ["name", "hop", "risk"], groups: [{ qn_prefix: "log", rows: [["Println", 1, "low"]] }] } },
   get_architecture: { project: "stub", total_nodes: 1200, total_edges: 4300,
-    node_labels: [{ label: "Function", count: 800 }], edge_types: [{ type: "CALLS", count: 4000 }],
-    languages: [{ language: "Go", file_count: 40 }], routes: [{ method: "GET", path: "/health", handler: "HealthHandler" }],
-    entry_points: [{ name: "main", qualified_name: "main.main", file: "/r/main.go" }],
-    hotspots: [{ name: "log.Println", qualified_name: "log.Println", fan_in: 99 }] },
+    node_labels: { cols: ["label", "count"], rows: [["Function", 800]] }, edge_types: { cols: ["type", "count"], rows: [["CALLS", 4000]] },
+    languages: { cols: ["language", "files"], rows: [["Go", 40]] }, routes: { cols: ["method", "path", "handler"], rows: [["GET", "/health", "HealthHandler"]] },
+    entry_points: { cols: ["qn", "file"], rows: [["main.main", "/r/main.go"]] },
+    hotspots: { cols: ["name", "qualified_name", "fan_in"], rows: [["Println", "log.Println", 99]] } },
   get_code_snippet: { name: "HandleRequest", qualified_name: "main.HandleRequest", label: "Function",
     file_path: "/r/main.go", start_line: 10, end_line: 20, source: "func HandleRequest() {}", callers: 3, callees: 5 },
   detect_changes: { changed_files: ["src/app/api/wallet/route.ts", "src/lib/x.ts"], changed_count: 2,
-    impacted_symbols: [{ name: "POST", label: "Function", file: "src/app/api/wallet/route.ts" }], depth: 2 } };
+    impacted: [{ qn: "app.wallet.POST", label: "Function", file: "src/app/api/wallet/route.ts" }], depth: 2 } };
 const out = payloads[argv[1]];
 if (!out) { process.stderr.write("project not found\\n"); process.exit(1); }
 process.stdout.write(JSON.stringify(out) + "\\n");
@@ -116,6 +123,7 @@ process.stdout.write(JSON.stringify(out) + "\\n");
   delete process.env.CODE_INTEL_DISABLE_ENGINE;
   process.env.CODEBASE_MEMORY_MCP_BIN = stubPath;
   process.env.STUB_ROOT = ref.repoPath;
+  process.env.STUB_ENV_CAPTURE = envCapturePath;
   resetCodebaseMemoryBinaryCache();
 
   const provider = new CodebaseMemoryProvider();
@@ -137,7 +145,8 @@ process.stdout.write(JSON.stringify(out) + "\\n");
 
   const tp = await provider.tracePath({ ...ref, functionName: "HandleRequest" });
   assert.equal(tp.callers.length, 1);
-  assert.equal(tp.callees[0].name, "log");
+  assert.equal(tp.callees[0].name, "Println");
+  assert.equal(tp.callees[0].qualifiedName, "log.Println");
 
   const ar = await provider.getArchitecture({ ...ref });
   assert.equal(ar.routes[0].path, "/health");
@@ -153,9 +162,20 @@ process.stdout.write(JSON.stringify(out) + "\\n");
   assert.equal(dc.affectedRoutes.length, 1, "repo-relative api route mapped to affectedRoutes");
   assert.equal(dc.affectedRoutes[0].path, "/api/wallet");
 
+  const engineEnvs = readFileSync(envCapturePath, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+  assert.ok(engineEnvs.length >= 6, "each engine tool call records its isolation environment");
+  for (const invocation of engineEnvs) {
+    assert.equal(invocation.argsMode, 0o600, `${invocation.tool} receives a private argument file`);
+    assert.equal(existsSync(invocation.argsPath), false, `${invocation.tool} argument file is removed after execution`);
+    assert.equal(typeof invocation.toolArgs, "object", `${invocation.tool} receives parsed JSON arguments`);
+    assert.equal(invocation.cacheDir, join(process.env.HOME, ".hivemindos", "code-intelligence", "codebase-memory-cache"), `${invocation.tool} uses the HivemindOS-managed cache`);
+    assert.equal(invocation.allowedRoot, ref.repoPath, `${invocation.tool} is limited to the resolved repository root`);
+  }
+
   // Restore the engine-disabled default for any later imports.
   process.env.CODE_INTEL_DISABLE_ENGINE = "1";
   delete process.env.CODEBASE_MEMORY_MCP_BIN;
+  delete process.env.STUB_ENV_CAPTURE;
   resetCodebaseMemoryBinaryCache();
 }
 

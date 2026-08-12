@@ -18,7 +18,7 @@ The reader is assumed **not** to have access to these; they are recorded for pro
 
 > **Private Swarm Command.** Beauty comes from clarity, coordination, trust, and function.
 
-A beehive metaphor rendered with restraint: dark graphite surfaces, a subtle honeycomb hex texture, warm amber ("honey") highlights used sparingly, and a teal "live/working" signal. The armored-bee mark is the **brand/app icon** — but the product UI itself uses *subtle* hive structure and **avoids** bee mascots, honey-drip visuals, and yellow/black hazard clichés inside the interface.
+A beehive metaphor rendered with restraint: dark graphite or warm-cream surfaces, a subtle honeycomb hex texture, warm amber ("honey") highlights used sparingly in dark mode, and a teal "live/working" signal. The armored-bee mark is the **brand/app icon** — but the product UI itself uses *subtle* hive structure and **avoids** bee mascots, honey-drip visuals, and yellow/black hazard clichés inside the interface.
 
 ---
 
@@ -38,17 +38,17 @@ A beehive metaphor rendered with restraint: dark graphite surfaces, a subtle hon
 
 ## Visual foundations
 
-- **Palette.** Warm-neutral graphite base (`--background #0c0d11`, solid panels `#14161c`, warm off-white hairlines). **Honey/amber is the primary action + brand accent** (`--honey`/`--accent #e7b45c`), used with intent; **mint-teal is reserved strictly for the "live/working" signal** (`--live #6fcdba`). Warm grays carry text (`--fg #f3f0e9` → `--fg-4 #545049`). Status: healthy = mint, attention = honey, risk = warm rose `#e58e85`. A full **warm-paper light theme** (`data-theme="hive-light"`) swaps graphite for cream, honey for ochre, and mint for muted olive.
+- **Palette.** Dark mode keeps the established warm-neutral graphite base and **honey/amber primary accent** (`--honey`/`--accent #e7b45c`); mint-teal remains reserved for the "live/working" signal (`--live #6fcdba`). The **warm-paper light theme** follows the mobile app's palette: background `#f5efe6`, surface `#f8f4ee`, pressed/selected surface `#f0e8d8`, text `#4a3a2a`, muted text `#8a7a6a`, divider `#e8dcc8`, restrained caramel accent `#8a5a2a`, and sage success/live `#6b8f5e`.
 
-  > **Note (updated):** this reflects the refined "hive" language now shipping across the Fleet Hive, Wallets, Trade, and Brain views — warm-neutral surfaces, honey-primary pill buttons, mono status pills. It supersedes the earlier cool-teal/`#090b10` shell palette.
+  > **Note (updated):** selected tabs and segmented controls use the tonal pressed surface, not a loud accent fill. Accent color is reserved for links, focus, and the one primary action.
 - **Type.** **Space Grotesk** (600/700) for display, headings, brand, and tab labels. **Geist** (400–800) for body/UI. **JetBrains Mono** (400–700) for eyebrows, metrics, machine ids, commands. Headlines are tight (line-height ~0.98, tracking 0); mono eyebrows are uppercase with ~1.4px tracking. Loaded from Google Fonts.
 - **Backgrounds.** A signature **tessellating honeycomb hex texture** (~9% teal opacity) sits behind everything, over two soft radial glows (teal upper-left, amber upper-right) and a graphite diagonal gradient. No photography; structure over decoration.
 - **Cards ("cells").** Solid warm panels (`--panel #14161c`) with a thin warm hairline (`--line-2`), a soft lifted drop shadow (`0 18px 50px -28px rgba(0,0,0,0.7)` + faint inset highlight) and larger rounded corners (`14px`, up to `20px` on order tickets). One card = one main job; compact by default, deep when inspected — never nested into mini-dashboards. Wallets/Trade favor an **editorial layout**: hierarchy from type + spacing and inline stat rows, not nested boxes, with one accent per surface.
-- **Buttons & badges are pills.** Buttons use a fully rounded pill shape at medium weight (never bold); the `default` is a honey fill with dark text, ghost/outline are transparent with a warm hairline that brightens on hover. Badges are pills too — soft tinted fill + color-matched border, with an optional mono-uppercase status treatment.
+- **Buttons & badges are pills.** Buttons use a fully rounded pill shape at medium weight (never bold); the dark `default` is a honey fill with dark text, while light selected tabs and segmented controls use `--honey-fill`/the tonal pressed surface. Ghost/outline actions stay transparent with a warm hairline. Badges use soft tinted fills and color-matched borders.
 - **The hex cell.** Machines, agents, and the Queen are pointy-top honeycomb hexagons with a clear size hierarchy: Queen, machine, agent. They **rest**, then lift subtly on hover (`translateY(-3px) scale(1.025)`); selected cells rest slightly enlarged. Dense maps keep inactive machines collapsed and reveal only the selected agent cluster.
 - **Motion.** Calm and meaningful — motion communicates state, not decoration. Live/working dots **pulse** (2.4s ease-in-out ring). Views fade/translate up on enter. Standard easing `cubic-bezier(0.2,0.9,0.2,1)`, ~120–140ms for interactions. Respects `prefers-reduced-motion`.
 - **Hover / press.** Hover: subtle brightness lift (~1.06) or a soft secondary tint; hex cells lift off the comb. Press: `scale(0.99)`. Focus: 3px teal ring (`--button-ring`).
-- **Borders & shadows.** Thin warm hairlines everywhere (`--line`/`--line-2`/`--line-3`); honey-tinted borders + soft glow for privileged/attention cards; mint-tinted borders for live/working. Soft lifted shadows on floating panels; overlays use `blur(18px)` glass. Focus rings are honey (`2px` outline, `2px` offset, or a `3px` honey-soft ring on fields).
+- **Borders & shadows.** Thin warm hairlines everywhere (`--line`/`--line-2`/`--line-3`); honey-tinted borders and soft glow mark focus or privileged cards in dark mode, while light selected controls stay tonal. Soft lifted shadows appear only on floating panels; overlays use `blur(18px)` glass.
 - **Radii.** `9px` fields/small controls, `14px` cards (default), `20px` large panels/order tickets, pill for buttons + badges + chips.
 
 See the **Design System** tab for live specimen cards (Colors, Type, Spacing, Brand).
@@ -70,10 +70,10 @@ See the **Design System** tab for live specimen cards (Colors, Type, Spacing, Br
 Reusable primitives, mirroring the product's `src/components/ui` inventory plus one brand primitive. Mount via `window.HivemindOSDesignSystem_65eabf`.
 
 - **Button** — primary action control. Pill-shaped, medium weight. Variants: default (honey), secondary, outline, ghost, danger, link; sizes xs–lg + icon; `isLoading`.
-- **Badge** — human-readable status/label pill. Tones: default (honey), success (mint), warning, danger, honey, live (mint), secondary, outline; optional `mono` uppercase treatment.
+- **Badge** — human-readable status/label pill. Tones: default (honey), success, warning, danger, honey, live, secondary, outline; optional `mono` uppercase treatment.
 - **StatusDot** — pulsing signal dot for machine/agent state (live, working, healthy, scheduled, warning, danger, offline).
 - **Card** (+ `CardHeader`, `CardTitle`, `CardDescription`, `CardContent`, `CardFooter`) — the honeycomb "cell" panel.
-- **Checkbox** — square opt-in toggle with honey fill.
+- **Checkbox** — square opt-in toggle with a honey fill in dark mode and the theme accent in light mode.
 - **Segmented** — pill segmented control for view/mode switching (hive/graph/map/list, buy/sell); `subtle` or `solid`.
 - **CopyableCodeLine** — mono command/id line with copy button (advanced surface only).
 - **HexCell** — the signature honeycomb hexagon tile for agents, machines, and the Queen.
@@ -101,7 +101,7 @@ This system ships components in **two forms**:
 1. **Design track** (`components/`, `guidelines/`, `ui_kits/`) — framework-agnostic plain-React + CSS custom properties, no build step, rendered as standalone HTML. This is what the Design System tab and any HTML mock use.
 2. **Production track** (`templates/codebase-handoff/`) — the same components as real **`.tsx` with Tailwind + `class-variance-authority` + Radix + `lucide-react`**, matching the app's `src/components/ui` API, copy-paste-able into the Next.js codebase. See `templates/codebase-handoff/README.md`. (They live under `templates/` only so the compiler doesn't try to bundle their npm imports.)
 
-Both read the same tokens, so a Tailwind `bg-primary` and a `var(--button-primary)` resolve to the same honey.
+Both read the same tokens, so a Tailwind `bg-primary` and a `var(--button-primary)` resolve to the same theme-aware primary accent.
 
 ---
 

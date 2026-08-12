@@ -4,7 +4,7 @@
 .nav button:hover { color: var(--fg); background: var(--panel-2); }
 .nav button:focus-visible { outline: 2px solid var(--honey); outline-offset: 1px; }
 .nav button[data-active] { color: var(--fg); background: var(--panel-hi); box-shadow: 0 1px 7px rgba(0,0,0,.16); }
-.nav button i { min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--honey); color: #241b08; font: 700 9px/17px var(--f-mono); font-style: normal; text-align: center; }
+.nav button i { min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--panel-2); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line-2); font: 600 9px/17px var(--f-mono); font-style: normal; text-align: center; }
 .workspace { display: grid; gap: 16px; animation: enter .18s ease both; }
 .workspaceHeader { display: flex; align-items: flex-end; justify-content: space-between; gap: 18px; padding: 7px 2px 2px; }
 .workspaceHeader > div { min-width: 0; }

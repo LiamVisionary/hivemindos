@@ -169,7 +169,7 @@
 :global(:root[data-theme="hive-light"]) .modal {
   --term-bg: rgba(255, 252, 246, 0.98);
   --term-fg: var(--foreground);
-  --term-prompt: var(--success, #406f53);
+  --term-prompt: var(--success, #6b8f5e);
   --term-cwd: var(--accent-strong);
   --term-dim: var(--text-soft);
   --term-line: var(--line);
@@ -198,7 +198,7 @@
 :global(:root[data-theme="hive-light"]) .stopButton,
 :global(:root[data-theme="hive-light"]) .stopButton:hover,
 :global(:root[data-theme="hive-light"]) .statusNoteError {
-  border-color: rgba(192, 82, 77, 0.34);
-  background: rgba(192, 82, 77, 0.12);
-  color: var(--danger, #a23a35);
+  border-color: rgba(181, 72, 59, 0.34);
+  background: rgba(181, 72, 59, 0.12);
+  color: var(--danger, #b5483b);
 }

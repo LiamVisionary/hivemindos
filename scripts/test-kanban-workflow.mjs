@@ -142,10 +142,39 @@ async function main() {
       return child;
     });
     assert(child.status === "ideas", "Child with unfinished parents should not promote.");
+
+    let detachedChild = await createTask("dependency removal child", "ready", { parents: [parent.id] });
+    assert(detachedChild.status === "ideas", "A second child should also wait on its unfinished parent.");
+    detachedChild = await patchTask(detachedChild, { parents: [] });
+    const afterDependencyRemoval = await request("GET", {}, { vaultPath, kanbanFolder, include_archived: "true" });
+    assert(
+      !afterDependencyRemoval.board.links.some((link) => link.childId === detachedChild.id),
+      "Patching parents to an empty list should remove the task's incoming dependency links.",
+    );
+    assert(
+      !("parents" in afterDependencyRemoval.board.tasks.find((task) => task.id === detachedChild.id)),
+      "Dependency control input should not leak onto the persisted task shape.",
+    );
+    detachedChild = await request("POST", { action: "promote", taskId: detachedChild.id }).then((data) => data.task);
+    assert(detachedChild.status === "ready", "A child should promote after its dependency links are removed through PATCH.");
+    await moveTask(detachedChild, "archived");
+
     await request("POST", { action: "complete", taskId: parent.id, summary: "parent done", metadata: { verification: ["api workflow"] } });
     const afterParentDone = await request("GET", {}, { vaultPath, kanbanFolder, include_archived: "true" });
     child = afterParentDone.board.tasks.find((task) => task.id === child.id);
     assert(child?.status === "ready", "Completing a parent should promote ready children.");
+
+    const unrelated = await createTask("unrelated completion", "ready");
+    child = await request("POST", {
+      action: "block",
+      taskId: child.id,
+      reason: "ACTION NEEDED: Attach the required founder file.\nNEEDS: file",
+    }).then((data) => data.task);
+    assert(child.status === "needs-human", "A child can raise a real human blocker after its parents finish.");
+    await request("POST", { action: "complete", taskId: unrelated.id, summary: "unrelated done", metadata: { verification: ["api workflow"] } });
+    const afterUnrelatedDone = await request("GET", {}, { vaultPath, kanbanFolder, include_archived: "true" });
+    child = afterUnrelatedDone.board.tasks.find((task) => task.id === child.id);
+    assert(child?.status === "needs-human", "Completing another task must not auto-promote a genuine Needs Human blocker.");
     await moveTask(child, "archived");
 
     // Park-for-approval gate: an agent (MCP work_board) can't promote a Needs-You card

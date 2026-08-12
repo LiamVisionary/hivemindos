@@ -1157,15 +1157,15 @@ export async function manageLocalTtsModel(input: {
   const path = input.action === "load-model"
     ? `/providers/${encodeURIComponent(provider)}/load`
     : `/providers/${encodeURIComponent(provider)}/unload`;
-  const response = await fetch(`${app.apiBaseUrl.replace(/\/+$/, "")}${path}`, {
+  const responseOrError = await fetch(`${app.apiBaseUrl.replace(/\/+$/, "")}${path}`, {
     method: "POST",
     headers: input.action === "load-model" ? { "content-type": "application/json" } : undefined,
     body: input.action === "load-model" ? JSON.stringify({ model: input.model || status?.id || provider }) : undefined,
     cache: "no-store",
-    signal: AbortSignal.timeout(LAUNCH_SHELL_TIMEOUT_MS),
-  }).catch((error) => {
-    throw new Error(error instanceof Error ? error.message : "Universal TTS model action failed.");
-  });
+    signal: AbortSignal.timeout(120_000),
+  }).catch((error: unknown) => error);
+  if (!(responseOrError instanceof Response)) return { ok: false, message: responseOrError instanceof Error ? responseOrError.message : "Universal TTS model action failed.", providerId: provider, model: input.model };
+  const response = responseOrError;
   const detail = await response.json().catch(() => null);
   if (!response.ok) {
     const errorText = clean(recordValue(detail)?.error) || clean(recordValue(detail)?.detail) || `Universal TTS returned HTTP ${response.status}.`;
@@ -1391,7 +1391,7 @@ export async function synthesizeLocalTtsWav(input: {
     // Buffered consumer: generate as fast as the app allows. Apps that ignore
     // this still work, just with their paced latency added before playback.
     realtime_pacing: false,
-    language: "English",
+    language: (input.model || DEFAULT_LOCAL_TTS_MODEL).toLowerCase().includes("kokoro") ? "a" : "English",
     instruct: "Speak warmly and clearly.",
   };
   let response: Response;
@@ -1475,7 +1475,7 @@ export async function streamLocalTtsPcm(input: {
     response_format: "pcm",
     sample_rate: DEFAULT_SAMPLE_RATE,
     realtime_pacing: false,
-    language: "English",
+    language: (input.model || DEFAULT_LOCAL_TTS_MODEL).toLowerCase().includes("kokoro") ? "a" : "English",
     instruct: "Speak warmly and clearly.",
   };
   let response: Response;
@@ -1537,7 +1537,7 @@ export async function streamLocalTtsSpeech(input: {
     realtime_pacing: true,
     smooth_join_ms: 8,
     lowpass_hz: 7000,
-    language: "English",
+    language: (input.model || DEFAULT_LOCAL_TTS_MODEL).toLowerCase().includes("kokoro") ? "a" : "English",
     instruct: "Speak warmly and clearly.",
     utterance_id: input.utteranceId,
   };

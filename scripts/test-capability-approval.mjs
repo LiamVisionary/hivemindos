@@ -6,6 +6,7 @@ import { register } from "node:module";
 register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 
 const {
+  CAPABILITY_APPROVAL_INTENTS,
   buildCapabilityApprovalPlan,
   capabilityApprovalContinuationPrompt,
   normalizeCapabilityApprovalPlan,
@@ -49,7 +50,7 @@ const plan = await buildCapabilityApprovalPlan({
 });
 
 assert.equal(plan.status, "pending");
-assert.equal(plan.reviewMode, "ask", "multi-capability builds still require review");
+assert.equal(plan.reviewMode, "ask", "a multi-capability build with required setup still requires review");
 assert.equal(capabilityPlanRequiresReview(plan), true);
 assert.ok(plan.items.length >= 4, "multi-part build maps to multiple capability families");
 const image = plan.items.find((item) => item.intent === "image-generation");
@@ -131,10 +132,122 @@ assert.equal(flappyWithAlternatesPlan.items[0]?.selectedCapabilityId, "hive-acti
 assert.ok((flappyWithAlternatesPlan.items[0]?.candidates.length ?? 0) > 1, "the regression fixture must actually surface an alternate candidate");
 assert.equal(flappyWithAlternatesPlan.reviewMode, "automatic", "discovered alternates must not turn a plain app build into an approval stop");
 assert.equal(capabilityPlanRequiresReview(flappyPlan), false);
+
+// Regression (2026-08-11): multi-capability review follows the permission
+// mode. Manual/accept-edits/plan preserve the useful capability chooser;
+// auto/bypass may continue when every selected capability is ready.
+const shoeVideoTask = "create a cool motion website about shoes. Generate a video of a cool pair of shoes and seek the video by scrolling";
+const readyMultiCapabilitySearch = async (_options, queries) => queries.map(() => ({
+  items: [
+    ...appBuilderContextItems,
+    ready("skill:shared:frontend-design", "frontend-design"),
+    ready("skill:shared:website-to-video", "website-to-video", "Capture an existing website and turn its visuals into a video."),
+    ready("skill:shared:short-video-assembly", "short-video-assembly", "Assemble existing clips, narration, subtitles, and music into a short video."),
+    ready("skill:shared:video-render-qa", "video-render-qa", "Verify generated videos and run render quality assurance before delivery."),
+    ready("skill:shared:video-generator-prompting", "video-generator-prompting", "Write and optimize prompts for video generators."),
+    { ...ready("api:/api/chat/video-generation", "/api/chat/video-generation", "Direct video generation API."), score: 200 },
+    { ...ready("mcp-catalog:palmier-pro", "Palmier Pro MCP", "MCP video generation and editing runtime."), score: 190 },
+    { ...ready("hive-action:hosted-media.generate", "Hosted media generation", "Generate hosted media with governed credits."), score: 180 },
+    { ...ready("tool-schema:hive-compute-marketplace", "Compute marketplace", "Video generation compute marketplace."), score: 170 },
+    { ...ready("runtime:local-video-generator", "Local video generator", "Local text-to-video and image-to-video generation runtime."), score: 160 },
+    ready("skill:shared:muapi-generative-media", "muapi-generative-media", "Generate and QA video through the general MUAPI model catalog."),
+    ready("skill:shared:muapi-seedance-video", "muapi-seedance-video", "Generate Seedance text-to-video and image-to-video shots through MUAPI."),
+    {
+      ...ready("connected-app:m5-media-gateway", "Media gateway", "Connected media workbench. App kind: media."),
+      kind: "connected-app",
+      tags: ["connected", "media", "mcp"],
+      aliases: ["media", "video", "render", "generation"],
+      machineName: "M5 MacBook Pro NYC",
+      score: 85,
+    },
+  ],
+  totals: {},
+}));
+const readyMultiCapabilityPlanFor = (permissionMode) => buildCapabilityApprovalPlan({
+  task: shoeVideoTask,
+  agentId: "hermes",
+  chatStorageKey: `hermes::shoe-video-site:${permissionMode}`,
+  origin: "http://localhost:5021",
+  connectedApps: [],
+  permissionMode,
+  search: readyMultiCapabilitySearch,
+  now: 1_700_000_000_070,
+});
+const readyMultiCapabilityPlan = await readyMultiCapabilityPlanFor("manual");
+const videoIntent = CAPABILITY_APPROVAL_INTENTS.find((intent) => intent.id === "video-generation");
+assert.ok(videoIntent, "video generation remains a declared capability intent");
+assert.doesNotMatch(videoIntent.query, /muapi|seedance|higgsfield|hyperframes/i, "video discovery uses capability language instead of provider names");
+assert.equal(videoIntent.primaryCandidatePattern, undefined, "video ranking has no hard-coded primary provider set");
+assert.equal(videoIntent.preferredCandidatePattern, undefined, "video ranking has no hard-coded preferred provider set");
+assert.deepEqual(
+  readyMultiCapabilityPlan.items.map((item) => item.intent),
+  ["app-builder", "interface-design", "video-generation"],
+  "the reported build maps to the workspace, interface, and video capability families",
+);
+assert.ok(
+  readyMultiCapabilityPlan.items.every((item) => item.decision === "use" && item.candidates[0]?.availability === "ready"),
+  "the regression fixture must keep every selected capability ready",
+);
+assert.equal(readyMultiCapabilityPlan.reviewMode, "ask", "manual mode preserves multi-capability review");
+assert.equal((await readyMultiCapabilityPlanFor("accept-edits")).reviewMode, "ask", "accept-edits preserves multi-capability review");
+assert.equal((await readyMultiCapabilityPlanFor("plan")).reviewMode, "ask", "plan mode preserves multi-capability review");
+const automaticMultiCapabilityPlan = await readyMultiCapabilityPlanFor("auto");
+assert.equal(automaticMultiCapabilityPlan.reviewMode, "automatic", "auto mode skips review when every selected capability is ready");
+assert.equal((await readyMultiCapabilityPlanFor("bypass")).reviewMode, "automatic", "bypass mode skips review when every selected capability is ready");
+assert.equal(capabilityPlanRequiresReview(readyMultiCapabilityPlan), true);
+const setupOnlyPlan = await buildCapabilityApprovalPlan({
+  task: "Generate a Seedance video",
+  agentId: "hermes",
+  chatStorageKey: "hermes::setup-only-video",
+  origin: "http://localhost:5021",
+  connectedApps: [],
+  permissionMode: "bypass",
+  search: async (_options, queries) => queries.map(() => ({
+    items: [setup("skill:shared:muapi-seedance-video", "muapi-seedance-video", "Generate Seedance video through MUAPI.")],
+    totals: {},
+  })),
+  now: 1_700_000_000_071,
+});
+assert.equal(setupOnlyPlan.reviewMode, "ask", "bypass never skips a setup-required capability");
+const readyVideoItem = readyMultiCapabilityPlan.items.find((item) => item.intent === "video-generation");
+assert.equal(readyVideoItem?.candidates.length, 8, "deduplication happens before the bounded eight-option model choice set");
+assert.ok(readyVideoItem?.candidates.some((candidate) => candidate.id === "skill:shared:muapi-generative-media"), "the general MUAPI generator remains a visible alternative");
+assert.ok(readyVideoItem?.candidates.some((candidate) => candidate.id === "skill:shared:muapi-seedance-video"), "the focused Seedance generator remains a visible alternative");
+assert.equal(readyVideoItem?.candidates.some((candidate) => candidate.id === "skill:shared:website-to-video"), false, "website capture is excluded without an existing site input");
+assert.equal(readyVideoItem?.candidates.some((candidate) => candidate.id === "skill:shared:short-video-assembly"), false, "clip assembly is excluded without source footage or an editing request");
+assert.equal(readyVideoItem?.candidates.some((candidate) => candidate.id === "skill:shared:video-render-qa"), false, "render QA remains a companion rather than a generation alternative");
+assert.equal(readyVideoItem?.candidates.some((candidate) => candidate.id === "skill:shared:video-generator-prompting"), false, "prompt guidance remains a companion rather than a generation alternative");
+const fleetMediaCandidate = readyVideoItem?.candidates.find((candidate) => candidate.id === "connected-app:m5-media-gateway");
+assert.equal(fleetMediaCandidate?.machineName, "M5 MacBook Pro NYC", "the connected generative-media MCP identifies its fleet machine");
+const automaticMultiCapabilityContinuation = capabilityApprovalContinuationPrompt(automaticMultiCapabilityPlan);
+assert.match(automaticMultiCapabilityContinuation, /model-select the best ready option/i, "automatic plans delegate ambiguous provider choice to the worker model");
+assert.match(automaticMultiCapabilityContinuation, /candidate order is discovery-only and is not a recommendation/i, "automatic plans do not convert search order into provider policy");
+assert.match(automaticMultiCapabilityContinuation, /muapi-generative-media/i, "the worker receives the general MUAPI option");
+assert.match(automaticMultiCapabilityContinuation, /muapi-seedance-video/i, "the worker receives the focused Seedance option");
+assert.match(automaticMultiCapabilityContinuation, /Media gateway[\s\S]+M5 MacBook Pro NYC/i, "the worker receives the fleet media option and machine context");
+const restoredReadyMultiCapabilityPlan = parseStoredChatMessages({
+  "hivemindos.chatMessages.v1": JSON.stringify(compactChatMessagesForStorage({
+    "hermes::shoe-video-site": [{ role: "assistant", content: "", capabilityApproval: readyMultiCapabilityPlan }],
+  })),
+});
+assert.equal(
+  restoredReadyMultiCapabilityPlan["hermes::shoe-video-site"][0].capabilityApproval?.items
+    .find((item) => item.intent === "video-generation")?.candidates.length,
+  8,
+  "the full bounded model-choice set survives capability-card persistence",
+);
+assert.equal(
+  restoredReadyMultiCapabilityPlan["hermes::shoe-video-site"][0].capabilityApproval?.items
+    .find((item) => item.intent === "video-generation")?.candidates
+    .find((candidate) => candidate.id === "connected-app:m5-media-gateway")?.machineName,
+  "M5 MacBook Pro NYC",
+  "the fleet machine label survives capability-card persistence",
+);
+
 const flappyContinuation = capabilityApprovalContinuationPrompt(flappyPlan);
 assert.doesNotMatch(flappyContinuation, /hivemindos-feature-development/i, "a standalone game continuation cannot load the HivemindOS repo-development skill");
 assert.doesNotMatch(flappyContinuation, /the user approved/i, "an automatic capability selection cannot claim the user approved it");
-assert.match(flappyContinuation, /selected this ready capability automatically/i, "the automatic continuation explains why no review was needed");
+assert.match(flappyContinuation, /found ready capabilities automatically/i, "the automatic continuation explains why no review was needed");
 assert.match(flappyContinuation, /invoke_hive_capability/, "the App Builder continuation names the capability tool actually exposed by this chat runtime");
 assert.doesNotMatch(flappyContinuation, /Use the app_builder tool/, "the App Builder continuation cannot direct the model to an unavailable direct tool");
 
@@ -575,6 +688,7 @@ const artifactWithCardMerge = mergeRuntimeHydratedChatMessages(
 assert.equal(artifactWithCardMerge.some((message) => message.appArtifact?.projectId === "local_artifact_1"), true, "artifact restamping also survives merges that preserve local approval exchanges");
 
 const controllerSource = await readFile(new URL("../src/features/dashboard/hooks/use-status-chat-input-controller.tsx", import.meta.url), "utf8");
+const capabilityServiceSource = await readFile(new URL("../src/lib/services/chat/capability-approval.ts", import.meta.url), "utf8");
 const capabilityRouteSource = await readFile(new URL("../src/app/api/chat/capability-approval/route.ts", import.meta.url), "utf8");
 const appBuilderActionSource = await readFile(new URL("../src/lib/services/hive-actions/app-builder.ts", import.meta.url), "utf8");
 const chatTreeControllerSource = await readFile(new URL("../src/features/dashboard/hooks/use-chat-tree-controller.tsx", import.meta.url), "utf8");
@@ -602,6 +716,8 @@ assert.equal(
   "the optimistic user message is appended exactly once across capability and runtime branches",
 );
 assert.match(controllerSource, /workingDirectory:\s*selectedChatDirectoryPath/, "chat preflight sends the attached project directory as repository context");
+assert.match(controllerSource, /action:\s*"draft"[\s\S]+permissionMode,/, "chat preflight sends the selected permission mode to capability planning");
+assert.match(capabilityServiceSource, /applyAppPreferences\(discoveredConnectedApps/, "capability planning applies connected-app capability and MCP preferences before ranking");
 assert.match(controllerSource, /!capabilityData\.required[\s\S]+prepareCapabilityAppProject[\s\S]+runChatMessage/, "the send controller continues an automatic plan without relying on a rendered approval card");
 // A failed automatic preparation must read as an error with the standard retry
 // affordance — an approval card cannot fix a broken machine, and clicking
@@ -661,6 +777,7 @@ assert.match(derivedStateSource, /compactCapabilityContinuation\(\s*work\.title 
 assert.match(derivedStateSource, /compactCapabilityContinuation\(primaryWork\.title\)/, "the fleet agent card's current-task line compacts capability continuations");
 assert.match(derivedStateSource, /compactCapabilityContinuation\(task\.title\)/, "fleet task rows compact capability continuations");
 assert.match(capabilityRouteSource, /workingDirectory:\s*typeof body\.workingDirectory/, "the capability API forwards bounded repository context to the ranker");
+assert.match(capabilityRouteSource, /permissionMode:\s*normalizeChatPermissionMode\(body\.permissionMode\)/, "the capability API normalizes and forwards permission mode at the boundary");
 assert.match(capabilityRouteSource, /required:\s*capabilityPlanRequiresReview\(plan\)/, "the API distinguishes an automatic single choice from a plan that needs review");
 assert.match(appBuilderActionSource, /title:\s*"Create app workspace"/, "the stable apps.build action uses an unambiguous user-facing name");
 assert.doesNotMatch(appBuilderActionSource, /title:\s*"Build HivemindOS app"/, "the action title cannot imply that a standalone project edits HivemindOS");
@@ -673,6 +790,7 @@ assert.doesNotMatch(threadSource, /AutomaticCapabilityPlanRunner/, "automatic co
 assert.match(approvalCardSource, /<details className=\{styles\.advanced\}/, "rare capability controls are collapsed by default");
 assert.match(approvalCardSource, /<summary[\s\S]+Advanced[\s\S]+Change tools or add instructions/, "the advanced disclosure explains its purpose in plain language");
 assert.match(approvalCardSource, /<details[\s\S]+Choose an alternative[\s\S]+Use another GitHub repository[\s\S]+Instructions for this capability/, "alternatives and manual inputs live inside Advanced");
+assert.match(approvalCardSource, /candidate\.machineName/, "connected capability alternatives identify their fleet machine");
 assert.doesNotMatch(approvalCardSource, />\s*Browse\s*</, "the default card has no competing Browse action");
 assert.match(approvalCardSource, />\s*Continue\s*</, "the primary action uses a short concrete label");
 assert.doesNotMatch(approvalCardSource, /I’ve drafted the capability list/, "the footer does not repeat what the card already communicates");

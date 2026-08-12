@@ -136,7 +136,7 @@ type HiveButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   size?: "default" | "sm" | "icon" | "iconSm";
 };
 
-/** Honey-primary pill button in the hive language (matches the design system). */
+/** Hivemind accent primary pill button in the hive language (matches the design system). */
 export function HiveButton({ variant = "primary", size = "default", className, type, children, ...props }: HiveButtonProps) {
   const variantClass = variant === "secondary" ? styles.btnSecondary
     : variant === "outline" ? styles.btnOutline

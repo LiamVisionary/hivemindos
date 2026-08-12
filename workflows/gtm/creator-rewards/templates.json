@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "provenance": "authored",
+  "license": "MIT (same as this repository)",
+  "verifiedOn": "2026-08-11",
+  "note": "Authored operating rows for performance-paid faceless AI UGC and creator-reward campaigns: launch readiness, creator selection, payout controls, funnel diagnosis, cohort testing, scorecard fields, organic-to-paid handoff, and operator communication. These rows paraphrase useful mechanisms from the user-supplied promotional article 'This is how we scaled RIZZ app to $5,000,000/year with AI UGC (The Complete Guide)' but deliberately omit its unverified revenue, spend, network-size, CPM, view-band, cohort-size, ROAS, and budget claims. They are starting hypotheses, not measured results. The full playbook lives in the shared skills shelf as content-rewards-viral-app-campaign. Hard rules: no payout for invalid traffic, no fabricated engagement or proof, no public humiliation, no creator outreach/spend/publishing without approval, no paid reuse without documented rights, and no scaling without downstream attribution and a hard loss cap. Slots are UPPERCASE so an unfilled template trips the deliverable acceptance gate.",
+  "count": 66,
+  "omitted": "Current provider prices, creator-network size, platform capabilities, universal view thresholds, fixed cohort sizes, fixed test windows, fixed ROAS targets, and fixed daily budgets are intentionally absent because they are volatile or only vendor-claimed. Resolve them from current primary evidence and the app's own economics.",
+  "readinessGates": [
+    { "id": "CRG01", "gate": "visible app moment", "pass": "the result is understandable in one frame or a short native clip", "block": "the promise stays generic or requires a long explanation" },
+    { "id": "CRG02", "gate": "conversion path", "pass": "install through paid conversion is measured by source", "block": "only views or aggregate downloads are visible" },
+    { "id": "CRG03", "gate": "retention and value", "pass": "cohort retention or conservative contribution value is observed", "block": "revenue potential is inferred from top-line pricing alone" },
+    { "id": "CRG04", "gate": "attribution", "pass": "creator, account, post, click, install, and downstream events reconcile", "block": "the operator cannot connect a post to business outcomes" },
+    { "id": "CRG05", "gate": "creative evidence", "pass": "an owned converting format exists or a bounded discovery test is defined", "block": "the plan assumes a large roster will discover product-market fit" },
+    { "id": "CRG06", "gate": "risk controls", "pass": "budget, payout, fraud, rights, appeal, and stop rules are written", "block": "launch terms allow uncapped spend or ambiguous paid reuse" }
+  ],
+  "creatorCriteria": [
+    { "id": "CRS01", "criterion": "format-family proof", "evidence": "rights-respecting examples showing the same structural format, not merely the same category" },
+    { "id": "CRS02", "criterion": "account health", "evidence": "plausible organic history and engagement with no obvious bought-view, engagement-pod, impersonation, or policy pattern" },
+    { "id": "CRS03", "criterion": "brief fidelity", "evidence": "follows claim, disclosure, rights, naming, demo, CTA, and submission requirements" },
+    { "id": "CRS04", "criterion": "throughput and consistency", "evidence": "meets an agreed cadence without repetitive spam, quality collapse, or undisclosed delegation" },
+    { "id": "CRS05", "criterion": "editing fundamentals", "evidence": "clear first frame, tight pacing, mobile-safe captions, readable app demo, and coherent hook stack" },
+    { "id": "CRS06", "criterion": "collaboration quality", "evidence": "responds to feedback, submits clean evidence, respects corrections, and surfaces source-linked format ideas" }
+  ],
+  "launchPaths": [
+    { "id": "CRL01", "path": "owned-format scale", "useWhen": "the operator has an original post with attributable conversion evidence", "test": "use a small cohort to test whether the structure transfers across creators" },
+    { "id": "CRL02", "path": "network discovery", "useWhen": "no format has attributable conversion evidence", "test": "cap the cohort and maximum loss, test distinct format families, and treat the spend as research" }
+  ],
+  "payoutControls": [
+    { "id": "CRP01", "control": "verified-view definition", "rule": "publish the source, counting window, invalid-traffic filters, paid-boost treatment, and late-adjustment policy before launch" },
+    { "id": "CRP02", "control": "creator floor", "rule": "set a clearly disclosed minimum payable amount or aggregation policy so valid micro-earnings do not disappear into processing ambiguity" },
+    { "id": "CRP03", "control": "creator cap", "rule": "cap payout per creator and campaign so one account cannot consume the budget before review" },
+    { "id": "CRP04", "control": "campaign loss cap", "rule": "set the maximum approved payout plus operating spend before the first post; exceeding it requires a new approval" },
+    { "id": "CRP05", "control": "business-value bonus", "rule": "reward verified installs, activations, qualified trials, paid customers, or retained value only when attribution and fraud controls support it" },
+    { "id": "CRP06", "control": "invalid-traffic appeal", "rule": "show the rejection reason, evidence class, response window, reviewer, and final disposition without exposing fraud-detection secrets" },
+    { "id": "CRP07", "control": "authoritative settlement", "rule": "server-side verified events and the approved terms determine payout; creator screenshots and local UI state are evidence, not authority" }
+  ],
+  "diagnosticLadder": [
+    { "id": "CRD01", "pattern": "healthy delivery with weak initial attention", "suspect": "hook, first frame, format-audience fit, or account eligibility", "nextTest": "hold the body constant and test several hooks after checking platform diagnostics" },
+    { "id": "CRD02", "pattern": "initial attention with weak completion", "suspect": "pacing, dead space, story tension, creator execution, or reveal timing", "nextTest": "recut the middle, move proof earlier, and compare creators on the same brief" },
+    { "id": "CRD03", "pattern": "strong views with weak clicks or installs", "suspect": "low product intent, unclear demo, CTA timing, caption naming, or store mismatch", "nextTest": "add a truthful app demo and explicit next step, then align the store promise" },
+    { "id": "CRD04", "pattern": "installs with weak activation or payment", "suspect": "onboarding, paywall, trial terms, value delivery, or product retention", "nextTest": "stop creative scale and fix the downstream funnel" },
+    { "id": "CRD05", "pattern": "paid customers with weak retention or high refunds", "suspect": "expectation mismatch, claim quality, or product value", "nextTest": "stop scale, audit the promise, and repair retention before buying more traffic" }
+  ],
+  "cohortRules": [
+    { "id": "CRT01", "rule": "name one changed variable", "detail": "a cohort tests one hook, first frame, format, creator segment, CTA, or product-demonstration change at a time" },
+    { "id": "CRT02", "rule": "declare the sample", "detail": "list creators, accounts, platforms, posts, start time, and exclusions before results are reviewed" },
+    { "id": "CRT03", "rule": "declare maximum loss", "detail": "record the maximum payout and operating spend that can accrue without a new approval" },
+    { "id": "CRT04", "rule": "respect conversion delay", "detail": "choose the review window from platform delivery and downstream event delay, not a copied fixed number" },
+    { "id": "CRT05", "rule": "keep exploration alive", "detail": "reserve an explicit test share while a winner runs; change the share when decay speed, test cost, or confidence changes" },
+    { "id": "CRT06", "rule": "expand from evidence", "detail": "add creators only when downstream conversion, payout efficiency, and traffic quality remain acceptable after the declared window" },
+    { "id": "CRT07", "rule": "retire on decay", "detail": "retire or rework a format when normalized hold, conversion, or payout efficiency degrades across enough comparable posts—not merely because it feels old" }
+  ],
+  "scoreboardFields": [
+    { "id": "CRM01", "field": "verified views", "role": "eligible attention after invalid-traffic checks" },
+    { "id": "CRM02", "field": "initial hold", "role": "first-frame and hook diagnostic at the platform-supported interval" },
+    { "id": "CRM03", "field": "completion or watch curve", "role": "pacing and reveal diagnostic" },
+    { "id": "CRM04", "field": "clicks and store visits", "role": "product-intent and CTA diagnostic" },
+    { "id": "CRM05", "field": "installs", "role": "acquisition outcome reconciled to creator and post" },
+    { "id": "CRM06", "field": "activation", "role": "first meaningful product-value event" },
+    { "id": "CRM07", "field": "trial start", "role": "offer and paywall diagnostic where applicable" },
+    { "id": "CRM08", "field": "paid conversion", "role": "customer outcome, separated from free acquisition" },
+    { "id": "CRM09", "field": "refund and retention", "role": "quality and expectation-match check" },
+    { "id": "CRM10", "field": "contribution revenue", "role": "net value over a stated cohort window" },
+    { "id": "CRM11", "field": "creator payout", "role": "approved cost after verification and disputes" },
+    { "id": "CRM12", "field": "cost per downstream outcome", "role": "payout efficiency at install, activation, trial, customer, and retained-value levels" }
+  ],
+  "paidHandoff": [
+    { "id": "CRH01", "check": "creator permission", "evidence": "documented paid-media rights, authorization duration, territories, edit rights, identity, and compensation" },
+    { "id": "CRH02", "check": "asset stability", "evidence": "final caption/post authorization or an approved editable master with a known takedown path" },
+    { "id": "CRH03", "check": "disclosure and policy", "evidence": "current AI, sponsorship, category-claim, music, likeness, and platform review" },
+    { "id": "CRH04", "check": "attribution", "evidence": "test install and revenue events reconcile through the selected measurement path" },
+    { "id": "CRH05", "check": "economic ceiling", "evidence": "conservative contribution value, target acquisition ceiling, payback window, and refund assumptions" },
+    { "id": "CRH06", "check": "bounded test", "evidence": "creative matrix, daily and lifetime cap, delayed-conversion window, and kill/hold/scale rules" },
+    { "id": "CRH07", "check": "launch approval", "evidence": "human-approved account, geography, campaign mode, identity, budget, creatives, dates, and operator authority" }
+  ],
+  "antiPatterns": [
+    { "id": "CRN01", "pattern": "views as the success metric", "why": "attention without attributable installs, customers, or retained value can be expensive vanity" },
+    { "id": "CRN02", "pattern": "universal source thresholds", "why": "copied view bands, CPMs, cohort sizes, test windows, and ROAS targets ignore the app's distribution and economics" },
+    { "id": "CRN03", "pattern": "large roster before a bounded test", "why": "marginal creator value can decline while payout exposure and operational noise rise" },
+    { "id": "CRN04", "pattern": "shadow-ban diagnosis by default", "why": "check account eligibility, policy status, delivery, hook, and comparable posts before blaming an opaque platform penalty" },
+    { "id": "CRN05", "pattern": "paying creator screenshots", "why": "screenshots can be stale or manipulated and do not replace authoritative platform and attribution evidence" },
+    { "id": "CRN06", "pattern": "public firing or humiliation", "why": "public standards are useful; naming and shaming individual creators is coercive, damages trust, and adds no diagnostic value" },
+    { "id": "CRN07", "pattern": "copying a competitor's expression", "why": "reuse structural lessons while keeping scripts, footage, voice, likeness, branding, and claims original or licensed" },
+    { "id": "CRN08", "pattern": "automatic roster-wide rollout", "why": "test new hooks and formats in a declared cohort before exposing the full budget" },
+    { "id": "CRN09", "pattern": "paid reuse without day-one rights", "why": "renegotiating after a post wins creates leverage, delay, takedown, and consent risk" },
+    { "id": "CRN10", "pattern": "upload every clip without a cap", "why": "organic underperformance does not preclude paid success, but paid exploration still needs a deliberate matrix and maximum loss" }
+  ],
+  "communicationTemplates": [
+    { "id": "CRK01", "moment": "bounded cohort brief", "template": "Campaign: [APP NAME]\nFormat family: [FORMAT FAMILY]\nPlatform: [PLATFORM]\nChanged variable: [CHANGED VARIABLE]\nMaximum approved loss: [MAXIMUM LOSS]\nReview window: [REVIEW WINDOW]\nExpansion evidence: [EXPANSION EVIDENCE]" },
+    { "id": "CRK02", "moment": "public legitimate win", "template": "Shoutout to [CREATOR NAME] for [SPECIFIC WIN]. The post drove [VERIFIED BUSINESS RESULT], and the transferable lesson is [STRUCTURAL LESSON]. We are testing that lesson across the next cohort without copying the original post." },
+    { "id": "CRK03", "moment": "private corrective feedback", "template": "Your post [POST LINK] missed [PUBLISHED STANDARD]. The evidence is [SPECIFIC EVIDENCE]. Please correct [CORRECTIVE ACTION] by [DEADLINE]. If you disagree, use [APPEAL PATH] before the payout decision is final." },
+    { "id": "CRK04", "moment": "paid handoff request", "template": "Please review paid use of [POST LINK] for [PLATFORM] in [TERRITORY]. Proposed authorization: [AUTHORIZATION WINDOW]. Identity and edit rights: [RIGHTS SUMMARY]. Compensation: [COMPENSATION TERMS]. Nothing runs until you and the campaign operator approve the final terms." }
+  ]
+}

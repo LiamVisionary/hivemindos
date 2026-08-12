@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { BrainFiberTubes } from "./brain-fiber-tubes";
-import { clamp, hashUnit } from "./brain-synapse-gpu";
+import { clamp, hashUnit, srgbColor } from "./brain-synapse-gpu";
 
 export type DendriteNode = {
   activity: number;
@@ -26,6 +26,8 @@ export class BrainDendriteField {
   private readonly end = new THREE.Vector3();
   private readonly endColor = new THREE.Color();
   private readonly glowColor = new THREE.Color(0.08, 0.42, 1);
+  private readonly lightGlowColor = srgbColor("#3f68b2");
+  private light: boolean;
   private readonly normal = new THREE.Vector3();
   private readonly side = new THREE.Vector3();
   private readonly start = new THREE.Vector3();
@@ -41,6 +43,7 @@ export class BrainDendriteField {
   private readonly twigs: BrainFiberTubes;
 
   constructor(nodes: DendriteNode[], light: boolean) {
+    this.light = light;
     this.branches = [];
     nodes.forEach((node, nodeIndex) => {
       const count = 7 + Math.round(clamp(node.weight, 0, 1) * 5);
@@ -57,17 +60,24 @@ export class BrainDendriteField {
     this.terminals = new BrainFiberTubes(this.branches.length * 6, light, { along: 8, around: 4, shell: 0.12, terminalGlow: 0.04 });
     this.mesh.add(this.trunks.mesh, this.twigs.mesh, this.terminals.mesh);
     this.mesh.renderOrder = -0.5;
-    this.setOpacity(light ? 0.14 : 0.64);
+    this.setOpacity(light ? 0.72 : 0.64);
   }
 
   setTheme(light: boolean) {
+    this.light = light;
     this.trunks.setTheme(light);
     this.twigs.setTheme(light);
     this.terminals.setTheme(light);
-    this.setOpacity(light ? 0.14 : 0.64);
+    this.setOpacity(light ? 0.72 : 0.64);
   }
 
   setOpacity(opacity: number) {
+    if (this.light) {
+      this.trunks.setOpacity(opacity);
+      this.twigs.setOpacity(opacity * 0.82);
+      this.terminals.setOpacity(opacity * 0.64);
+      return;
+    }
     this.trunks.setOpacity(opacity * 0.82);
     this.twigs.setOpacity(opacity * 0.88);
     this.terminals.setOpacity(opacity * 0.84);
@@ -82,17 +92,20 @@ export class BrainDendriteField {
         nodeTints[branch.nodeIndex * 3 + 1],
         nodeTints[branch.nodeIndex * 3 + 2],
       );
-      this.endColor.copy(this.startColor).lerp(this.glowColor, 0.34 + branch.seed * 0.2);
+      this.endColor.copy(this.startColor).lerp(
+        this.light ? this.lightGlowColor : this.glowColor,
+        this.light ? 0.08 + branch.seed * 0.08 : 0.34 + branch.seed * 0.2,
+      );
       this.trunks.setColors(branch.slot, this.startColor, this.endColor);
-      this.trunks.setStrength(branch.slot, 0.58 + node.activity * 0.22 + node.weight * 0.16);
+      this.trunks.setStrength(branch.slot, this.light ? 0.88 : 0.58 + node.activity * 0.22 + node.weight * 0.16);
       for (let fork = 0; fork < 3; fork += 1) {
         const twigSlot = branch.slot * 3 + fork;
         this.twigs.setColors(twigSlot, this.endColor, this.startColor);
-        this.twigs.setStrength(twigSlot, 0.44 + node.activity * 0.16 + node.weight * 0.12);
+        this.twigs.setStrength(twigSlot, this.light ? 0.76 : 0.44 + node.activity * 0.16 + node.weight * 0.12);
         for (let child = 0; child < 2; child += 1) {
           const terminalSlot = twigSlot * 2 + child;
           this.terminals.setColors(terminalSlot, this.endColor, this.startColor);
-          this.terminals.setStrength(terminalSlot, 0.4 + node.activity * 0.14 + node.weight * 0.1);
+          this.terminals.setStrength(terminalSlot, this.light ? 0.68 : 0.4 + node.activity * 0.14 + node.weight * 0.1);
         }
       }
     }

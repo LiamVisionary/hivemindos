@@ -64,7 +64,7 @@ export function CapabilityApprovalCard({
                 <span className={removed ? styles.removedDot : setupRequired ? styles.setupDot : styles.readyDot} aria-hidden="true" />
                 <span>
                   <strong>{item.label}</strong>
-                  <small>{removed ? "Removed" : `${selected.name} · ${setupRequired ? "Setup required" : "Ready"}`}</small>
+                  <small>{removed ? "Removed" : `${selected.name}${selected.machineName ? ` · ${selected.machineName}` : ""} · ${setupRequired ? "Setup required" : "Ready"}`}</small>
                 </span>
               </div>
 
@@ -132,7 +132,7 @@ export function CapabilityApprovalCard({
                             })}
                           >
                             <span>{candidate.name}</span>
-                            <small>{candidate.availability === "ready" ? "Available" : "Needs setup"}</small>
+                            <small>{candidate.availability === "ready" ? "Available" : "Needs setup"}{candidate.machineName ? ` · ${candidate.machineName}` : ""}</small>
                           </button>
                         ))}
                       </div>

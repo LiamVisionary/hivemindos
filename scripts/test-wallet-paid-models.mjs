@@ -40,6 +40,7 @@ const [
   modelsRoute,
   setupWalletRoute,
   setupComponent,
+  subscriptionComponent,
   setupFundingWallets,
   setupStyles,
   walletSelectModal,
@@ -70,6 +71,12 @@ const [
   officialCreditTopUpRoute,
   officialCreditCheckoutRoute,
   officialCreditBalanceRoute,
+  subscriptionRoute,
+  officialCreditConsolidationRoute,
+  officialSubscriptionStatusRoute,
+  officialSubscriptionPlansRoute,
+  officialSubscriptionCheckoutRoute,
+  officialSubscriptionCancelRoute,
   chatBillingTypes,
   runtimeSessionStore,
   dashboardTypes,
@@ -94,6 +101,7 @@ const [
   source("src/app/api/hivemindos/models/models/route.ts"),
   source("src/app/api/hivemindos/models/wallet/route.ts"),
   source("src/features/dashboard/views/chat/GuidedHivemindosModelsSetup.tsx"),
+  source("src/features/dashboard/views/chat/HivemindosModelSubscriptions.tsx"),
   source("src/features/dashboard/views/chat/hivemindos-model-funding-wallets.ts"),
   source("src/features/dashboard/views/chat/HivemindosModelsSetup.module.css"),
   source("src/features/dashboard/views/trade/WalletSelectModal.tsx"),
@@ -124,6 +132,12 @@ const [
   source("src/app/api/official-paid-agents/[slug]/credits/top-up/route.ts"),
   source("src/app/api/official-paid-agents/[slug]/credits/checkout/route.ts"),
   source("src/app/api/official-paid-agents/[slug]/credits/balance/route.ts"),
+  source("src/app/api/hivemindos/models/credits/subscription/route.ts"),
+  source("src/app/api/official-paid-agents/[slug]/credits/consolidate/route.ts"),
+  source("src/app/api/official-paid-agents/[slug]/credits/subscription/route.ts"),
+  source("src/app/api/official-paid-agents/[slug]/credits/subscription/plans/route.ts"),
+  source("src/app/api/official-paid-agents/[slug]/credits/subscription/checkout/route.ts"),
+  source("src/app/api/official-paid-agents/[slug]/credits/subscription/cancel/route.ts"),
   source("src/lib/types/chat-billing.ts"),
   source("src/lib/services/chat/runtime-session-store.ts"),
   source("src/features/dashboard/dashboard-types.ts"),
@@ -152,7 +166,7 @@ includes(runtimeRoute, "if (isHivemindosWalletPaidModelProfile(profile))", "chat
 includes(runtimeRoute, "return streamOpenAICompatibleRuntime(profile, messages, userText", "chat runtime wallet-paid OpenAI-compatible stream");
 includes(runtimeRoute, "telemetryUrl: \"\"", "chat runtime wallet-paid dashboard-local proxy routing");
 includes(runtimeRoute, "hivemindosModelsBillingFromHeaders", "chat runtime model billing headers");
-includes(runtimeRoute, "X-HivemindOS-Models-Credit-Debited-Usd", "chat runtime model credit debit header");
+includes(runtimeRoute, "X-HivemindOS-Models-Credit-Debited-Credits", "chat runtime model credit debit header");
 includes(runtimeRoute, "ssePayload({ billing: responseBilling })", "chat runtime streams model billing");
 includes(runtimeRoute, "extractOpenAIToolCalls", "chat runtime extracts non-stream OpenAI tool calls");
 includes(runtimeRoute, "runNonStreamToolCalls", "chat runtime executes non-stream model tool calls");
@@ -286,7 +300,7 @@ includes(agentRuntimeTypes, "creditAccountId?: string", "agent profile hosted cr
 includes(agentRuntimeTypes, "fundingWalletKind?: \"personal\" | \"agent\"", "agent profile funding source kind");
 includes(agentRuntimeTypes, "fundingWalletLabel?: string", "agent profile funding source label");
 includes(agentRuntimeTypes, "lastCheckoutSessionId?: string", "agent profile card checkout session metadata");
-includes(agentRuntimeTypes, "lastCreditBalanceUsd?: string", "agent profile wallet-paid model credit balance");
+includes(agentRuntimeTypes, "lastCreditBalanceCredits?: string", "agent profile wallet-paid model credit balance");
 includes(agentRuntimeTypes, "lastCreditBalanceLabel?: string", "agent profile wallet-paid model credit balance label");
 includes(agentSettingsTypes, "hivemindosModels?: HivemindosModelsAgentConfig", "agent create draft wallet-paid config");
 
@@ -339,7 +353,9 @@ includes(setupComponent, "data-mode={fundingMode}", "guided setup funding mode s
 assert.match(setupComponent, />\s*Card\s*<\/button>/, "guided setup card funding mode should render the compact Card label");
 includes(setupComponent, "Card top-ups are stored", "guided setup card funding footer copy");
 includes(setupComponent, "Crypto wallet", "guided setup crypto wallet mode");
-includes(setupComponent, "CARD_CREDIT_AMOUNT_OPTIONS = [10, 25, 50, 100]", "guided setup card credit presets");
+includes(setupComponent, "CARD_CREDIT_AMOUNT_OPTIONS = [5, 10, 25, 50, 100]", "guided setup card credit presets include the server minimum");
+includes(setupComponent, "cardTopUpAmountUsd >= 5", "guided setup rejects card and crypto top-ups below five dollars");
+includes(setupComponent, 'min="5"', "guided setup custom amount input starts at five dollars");
 includes(setupComponent, "CardCreditAmountOption", "guided setup card custom amount state");
 includes(setupComponent, "const topUpAmountSelector", "guided setup reuses one amount selector for card and crypto");
 includes(setupComponent, "Custom amount", "guided setup custom credit amount input");
@@ -629,7 +645,7 @@ runTsxAssertion(`
 assert.ok(!setupComponent.includes("async function finishSetup"), "embedded panel has no Done handler of its own — every change persists immediately via onComplete");
 assert.ok(!setupComponent.includes("onCancel: () => void"), "embedded panel takes no onCancel prop (only the wallet browser's internal Back remains)");
 includes(setupComponent, "const fundingConfigured = walletReady || cardFundingReady", "guided setup derives one funded flag for the balance pill and paid-model gate");
-includes(setupComponent, "const modelCreditPillBalanceUsd", "guided setup balance pill derives the hosted model-credit balance");
+includes(setupComponent, "const modelCreditPillBalance", "guided setup balance pill derives the hosted model-credit balance");
 includes(setupComponent, "data-funded={modelCreditPillFunded || undefined}", "guided setup balance pill is funded only by hosted model credits");
 assert.ok(!setupComponent.includes("pillBalanceUsd"), "guided setup balance pill should not fall back to the connected wallet balance");
 includes(setupComponent, "const staticCatalogModels = HIVEMINDOS_WALLET_PAID_MODEL_OPTIONS", "guided setup derives static HivemindOS models for the unified catalog");
@@ -719,9 +735,9 @@ includes(agentSettingsModal, "creditAccountId", "agent settings modal preserves 
 includes(agentSettingsModal, "fundingMode", "agent settings modal preserves HivemindOS Models funding mode");
 includes(agentSettingsModal, "lastCreditBalanceLabel", "agent settings modal preserves HivemindOS Models credit balance");
 assert.ok(!agentSettingsModal.includes(") : hivemindosModelsSelected ? ("), "agent settings modal should not render completed HivemindOS Models setup solely because the provider is selected");
-includes(agentSettingsPrimitives, "moneyValue(config.lastCreditBalanceUsd) > 0", "agent settings readiness requires funded hosted credits");
+includes(agentSettingsPrimitives, "numericValue(config.lastCreditBalanceCredits) > 0", "agent settings readiness requires funded hosted credits");
 includes(agentSettingsPrimitives, "if (isFreeHivemindosWalletPaidModel(model)) return true", "agent settings readiness treats the free model as ready");
-assert.ok(!agentSettingsPrimitives.includes("config.lastCheckoutSessionId\n      || config.lastCreditBalanceUsd"), "agent settings readiness should not treat an opened checkout session as ready");
+assert.ok(!agentSettingsPrimitives.includes("config.lastCheckoutSessionId\n      || config.lastCreditBalanceCredits"), "agent settings readiness should not treat an opened checkout session as ready");
 includes(walletPanel, "buildLlmFundingSourceMeta", "wallet panel LLM funding source metadata");
 includes(walletPanel, "Hosted model credits", "wallet panel card-funded LLM funding source metadata");
 includes(walletPanel, "onOpenLlmFundingSource", "wallet panel funding source action");
@@ -736,7 +752,7 @@ includes(proxyRoute, "upstreamHivemindosWalletPaidModel", "wallet-paid proxy map
 includes(proxyRoute, "resolvePooledHivemindosModelCreditToken", "wallet-paid proxy reads the shared prepaid credit pool");
 includes(proxyRoute, "X-HivemindOS-Credit-Token", "wallet-paid proxy forwards hosted credit token");
 includes(proxyRoute, "fetchWithHostedCredits", "wallet-paid proxy uses stored credits without a local wallet secret");
-includes(proxyRoute, "X-HivemindOS-Models-Credit-Balance-Usd", "wallet-paid proxy exposes hosted model credit balance");
+includes(proxyRoute, "X-HivemindOS-Models-Credit-Balance-Credits", "wallet-paid proxy exposes hosted model credit balance");
 includes(proxyRoute, "const upstreamModel = upstreamHivemindosWalletPaidModel(model)", "wallet-paid proxy derives upstream model id");
 includes(proxyRoute, "model: upstreamModel", "wallet-paid proxy sends upstream model id");
 includes(proxyRoute, "return { ...payload, model }", "wallet-paid proxy preserves public HivemindOS model id in OpenAI-compatible responses");
@@ -822,6 +838,25 @@ includes(creditRoute, "walletAgentId: HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID"
 includes(creditRoute, "existingPoolToken", "wallet top-up reuses the pool token so the gateway credits one account");
 includes(setupComponent, "HIVEMINDOS_SHARED_MODEL_CREDIT_ACCOUNT_ID", "panel resolves the shared credit pool");
 assert.ok(!setupComponent.includes("hmos-model-credits:"), "panel no longer mints per-draft credit account ids");
+includes(subscriptionRoute, 'body.action === "sync"', "subscription route supports authenticated phone/desktop account sync");
+includes(subscriptionRoute, "creditTokens: [mobileToken, desktopToken]", "subscription sync keeps the mobile account canonical while consolidating balances");
+includes(subscriptionRoute, "storeHivemindosModelCreditToken", "subscription checkout and sync persist the shared hosted credential");
+includes(subscriptionRoute, "CANCEL_HIVEMINDOS_CREDIT_SUBSCRIPTION", "desktop subscription cancellation requires explicit server confirmation");
+includes(setupComponent, "HivemindosModelSubscriptions", "guided setup mounts the focused subscription card");
+includes(setupComponent, "modelCreditsForRetailAmount", "one-time funding presents opaque credit units alongside the retail payment");
+runTsxAssertion(`
+  import assert from "node:assert/strict";
+  import { modelCreditsForRetailAmount } from "./src/lib/utils/model-credits.ts";
+  assert.deepEqual(
+    [20, 50, 100].map(modelCreditsForRetailAmount),
+    [10_000, 25_000, 50_000],
+  );
+`, "one-time funding uses the high-scale opaque credit denomination");
+includes(subscriptionComponent, "Same plans and credits as HivemindOS mobile", "desktop subscription UI identifies the shared mobile catalog");
+includes(subscriptionComponent, "plan.monthlyCredits", "desktop subscription UI renders opaque monthly credits");
+assert.ok(!subscriptionComponent.includes("monthlyCreditsUsd"), "desktop subscription UI must not receive internal dollar grants");
+includes(subscriptionComponent, 'action: "checkout"', "desktop subscription UI starts hosted Stripe checkout");
+includes(subscriptionComponent, 'action: "cancel"', "desktop subscription UI exposes cancellation");
 assert.ok(!agentController.includes("hmos-model-credits:"), "agent create no longer needs a credits re-key");
 includes(creditRoute, "officialPaidAgentCheckoutReturnUrl(\"success\", slug)", "model credits route uses hosted success return URL");
 includes(creditRoute, "officialPaidAgentCheckoutReturnUrl(\"cancel\", slug)", "model credits route uses hosted cancel return URL");
@@ -829,6 +864,36 @@ assert.ok(!creditRoute.includes("creditToken,"), "model credits route should not
 
 includes(chatBillingTypes, "export type ChatResponseBilling", "chat billing metadata type");
 includes(chatBillingTypes, "normalizeChatResponseBilling", "chat billing metadata normalizer");
+runTsxAssertion(`
+  import assert from "node:assert/strict";
+  import { normalizeChatResponseBilling } from "./src/lib/types/chat-billing.ts";
+  const legacyPrepaid = normalizeChatResponseBilling({
+    provider: "hivemindos-models",
+    source: "prepaid-credit",
+    costUsd: 0.125,
+    balanceUsd: 12.5,
+  });
+  assert.equal(legacyPrepaid?.costUsd, undefined);
+  assert.equal(legacyPrepaid?.balanceUsd, undefined);
+  const opaquePrepaid = normalizeChatResponseBilling({
+    provider: "hivemindos-models",
+    source: "prepaid-credit",
+    creditsDebited: 9.25,
+    creditsBalance: 990.75,
+    costUsd: 0.125,
+    balanceUsd: 12.5,
+  });
+  assert.equal(opaquePrepaid?.creditsDebited, 9.25);
+  assert.equal(opaquePrepaid?.creditsBalance, 990.75);
+  assert.equal(opaquePrepaid?.costUsd, undefined);
+  assert.equal(opaquePrepaid?.balanceUsd, undefined);
+  const directWallet = normalizeChatResponseBilling({
+    provider: "hivemindos-models",
+    source: "x402",
+    costUsd: 0.125,
+  });
+  assert.equal(directWallet?.costUsd, 0.125);
+`, "legacy HivemindOS prepaid billing strips dollar-denominated credit fields");
 includes(runtimeSessionStore, "billing?: ChatResponseBilling", "runtime session persists response billing");
 includes(runtimeSessionStore, "updateRuntimeChatSessionLastAssistantBilling", "runtime session can update streamed assistant billing");
 includes(dashboardTypes, "billing?: ChatResponseBilling", "dashboard chat messages include response billing");
@@ -844,13 +909,22 @@ includes(paidAgentCloudClient, "proxyOfficialPaidAgentCreditBalanceRequest", "of
 includes(paidAgentCloudClient, "officialPaidAgentCheckoutReturnUrl", "official paid-agent client builds checkout return URLs");
 includes(paidAgentCloudClient, "models\", \"credits\", \"return", "official paid-agent checkout return URL path");
 includes(paidAgentCloudClient, "x-hivemindos-credit-token", "official paid-agent proxy forwards credit token header");
-includes(paidAgentCloudClient, "x-hivemindos-credit-balance-usd", "official paid-agent proxy exposes credit balance header");
+includes(paidAgentCloudClient, "x-hivemindos-credit-balance-credits", "official paid-agent proxy exposes opaque credit balance header");
+assert.ok(!paidAgentCloudClient.includes("x-hivemindos-credit-balance-usd"), "official paid-agent proxy must not expose internal dollar balances");
+includes(creditRoute, "balanceCredits", "model credits route returns opaque balances");
+assert.ok(!creditRoute.includes("creditedUsd"), "model credits route must not return internal credited USD");
+assert.ok(!subscriptionRoute.includes("balanceUsd"), "model subscription route must not return internal USD balances");
 includes(paidAgentCloudClient, "fetchOfficialPaidAgentModelList", "official paid-agent client lists gateway models");
 includes(paidAgentCloudClient, "freeModelChatCompletionsUrl", "official paid-agent client resolves the free-models surface");
 includes(paidAgentCloudClient, "FREE_MODELS_BASE_URL_ENV", "free-models base override env");
 includes(officialCreditTopUpRoute, "proxyOfficialPaidAgentCreditTopUpRequest", "official credit top-up route");
 includes(officialCreditCheckoutRoute, "proxyOfficialPaidAgentCreditCheckoutRequest", "official credit checkout route");
 includes(officialCreditBalanceRoute, "proxyOfficialPaidAgentCreditBalanceRequest", "official credit balance route");
+includes(officialCreditConsolidationRoute, "proxyOfficialPaidAgentCreditConsolidationRequest", "official credit consolidation route");
+includes(officialSubscriptionStatusRoute, "proxyOfficialPaidAgentCreditSubscriptionStatusRequest", "official subscription status route");
+includes(officialSubscriptionPlansRoute, "proxyOfficialPaidAgentCreditSubscriptionPlansRequest", "official subscription plans route");
+includes(officialSubscriptionCheckoutRoute, "proxyOfficialPaidAgentCreditSubscriptionCheckoutRequest", "official subscription checkout route");
+includes(officialSubscriptionCancelRoute, "proxyOfficialPaidAgentCreditSubscriptionCancelRequest", "official subscription cancel route");
 
 includes(tauriCargo, "tauri-plugin-deep-link", "Tauri desktop enables the deep-link plugin");
 includes(tauriConfig, "\"schemes\": [\"hivemindos\"]", "Tauri desktop registers the hivemindos URL scheme");

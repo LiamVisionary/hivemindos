@@ -166,10 +166,10 @@ export default function DashboardPasskeyUnlock({
             alignItems: "center",
             justifyContent: "center",
             gap: 9,
-            border: "1px solid color-mix(in srgb, var(--accent-strong, #936811) 48%, transparent)",
+            border: "1px solid color-mix(in srgb, var(--accent-strong, #8a5a2a) 48%, transparent)",
             borderRadius: 8,
-            background: "color-mix(in srgb, var(--accent-strong, #936811) 13%, var(--surface, #fbf8f1))",
-            color: "var(--foreground, #221d14)",
+            background: "color-mix(in srgb, var(--accent-strong, #8a5a2a) 13%, var(--surface, #f8f4ee))",
+            color: "var(--foreground, #4a3a2a)",
             cursor: mode === "unlocking" ? "wait" : "pointer",
             fontSize: 15,
             fontWeight: 600,
@@ -181,7 +181,7 @@ export default function DashboardPasskeyUnlock({
         </button>
       ) : null}
       {mode === "native" ? (
-        <p role="status" style={{ margin: 0, color: "var(--muted, #867d6e)", fontSize: 13, textAlign: "center" }}>
+        <p role="status" style={{ margin: 0, color: "var(--muted, #8a7a6a)", fontSize: 13, textAlign: "center" }}>
           {message}
         </p>
       ) : null}
@@ -198,7 +198,7 @@ export default function DashboardPasskeyUnlock({
             justifySelf: "center",
             border: 0,
             background: "transparent",
-            color: "var(--text-soft, #5e574b)",
+            color: "var(--text-soft, #8a7a6a)",
             cursor: "pointer",
             fontSize: 12,
             fontWeight: 500,
@@ -210,10 +210,10 @@ export default function DashboardPasskeyUnlock({
         </button>
       ) : null}
       {mode !== "native" ? (
-        <div aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--muted, #867d6e)", fontSize: 11, textTransform: "uppercase" }}>
-          <span style={{ height: 1, flex: 1, background: "var(--line, rgba(54, 46, 30, 0.16))" }} />
+        <div aria-hidden="true" style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--muted, #8a7a6a)", fontSize: 11, textTransform: "uppercase" }}>
+          <span style={{ height: 1, flex: 1, background: "var(--line, rgba(74, 58, 42, 0.16))" }} />
           or enter device token manually
-          <span style={{ height: 1, flex: 1, background: "var(--line, rgba(54, 46, 30, 0.16))" }} />
+          <span style={{ height: 1, flex: 1, background: "var(--line, rgba(74, 58, 42, 0.16))" }} />
         </div>
       ) : null}
     </div>

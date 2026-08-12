@@ -788,27 +788,27 @@
 
 [data-theme="hive-light"] .sc-shell,
 .sc-shell[data-fr-theme="light"] {
-  --sc-bg: #f5f0e5;
-  --sc-panel: #fffaf0;
-  --sc-panel-2: #f0eadf;
-  --sc-panel-3: #e7dfd1;
-  --sc-line: rgba(72, 58, 36, 0.09);
-  --sc-line-2: rgba(72, 58, 36, 0.16);
-  --sc-line-3: rgba(72, 58, 36, 0.25);
-  --sc-fg: #201d18;
-  --sc-fg-2: #625c52;
-  --sc-fg-3: #6f6657;
-  --sc-fg-4: #766c5d;
-  --sc-honey: #8c5e0a;
-  --sc-honey-strong: #6a4505;
-  --sc-honey-soft: rgba(140, 94, 10, 0.11);
-  --sc-honey-line: rgba(140, 94, 10, 0.3);
-  --sc-live: #0d8e7e;
-  --sc-live-soft: rgba(13, 142, 126, 0.1);
-  --sc-live-line: rgba(13, 142, 126, 0.3);
-  --sc-danger: #a23d3d;
-  --sc-danger-soft: rgba(162, 61, 61, 0.09);
-  --sc-danger-line: rgba(162, 61, 61, 0.28);
+  --sc-bg: #f5efe6;
+  --sc-panel: #f8f4ee;
+  --sc-panel-2: #f0e8d8;
+  --sc-panel-3: #fffaf4;
+  --sc-line: #e8dcc8;
+  --sc-line-2: rgba(74, 58, 42, 0.16);
+  --sc-line-3: rgba(74, 58, 42, 0.26);
+  --sc-fg: #4a3a2a;
+  --sc-fg-2: #8a7a6a;
+  --sc-fg-3: #8a7a6a;
+  --sc-fg-4: #a09080;
+  --sc-honey: #8a5a2a;
+  --sc-honey-strong: #8a5a2a;
+  --sc-honey-soft: rgba(138, 90, 42, 0.1);
+  --sc-honey-line: rgba(138, 90, 42, 0.26);
+  --sc-live: #6b8f5e;
+  --sc-live-soft: rgba(107, 143, 94, 0.12);
+  --sc-live-line: rgba(107, 143, 94, 0.3);
+  --sc-danger: #b5483b;
+  --sc-danger-soft: rgba(181, 72, 59, 0.11);
+  --sc-danger-line: rgba(181, 72, 59, 0.3);
 }
 
 .sc-shell *,
@@ -931,10 +931,21 @@
   box-shadow: 0 12px 28px -18px color-mix(in srgb, var(--sc-honey) 85%, transparent);
 }
 
-[data-theme="hive-light"] .sc-connect-primary,
-.sc-shell[data-fr-theme="light"] .sc-connect-primary { color: #fffaf0 !important; }
-
 .sc-connect-primary:hover:not(:disabled) { border-color: var(--sc-honey-strong) !important; background: var(--sc-honey-strong) !important; }
+
+[data-theme="hive-light"] .sc-connect-primary,
+.sc-shell[data-fr-theme="light"] .sc-connect-primary {
+  border-color: var(--sc-line-2) !important;
+  color: var(--sc-fg) !important;
+  background: var(--sc-panel-2) !important;
+  box-shadow: 0 1px 2px rgba(74, 58, 42, 0.06);
+}
+
+[data-theme="hive-light"] .sc-connect-primary:hover:not(:disabled),
+.sc-shell[data-fr-theme="light"] .sc-connect-primary:hover:not(:disabled) {
+  border-color: var(--sc-line-3) !important;
+  background: var(--sc-panel-3) !important;
+}
 
 .sc-account-strip {
   gap: 8px;

@@ -180,8 +180,26 @@ export async function syncCompanyTaskOutcomes(companies: Company[], tasks: Kanba
     byCompany.set(companyId, list);
   }
   for (const [companyId, companyTasks] of byCompany) {
-    if (!companies.some((company) => company.id === companyId)) continue;
+    const company = companies.find((entry) => entry.id === companyId);
+    if (!company) continue;
     try {
+      // Reconcile legacy pending proposals even when the task-completion memory
+      // record is still inside the bounded `seen` window. This consumes the new
+      // durable marker receipt and removes a request if the task's immutable
+      // catalog snapshot no longer matches the live catalog.
+      const pendingPricingTaskIds = new Set(
+        (company.pricingProposals ?? [])
+          .map((proposal) => proposal.sourceTaskId)
+          .filter((taskId): taskId is string => Boolean(taskId)),
+      );
+      if (pendingPricingTaskIds.size > 0) {
+        const { fileTaskPricingProposals } = await import("@/lib/services/company-products");
+        for (const task of companyTasks) {
+          if (pendingPricingTaskIds.has(task.id) && /PRICING PROPOSAL:/i.test(task.result ?? "")) {
+            await fileTaskPricingProposals(companyId, task);
+          }
+        }
+      }
       const seen = new Set(
         (await readCompanyMemory(companyId, { limit: 2_000 }))
           .filter((record) => record.taskId && (record.kind === "task-completed" || record.kind === "task-blocked"))
@@ -229,11 +247,11 @@ export async function syncCompanyTaskOutcomes(companies: Company[], tasks: Kanba
           }).catch(() => undefined);
         }
         recorded += 1;
-        // Same exactly-once window as the ledger write: a result carrying
-        // `PRICING PROPOSAL:` markers files pending price-change requests for
-        // human review under Approvals. Best-effort — a filing failure must
-        // never block memory accrual. (Dynamic import mirrors the store's own
-        // company-memory import and avoids a static cycle.)
+        // A result carrying `PRICING PROPOSAL:` markers files pending
+        // price-change requests for human review under Approvals. Proposal
+        // idempotency is durable in the replicated company definition; it does
+        // not rely on this bounded memory window. Best-effort — a filing failure
+        // must never block memory accrual. (Dynamic import avoids a static cycle.)
         if (/PRICING PROPOSAL:/i.test(task.result ?? "")) {
           try {
             const { fileTaskPricingProposals } = await import("@/lib/services/company-products");

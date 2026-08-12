@@ -30,7 +30,7 @@
   --s-honey-border: rgba(231, 180, 92, 0.32);
   --s-honey-glow: rgba(231, 180, 92, 0.18);
 
-  --s-danger: #c0524d;
+  --s-danger: #b5483b;
 
   min-height: 100vh;
   background: radial-gradient(120% 80% at 85% -12%, rgba(231, 180, 92, 0.05), transparent 60%), var(--s-bg);
@@ -39,26 +39,26 @@
 }
 
 :global([data-theme="hive-light"]) .page {
-  --s-bg: #f1ede3;
-  --s-surface: #fbf8f1;
-  --s-surface-inset: #f4efe4;
-  --s-border: rgba(54, 46, 30, 0.10);
-  --s-border-soft: rgba(54, 46, 30, 0.16);
+  --s-bg: #f5efe6;
+  --s-surface: #f8f4ee;
+  --s-surface-inset: #f0e8d8;
+  --s-border: rgba(74, 58, 42, 0.10);
+  --s-border-soft: rgba(74, 58, 42, 0.16);
   --s-shadow: 0 18px 48px rgba(80, 60, 20, 0.12);
 
-  --s-teal: #1d8e7c;
-  --s-teal-strong: #157a6a;
-  --s-teal-bg: rgba(29, 142, 124, 0.12);
-  --s-teal-border: rgba(29, 142, 124, 0.30);
-  --s-teal-glow: rgba(29, 142, 124, 0.18);
+  --s-teal: #6b8f5e;
+  --s-teal-strong: #56794b;
+  --s-teal-bg: rgba(107, 143, 94, 0.12);
+  --s-teal-border: rgba(107, 143, 94, 0.30);
+  --s-teal-glow: rgba(107, 143, 94, 0.18);
 
-  --s-honey: #936811; --s-honey-fill: #e6bb5c;
-  --s-honey-2: #936811;
-  --s-honey-bg: linear-gradient(180deg, rgba(176, 127, 28, 0.16), rgba(176, 127, 28, 0.05));
-  --s-honey-border: rgba(176, 127, 28, 0.34);
-  --s-honey-glow: rgba(176, 127, 28, 0.14);
+  --s-honey: #8a5a2a; --s-honey-fill: #f0e8d8;
+  --s-honey-2: #8a5a2a;
+  --s-honey-bg: linear-gradient(180deg, rgba(138, 90, 42, 0.16), rgba(138, 90, 42, 0.05));
+  --s-honey-border: rgba(138, 90, 42, 0.34);
+  --s-honey-glow: rgba(138, 90, 42, 0.14);
 
-  --s-danger: #c0524d;
+  --s-danger: #b5483b;
 }
 
 .shell {
@@ -115,7 +115,7 @@
 }
 
 /* Buttons — 1:1 with the fr-/Reserve fb-btn: pill, body font, weight 500,
-   sm sizing. Primary = solid honey fill + dark text; ghost = transparent. */
+   sm sizing. Primary = solid Hivemind accent fill + dark text; ghost = transparent. */
 .topBar a,
 .ghostButton,
 .primaryButton,
@@ -159,7 +159,7 @@
   color: var(--foreground);
 }
 
-/* primary = solid honey fill, dark text (fb-btn.primary) */
+/* primary = solid Hivemind accent fill, dark text (fb-btn.primary) */
 .primaryButton {
   background: var(--s-honey-fill, var(--s-honey));
   color: #1a1305;
@@ -204,7 +204,7 @@
   gap: 26px;
   padding: 30px;
   overflow: hidden;
-  /* warm honey → panel diagonal, matched to the Reserve mock */
+  /* soft Hivemind accent → panel diagonal, matched to the Reserve mock */
   background: linear-gradient(150deg, color-mix(in srgb, var(--s-honey) 7%, var(--s-surface)), var(--s-surface) 62%);
 }
 

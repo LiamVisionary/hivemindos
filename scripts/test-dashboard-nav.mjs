@@ -12,6 +12,10 @@ const morePanel = readFileSync(new URL("../src/features/dashboard/MorePanel.tsx"
 const kanbanBoardUtils = readFileSync(new URL("../src/lib/utils/kanban-board.ts", import.meta.url), "utf8");
 const pinnedUtilitiesHook = readFileSync(new URL("../src/features/dashboard/hooks/use-pinned-utilities.ts", import.meta.url), "utf8");
 const rememberedDashboardValueHook = readFileSync(new URL("../src/lib/services/use-remembered-dashboard-value.ts", import.meta.url), "utf8");
+const persistentHiveChat = readFileSync(new URL("../src/features/queen-voice/PersistentHiveChat.tsx", import.meta.url), "utf8");
+const tradeView = readFileSync(new URL("../src/components/trade/TradeView.tsx", import.meta.url), "utf8");
+const walletsView = readFileSync(new URL("../src/components/wallets-drop-in/WalletsView.tsx", import.meta.url), "utf8");
+const walletsCss = readFileSync(new URL("../src/components/wallets-drop-in/wallets.css", import.meta.url), "utf8");
 
 assert.doesNotMatch(derivedState, /type DashboardView = [^;]*"new"/, "DashboardView should not include the removed test New tab id");
 assert.doesNotMatch(derivedState, /id: "new" as const,[\s\S]*?label: "New"/, "Dashboard nav items should not include the removed test New tab");
@@ -26,6 +30,20 @@ assert.deepEqual([...new Set(ids)], ids, "Dashboard nav ids should be unique");
 assert.equal(ids.filter((id) => id === "chat").length, 1, "Dashboard nav should include exactly one Chat tab");
 assert.equal(ids.filter((id) => id === "new").length, 0, "Dashboard nav should not include a New tab");
 assert.doesNotMatch(dashboardHeader, /"new"/, "Dashboard header copy should not include the removed test New tab");
+
+assert.equal(
+  dashboardApp.match(/<PersistentHiveChat\b/g)?.length,
+  1,
+  "The dashboard shell should mount exactly one app-wide Queen Bee composer",
+);
+assert.equal(
+  persistentHiveChat.match(/<ChatPill\b/g)?.length,
+  1,
+  "The persistent Queen Bee composer should render exactly one shared ChatPill",
+);
+assert.doesNotMatch(tradeView, /<ChatPill\b|aria-label="Message the hive"/, "Trade should rely on the app-wide Queen Bee composer");
+assert.doesNotMatch(walletsView, /<ChatPill\b|aria-label="Message the hive"/, "Wallets should rely on the app-wide Queen Bee composer");
+assert.doesNotMatch(walletsCss, /\.fr-chat(?:\b|-)/, "Wallets CSS should not shadow the shared Queen Bee composer styles");
 
 // The rendered rail derives from the view registry (the old DashboardHeader tab
 // list is gone) — assert the real derived shelf composition and slot mapping.
@@ -99,6 +117,11 @@ assert.match(
   appNavShelf,
   /<div className="fr-shelf-control-row" role="group" aria-label="Dashboard controls">[\s\S]*?<DashboardSecurityControl onTooltipOpenChange=\{setSecurityTooltipOpen\} \/>[\s\S]*?<Tooltip onOpenChange=\{setThemeTooltipOpen\}>[\s\S]*?aria-label=\{theme === "light" \? "Switch to dark mode" : "Switch to light mode"\}[\s\S]*?<TooltipContent side="right" className="z-\[80\]">/,
   "Security and theme should share the compact footer control row with the custom tooltip treatment",
+);
+assert.match(
+  appNavShelf,
+  /activeView !== "governance" \? \([\s\S]*?aria-label=\{theme === "light" \? "Switch to dark mode" : "Switch to light mode"\}/,
+  "The Companies route should not expose the global light-mode toggle",
 );
 assert.match(
   dashboardSecurityControl,

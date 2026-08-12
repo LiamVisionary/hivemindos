@@ -222,7 +222,7 @@
 
 :global(:root[data-theme="hive-light"]) .briefActivityKind.dispatched {
   border-color: rgba(140, 94, 10, 0.4);
-  color: #8c5e0a;
+  color: #8a5a2a;
 }
 
 /* Events list flows in the modal-body scroll too (kills .modalEvents's own
@@ -969,8 +969,8 @@
 
 :global(:root[data-theme="hive-light"]) .cardQuickActions button {
   border-color: rgba(140, 94, 10, 0.35);
-  background: rgba(212, 180, 111, 0.14);
-  color: #6a4505;
+  background: #f0e8d8;
+  color: #8a5a2a;
 }
 
 :global(:root[data-theme="hive-light"]) .cardQuickActions button:last-child {
@@ -996,7 +996,7 @@
 
 :global(:root[data-theme="hive-light"]) .convoEntry.note {
   border-color: rgba(140, 94, 10, 0.28);
-  background: rgba(212, 180, 111, 0.12);
+  background: #f0e8d8;
 }
 
 :global(:root[data-theme="hive-light"]) .convoEntry.result {
@@ -1022,7 +1022,7 @@
 }
 
 :global(:root[data-theme="hive-light"]) .convoEntry.note .convoKind {
-  color: #8c5e0a;
+  color: #8a5a2a;
   border-color: rgba(140, 94, 10, 0.3);
 }
 
