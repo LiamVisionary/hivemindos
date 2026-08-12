@@ -34,10 +34,17 @@ export type AuthorizationInput = {
 
 export function requiredClaimsForSideEffects(sideEffects: HiveActionSideEffect[]) {
   const claims = new Set<string>();
+  // `filesystem` is not a mutating side effect (see MUTATING_SIDE_EFFECTS in
+  // hive-actions/define.ts), so an action may touch the filesystem read-only.
+  // Demanding filesystem:write for those made merely INSPECTING a document
+  // require a write grant. The declared `write` side effect is what separates
+  // them, and deriving from it keeps this single-argument for the
+  // context-index caller.
+  const mutatesFilesystem = sideEffects.includes("write");
   for (const sideEffect of sideEffects) {
     if (sideEffect === "read") claims.add("connectors:read");
     if (sideEffect === "write") claims.add("local:write");
-    if (sideEffect === "filesystem") claims.add("filesystem:write");
+    if (sideEffect === "filesystem") claims.add(mutatesFilesystem ? "filesystem:write" : "filesystem:read");
     if (sideEffect === "network") claims.add("network:invoke");
     if (sideEffect === "remote-machine") claims.add("machines:write");
     if (sideEffect === "wallet" || sideEffect === "payment") claims.add("wallet:spend");

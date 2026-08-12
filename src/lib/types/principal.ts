@@ -53,8 +53,44 @@ export type AuthorizationMetadata = {
 
 export const LOCAL_ADMIN_CLAIM = "local:admin";
 
-export const DEFAULT_LOCAL_ADMIN_CLAIMS = [
-  LOCAL_ADMIN_CLAIM,
+/**
+ * Claims that `requiredClaimsForSideEffects` can demand.
+ *
+ * This list and the grant lists below were originally written independently and
+ * drifted: six of these appeared in no grant list at all, so any principal
+ * without `local:admin` was denied 98 of the 102 registered hive actions —
+ * including `web.search` and reading a document. Nothing surfaced it because
+ * `principalHasClaim` short-circuits on `local:admin`, so the claim system had
+ * never actually executed. Keep this list and the grants reconciled; the
+ * action-authorization suite asserts every derivable claim is grantable.
+ */
+export const SIDE_EFFECT_CLAIMS = [
+  "connectors:read",
+  "credentials:write",
+  "filesystem:read",
+  "filesystem:write",
+  "local:write",
+  "machines:write",
+  "messages:publish",
+  "network:invoke",
+  "wallet:spend",
+] as const;
+
+/**
+ * What a non-admin runtime agent gets by default.
+ *
+ * Deliberately broad on capability and narrow on authority. An agent may
+ * attempt wallet, credential, publish, and remote-machine work — those are
+ * gated by the risk/confirmation rungs of `authorizeOperation`, which route
+ * them to needs-approval and into the Needs You lane. Missing a claim is a hard
+ * deny, so withholding these would make the approval rail unreachable rather
+ * than making the agent safer.
+ *
+ * The two it must never hold:
+ *   - `local:admin`   — short-circuits every check; granting it defeats the point
+ *   - `actions:approve` — an agent must not approve its own pending actions
+ */
+export const DEFAULT_RUNTIME_AGENT_CLAIMS = [
   "brain:read",
   "brain:write",
   "apps:read",
@@ -63,12 +99,18 @@ export const DEFAULT_LOCAL_ADMIN_CLAIMS = [
   "connectors:invoke",
   "mcp:connect",
   "mcp:invoke",
-  "actions:approve",
   "wallet:approve",
   "wallet:spend",
   "telemetry:read",
   "artifacts:read",
   "artifacts:write",
+  ...SIDE_EFFECT_CLAIMS,
+] as const;
+
+export const DEFAULT_LOCAL_ADMIN_CLAIMS = [
+  LOCAL_ADMIN_CLAIM,
+  "actions:approve",
+  ...DEFAULT_RUNTIME_AGENT_CLAIMS,
 ] as const;
 
 export function localAdminPrincipal(

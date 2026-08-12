@@ -183,6 +183,8 @@
     "benchmark:earned-scale:runtime-plan": "node scripts/benchmark-earned-scale-live.mjs --repeats 3 --write --record",
     "benchmark:earned-scale:policy": "node scripts/benchmark-earned-scale.mjs --condition both --repeats 3 --write",
     "test:company-needs-human-triage": "node scripts/test-company-needs-human-triage.mjs",
+    "test:action-authorization": "node scripts/test-action-authorization.mjs",
+    "test:principal-context": "node scripts/test-principal-context.mjs",
     "test:company-task-watchdog": "node scripts/test-company-task-watchdog.mjs",
     "test:company-templates": "node scripts/test-company-templates.mjs",
     "test:company-deliverables": "node scripts/test-company-deliverables.mjs",

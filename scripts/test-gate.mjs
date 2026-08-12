@@ -32,6 +32,7 @@ const CHECKS = [
 // Hermetic and passing as of 2026-07-02. Keep alphabetized.
 const TESTS = [
   "test:acting-wallet-context",
+  "test:action-authorization",
   "test:adaptive-hermes-stream",
   "test:agent-asset-overview",
   "test:agent-chat-readiness",
@@ -227,6 +228,7 @@ const TESTS = [
   "test:plume-options",
   "test:wallet-display-currency",
   "test:preview-review",
+  "test:principal-context",
   "test:qmd-brain-service",
   "test:quant-research",
   "test:penny-paper",
