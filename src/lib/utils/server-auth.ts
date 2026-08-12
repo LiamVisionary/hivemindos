@@ -2,7 +2,13 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { DASHBOARD_AUTH_HEADER } from "@/lib/utils/internal-api-auth";
-import { localAdminPrincipal, type PrincipalContext } from "@/lib/types/principal";
+import { runtimeAgentPrincipal } from "@/lib/services/security/agent-authority";
+import {
+  AGENT_AUTHORITY_PRESETS,
+  localAdminPrincipal,
+  type AgentAuthorityPreset,
+  type PrincipalContext,
+} from "@/lib/types/principal";
 
 export const DASHBOARD_SESSION_COOKIE = "hivemindos_session";
 export { DASHBOARD_AUTH_HEADER };
@@ -211,10 +217,95 @@ function rememberVerified(credential: string, now: number) {
   verifiedCredentials.set(credential, now);
 }
 
+/**
+ * Agent-scoped permissions. Default OFF: with it off the agent header is
+ * ignored entirely and every request resolves to the local operator exactly as
+ * before, so enabling this is a deliberate act and disabling it is a complete
+ * rollback.
+ */
+export function agentScopedPermissionsEnabled() {
+  return process.env.HIVEMINDOS_AGENT_SCOPED_PERMISSIONS === "1";
+}
+
+export const AGENT_AUTH_HEADER = "x-hivemindos-agent-token";
+
+const AGENT_TOKEN_VERSION = "a1";
+/**
+ * Tokens carry the authority level they were minted with, so verification needs
+ * no profile read on the hot path. The tradeoff is staleness: lowering an
+ * agent's level does not retroactively weaken a token already issued. This
+ * lifetime bounds that window — an agent must re-mint to keep working, and the
+ * re-mint picks up the current level.
+ */
+const AGENT_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
+
+/**
+ * Mint an agent's own credential.
+ *
+ * Agents currently authenticate with the machine-wide device token, which means
+ * every agent holds the credential that can do anything on this machine. A
+ * signed per-agent token replaces that: it names the agent, carries the level
+ * the operator chose, and cannot be forged or self-upgraded without the
+ * dashboard secret. That is what makes an authority level a boundary rather
+ * than a suggestion.
+ */
+export async function mintAgentAuthToken(
+  agentId: string,
+  preset: AgentAuthorityPreset,
+  now = Date.now(),
+): Promise<string> {
+  const secret = dashboardAuthSecret();
+  if (secret.length < MIN_SECRET_LENGTH) throw new Error("Dashboard auth secret is not configured.");
+  const id = agentId.trim();
+  if (!id) throw new Error("Agent id is required.");
+  if (id.includes(".")) throw new Error("Agent id must not contain a dot.");
+  const payload = [AGENT_TOKEN_VERSION, id, preset, String(now)].join(".");
+  return `${payload}.${await hmacHex(secret, payload)}`;
+}
+
+export async function verifyAgentAuthToken(
+  value: string,
+  now = Date.now(),
+): Promise<{ agentId: string; preset: AgentAuthorityPreset } | null> {
+  const secret = dashboardAuthSecret();
+  if (secret.length < MIN_SECRET_LENGTH || !value) return null;
+  const parts = value.split(".");
+  if (parts.length !== 5 || parts[0] !== AGENT_TOKEN_VERSION) return null;
+  const [version, agentId, preset, issuedAt, signature] = parts;
+  if (!agentId || !/^\d+$/.test(issuedAt)) return null;
+  if (!(AGENT_AUTHORITY_PRESETS as readonly string[]).includes(preset)) return null;
+  const issuedAtMs = Number(issuedAt);
+  if (!Number.isFinite(issuedAtMs)) return null;
+  // Reject future-dated tokens too: a clock-skewed or hand-crafted issuedAt
+  // must not extend a token's life beyond the TTL.
+  if (issuedAtMs > now + 60_000) return null;
+  if (now - issuedAtMs > AGENT_TOKEN_TTL_MS) return null;
+  const expected = await hmacHex(secret, [version, agentId, preset, issuedAt].join("."));
+  if (!safeEqual(expected, signature)) return null;
+  return { agentId, preset: preset as AgentAuthorityPreset };
+}
+
 export async function verifyAuth(request: Request): Promise<AuthResult> {
   const status = dashboardAuthStatus();
   if (!status.ok) return { userId: null, reason: status.reason };
   const now = Date.now();
+
+  // Checked BEFORE the operator credentials on purpose. A caller presenting an
+  // agent token is asking to act as that agent, so it must not be able to fall
+  // through to full operator authority by also holding the device token — that
+  // would make the level trivially bypassable. A present-but-invalid agent
+  // token is a hard failure rather than a fallthrough.
+  if (agentScopedPermissionsEnabled()) {
+    const agentToken = request.headers.get(AGENT_AUTH_HEADER)?.trim() ?? "";
+    if (agentToken) {
+      const verified = await verifyAgentAuthToken(agentToken, now);
+      if (!verified) return { userId: null, reason: "Agent token is invalid or expired." };
+      return {
+        userId: `agent:${verified.agentId}`,
+        principal: runtimeAgentPrincipal({ agentId: verified.agentId, preset: verified.preset }),
+      };
+    }
+  }
 
   const sessionValue = requestCookie(request, DASHBOARD_SESSION_COOKIE);
   if (sessionValue) {
