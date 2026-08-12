@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-08-12 14:50 EDT (-0400) - Give agents their own signed credential and apply their authority level
-  - Status: Uncommitted.
+  - Status: Pushed.
   - User-facing release note: Agents can now hold their own credential instead of sharing the machine-wide dashboard device token, and when agent-scoped permissions are enabled the authority level set on the Permissions tab is what the agent actually acts under. The feature is off by default; with it off, every request resolves exactly as before. Turning it on is `HIVEMINDOS_AGENT_SCOPED_PERMISSIONS=1`, and turning it off is a complete rollback.
   - Root cause and baseline: The authority presets and the Permissions tab existed but nothing read them — `server-auth.ts` handed `localAdminPrincipal()` to every authenticated request, whose `local:admin` claim short-circuits every check. Underneath that, agents authenticate with the single machine-wide device token and pass `agentId` as an ordinary tool argument, so an agent could name any agent it liked. An authority level enforced on a self-declared id would be a suggestion, not a boundary, so the level could not be applied until the identity behind it was unforgeable.
   - Areas changed: A signed per-agent token (mint/verify) in `server-auth.ts` carrying the agent id, its authority level, and an issue time; the `HIVEMINDOS_AGENT_SCOPED_PERMISSIONS` flag; agent-token resolution in `verifyAuth` ahead of the operator credentials; new hermetic suite; gate registration.
