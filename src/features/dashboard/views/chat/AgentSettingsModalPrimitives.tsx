@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
-import { Bot, BrainCircuit, Network, Phone, PlugZap, Settings2, ShieldCheck } from "lucide-react";
+import { Bot, BrainCircuit, KeyRound, Network, Phone, PlugZap, Settings2, ShieldCheck } from "lucide-react";
 import type { HivemindosModelsAgentConfig, UsePodAgentConfig, VeniceAgentConfig } from "@/lib/types/agent-runtime";
 import { isFreeHivemindosWalletPaidModel } from "@/lib/config/hivemindos-wallet-paid-models";
 
@@ -15,6 +15,7 @@ export const PANEL_ICONS: Record<string, ComponentType<{ size?: number; "aria-hi
   tools: Settings2,
   calls: Phone,
   ministry: Network,
+  permissions: KeyRound,
   security: ShieldCheck,
 };
 
@@ -25,6 +26,7 @@ const PANEL_DETAILS: Record<string, string> = {
   tools: "Runtime integrations",
   calls: "Scheduled phone calls",
   ministry: "Orchestrator and experts",
+  permissions: "Authority and approvals",
   security: "Guards and redaction",
 };
 

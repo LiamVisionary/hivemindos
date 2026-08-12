@@ -14,6 +14,7 @@ import {
   AgentSettingsSecurityPanel,
 } from "./AgentSettingsConnectionPanels";
 import { AgentSettingsModalFrame } from "./AgentSettingsModalFrame";
+import { AgentSettingsPermissionsPanel } from "./AgentSettingsPermissionsPanel";
 import { AgentSettingsQueenPersonalityPanel } from "./AgentSettingsQueenPersonalityPanel";
 import { AgentSettingsCustomInstructionsPanel } from "./AgentSettingsCustomInstructionsPanel";
 // AgentSettingsToolsPanel owns the Agent mailbox "Create mailbox" action.
@@ -1667,10 +1668,6 @@ export function AgentSettingsModal(props: any) {
     else if (roleModalAgent) updateAgentProfile(roleModalAgent.id, { calls: next });
   };
 
-  function renderSecurity() {
-    return <AgentSettingsSecurityPanel />;
-  }
-
   const panelContent = activePanel === "role"
     ? renderRole()
     : activePanel === "connection"
@@ -1683,7 +1680,9 @@ export function AgentSettingsModal(props: any) {
             ? <AgentSettingsCallsPanel {...{ agentCreateDraft, agentCreateMachine, onQueenClapWakeEnabledChange, queenClapWakeEnabled, roleModalAgent, setAgentCreateDraft, updateAgentProfile }} onVoiceFailure={notifyAgentVoiceFailure} />
             : activePanel === "ministry"
               ? <AgentSettingsMinistryPanel {...{ agentCallSettings, displayAgents, roleModalAgent, updateAgentCalls }} />
-              : renderSecurity();
+              : activePanel === "permissions"
+                ? <AgentSettingsPermissionsPanel {...{ roleModalAgent, updateAgentProfile }} />
+                : <AgentSettingsSecurityPanel />;
 
   const primaryActionBusy = runtimeIntegrationBusy === "create-agent" || runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading;
   const primaryActionLabel = (runtimeIntegrationBusy === "load-model" || lmStudioSelectedModelLoading) && lmStudioSelectedModelNeedsLoad

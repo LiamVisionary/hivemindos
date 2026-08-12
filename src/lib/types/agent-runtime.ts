@@ -126,6 +126,7 @@ export type RuntimeSettingsPanelId =
   | "memory"
   | "tools"
   | "calls"
+  | "permissions"
   | "security";
 
 export type RuntimeSettingsFeature = {
@@ -669,7 +670,7 @@ const DEFAULT_RUNTIME_ENV_FEATURE: RuntimeEnvFeature = {
 const DEFAULT_RUNTIME_SETTINGS_FEATURE: RuntimeSettingsFeature = {
   kind: "standard",
   createPanels: ["role", "memory", "calls", "security"],
-  editPanels: ["role", "memory", "tools", "calls", "security"],
+  editPanels: ["role", "memory", "tools", "calls", "permissions", "security"],
   modelSource: "runtime",
 };
 
