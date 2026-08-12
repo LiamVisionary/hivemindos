@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-08-12 14:05 EDT (-0400) - Add a Permissions tab to agent settings
-  - Status: Uncommitted.
+  - Status: Pushed.
   - User-facing release note: Agent settings has a new **Permissions** tab where you set how much authority an agent carries. Restricted is read-only research. Standard, the default, lets the agent do ordinary work freely while outward actions wait for you. Autonomous is for an agent you have deliberately put in charge — a company CEO or CTO agent — and it approves its own risk decisions. For an agent that is a company's CEO, Autonomous is marked as suggested. The tab states plainly that money movement, publishing, computer control, and deploys still stop for confirmation at every level, and that the level is currently recorded rather than applied.
   - Root cause and baseline: The previous change added authority presets and an `authority` field on the agent record but no way to set it, so the capability existed only to code. Agent settings panels are declared in `RuntimeSettingsPanelId` and rendered from a ternary chain in `AgentSettingsModal.tsx`, with tab chrome driven by three maps that must move together — `PANEL_ICONS`, `PANEL_DETAILS`, and the panel id union. A missing entry in any one of them yields a tab with a fallback icon and no description rather than a visible error.
   - Areas changed: New `AgentSettingsPermissionsPanel` component, `permissions` added to the panel id union, the icon map, the detail map, and the default runtime `editPanels`; `renderSecurity` inlined at its single call site; new tab wired into the panel ternary.
