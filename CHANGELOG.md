@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-08-12 23:11 EDT (-0400) - Turn Fleet access requests into working approval buttons
-  - Status: Uncommitted.
+  - Status: Pushed.
   - User-facing release note: Fleet machine-access requests in Chat now render **Allow 15 min**, **Always allow**, and **Deny** buttons. Choosing one updates the target machine's collector policy first and only then resumes the selected agent, so the control is functional rather than decorative plain text.
   - Root cause and baseline: The Fleet policy prompt deliberately emits `OPTIONS: Allow 15 min | Always allow | Deny` on one line, while the Chat fallback parser accepted only a bare `OPTIONS:` header followed by numbered or bulleted lines. Replaying the exact screenshot message through `promptUiFromMessage` returned `null`, so the renderer had no prompt model and displayed the entire response as ordinary Markdown. Direct Chat also had no equivalent of the Work Board's collector-first Fleet answer path.
   - Areas changed: Pipe-separated prompt parsing, strict Fleet-choice UI, the shared answer-to-policy-decision mapping, collector-first direct-chat resolution, prompt settlement after a visible answer, regression coverage, and this changelog.
@@ -15,7 +15,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(chat): render fleet access approval controls`
 
 - 2026-08-12 16:35 EDT (-0400) - Enforce agent capability at the API gate across 55 hive-action routes
-  - Status: Uncommitted.
+  - Status: Pushed.
   - User-facing release note: With agent-scoped permissions enabled, an agent's authority level is now enforced at the API gate rather than only being recorded. A standard agent's ordinary work passes; an action carrying a confirmation contract — sending funds, trading, publishing, computer control — comes back as "needs human approval" even for an autonomous agent; a restricted read-only agent is refused write actions outright and told which permission it lacks. The local operator is unaffected.
   - Root cause and baseline: Enforcement previously existed on four routes only (`/api/mcp/client`, `/api/plugins`, `hive-query`, `/api/fleet/apps/request`), so an agent's level was recorded but essentially every other route executed whatever it asked for. Agent tool calls are ordinary API calls — `scripts/hivemind-mcp` proxies to dashboard routes — so `src/proxy.ts` is the only universal chokepoint. All 102 hive actions declare a `contextIndex.route`, across 70 distinct routes.
   - Areas changed: A generated route-policy table, a guard that fails when it drifts from the catalog, capability enforcement in `src/proxy.ts` for `runtime-agent` principals, and a new hermetic suite.
@@ -25,7 +25,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `feat(security): enforce agent capability at the API gate`
 
 - 2026-08-12 22:50 EDT (-0400) - Keep every new chat on the selected agent
-  - Status: Uncommitted.
+  - Status: Pushed.
   - User-facing release note: **New chat** and **New general chat** now always keep the agent shown in the chat header. Opening Chat without a selected thread resumes only that agent's history, and an agent that cannot chat leaves the action disabled instead of silently substituting another live or saved profile.
   - Root cause and baseline: The first live reproduction selected `BankrAgent02` and pressed **New chat**, which switched the header and URL to `AdaptiveAgent` because Unsorted chats retained the first agent's shared folder callback. A second desktop reproduction opened Chat on `Aeon on This Mac` and then switched to another agent because the no-leaf entry path resumed the globally newest thread and the New-chat fallback borrowed the first chat-capable machine agent. The user's `Codex Engineer` result was a third manifestation: that identity is an old persisted Saved profile rather than one of the live Fleet agents, but the General fallback could still select it automatically. The earlier focused regression covered project-folder callback replacement only.
   - Areas changed: selected-agent-only fresh-chat target resolution, no-leaf history ownership, Unsorted folder routing, primary and General sidebar actions, dashboard wiring, focused regression coverage, and this changelog.
@@ -34,7 +34,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(chat): keep unsorted new chats on selected agent`
 
 - 2026-08-12 22:14 EDT (-0400) - Keep the App workspace closed until the agent finishes building
-  - Status: Uncommitted.
+  - Status: Pushed.
   - User-facing release note: Approving an app build no longer replaces half the chat with an empty App workspace while the agent is still working. HivemindOS still allocates the durable project directory before the turn, but it opens and starts the preview only after the worker reports successful completion. Failed, interrupted, timed-out, or question-paused turns remain in chat; the person can still open the workspace explicitly from its card or header control.
   - Root cause and baseline: The approval handler treated successful project allocation as successful app creation. It called `setWorkspaceOpen(true)` and requested preview startup before calling `sendPromptMessage`, so the pane rendered the untouched scaffold with “No preview URL yet” while Hermes was still building. The focused App-workspace regression passed before it covered this ordering; the new assertion failed with the auto-open call preceding the worker call.
   - Areas changed: Runtime outcome propagation through the chat input controller, post-completion App-workspace opening in the capability approval handler, focused lifecycle regression coverage, and this changelog.
@@ -43,7 +43,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(chat): open app workspace after build completion`
 
 - 2026-08-12 22:05 EDT (-0400) - Show executable video generators instead of prompting guides
-  - Status: Uncommitted.
+  - Status: Pushed.
   - User-facing release note: Video capability review now keeps prompting guides, QA helpers, audio-only apps, and generic creative workspaces out of the generator chooser. It balances ready fleet executors, direct generation skills, and other callable media routes so useful alternatives are not crowded out; private machine addresses are no longer shown in capability cards. Manual modes retain the multi-capability review, while Auto and Bypass continue automatically only when every selected capability is ready.
   - Root cause and baseline: Replaying the exact shoe-site request against the live 55-app fleet selected the setup-required `minimax-h3-video-prompting` guide and omitted both the general MUAPI generator and Seedance. Every app with `kind: media` had been given synthetic `video`, `render`, and `generation` aliases, so an audio-only bridge and metadata-poor creative workspaces qualified as video executors. The mixed 80-result search was then saturated by fleet matches before the focused Seedance skill reached ranking; increasing the broad limit to 320 recovered it but was the wrong latency and relevance tradeoff.
   - Areas changed: Provider-neutral video eligibility and source-balanced selection, a bounded skill-only supplement for video discovery, readiness-aware default selection, exact-provider request handling, public fleet-machine labels, context-index media aliases, focused crowded-fleet regression coverage, optimization notes, and this changelog.
