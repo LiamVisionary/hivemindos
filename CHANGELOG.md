@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-08-12 21:19 EDT (-0400) - Keep parked company work out of current owner counts
-  - Status: Uncommitted.
+  - Status: Pushed.
   - User-facing release note: Parking a Zero Human Company task now does what the UI promises: the deferred card stays recoverable on the Work Board but disappears from the company's current Issues, Approvals, Deliverables, activity, pipeline, and work totals until its hold is cleared. Historical work no longer masquerades as a fresh owner decision.
   - Root cause and baseline: The Work Board API returned each task's durable `held` marker, and the autonomy driver already excluded held cards from backpressure, but the Companies response normalizer discarded that field. Its mapper then filtered only `archived` tasks. On the live WEBS ledger, 50 of 57 Needs You tasks were parked while the cockpit still rendered all 57 as 48 Issues plus 9 Approvals and continued collecting outputs from 20 held tasks. The focused regression failed first by retaining both a parked approval and a parked infrastructure issue in the company model.
   - Areas changed: Typed held-task normalization at the Companies API boundary, one canonical current-task visibility predicate in the Zero Human Company mapper, focused Issues/Approvals/Deliverables regression coverage, and this changelog.
@@ -15,7 +15,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(companies): hide parked work from current counts`
 
 - 2026-08-12 15:40 EDT (-0400) - Deliver per-agent credentials through agent-scoped MCP registration
-  - Status: Uncommitted.
+  - Status: Pushed.
   - User-facing release note: An agent can now be registered with its own MCP server entry carrying its own credential: `node scripts/register-mcp-clients.mjs --agent <id> --authority autonomous --targets claude`. That entry is named `hivemind-<id>` and carries only that agent's signed token — **not** the machine-wide dashboard device token. With `HIVEMINDOS_AGENT_SCOPED_PERMISSIONS=1`, that agent now acts under the authority level set on its Permissions tab. Re-run the same command to refresh the credential or to apply a changed level; `--remove` de-authorizes the agent.
   - Root cause and baseline: The previous change could verify an agent credential but nothing issued one, so with the flag on no agent presented the header and everything still resolved to the operator. Building delivery also exposed a flaw in the shipped design: the 12-hour token TTL could not survive being written into a harness config, since nothing could refresh it without either holding the dashboard secret (which would let an agent mint itself an `autonomous` token) or holding the device token (which is the credential the feature exists to take away).
   - Areas changed: New Next-free `src/lib/utils/agent-auth-token.ts` holding mint/verify so the auth path, the registrar CLI, and the suites share one implementation instead of re-deriving the HMAC layout; `server-auth.ts` reduced to thin wrappers over it; TTL raised from 12 hours to 7 days with re-registration as the refresh mechanism; `--agent`/`--authority` in the MCP registrar; `scripts/hivemind-mcp` sends the agent header and, when agent-scoped, deliberately does NOT fall back to the device token; two hermetic suites; gate registration.
