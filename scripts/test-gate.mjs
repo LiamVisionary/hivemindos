@@ -26,6 +26,7 @@ const CHECKS = [
   "guard:browser-durable-state",
   "guard:commercial-trust-boundary",
   "guard:hive-action-route-drift",
+  "guard:hive-action-route-policy",
   "guard:ui-typography",
 ];
 
@@ -231,6 +232,7 @@ const TESTS = [
   "test:plume-options",
   "test:wallet-display-currency",
   "test:preview-review",
+  "test:proxy-agent-capability",
   "test:principal-context",
   "test:qmd-brain-service",
   "test:quant-research",

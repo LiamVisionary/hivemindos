@@ -1,5 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { unauthorizedJson, verifyAuth } from "@/lib/utils/server-auth";
+import { authorizeOperation } from "@/lib/services/security/action-authorization";
+import { hiveActionRoutePolicy } from "@/lib/services/security/hive-action-route-policy.generated";
+import type { PrincipalContext } from "@/lib/types/principal";
 
 // Next 16 with a src/ layout only loads this file from src/proxy.ts (or
 // src/middleware.ts, deprecated) — a root-level middleware.ts is silently
@@ -66,12 +69,62 @@ function isSelfAuthenticatingApi(pathname: string) {
   return SELF_AUTHENTICATING_API_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
 
+/**
+ * Capability enforcement for agent-originated requests.
+ *
+ * Only applies to a `runtime-agent` principal: the local operator carries
+ * `local:admin`, which short-circuits every check anyway, so running this for
+ * operator traffic would cost work to reach a foregone conclusion.
+ *
+ * Scope is deliberately partial. `HIVE_ACTION_ROUTE_POLICIES` covers the 55
+ * routes served by exactly one action; the 15 routes serving several actions at
+ * differing risk are listed as ambiguous and skipped, because which action a
+ * request invokes is decided by its body and middleware cannot read it. Skipping
+ * them is a known gap, not an oversight — enforcing a guessed policy would either
+ * refuse ordinary reads or wave through a payment.
+ */
+function enforceAgentCapability(request: NextRequest, principal: PrincipalContext) {
+  if (principal.kind !== "runtime-agent") return null;
+  const policy = hiveActionRoutePolicy(request.nextUrl.pathname);
+  if (!policy) return null;
+  const decision = authorizeOperation(
+    {
+      id: policy.actionId,
+      sideEffects: policy.sideEffects,
+      risk: policy.risk,
+      readOnly: policy.readOnly,
+      requiredClaims: policy.requiredClaims,
+      confirmation: policy.confirmation ?? undefined,
+    },
+    { principal, caller: "proxy" },
+  );
+  if (decision.status === "allow") return null;
+  // 403, not 401: the caller authenticated fine, it just is not permitted. A 401
+  // would invite a credential retry loop that can never succeed.
+  return NextResponse.json(
+    {
+      ok: false,
+      error: decision.status === "needs-approval"
+        ? `This action needs human approval: ${decision.reason}`
+        : `Not permitted for this agent: ${decision.reason}`,
+      status: decision.status,
+      action: policy.actionId,
+      requiredClaims: decision.requiredClaims ?? [],
+    },
+    { status: 403 },
+  );
+}
+
 export async function proxy(request: NextRequest) {
   if (!request.nextUrl.pathname.startsWith("/api/")) return NextResponse.next();
   if (isSelfAuthenticatingApi(request.nextUrl.pathname)) return NextResponse.next();
 
   const auth = await verifyAuth(request);
   if (!auth.userId) return unauthorizedJson(auth.reason);
+  if (auth.principal) {
+    const denied = enforceAgentCapability(request, auth.principal);
+    if (denied) return denied;
+  }
   return NextResponse.next();
 }
 
