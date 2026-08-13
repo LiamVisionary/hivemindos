@@ -48,9 +48,17 @@ assert.equal(
 const impersonated = [sv, "agent-ceo", "standard", sissued, ssig].join(".");
 assert.equal(await auth.verifyAgentAuthToken(impersonated, NOW), null, "agent id is signed");
 
-// Expiry, and no future-dating around it.
-assert.ok(await auth.verifyAgentAuthToken(token, NOW + 11 * 3_600_000), "still valid inside the TTL");
-assert.equal(await auth.verifyAgentAuthToken(token, NOW + 13 * 3_600_000), null, "expires after the TTL");
+// Expiry, and no future-dating around it. Bounds are derived from the exported
+// TTL so changing it cannot silently leave these assertions testing nothing.
+assert.ok(
+  await auth.verifyAgentAuthToken(token, NOW + auth.AGENT_TOKEN_TTL_MS - 60_000),
+  "still valid just inside the TTL",
+);
+assert.equal(
+  await auth.verifyAgentAuthToken(token, NOW + auth.AGENT_TOKEN_TTL_MS + 60_000),
+  null,
+  "expires just past the TTL",
+);
 const future = await auth.mintAgentAuthToken("agent-x", "standard", NOW + 86_400_000);
 assert.equal(await auth.verifyAgentAuthToken(future, NOW), null, "future-dated tokens are rejected");
 

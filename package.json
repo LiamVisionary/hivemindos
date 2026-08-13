@@ -185,6 +185,7 @@
     "test:company-needs-human-triage": "node scripts/test-company-needs-human-triage.mjs",
     "test:action-authorization": "node scripts/test-action-authorization.mjs",
     "test:agent-authority": "node scripts/test-agent-authority.mjs",
+    "test:agent-scoped-mcp-registration": "node scripts/test-agent-scoped-mcp-registration.mjs",
     "test:agent-scoped-permissions": "node scripts/test-agent-scoped-permissions.mjs",
     "test:principal-context": "node scripts/test-principal-context.mjs",
     "test:company-task-watchdog": "node scripts/test-company-task-watchdog.mjs",

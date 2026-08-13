@@ -672,6 +672,14 @@ function projectRoot() {
   return process.env.HIVE_ENV_PROJECT_ROOT || process.cwd();
 }
 
+// An agent-scoped MCP registration carries this instead of the machine-wide
+// device token. When present the server presents ONLY the agent credential:
+// falling back to the device token would hand the agent full operator
+// authority and make its configured level meaningless.
+function agentAuthToken() {
+  return (process.env.HIVEMINDOS_AGENT_TOKEN || "").trim();
+}
+
 function dashboardToken() {
   return process.env.HIVEMINDOS_DASHBOARD_DEVICE_TOKEN
     || process.env.HIVE_E2E_DASHBOARD_TOKEN
@@ -699,9 +707,11 @@ function requestJson(base, route, method = "GET", body) {
   return new Promise((resolve, reject) => {
     const url = new URL(route, base);
     const payload = body ? JSON.stringify(body) : "";
-    const token = dashboardToken();
+    const agentToken = agentAuthToken();
+    const token = agentToken ? "" : dashboardToken();
     const headers = {
       ...(payload ? { "content-type": "application/json", "content-length": Buffer.byteLength(payload) } : {}),
+      ...(agentToken ? { "x-hivemindos-agent-token": agentToken } : {}),
       ...(token ? { "x-hivemindos-device-token": token } : {}),
     };
     const req = http.request(url, { method, headers, timeout: 190_000 }, (res) => {

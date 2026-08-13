@@ -118,10 +118,67 @@ if (!SERVER) {
   console.error(`Unknown MCP server "${SERVER_KEY}". Expected one of: ${Object.keys(SERVER_CATALOG).join(", ")}`);
   process.exit(2);
 }
-const NAME = SERVER.name;
+// --agent <id> registers an AGENT-SCOPED server: a separate entry named
+// hivemind-<id> whose env carries that agent's own signed credential instead of
+// the machine-wide device token. Without this every agent authenticates as the
+// machine and can name any agent it likes in a tool argument, which makes the
+// authority level a suggestion rather than a boundary.
+const AGENT_ID = flagValue("--agent").trim();
+const AGENT_AUTHORITY = (flagValue("--authority") || "standard").trim().toLowerCase();
+
+/** Minimal KEY=value reader for .env.local; the secret never leaves this process. */
+function readEnvValue(file, key) {
+  try {
+    for (const line of fs.readFileSync(file, "utf8").split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const separator = trimmed.indexOf("=");
+      if (separator < 0) continue;
+      if (trimmed.slice(0, separator).trim() !== key) continue;
+      return trimmed.slice(separator + 1).trim().replace(/^["']|["']$/g, "");
+    }
+  } catch {
+    return "";
+  }
+  return "";
+}
+
+async function mintAgentTokenForRegistration(agentId, authority) {
+  const { register } = await import("node:module");
+  register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
+  const { mintAgentAuthToken } = await import("../src/lib/utils/agent-auth-token.ts");
+  const secret = (
+    process.env.HIVEMINDOS_DASHBOARD_AUTH_SECRET
+    || readEnvValue(path.join(ROOT, ".env.local"), "HIVEMINDOS_DASHBOARD_AUTH_SECRET")
+    || ""
+  ).trim();
+  if (!secret) {
+    console.error(
+      "Cannot mint an agent credential: HIVEMINDOS_DASHBOARD_AUTH_SECRET is not set in the environment or .env.local.",
+    );
+    process.exit(2);
+  }
+  return mintAgentAuthToken(secret, agentId, authority);
+}
+
+if (AGENT_ID && SERVER_KEY !== "hivemind") {
+  console.error("--agent is only supported for the hivemind MCP server.");
+  process.exit(2);
+}
+
+const NAME = AGENT_ID ? `${SERVER.name}-${AGENT_ID}` : SERVER.name;
 const COMMAND = SERVER.command;
 const ARGS = SERVER.args;
-const ENV = SERVER.env;
+const ENV = AGENT_ID
+  ? {
+      ...SERVER.env,
+      HIVEMINDOS_AGENT_ID: AGENT_ID,
+      // Minted at registration. Re-run this command to refresh it — the token
+      // carries the authority level, so lowering an agent's level also requires
+      // re-registering for the change to reach that agent.
+      HIVEMINDOS_AGENT_TOKEN: REMOVE ? "" : await mintAgentTokenForRegistration(AGENT_ID, AGENT_AUTHORITY),
+    }
+  : SERVER.env;
 
 function parseTargets() {
   let raw = flagValue("--targets") || "all";
