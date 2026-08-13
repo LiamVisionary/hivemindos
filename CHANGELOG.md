@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-08-13 10:27 +07 - Finish the Fleet approval card and remove false-positive asks
-  - Status: Uncommitted.
+  - Status: Pushed.
   - User-facing release note: Fleet access cards now show a clean capability-specific question instead of raw `ACTION NEEDED` / `FLEET ACCESS REQUEST` control markers or duplicated prose. A click immediately disables every choice and animates the selected action; after the collector accepts it, the card persists the answer and collapses instead of leaving live approval buttons behind. Merely discovering connected apps no longer tells an agent to request permission; the request belongs immediately before a concrete call to a named app on another fleet machine.
   - Root cause and baseline: The first Fleet-button change parsed the pipe-separated `OPTIONS:` line but left the other protocol lines in `displayText`. Its response settler searched only messages that already carried a structured `agentPrompt`, so the legacy text-marker card could never become answered. The button awaited the collector mutation without a local pending state, and the stream compactor handled repeated `Draft:` blocks only. Both focused Fleet suites passed at baseline because they asserted button creation and the collector POST but not clean rendering, pending feedback, legacy response persistence, or general repeated-prefix compaction.
   - Areas changed: Fleet prompt presentation and legacy-to-structured response normalization, interactive prompt pending feedback, repeated assistant-prefix compaction, collector policy guidance for concrete cross-machine app calls, focused regressions, and this changelog.
@@ -15,7 +15,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(chat): finish fleet access approval lifecycle`
 
 - 2026-08-12 17:30 EDT (-0400) - Durable audit trail, a decision corpus, and secret redaction
-  - Status: Uncommitted.
+  - Status: Pushed.
   - User-facing release note: Authorization outcomes now land in a durable, queryable audit trail at `~/.hivemindos/audit/events.jsonl` that nothing purges, so "which agent did this and was it permitted" has a real answer. Separately, decisions you actually make — answering a Needs You question, settling a company proposal — are captured into `~/.hivemindos/decisions/decisions.jsonl` with the question, your answer, and enough context to see when the same question keeps coming back. Any known credential value is masked before either file is written.
   - Root cause and baseline: `recordAuditEvent` wrote only into the local telemetry log, which is chatty, rotates fast, and is rewritten whole by a thread purge — so deleting a chat could erase the record of what an agent was allowed to do. On the decision side, `learnedApprovalPoliciesFromDirectives` learned only approval SUBJECTS by regex-matching permission phrases out of directive text; it never recorded the question asked, the answer given, or the context, which is the material needed to stop re-asking.
   - Areas changed: New durable audit log, new decision corpus with a pattern summarizer, new secret scoping and value-redaction module, capture hooks in `answerHumanTask` and the company proposal settle path, `recordAuditEvent` now writing to both sinks, and a new hermetic suite.
