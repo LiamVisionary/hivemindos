@@ -33,7 +33,7 @@ import {
 } from "@/lib/services/kanban/outreach-safeguards";
 import { withMutationQueue } from "@/lib/services/kanban/mutation-queue";
 import { promoteReadyChildren, replaceIncomingTaskLinks } from "@/lib/services/kanban/dependency-links";
-import { captureDecision } from "@/lib/services/security/decision-capture";
+import { captureHumanAnswerDecision } from "@/lib/services/kanban/human-answer-decision";
 import {
   deliverableId,
   deliverableLabel,
@@ -1735,16 +1735,23 @@ export async function unblockTask(
  * an immediate autonomous pickup after this returns.
  */
 
-/** `company:<id>:<runId>` is how dispatched company work is stamped. */
-function companyIdFromTaskSource(source?: string) {
-  const match = /^company:([^:]+):/.exec(source ?? "");
-  return match?.[1] ?? null;
-}
-
 export async function answerHumanTask(
   slug: string | null,
   taskId: string,
-  input: { answer: string; author?: string; stampLabel?: string; resetAttempts?: boolean },
+  input: {
+    answer: string;
+    author?: string;
+    stampLabel?: string;
+    resetAttempts?: boolean;
+    /**
+     * Who is answering. Automation also calls this path — the infra rescue
+     * stamps a machine-written answer to put a stranded task back in flight —
+     * and those are NOT operator decisions. Capturing them would fill the
+     * decision corpus with machine text and teach later mining from it.
+     * Callers that are not a human must pass "automation".
+     */
+    origin?: "human" | "automation";
+  },
   options: KanbanStorageOptions = {},
 ) {
   return withBoardMutation(slug, options, async () => {
@@ -1791,19 +1798,7 @@ export async function answerHumanTask(
     ),
   );
   await writeBoard(touch(board), options);
-  // Capture what the operator decided, so the same question does not have to be
-  // asked cold next time. Best-effort and after the write: a corpus append must
-  // never fail answering a task.
-  void captureDecision({
-    sourceKind: "interaction",
-    sourceId: taskId,
-    companyId: companyIdFromTaskSource(task.source),
-    subject: task.title,
-    question: task.body ?? "",
-    outcome: answer,
-    actor: author,
-    context: { assignee: task.assignee ?? null, deliverables: (task.deliverables ?? []).map((d) => d.kind) },
-  }).catch(() => undefined);
+  captureHumanAnswerDecision({ task, answer, author, origin: input.origin });
   return { board, task: changed };
   });
 }

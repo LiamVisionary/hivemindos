@@ -164,6 +164,8 @@ export async function rescueInfraStrandedTasks(deps: InfraRescueDeps = {}): Prom
     if (!healthy) { result.skipped += 1; continue; }
     try {
       await answerHumanTask(null, task.id, {
+        // Machine-written rescue, not an operator decision.
+        origin: "automation",
         answer: rescueAnswer(task),
         author: "company-autonomy-driver",
         stampLabel: "Automatic rescue",

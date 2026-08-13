@@ -220,4 +220,60 @@ const scope = await import("../src/lib/services/security/secret-scope.ts");
   delete process.env.HIVE_ENV_FILE;
 }
 
+// ------------------------- automation must not pollute the human corpus
+{
+  // answerHumanTask is also called by the infra rescue to put a stranded task
+  // back in flight. Those are machine-written answers, not operator decisions;
+  // capturing them would fill the corpus with text later mining would learn
+  // from. Found by running this live: three of the first five captured records
+  // were company-autonomy-driver rescues.
+  //
+  // Capture is fire-and-forget by design (it must never fail the answer), so
+  // the positive case polls rather than assuming the append already landed.
+  const kanban = await import("../src/lib/services/kanban/local-kanban-store.ts");
+
+  async function countAfterSettle(expected, timeoutMs = 4000) {
+    const deadline = Date.now() + timeoutMs;
+    let count = (await decisions.queryDecisions()).length;
+    while (count !== expected && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      count = (await decisions.queryDecisions()).length;
+    }
+    return count;
+  }
+
+  const before = (await decisions.queryDecisions()).length;
+
+  // Human first: poll until it lands, which also calibrates how long a capture
+  // takes on this machine.
+  const { task: human } = await kanban.createTask(null, {
+    title: "Real question",
+    body: "should we send?",
+    status: "needs-human",
+  });
+  await kanban.answerHumanTask(null, human.id, { answer: "yes, send", author: "dashboard" });
+  assert.equal(await countAfterSettle(before + 1), before + 1, "a human answer IS captured");
+  const captured = (await decisions.queryDecisions())[0];
+  assert.equal(captured.outcome, "yes, send");
+  assert.equal(captured.sourceKind, "interaction");
+
+  // Automation second: wait the same window and assert nothing new appeared.
+  const { task: stranded } = await kanban.createTask(null, {
+    title: "Stranded task",
+    body: "waiting",
+    status: "needs-human",
+  });
+  await kanban.answerHumanTask(null, stranded.id, {
+    answer: "Automatic infrastructure rescue: retrying.",
+    author: "company-autonomy-driver",
+    origin: "automation",
+  });
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.equal(
+    (await decisions.queryDecisions()).length,
+    before + 1,
+    "an automation answer must NOT be captured as an operator decision",
+  );
+}
+
 console.log("Security audit, decision capture, and secret scope tests passed.");
