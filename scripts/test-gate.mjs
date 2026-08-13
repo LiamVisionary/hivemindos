@@ -233,6 +233,7 @@ const TESTS = [
   "test:wallet-display-currency",
   "test:preview-review",
   "test:proxy-agent-capability",
+  "test:security-audit-decisions",
   "test:principal-context",
   "test:qmd-brain-service",
   "test:quant-research",

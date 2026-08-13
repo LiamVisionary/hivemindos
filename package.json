@@ -75,6 +75,7 @@
     "test:loop-kanban-real-tasks": "node scripts/test-loop-kanban-real-tasks.mjs",
     "test:preview-review": "node scripts/test-preview-review.mjs",
     "test:proxy-agent-capability": "node scripts/test-proxy-agent-capability.mjs",
+    "test:security-audit-decisions": "node scripts/test-security-audit-decisions.mjs",
     "test:loop-chat-inference": "node scripts/test-loop-chat-inference.mjs",
     "test:founder-mode": "node scripts/test-founder-mode.mjs",
     "test:fusion": "node scripts/test-fusion.mjs",

@@ -5,6 +5,7 @@ import { promises as fs } from "fs";
 import path from "path";
 
 import { homedir } from "@/lib/home-dir";
+import { captureDecision } from "@/lib/services/security/decision-capture";
 import type {
   CompanyProposal,
   CompanyProposalKind,
@@ -338,6 +339,19 @@ async function settleCompanyProposalWhere(
     });
     if (!updated) return null;
     await writeCompanyRunLedger({ ...ledger, proposals, updatedAt: now });
+    // An approval settled by a human is the cleanest decision signal there is:
+    // an explicit proposal, an explicit verdict. Best-effort, after the write.
+    const settled: CompanyProposal = updated;
+    void captureDecision({
+      sourceKind: "approval",
+      sourceId: settled.id,
+      companyId: id,
+      subject: settled.title ?? settled.kind ?? "proposal",
+      question: settled.summary ?? "",
+      outcome: `${status}${settled.decision ? `: ${settled.decision}` : ""}`,
+      actor: settled.decidedBy ?? "operator",
+      context: { kind: settled.kind ?? null, status },
+    }).catch(() => undefined);
     return updated;
   });
 }
