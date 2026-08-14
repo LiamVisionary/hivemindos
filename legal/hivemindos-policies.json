@@ -179,8 +179,8 @@
     ]
   },
   "privacy": {
-    "version": "2026-07-27",
-    "effectiveDate": "July 27, 2026",
+    "version": "2026-08-13",
+    "effectiveDate": "August 13, 2026",
     "title": "Privacy Policy",
     "eyebrow": "Legal · private and local-first by design",
     "intro": "HivemindOS is designed so its core can run privately on hardware you control. This policy separates local processing, limited automatic technical connections, user-chosen connected services, and deliberately public features.",
@@ -301,7 +301,16 @@
         ]
       },
       {
-        "title": "15. Retention and deletion",
+        "title": "15. HivemindOS Browser extension",
+        "paragraphs": [
+          "The HivemindOS Browser extension provides one disclosed purpose: letting you bring browser context into a HivemindOS side panel and send it to an agent you choose. After you invoke the extension, it may read the active page URL, title, selected text, readable page text, description, language, headings, visible links and controls, and the titles and URLs of open tabs. The extension does not continuously monitor browsing activity, and its privacy guard omits configured sensitive destinations such as banking, wallet, password-manager, checkout, payment, health, and tax pages.",
+          "The extension stores its dashboard URL, dashboard unlock token, selected agent, context mode, agent mode, and current session identifier in local, unsynchronized Chrome extension storage. These settings are not sent to Rizzma Inc. merely because the extension is installed, the browser is open, or you browse a page. When you choose Send, the extension transmits your prompt and the context shown in the side panel only to the HivemindOS dashboard address you configured. That dashboard may then send the request to the local or remote model, agent runtime, or provider you selected under its configuration and applicable policy.",
+          "The extension uses temporary active-page and script-injection access only after you invoke it, tab metadata access for its visible compare-tabs feature, local storage for connection settings, the browser side-panel interface, built-in access to the local HivemindOS dashboard, and an optional exact host permission when you connect another dashboard address. It does not request cookies, browser history, debugger, native messaging, downloads, bookmarks, or remote-code execution permissions. HivemindOS does not sell extension data, use it for advertising, transfer it to data brokers, or allow humans to read it except as specifically requested for support or when required for security or law.",
+          "The use of information received from Google APIs will adhere to the Chrome Web Store User Data Policy, including the Limited Use requirements."
+        ]
+      },
+      {
+        "title": "16. Retention and deletion",
         "paragraphs": [
           "Local data remains under your control subject to the app's deletion tools, your filesystem and backup practices, configured retention limits, and copies held by runtimes or destinations you selected. Deleting a local record does not delete an independently stored provider copy, recipient copy, public post, blockchain record, synced backup, or third-party log.",
           "HivemindOS-managed services retain information only as long as reasonably necessary for service delivery, entitlement and payment records, claim integrity, fraud prevention, community and reward administration, dispute resolution, security, accounting, and legal compliance. Retention depends on the record and whether it remains active, disputed, security-relevant, or legally required.",
@@ -310,14 +319,14 @@
         ]
       },
       {
-        "title": "16. Security",
+        "title": "17. Security",
         "paragraphs": [
           "HivemindOS uses safeguards appropriate to the feature, including local-only defaults, private-network collectors, least-privilege connection design, signed wallet proofs, short-lived nonces, OAuth state and PKCE, encrypted local secret storage where offered, authenticated local routes, approval controls, spending limits, and provider access controls.",
           "No system is completely secure. HivemindOS cannot guarantee that information will never be accessed, altered, lost, or disclosed without authorization. Keep devices patched, use strong authentication, review connected tools, restrict permissions, maintain backups, and never send a seed phrase or private key to a support contact."
         ]
       },
       {
-        "title": "17. International processing and privacy rights",
+        "title": "18. International processing and privacy rights",
         "paragraphs": [
           "Rizzma Inc. and connected providers may process information in the United States and other countries whose data-protection rules differ from those where you live. Where legally required, an applicable transfer mechanism or other lawful basis is used. Public blockchain and social-network data can be accessed globally by design.",
           "Depending on your location, you may have rights to know or access personal information, correct it, delete it, restrict or object to processing, receive a portable copy, withdraw consent, appeal a decision, and lodge a complaint with a data-protection authority. You will not be discriminated against for exercising applicable privacy rights.",
@@ -325,20 +334,20 @@
         ]
       },
       {
-        "title": "18. U.S. state disclosures",
+        "title": "19. U.S. state disclosures",
         "paragraphs": [
           "In the preceding 12 months, official services may have collected the categories described above: identifiers; internet, network, and electronic activity; user-provided content; public social-profile and community information; blockchain, transaction, and commercial information; approximate location inferred from network requests; and inferences such as community contribution scores. These categories are used and disclosed for the operational purposes listed in this policy.",
           "Rizzma Inc. does not sell these categories and does not share them for cross-context behavioral advertising. Sensitive personal information is not used or disclosed to infer characteristics about people. If practices materially change, this notice and any legally required opt-out or limitation mechanism will be updated."
         ]
       },
       {
-        "title": "19. Children",
+        "title": "20. Children",
         "paragraphs": [
           "The official site and Services are not directed to children under 13, and wallet, staking, identity-claim, marketplace, and financial features are intended only for people legally able to use them. Rizzma Inc. does not knowingly collect personal information from children under 13 through these services. Contact privacy@hivemindos.app if you believe a child submitted information."
         ]
       },
       {
-        "title": "20. Changes and contact",
+        "title": "21. Changes and contact",
         "paragraphs": [
           "This policy may be updated when services, providers, data flows, or legal obligations change. The effective date and version identify the current notice. Material changes will be highlighted or presented again where required.",
           "Privacy questions and rights requests may be sent to privacy@hivemindos.app. General legal questions may be sent to legal@hivemindos.app. Do not include wallet secrets, private keys, or unnecessary sensitive information."

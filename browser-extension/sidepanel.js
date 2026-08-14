@@ -1,5 +1,6 @@
 import { browserContextReceipt, buildBrowserContextText, isRestrictedUrl } from "./lib/context.mjs";
 import { commandForInput, QUICK_COMMANDS } from "./lib/commands.mjs";
+import { dashboardPermissionOrigin, hasBuiltInDashboardPermission } from "./lib/dashboard-permissions.mjs";
 import { createSseParser, runtimeEventText } from "./lib/sse.mjs";
 
 const STORAGE_KEY = "hivemindosBrowserSettings";
@@ -66,7 +67,20 @@ function authHeaders() {
   return { Authorization: `Bearer ${settings.token}`, "Content-Type": "application/json" };
 }
 
+async function hasDashboardPermission(rawUrl) {
+  if (hasBuiltInDashboardPermission(rawUrl)) return true;
+  return chrome.permissions.contains({ origins: [dashboardPermissionOrigin(rawUrl)] });
+}
+
+async function requestDashboardPermission(rawUrl) {
+  if (hasBuiltInDashboardPermission(rawUrl)) return true;
+  return chrome.permissions.request({ origins: [dashboardPermissionOrigin(rawUrl)] });
+}
+
 async function apiRequest(init = {}) {
+  if (!(await hasDashboardPermission(settings.dashboardUrl))) {
+    throw new Error("Open connection settings and choose Save & connect to allow this dashboard address.");
+  }
   const response = await fetch(`${normalizeDashboardUrl(settings.dashboardUrl)}/api/browser-extension`, {
     ...init,
     headers: { ...authHeaders(), ...(init.headers || {}) },
@@ -259,7 +273,11 @@ elements.saveSettings.addEventListener("click", async () => {
   elements.saveSettings.disabled = true;
   elements.saveSettings.querySelector(".button-label").textContent = "Connecting…";
   try {
-    await saveSettings({ dashboardUrl: normalizeDashboardUrl(elements.dashboardUrl.value), token: elements.dashboardToken.value.trim() });
+    const dashboardUrl = normalizeDashboardUrl(elements.dashboardUrl.value);
+    if (!(await requestDashboardPermission(dashboardUrl))) {
+      throw new Error("Dashboard access was not granted.");
+    }
+    await saveSettings({ dashboardUrl, token: elements.dashboardToken.value.trim() });
     await connect();
     setSettingsOpen(false);
   } catch (error) {

@@ -20,7 +20,9 @@
   ],
   "host_permissions": [
     "http://127.0.0.1/*",
-    "http://localhost/*",
+    "http://localhost/*"
+  ],
+  "optional_host_permissions": [
     "http://*/*",
     "https://*/*"
   ],
@@ -49,13 +51,6 @@
       "description": "Open HivemindOS Browser"
     }
   },
-  "content_scripts": [
-    {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
-    }
-  ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; img-src 'self' data:; connect-src http: https:;"
   }
