@@ -6,7 +6,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 ## Unreleased
 
 - 2026-08-13 22:34 EDT (-0400) - Provision approved capabilities into the selected agent runtime
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: A capability discovered and approved in chat is now made executable in the selected Hermes agent's own runtime before work begins. HivemindOS installs selected shared workflows locally and installs its fresh-discovery remote adapter for connected apps or app endpoints on other Hive machines. It reports provisioning in the process stream, supplies runtime-local instructions, and rejects a completed generated-media result when the selected capability was never actually invoked. A real provisioning or provider failure still permits a plainly disclosed fallback.
   - Root cause and baseline: Capability search treated the presence of `Skills/<slug>/SKILL.md` in the shared-vault index as proof that the selected agent could execute it. The chat route then sent only a prose locator, while the collector launched the agent's profile-specific `HERMES_HOME` without projecting the selected skill there or recording whether it ran. That split let the UI say MUAPI Seedance was Ready while Hermes concluded it was not exposed and silently substituted image generation plus FFmpeg.
   - Areas changed: Approved-capability runtime contract parsing, exact shared-skill projection mode, remote connected-app execution adapter, Hermes collector pre-launch materialization, native skill discovery mirror, scoped-CLI enforcement, private capability invocation receipts, generated-media completion gate, focused projection/protocol/collector regressions, default test-gate registration, managed collector runtime, and this changelog.
@@ -15,7 +15,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(chat): provision approved capabilities into agent runtimes`
 
 - 2026-08-13 21:14 EDT (-0400) - Restore scrolling on the Hive Compute host route
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: The full-page Hive Compute hosting route now scrolls when its setup and hosting controls extend below the window, so the diagnostics and bottom actions remain reachable without changing the separately scrollable Fleet modal.
   - Root cause and baseline: The dashboard shell intentionally clips overflow, while the Hive Compute page wrapper used a viewport-based minimum height and visible overflow instead of owning a bounded scroll area. In the authenticated 1400x900 route, the 1,022px host card expanded its wrapper to 1,096px inside a clipped 900px shell; a 700px wheel input left every scroll position at zero.
   - Areas changed: Hive Compute dashboard-route sizing, vertical overflow ownership, contained overscroll behavior, and this changelog.
@@ -24,7 +24,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(compute): restore host route scrolling`
 
 - 2026-08-13 21:03 EDT (-0400) - Show complete names on personal wallet cards
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: Personal wallet cards now give the wallet identity the full middle of the header and wrap genuinely long names onto additional lines. `PRIMARY` lives with the wallet metadata instead of occupying a separate title-squeezing column, so names such as `HivemindOS Hyperliquid Builder Test Trader` stay complete without the old ellipsis or the cramped four-column header.
   - Root cause and baseline: The personal-wallet card rendered its name with inline `white-space: nowrap`, hidden overflow, and ellipsis styling. Removing that truncation exposed a second layout defect: the chain icons, name, Primary badge, and expand control were four separate header regions, leaving the name in an unnecessarily narrow strip. The reported screenshots reproduced both states, and focused regressions failed against each old structure before its fix.
   - Areas changed: Three-region personal-wallet header structure, Primary-status placement inside wallet metadata, complete name presentation, reusable wrapping/reflow styles, focused wallet-tab regression coverage, and this changelog.
@@ -33,7 +33,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(wallets): wrap personal wallet card names`
 
 - 2026-08-13 20:18 EDT (-0400) - Honor manually selected capabilities before falling back
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: When you manually select a capability such as MUAPI Seedance, the worker now treats it as the required first route. It may still fall back when that capability genuinely cannot run, but only after an actual attempt produces a concrete failure; it can no longer skip the selected provider merely because a local generator is easier. GUI-launched Hermes workers also inherit the supported `~/.local/bin` helper path, so shared-env capabilities work the same way they do in a terminal.
   - Root cause and baseline: The capability selector correctly found the shared `muapi-seedance-video` skill and the approved continuation let Hermes read it, while the collector also injected `MUAPI_API_KEY`. However, the collector's sparse LaunchAgent PATH omitted `~/.local/bin`, so `hive-env-check` returned command-not-found. The worker then declared MUAPI “not exposed” without making any MUAPI request and substituted image generation plus an FFmpeg pan/zoom. The approval prompt described authorization but never made a manual selection binding or required evidence before fallback.
   - Areas changed: Hermes worker executable PATH construction, manual capability execution/fallback contract, focused collector environment and capability-plan regressions, and this changelog.
@@ -42,7 +42,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(chat): honor selected capabilities before fallback`
 
 - 2026-08-13 19:53 EDT (-0400) - Keep Socials stable and show the correct profile photos
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: Socials now opens directly on the remembered account without briefly painting another account, clearing the workspace, and loading it again. Connected account photos appear sharply in account selectors and platform previews, while reply and quote drafts show the other author's sharp photo—including older saved drafts that predate stored avatar snapshots. A mismatched Agent Reach session can no longer make `@TheHivemindOS` look like a different X account.
   - Root cause and baseline: The Socials initial loader depended on the asynchronously hydrated remembered account id. Navigation started two concurrent `/api/socials/accounts` reads: the first painted the fallback Facebook account and the second repainted the remembered X account roughly 2.1 seconds later. Queue discovery also copied the machine-default X session's display name and avatar even after the selected-account handle check marked that session unauthenticated, producing a mixed personal-name / `@TheHivemindOS` identity. Account probes did not return avatars, engagement snapshots did not retain target-author avatars, and X's returned `_normal` photo URL was only 48×48 pixels before the preview enlarged it.
   - Areas changed: Remembered-account hydration gating, stable account loading and stale-response guards; OAuth-connection identity verification; explicit public X profile resolution with a bounded cache; X avatar normalization from the 48px `_normal` asset to the confirmed 400×400 variant; account and platform-preview avatars; stored discovery-author avatars plus lazy lookup for older response drafts; provider avatar fields for LinkedIn, Reddit, and Farcaster; focused Socials contracts and authenticated browser coverage; performance guidance; and this changelog.
@@ -51,7 +51,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(socials): stabilize loading and show profile avatars`
 
 - 2026-08-13 18:22 EDT (-0400) - Bring the economy into the default Fleet Hive
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: The default Fleet Hive now carries its economy at every selection level in the newer panel language. Selecting the Queen shows the fleet's cumulative unique-wallet balance alongside Honey and Bankr credits; selecting a machine shows only wallet-bearing agents with their combined wallet balances, including attached wallets at `$0.00`; and selecting an agent shows every wallet it can use. Shared wallets are counted only once in cumulative totals and expose a quiet “Shared with x agents” control whose tooltip names the other agents using the same wallet.
   - Root cause and baseline: The Classic Fleet rendered a three-cell economy strip, while the default Hive had no Queen- or machine-level economy and its agent detail projected only one primary wallet through a synthetic holdings card. The dashboard already supplied the full wallet registry plus per-agent aliases to the Hive, but the selected-panel call chain discarded that many-to-many attachment context.
   - Areas changed: One canonical Fleet economy balance hook shared with the Classic strip; wallet-permission-aware Hive economy projection and unique-wallet aggregation; Queen, machine, and agent economy panels; shared-wallet agent disclosure; Hive-specific dark/light styling; focused aggregation and presentation coverage; default gate registration; and this changelog.
@@ -69,7 +69,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `feat(browser): prepare Chrome Web Store release`
 
 - 2026-08-13 17:54 EDT (-0400) - Keep long agent builds alive until the runtime actually finishes
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: Long app-building and generated-media turns no longer fail at a fixed ten-minute wall-clock boundary. Chat now stays visibly active through quiet tool waits, survives reloads with the worker bee intact, auto-scrolls new process steps, recovers a worker response that arrived after an older transport timeout, and opens the App workspace only after the runtime session authoritatively completes—not merely after interim progress text appears.
   - Root cause and baseline: The reported Hermes turn was still healthy when HivemindOS aborted its collector response at exactly 599,996 ms through `AbortSignal.timeout(600000)`. Hermes completed the production build about four seconds later and its final answer about 24 seconds later. A separate browser watchdog declared a stall after 130 seconds without response bytes because the scoped Hermes CLI bridge—unlike the gateway bridge—emitted no SSE heartbeat. Recovery then treated any recovered assistant narration as task completion even when the session had no `endedAt`, which could open App Builder against an empty/in-progress scaffold. After its 20-minute active-run record expired, reload also stopped polling entirely and retained only the failed HivemindOS wrapper id; the later authoritative Hermes session had no chat key and older Hermes CLI versions left `ended_at` empty even after flushing a final assistant response. The task itself took 10m19s: about 3m12s of agent setup/editing (including one invalid MUAPI duration retry), about 4m1s for successful video generation, and about 3m6s for install, QA, and production build.
   - Areas changed: Activity-based HTTP/OpenAI-compatible runtime supervision, scoped CLI and route-level SSE keepalives, activity-based collector supervision, one-hour route budget, terminal-aware interrupted-stream recovery, prompt-and-start-time late-session reconciliation across local and remote Hermes stores, one-shot historical reload repair, compact approval-row migration, stale failed-wrapper suffix cleanup with App-workspace preservation, completed-only App-workspace handoff, process auto-scroll/worker-bee reload state, corrected 5/10/15-second MUAPI guidance in the canonical shared skill and runtime projection, focused runtime/collector/UI regressions, performance guidance, and this changelog.
@@ -78,7 +78,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(chat): supervise long agent turns by activity`
 
 - 2026-08-13 13:53 EDT (-0400) - Share any number of governed wallets across agents
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: Agent Wallets now shows only wallets that actually exist. Operators can create any number of named agent wallets, attach or detach several agents through an in-context selector, clear all access, and choose independently whether each attached agent must ask before spending or may act autonomously within the wallet's hard caps. One agent can be attached to several wallets, and unattached agents are denied by the authoritative spend routes.
   - Root cause and baseline: The Wallets view projected one card per agent and filled missing records with an uninitialized placeholder, while wallet identity, encrypted-vault identity, and agent identity all used the same id. The only autonomy switch was wallet-wide, so it could not safely express different permissions for agents sharing funds. The existing real-wallet tab test and full TypeScript passed at baseline; direct Node invocations of the TypeScript send/trade suites failed only because their `@/` aliases require the repository TypeScript runner, and both pass under `tsx`.
   - Areas changed: Wallet-owned stable ids and names, many-to-many agent attachment metadata, legacy-record normalization, dashboard-state and Obsidian-ledger persistence, wallet-centric card projection, create/access modals, direct-send confirmation copy, server-authoritative attachment resolution for public x402, stablecoin sends, Veil private transfers and private x402, chat wallet narrowing, signer selection by wallet id, agent tool schemas/prompts, focused permission/ledger coverage, and this changelog.
@@ -87,7 +87,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `feat(wallets): share governed wallets across agents`
 
 - 2026-08-13 13:54 EDT (-0400) - Keep live process activity and the worker bee correct across reloads
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: Active chat process cards now follow newly arriving steps automatically, and the animated worker bee remains visible after interim narration—including immediately after reloading an active run—until the runtime actually finishes. Reloading an ended session also closes any orphaned tool lifecycle and shows the terminal failure instead of leaving a misleading “running” row.
   - Root cause and baseline: The process timeline had its own overflow container but never moved that container when its event list changed. The thinking loader rendered only while the assistant body was empty, so the first progress sentence unmounted the bee. Hydration then made the same mistake a second time by deleting the persisted active-run marker whenever it found assistant prose, even though Hermes uses that prose for progress narration; the global stale-run sweep repeated that invalid assumption. Finally, a stream timeout could persist a tool start without its matching finish, and the terminal failure could be stored on a different assistant narration segment from that orphaned start. Focused regressions failed first on the missing scroll owner, the reload marker being discarded, and the terminal session rehydrating an older process card as running.
   - Areas changed: Process-timeline scroll ownership, active assistant-state presentation, active-run hydration and stale-run reconciliation, run-scoped terminal tool lifecycle settlement across assistant segments, focused chat process/reload regression coverage, and this changelog.
@@ -96,7 +96,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(chat): keep live process activity visible`
 
 - 2026-08-13 10:48 EDT (-0400) - Calm the Fleet List and Hive action rails
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: Fleet List rows and the default Hive detail panel now keep one clear primary action visible—Add agent for machines and a split Chat/Call control for agents—while grouping the rest into compact, keyboard-accessible Actions menus. The split keeps Chat or New chat on the left and a small phone icon on the right across Hive agents, the Queen overview, List agents, and classic Fleet agent details. Menu titles use restrained medium typography and action labels use a lighter regular weight. The duplicate List Add agent row is gone, machine repair needs remain visible as a numbered issue badge, and destructive agent removal is separated and styled as danger inside both menus.
   - Root cause and baseline: The List machine rail rendered as many as ten same-sized action buttons across multiple wrapped rows, while its agent rail rendered New chat plus up to five same-weight controls. The first redesign addressed only that layout. A follow-up authenticated check confirmed the default Hive machine panel still exposed seven peer buttons—Add agent, Settings, Update, Shell, Send file, Rent compute, and Code proof—and selected Hive agents still split Chat/Call from five secondary chips. Review of the resulting menu found that its Space Grotesk title at weight 600 and every action at weight 500 made the compact surface look unnecessarily bold. The subsequent compact layout still separated Chat from Call by hiding Call inside Actions, making two closely related communication modes feel unrelated.
   - Areas changed: Fleet List and Hive panel machine/agent action hierarchies, shared semantic Chat/Call split control across four active Fleet surfaces, four grouped action-menu components, lighter shared menu typography, responsive dark/light menu styling, reduced-motion handling, focused cross-layout action-discoverability coverage, default gate registration, and this changelog.
@@ -105,7 +105,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `refactor(fleet): group machine and agent actions`
 
 - 2026-08-13 10:33 EDT (-0400) - Put machine renaming beside the machine name
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: Fleet machine details now place a pencil beside the machine name instead of showing a standalone Rename action. Pressing the pencil swaps the name for a focused input with check and X controls; check or Enter saves, while X or Escape cancels and restores the original name. Long machine names stay fully visible on one line and shrink to the panel width instead of wrapping.
   - Root cause and baseline: The Hive machine panel rendered Rename as an action chip, and its handler opened `window.prompt()` instead of an in-context editor. The requested contract assertion failed at baseline because there was no input, check, or cancel control in the panel; the existing Fleet Hive update-status regression still passed. The first inline heading also explicitly enabled flex wrapping and anywhere word breaks, which split a long fleet hostname across two lines rather than fitting it to the available width.
   - Areas changed: Fleet Hive machine-name editing UI, measured one-line name fitting, rename-handler adapter, fast default-gate regression coverage, and this changelog.
@@ -114,7 +114,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(fleet): make machine rename inline`
 
 - 2026-08-13 10:31 EDT (-0400) - Label private Fleet transfers as Send file
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: Fleet machine actions now say “Send file” in both Hive and List views. The modal keeps HiveDrop as the private transfer mechanism with a restrained identity row, compact drop target, muted honey send action, responsive dark/light polish, and the line “Drag & Drop or Browse to send a file privately via HiveDrop.”
   - Root cause and baseline: The machine action exposed the internal HiveDrop brand without explaining what it did, while the original utility modal repeated that brand in its title and button without stating that the transfer is private. A first branding pass was visually too loud, so the final treatment removes its animated glow, gradient wordmark, badge, trust-chip rail, and oversized drop stage while retaining a clear HiveDrop identity. The action remains safely disabled when a machine explicitly advertises `fileTransfers: false`; on macOS that means Setup has not prepared protected Downloads access. New copy assertions failed first on the old HiveDrop action label.
   - Areas changed: Hive and List machine action labels/tooltips, restrained HiveDrop modal structure and responsive dark/light styling, send-file title/instruction/CTA, focused cross-layer regression coverage, and this changelog.
@@ -123,7 +123,7 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
   - Intended commit message: `fix(fleet): label private HiveDrop actions as Send file`
 
 - 2026-08-13 21:30 +07 - Put Hive Compute hosting where people can find it
-  - Status: Committed.
+  - Status: Pushed.
   - User-facing release note: Fleet List machine cards now reveal the same core machine controls as the Hive detail panel, including Add agent, Settings, Update and repair actions, Shell, Send file, Rename, Code proof, and Rent compute. The More view also carries a persistent “Earn while you sleep. Host your compute.” callout that opens the shared Hive Compute hosting flow.
   - Root cause and baseline: The default Fleet Hive passed agent callbacks into the shared List view but omitted every machine callback, and the List component had no selected-machine action surface at all. Hive Compute hosting was reachable from the selected Hive machine panel and a generic utility tile, but it had no prominent host-oriented discovery message elsewhere in the dashboard.
   - Areas changed: Shared Fleet List machine-action component and styling, machine callback wiring in both Hive and Classic Fleet hosts, List-accessible machine settings/file transfer/terminal/compute surfaces, a responsive dark/light More-page hosting spotlight, and focused Hive Compute contract coverage.
