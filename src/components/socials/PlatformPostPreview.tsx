@@ -1,5 +1,7 @@
+/* eslint-disable @next/next/no-img-element -- public profile images use validated runtime URLs and provider caching. */
 "use client";
 
+import { useEffect, useState } from "react";
 import {
   ArrowDown,
   ArrowUp,
@@ -23,6 +25,8 @@ import type { SocialEngagementTarget, SocialPlatform, SocialQueueItem } from "@/
 import styles from "./PlatformPostPreview.module.css";
 
 type DraftKind = "post" | "reply" | "quote";
+
+const publicProfileImageCache = new Map<string, string | null>();
 
 type PlatformPostPreviewProps = {
   account: SocialsAccountView | null;
@@ -75,8 +79,13 @@ function BrandMark({ platform }: { platform: SocialPlatform }) {
   return <span aria-hidden="true">{platform === "x" ? "X" : platform === "linkedin" ? "in" : platform === "reddit" ? "r/" : platform === "facebook" ? "f" : "F"}</span>;
 }
 
-function Avatar({ name, platform }: { name: string; platform: SocialPlatform }) {
-  return <span className={styles.avatar} data-avatar-platform={platform} aria-hidden="true">{initials(name)}</span>;
+function Avatar({ name, platform, imageUrl }: { name: string; platform: SocialPlatform; imageUrl?: string }) {
+  return (
+    <span className={styles.avatar} data-avatar-platform={platform} aria-hidden="true">
+      {initials(name)}
+      {imageUrl ? <img key={imageUrl} src={imageUrl} alt="" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}
+    </span>
+  );
 }
 
 function DraftEditor({ platform, text, onTextChange }: {
@@ -103,7 +112,36 @@ function Action({ icon, label }: { icon: React.ReactNode; label: string }) {
   return <span className={styles.action}>{icon}<span>{label}</span></span>;
 }
 
-function TargetCard({ target, mode = "quote" }: { target: SocialEngagementTarget; mode?: "reply" | "quote" }) {
+function usePublicTargetAvatar(accountId: string, target: SocialEngagementTarget): string | undefined {
+  const key = `${accountId}:${target.authorHandle.toLowerCase()}`;
+  const cachedAvatarUrl = publicProfileImageCache.get(key) ?? undefined;
+  const [resolvedAvatar, setResolvedAvatar] = useState<{ key: string; url?: string }>(() => ({
+    key,
+    url: target.authorAvatarUrl ?? cachedAvatarUrl,
+  }));
+  useEffect(() => {
+    if (target.authorAvatarUrl || publicProfileImageCache.has(key)) return;
+    let cancelled = false;
+    const query = new URLSearchParams({ accountId, handle: target.authorHandle });
+    void fetch(`/api/socials/profile?${query}`, { cache: "force-cache" })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => null) as { profile?: { avatarUrl?: string } } | null;
+        return response.ok ? payload?.profile?.avatarUrl ?? null : null;
+      })
+      .catch(() => null)
+      .then((resolved) => {
+        publicProfileImageCache.set(key, resolved);
+        if (!cancelled && resolved) setResolvedAvatar({ key, url: resolved });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId, key, target.authorAvatarUrl, target.authorHandle]);
+  return target.authorAvatarUrl ?? cachedAvatarUrl ?? (resolvedAvatar.key === key ? resolvedAvatar.url : undefined);
+}
+
+function TargetCard({ accountId, target, mode = "quote" }: { accountId: string; target: SocialEngagementTarget; mode?: "reply" | "quote" }) {
+  const avatarUrl = usePublicTargetAvatar(accountId, target);
   const metrics = [
     `${formatMetric(target.metrics.replies)} replies`,
     `${formatMetric(target.metrics.reposts)} reposts`,
@@ -113,10 +151,13 @@ function TargetCard({ target, mode = "quote" }: { target: SocialEngagementTarget
   return (
     <div className={styles.target} data-mode={mode} data-testid="social-engagement-target">
       <div className={styles.targetHeader}>
-        <span className={styles.targetIdentity}>
-          <strong>{target.authorName || `@${target.authorHandle}`}</strong>
-          {target.authorVerified ? <CheckCircle2 aria-label="Verified" width={14} /> : null}
-          <span>@{target.authorHandle} · {formatTargetDate(target.createdAt)}</span>
+        <span className={styles.targetAuthor}>
+          <Avatar name={target.authorName || target.authorHandle} platform="x" imageUrl={avatarUrl} />
+          <span className={styles.targetIdentity}>
+            <strong>{target.authorName || `@${target.authorHandle}`}</strong>
+            {target.authorVerified ? <CheckCircle2 aria-label="Verified" width={14} /> : null}
+            <span>@{target.authorHandle} · {formatTargetDate(target.createdAt)}</span>
+          </span>
         </span>
         <a href={target.url} target="_blank" rel="noreferrer">Open target <ExternalLink aria-hidden="true" width={12} /></a>
       </div>
@@ -131,9 +172,9 @@ function XPreview({ account, item, kind, text, onTextChange }: PlatformPostPrevi
   const target = item.generation?.target;
   return (
     <article className={styles.preview} data-platform="x" data-testid="social-platform-preview">
-      {kind === "reply" && target ? <TargetCard target={target} mode="reply" /> : null}
+      {kind === "reply" && target ? <TargetCard accountId={account?.id ?? item.accountId} target={target} mode="reply" /> : null}
       <div className={styles.xPost}>
-        <Avatar name={identity.name} platform="x" />
+        <Avatar name={identity.name} platform="x" imageUrl={account?.avatarUrl} />
         <div className={styles.xBody}>
           <header className={styles.identityRow}>
             <span><strong>{identity.name}</strong><span>@{identity.handle} · Draft</span></span>
@@ -141,7 +182,7 @@ function XPreview({ account, item, kind, text, onTextChange }: PlatformPostPrevi
           </header>
           {kind === "reply" && target ? <div className={styles.replying}>Replying to <span>@{target.authorHandle}</span></div> : null}
           <DraftEditor platform="x" text={text} onTextChange={onTextChange} />
-          {kind === "quote" && target ? <TargetCard target={target} /> : null}
+          {kind === "quote" && target ? <TargetCard accountId={account?.id ?? item.accountId} target={target} /> : null}
           <div className={styles.actions}>
             <Action icon={<MessageCircle aria-hidden="true" width={17} />} label="Reply" />
             <Action icon={<Repeat2 aria-hidden="true" width={18} />} label="Repost" />
@@ -187,7 +228,7 @@ function LinkedInPreview({ account, item, text, onTextChange }: PlatformPostPrev
     <article className={styles.preview} data-platform="linkedin" data-testid="social-platform-preview">
       <div className={styles.standardPost}>
         <header className={styles.profileHeader}>
-          <Avatar name={identity.name} platform="linkedin" />
+          <Avatar name={identity.name} platform="linkedin" imageUrl={account?.avatarUrl} />
           <span className={styles.profileIdentity}><strong>{identity.name}</strong><span>@{identity.handle}</span><span>Draft · <Globe2 aria-label="Public" width={12} /></span></span>
           <MoreHorizontal aria-hidden="true" width={20} />
         </header>
@@ -210,7 +251,7 @@ function FacebookPreview({ account, item, text, onTextChange }: PlatformPostPrev
     <article className={styles.preview} data-platform="facebook" data-testid="social-platform-preview">
       <div className={styles.standardPost}>
         <header className={styles.profileHeader}>
-          <Avatar name={identity.name} platform="facebook" />
+          <Avatar name={identity.name} platform="facebook" imageUrl={account?.avatarUrl} />
           <span className={styles.profileIdentity}><strong>{identity.name}</strong><span>Draft · <Globe2 aria-label="Public" width={12} /></span></span>
           <MoreHorizontal aria-hidden="true" width={20} />
         </header>
@@ -231,7 +272,7 @@ function TelegramPreview({ account, item, text, onTextChange }: PlatformPostPrev
   return (
     <article className={styles.preview} data-platform="telegram" data-testid="social-platform-preview">
       <div className={styles.telegramScene}>
-        <Avatar name={identity.name} platform="telegram" />
+        <Avatar name={identity.name} platform="telegram" imageUrl={account?.avatarUrl} />
         <div className={styles.telegramBubble}>
           <header><strong>{identity.name}</strong><span>@{identity.handle}</span></header>
           <DraftEditor platform="telegram" text={text} onTextChange={onTextChange} />
@@ -248,7 +289,7 @@ function FarcasterPreview({ account, item, text, onTextChange }: PlatformPostPre
   return (
     <article className={styles.preview} data-platform="farcaster" data-testid="social-platform-preview">
       <div className={styles.farcasterPost}>
-        <Avatar name={identity.name} platform="farcaster" />
+        <Avatar name={identity.name} platform="farcaster" imageUrl={account?.avatarUrl} />
         <div className={styles.farcasterBody}>
           <header className={styles.identityRow}>
             <span><strong>{identity.name}</strong><span>@{identity.handle} · Draft</span></span>

@@ -1,4 +1,5 @@
 import { socialPlatformRow } from "@/lib/services/socials/social-platform-matrix";
+import { normalizeSocialProfileImageUrl } from "@/lib/services/socials/social-profile-image";
 import type { SocialAccount } from "@/lib/services/socials/socials-types";
 import {
   accountEnvValue,
@@ -29,11 +30,12 @@ export const linkedinAdapter: SocialPlatformAdapter = {
       });
       if (res.status === 401) return { ok: false, detail: "LinkedIn token expired or revoked — sign in again (tokens last ~60 days)." };
       if (!res.ok) return { ok: false, detail: `LinkedIn userinfo failed (HTTP ${res.status}).` };
-      const body = (await res.json()) as { name?: string; email?: string; sub?: string };
+      const body = (await res.json()) as { name?: string; email?: string; sub?: string; picture?: string };
       return {
         ok: true,
         detail: `Signed in as ${body.name ?? body.email ?? body.sub ?? "LinkedIn member"}.`,
         displayName: body.name,
+        avatarUrl: normalizeSocialProfileImageUrl(body.picture),
       };
     } catch (error) {
       return { ok: false, detail: `LinkedIn probe failed: ${error instanceof Error ? error.message : String(error)}` };

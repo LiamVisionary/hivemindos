@@ -6,30 +6,7 @@
 import * as React from "react";
 import type { FleetMachine } from "./fleet-data";
 import styles from "./fleet-tokens.module.css";
-
-const ECONOMY_REFRESH_MS = 60_000;
-
-type EconomyData = {
-  availableHoney: number | null;
-  totalHoney: number | null;
-  bankrLabel: string;
-};
-
-function formatUsd(value: number) {
-  return value >= 1000
-    ? `$${Math.round(value).toLocaleString("en-US")}`
-    : `$${value.toFixed(2)}`;
-}
-
-// Compact cousin of the wallet panel's formatHiveAmount — the strip cells are
-// too narrow for 6 decimals, so tiny balances round to 4 places.
-function formatHoney(value: number) {
-  if (!Number.isFinite(value) || value <= 0) return "0";
-  if (value < 0.0001) return "<0.0001";
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 10_000) return `${Math.round(value / 1000)}k`;
-  return value.toLocaleString(undefined, { maximumFractionDigits: value < 1 ? 4 : 2 });
-}
+import { formatEconomyHoney, formatEconomyUsd, useFleetEconomyBalances } from "./use-fleet-economy-balances";
 
 /** Sum the formatted per-agent wallet strings ("$12.50" / "off" / "—"). */
 function agentWalletTotalUsd(machines: FleetMachine[]) {
@@ -47,41 +24,7 @@ function agentWalletTotalUsd(machines: FleetMachine[]) {
 }
 
 export function EconomyStrip({ machines }: { machines: FleetMachine[] }) {
-  const [data, setData] = React.useState<EconomyData | null>(null);
-
-  React.useEffect(() => {
-    const controller = new AbortController();
-    let timer = 0;
-    const refresh = async () => {
-      const [honeyData, bankrData] = await Promise.all([
-        fetch("/api/honey-ledger", { cache: "no-store", signal: controller.signal })
-          .then((response) => response.json())
-          .catch(() => null) as Promise<{ ok?: boolean; ledger?: { balances?: Array<{ availableHoney?: number; lifetimeHoney?: number }> } } | null>,
-        fetch("/api/bankr/llm-credits?mode=balance", { cache: "no-store", signal: controller.signal })
-          .then((response) => response.json())
-          .catch(() => null) as Promise<{ ok?: boolean; balanceUsd?: number | null; balanceLabel?: string } | null>,
-      ]);
-      if (controller.signal.aborted) return;
-      const balances = honeyData?.ok ? honeyData.ledger?.balances : null;
-      setData({
-        availableHoney: balances
-          ? balances.reduce((total, balance) => total + (balance.availableHoney ?? 0), 0)
-          : null,
-        totalHoney: balances
-          ? balances.reduce((total, balance) => total + (balance.lifetimeHoney ?? 0), 0)
-          : null,
-        bankrLabel: bankrData?.ok && typeof bankrData.balanceUsd === "number"
-          ? formatUsd(bankrData.balanceUsd)
-          : "—",
-      });
-      timer = window.setTimeout(() => void refresh(), ECONOMY_REFRESH_MS);
-    };
-    void refresh();
-    return () => {
-      controller.abort();
-      window.clearTimeout(timer);
-    };
-  }, []);
+  const { data } = useFleetEconomyBalances();
 
   const wallets = React.useMemo(() => agentWalletTotalUsd(machines), [machines]);
 
@@ -89,7 +32,7 @@ export function EconomyStrip({ machines }: { machines: FleetMachine[] }) {
     {
       key: "wallets",
       label: "agent wallets",
-      value: wallets.counted > 0 ? formatUsd(wallets.total) : "—",
+      value: wallets.counted > 0 ? formatEconomyUsd(wallets.total) : "—",
       title: wallets.counted > 0
         ? `Combined balance across ${wallets.counted} funded agent wallet${wallets.counted === 1 ? "" : "s"}`
         : "No funded agent wallets yet",
@@ -97,15 +40,15 @@ export function EconomyStrip({ machines }: { machines: FleetMachine[] }) {
     {
       key: "honey",
       label: "honey",
-      value: data?.availableHoney == null ? "—" : formatHoney(data.availableHoney),
+      value: data?.availableHoney == null ? "—" : formatEconomyHoney(data.availableHoney),
       title: data?.totalHoney != null
-        ? `Honey contribution record · ${formatHoney(data.totalHoney)} recorded lifetime`
+        ? `Honey contribution record · ${formatEconomyHoney(data.totalHoney)} recorded lifetime`
         : "Honey contribution record; not cash and not automatically convertible to HIVE",
     },
     {
       key: "bankr",
       label: "bankr credits",
-      value: data?.bankrLabel ?? "—",
+      value: data?.bankrBalanceUsd == null ? "—" : formatEconomyUsd(data.bankrBalanceUsd),
       title: "Bankr LLM credit balance",
     },
   ];

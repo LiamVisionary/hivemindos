@@ -4,7 +4,9 @@ import type {
   AgentSpendCapAsset,
   AgentSurvivalSnapshot,
   AgentSurvivalTier,
+  AgentWalletAgentPermissions,
   AgentWalletConfig,
+  AgentWalletPermissionMode,
   X402PaymentRequirement,
 } from "@/lib/types/agent-wallet";
 import type { AgentProfile, UsePodAgentConfig, VeniceAgentConfig } from "@/lib/types/agent-runtime";
@@ -93,6 +95,134 @@ export function createDefaultAgentWallet(agentId: string): AgentWalletConfig {
     survivalStartedAt: now,
     updatedAt: now,
   };
+}
+
+export function isPersonalWalletId(walletId: string): boolean {
+  return walletId.trim().startsWith("user:");
+}
+
+export function normalizeAgentWalletPermissionMode(value: unknown): AgentWalletPermissionMode {
+  return value === "autonomous" ? "autonomous" : "approval-required";
+}
+
+export function normalizeAgentWalletPermissions(
+  value: unknown,
+  legacyOwnerId?: string,
+  legacyAutoPayEnabled = false,
+): AgentWalletAgentPermissions {
+  if (typeof value === "string" && value.trim()) {
+    try {
+      // A serialized value is explicit, including an empty object used by the
+      // Clear all action. Do not reinterpret it as an unmigrated legacy record.
+      return normalizeAgentWalletPermissions(JSON.parse(value));
+    } catch {
+      // Malformed persisted permissions grant no access.
+      return {};
+    }
+  }
+  const legacyPermissionsMissing = value == null;
+  const normalized: AgentWalletAgentPermissions = {};
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    for (const [agentId, mode] of Object.entries(value)) {
+      const id = agentId.trim();
+      if (!id) continue;
+      normalized[id] = normalizeAgentWalletPermissionMode(mode);
+    }
+  }
+  const ownerId = legacyOwnerId?.trim() || "";
+  if (legacyPermissionsMissing && ownerId && !isPersonalWalletId(ownerId) && !ownerId.startsWith("agent-wallet:")) {
+    normalized[ownerId] = legacyAutoPayEnabled ? "autonomous" : "approval-required";
+  }
+  return normalized;
+}
+
+export function normalizeAgentWalletAssignments(
+  wallet: AgentWalletConfig,
+  legacyOwnerId = wallet.agentId,
+): AgentWalletConfig {
+  if (isPersonalWalletId(wallet.agentId || legacyOwnerId)) return wallet;
+  const agentPermissions = normalizeAgentWalletPermissions(
+    wallet.agentPermissions,
+    legacyOwnerId,
+    wallet.autoPayEnabled,
+  );
+  return {
+    ...wallet,
+    agentPermissions,
+    // Per-agent permission is authoritative. This legacy field remains as a
+    // compatibility summary for older readers and is never sufficient to grant
+    // a particular agent access on its own.
+    autoPayEnabled: Object.values(agentPermissions).includes("autonomous"),
+  };
+}
+
+export function walletPermissionForAgent(
+  wallet: Pick<AgentWalletConfig, "agentId" | "agentPermissions" | "autoPayEnabled">,
+  agentId: string,
+): AgentWalletPermissionMode | null {
+  const id = agentId.trim();
+  if (!id || isPersonalWalletId(wallet.agentId)) return null;
+  const permissions = normalizeAgentWalletPermissions(
+    wallet.agentPermissions,
+    wallet.agentId,
+    wallet.autoPayEnabled,
+  );
+  return permissions[id] ?? null;
+}
+
+export function walletWithAgentPermission(
+  wallet: AgentWalletConfig,
+  agentId: string,
+): AgentWalletConfig | null {
+  const permission = walletPermissionForAgent(wallet, agentId);
+  if (!permission) return null;
+  return {
+    ...normalizeAgentWalletAssignments(wallet),
+    actingAgentId: agentId,
+    autoPayEnabled: permission === "autonomous",
+    // Approval-required access must also override provider-specific unattended
+    // send switches inherited from older wallet-wide settings.
+    veilAutoSendEnabled: permission === "autonomous" && wallet.veilAutoSendEnabled === true,
+  };
+}
+
+export function agentWalletsForAgent(
+  walletsById: Record<string, AgentWalletConfig> | null | undefined,
+  agentId: string,
+): AgentWalletConfig[] {
+  return Object.entries(walletsById ?? {})
+    .flatMap(([walletId, rawWallet]) => {
+      if (!rawWallet || isPersonalWalletId(walletId)) return [];
+      const wallet = normalizeAgentWalletAssignments({ ...rawWallet, agentId: rawWallet.agentId || walletId }, walletId);
+      const effective = walletWithAgentPermission(wallet, agentId);
+      return effective ? [effective] : [];
+    })
+    .sort((left, right) => {
+      const leftLegacy = left.agentId === agentId ? 0 : 1;
+      const rightLegacy = right.agentId === agentId ? 0 : 1;
+      return leftLegacy - rightLegacy
+        || Number(left.survivalStartedAt || 0) - Number(right.survivalStartedAt || 0)
+        || left.agentId.localeCompare(right.agentId);
+    });
+}
+
+export function primaryAgentWalletForAgent(
+  walletsById: Record<string, AgentWalletConfig> | null | undefined,
+  agentId: string,
+): AgentWalletConfig | undefined {
+  return agentWalletsForAgent(walletsById, agentId)[0];
+}
+
+export function indexAgentWalletsByAgent(
+  walletsById: Record<string, AgentWalletConfig> | null | undefined,
+  agentIds: Iterable<string>,
+): Record<string, AgentWalletConfig> {
+  const indexed: Record<string, AgentWalletConfig> = {};
+  for (const agentId of agentIds) {
+    const wallet = primaryAgentWalletForAgent(walletsById, agentId);
+    if (wallet) indexed[agentId] = wallet;
+  }
+  return indexed;
 }
 
 export function hasWalletBalanceEvidence(config: AgentWalletConfig): boolean {

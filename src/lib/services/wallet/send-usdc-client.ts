@@ -1,5 +1,6 @@
 export type WalletSendUsdcRequest = {
   agentId: string;
+  actingAgentId?: string;
   toAddress: string;
   amountUsd: number;
   maxPaymentUsd?: number;

@@ -99,7 +99,10 @@
 
 /* ---------- dashboard route (same card, page layout) ---------- */
 .pageWrap {
-  min-height: calc(100vh - 32px);
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: clamp(16px, 3vw, 36px);
   display: flex;
   justify-content: center;

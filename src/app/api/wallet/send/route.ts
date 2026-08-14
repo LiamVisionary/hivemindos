@@ -3,10 +3,12 @@ import { randomUUID } from "crypto";
 import { requireAuth } from "@/lib/utils/server-auth";
 import { executeGovernedUsdcSend } from "@/lib/services/wallet/governed-send";
 import { executePersonalWalletAssetSend } from "@/lib/services/wallet/personal-wallet-asset-send";
+import { resolveGovernedWalletAccess } from "@/lib/services/wallet/spend-governance";
 
 type SendUsdcBody = {
   action?: string;
   agentId?: string;
+  actingAgentId?: string;
   toAddress?: string;
   amountUsd?: number;
   maxPaymentUsd?: number;
@@ -36,54 +38,70 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({})) as SendUsdcBody;
     const validation = validateSendBody(body);
     if (validation) return validation;
+    const requestedWalletId = body.agentId!.trim();
+    const requestedPersonalWallet = requestedWalletId.startsWith("user:");
+    const access = requestedPersonalWallet
+      ? null
+      : await resolveGovernedWalletAccess(requestedWalletId, body.actingAgentId?.trim() || undefined);
+    if (body.actingAgentId?.trim() && !access) {
+      return NextResponse.json({ ok: false, error: "This agent is not attached to that wallet." }, { status: 403 });
+    }
+    const effectiveBody: SendUsdcBody = {
+      ...body,
+      agentId: access?.walletId ?? requestedWalletId,
+      maxPaymentUsd: access?.wallet.maxPaymentUsd ?? body.maxPaymentUsd,
+      autoPayEnabled: access?.permissionMode === "autonomous" && access.wallet.enabled,
+    };
+    const authoritativeValidation = validateSendBody(effectiveBody);
+    if (authoritativeValidation) return authoritativeValidation;
     const assetTransfer = hasAssetTransferFields(body);
     // Personal (`user:`) wallets never auto-spend: ignore any auto-pay flag so an
     // explicit SEND_USDC confirmation is always required. The user (or an agent
     // they tell) can still send "from my wallet" — it just always confirms.
-    const isPersonalWallet = String(body.agentId || "").startsWith("user:");
-    const autoPayEnabled = Boolean(body.autoPayEnabled) && !isPersonalWallet;
+    const isPersonalWallet = String(effectiveBody.agentId || "").startsWith("user:");
+    const autoPayEnabled = Boolean(effectiveBody.autoPayEnabled) && !isPersonalWallet;
     if (assetTransfer && !isPersonalWallet) {
       return sendError("Arbitrary-token sends are available only from personal wallets.");
     }
-    if (assetTransfer && body.confirmation !== "SEND_TOKEN") {
+    if (assetTransfer && effectiveBody.confirmation !== "SEND_TOKEN") {
       return sendError("Confirm this personal-wallet token transfer before sending.");
     }
-    if (!assetTransfer && !autoPayEnabled && body.confirmation !== "SEND_USDC") {
+    if (!assetTransfer && !autoPayEnabled && effectiveBody.confirmation !== "SEND_USDC") {
       return sendError("Wallet auto-use is off. Type SEND_USDC to confirm this transfer.");
     }
     if (body.action && body.action !== "approve" && body.action !== "send") {
       return sendError(`Unsupported wallet send action: ${body.action}`);
     }
     if (body.action === "approve") {
-      const approval = createRouteSendApproval(body);
+      const approval = createRouteSendApproval(effectiveBody);
       return NextResponse.json({
         ok: true,
         approvalToken: approval.token,
         expiresAt: new Date(approval.expiresAtMs).toISOString(),
       });
     }
-    const approvalError = consumeRouteSendApproval(body);
+    const approvalError = consumeRouteSendApproval(effectiveBody);
     if (approvalError) return approvalError;
 
     if (assetTransfer) {
       const result = await executePersonalWalletAssetSend({
-        agentId: body.agentId!.trim(),
-        toAddress: body.toAddress!.trim(),
-        asset: normalizeAssetSymbol(body.asset),
-        assetAmount: canonicalAssetAmount(body.assetAmount),
-        tokenAddress: body.tokenAddress?.trim() || undefined,
+        agentId: effectiveBody.agentId!.trim(),
+        toAddress: effectiveBody.toAddress!.trim(),
+        asset: normalizeAssetSymbol(effectiveBody.asset),
+        assetAmount: canonicalAssetAmount(effectiveBody.assetAmount),
+        tokenAddress: effectiveBody.tokenAddress?.trim() || undefined,
       });
       if (!result.ok) return sendExecutionError(result);
       return NextResponse.json({ ok: true, signature: result.signature, network: result.network, assetSymbol: result.assetSymbol, assetAmount: result.assetAmount });
     }
     const result = await executeGovernedUsdcSend({
-      agentId: body.agentId!.trim(),
-      toAddress: body.toAddress!.trim(),
-      amountUsd: Number(body.amountUsd),
-      gasSponsorAgentId: body.gasSponsorAgentId?.trim() || undefined,
-      approvalToken: body.approvalToken,
+      agentId: effectiveBody.agentId!.trim(),
+      toAddress: effectiveBody.toAddress!.trim(),
+      amountUsd: Number(effectiveBody.amountUsd),
+      gasSponsorAgentId: effectiveBody.gasSponsorAgentId?.trim() || undefined,
+      approvalToken: effectiveBody.approvalToken,
       approvalThresholdSatisfied: true,
-      companyTaskId: body.companyTaskId?.trim() || undefined,
+      companyTaskId: effectiveBody.companyTaskId?.trim() || undefined,
     });
     if (!result.ok) return sendExecutionError(result);
     return NextResponse.json({ ok: true, signature: result.signature, network: result.network, assetSymbol: result.assetSymbol, platformFee: result.platformFee, gasAssist: result.gasAssist });

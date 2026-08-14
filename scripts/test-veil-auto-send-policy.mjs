@@ -63,8 +63,8 @@ function wallet(agentId, patch = {}) {
 
 function createRouteHarness() {
   const records = new Map([
-    ["auto-on", { wallet: wallet("auto-on", { veilAutoSendEnabled: true }), agentName: "Auto On" }],
-    ["auto-off", { wallet: wallet("auto-off", { veilAutoSendEnabled: false }), agentName: "Auto Off" }],
+    ["auto-on", { wallet: wallet("auto-on", { veilAutoSendEnabled: true, agentPermissions: { runner: "autonomous" } }), agentName: "Auto On" }],
+    ["auto-off", { wallet: wallet("auto-off", { veilAutoSendEnabled: false, agentPermissions: { runner: "approval-required" } }), agentName: "Auto Off" }],
     ["wrong-network", { wallet: wallet("wrong-network", { veilAutoSendEnabled: true, network: "eip155:1" }), agentName: "Wrong Network" }],
     ["disabled", { wallet: wallet("disabled", { veilAutoSendEnabled: true, enabled: false }), agentName: "Disabled" }],
   ]);
@@ -102,6 +102,24 @@ function createRouteHarness() {
     requireAuth: async () => null,
     evaluateSpend: async () => ({ decision: "allow", reason: "test", budget: {} }),
     loadGovernanceWallet: async (agentId) => records.get(agentId) ?? null,
+    resolveGovernedWalletAccess: async (agentId, actingAgentId) => {
+      const record = records.get(agentId);
+      if (!record) return null;
+      if (!actingAgentId) return { walletId: agentId, wallet: record.wallet, walletName: record.agentName };
+      const permissionMode = record.wallet.agentPermissions?.[actingAgentId];
+      if (!permissionMode) return null;
+      return {
+        walletId: agentId,
+        walletName: record.agentName,
+        actingAgentId,
+        permissionMode,
+        wallet: {
+          ...record.wallet,
+          autoPayEnabled: permissionMode === "autonomous",
+          veilAutoSendEnabled: permissionMode === "autonomous" && record.wallet.veilAutoSendEnabled,
+        },
+      };
+    },
     resolveSpendGovernance: async (agentId) => records.get(agentId) ?? null,
     appendSpend: async () => {},
     shortTarget: (value) => String(value).slice(0, 10),
@@ -150,7 +168,8 @@ function assertStaticWiring() {
   assert.match(files.walletPanel, /veilAutoSend: wallet\?\.veilAutoSendEnabled === true/);
   assert.match(files.walletPanel, /autoSendEnabled: veilAutoSendEnabled/);
   assert.match(files.walletView, /Allow Veil auto-send/);
-  assert.match(files.walletView, /requiresSendConfirmation = w\.meta\.rawProvider === "veil" \? !veilAuto : !auto/);
+  assert.match(files.walletView, /const requiresSendConfirmation = true/);
+  assert.match(files.walletView, /Agent access/);
   assert.match(files.ledger, /\["veilAutoSendEnabled", record\.wallet\.veilAutoSendEnabled === true\]/);
   assert.match(files.ledger, /veilAutoSendEnabled: typeof fm\.veilAutoSendEnabled === "boolean" \? fm\.veilAutoSendEnabled : false/);
   assert.match(files.router, /return canAutoSendVeilTransfer\(wallet\) \? undefined : VEIL_CASH_TRANSFER_CONFIRMATION_LABEL/);
@@ -187,6 +206,11 @@ async function main() {
   );
   assertError(
     await post(POST, { ...baseBody, agentId: "auto-on" }),
+    400,
+    /Type CONFIRM to confirm this private transfer/,
+  );
+  assertError(
+    await post(POST, { ...baseBody, agentId: "auto-on", actingAgentId: "runner" }),
     424,
     /VEIL_KEY is not configured/,
   );
@@ -196,7 +220,7 @@ async function main() {
     /VEIL_KEY is not configured/,
   );
   assertError(
-    await post(POST, { ...baseBody, agentId: "auto-on", amount: "11", amountUsd: "11" }),
+    await post(POST, { ...baseBody, agentId: "auto-on", actingAgentId: "runner", amount: "11", amountUsd: "11" }),
     400,
     /Amount exceeds this agent's USDC spend cap/,
   );

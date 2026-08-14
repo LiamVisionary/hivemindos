@@ -1,23 +1,16 @@
 import type { KanbanTask } from "@/lib/types/kanban";
 import {
+  fleetMachineAccessDecisionFromAnswer,
   parseFleetMachineAccessRequest,
   type FleetMachineAccessCapability,
+  type FleetMachineAccessResolutionDecision,
 } from "@/lib/types/fleet-machine-policy";
 import { assertFleetCollectorUrl } from "@/lib/services/local-collector-url";
-
-const ANSWER_DECISIONS = new Map([
-  ["allow 15 min", "allow-temporary"],
-  ["always allow", "allow"],
-  ["deny", "deny"],
-] as const);
-
-type FleetAccessAnswer = "allow 15 min" | "always allow" | "deny";
-type FleetAccessDecision = "allow-temporary" | "allow" | "deny";
 
 export type FleetAccessApprovalResolution = {
   handled: true;
   capability: FleetMachineAccessCapability;
-  decision: FleetAccessDecision;
+  decision: FleetMachineAccessResolutionDecision;
   collectorUrl: string;
 };
 
@@ -30,11 +23,6 @@ function requestedCapability(task: Pick<KanbanTask, "result">): FleetMachineAcce
   return request.capability;
 }
 
-function answerDecision(answer: unknown): FleetAccessDecision | null {
-  const normalized = typeof answer === "string" ? answer.trim().toLowerCase() : "";
-  return ANSWER_DECISIONS.get(normalized as FleetAccessAnswer) ?? null;
-}
-
 export async function resolveFleetMachineAccessAnswer(
   task: Pick<KanbanTask, "result" | "targetMachine">,
   answer: unknown,
@@ -43,7 +31,7 @@ export async function resolveFleetMachineAccessAnswer(
   const capability = requestedCapability(task);
   if (!capability) return { handled: false };
 
-  const decision = answerDecision(answer);
+  const decision = fleetMachineAccessDecisionFromAnswer(answer);
   if (!decision) {
     throw new Error("Choose Allow 15 min, Always allow, or Deny for this Fleet access request.");
   }

@@ -87,9 +87,12 @@ import { verifyAuth } from "@/lib/utils/server-auth";
 import { resolveChatSkillAttribution } from "@/lib/services/chat/skill-attribution";
 import { warmBundledMarkItDown } from "@/lib/services/document-ingestion";
 import { enforceOpenAiChatProfile } from "@/lib/services/openai-chat-profile-guard";
+import { resolveGovernedWalletAccess } from "@/lib/services/wallet/spend-governance";
 
 export const runtime = "nodejs";
-export const maxDuration = 600;
+// App-building turns can legitimately exceed ten minutes. Runtime-specific
+// activity watchdogs still terminate genuinely silent upstreams.
+export const maxDuration = 3600;
 
 const CHAT_PREFLIGHT_RUNTIME_CAPABILITY_TIMEOUT_MS = 150;
 const CHAT_PREFLIGHT_CAPABILITY_SEARCH_TIMEOUT_MS = 1_500;
@@ -176,6 +179,18 @@ export async function POST(request: NextRequest) {
   } catch {
     await recordRouteTelemetry(request, "agent_runtime.request.invalid", { elapsedMs: Date.now() - routeStartedAt });
     return Response.json({ error: "Expected { agent, messages }" }, { status: 400 });
+  }
+  if (wallet?.agentId && !wallet.agentId.startsWith("user:")) {
+    const access = await resolveGovernedWalletAccess(
+      wallet.agentId,
+      profile.id,
+      { vaultPath: sharedVault?.enabled ? sharedVault.vaultPath : undefined },
+    ).catch(() => null);
+    wallet = access
+      ? { ...wallet, ...access.wallet, agentId: access.walletId }
+      : wallet.custodyMode === "local"
+        ? undefined
+        : { ...wallet, autoPayEnabled: false };
   }
   await recordRouteTelemetry(request, "agent_runtime.request.received", {
     ...telemetryPayloadForProfile(profile),

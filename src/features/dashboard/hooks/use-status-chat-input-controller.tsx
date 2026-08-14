@@ -28,6 +28,8 @@ import { CAPABILITY_APPROVAL_CONTINUATION_MARKER, type CapabilityApprovalPlan } 
 import { latestChatAppArtifact, type ChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
 import { capabilityAppProjectContext, prepareCapabilityAppProject } from "@/lib/services/chat/capability-app-project-client";
 import { RUNTIME_STREAM_EVENT_TYPES } from "@/lib/services/runtime-stream-events";
+import { respondedAgentPromptFromMessage } from "@/features/dashboard/views/chat/chat-panel-helpers";
+import { interruptedRuntimeRecoveryResult, runtimeSessionRecoveryState, UNKNOWN_RUNTIME_SESSION_RECOVERY } from "./status-chat-runtime-recovery";
 
 export function useStatusChatInputController(props: any) {
   const { AbortController, CHAT_RESPONSE_STALL_TIMEOUT_MS, Uint8Array, agents, appendMessage, attachmentSummary, brainDragMovedRef, brainDragRef, brainGraph, brainPan, chatAttachments, chatAutoScrollRef, chatDirectories, chatMessageStorageKey, chatRuntimeSessionIdsByKey, chatSetupIssue, chooseDirectoryForMachine, clearActiveChatRun, collectorKey, createDefaultAgentWallet, discoveredMachines, honeyLedgerEnabled, hydrated, isManualAgentChatMessage, kanbanBoardSlug, kanbanReadyPickupInFlightRef, kanbanStorageBody, linkedDirectoryLabel, localKanbanMachineTarget, machineGroups, messageContentParts, messages, orchestrateReadyKanbanTask, quickAddMachineTarget, quickAddMachineTargets, readComposerFiles, recordActiveChatRun, recordRecentDirectory, recording, refreshHoneyLedger, refreshKanbanOnce, refreshMaintenanceReport, refreshNotifications, refreshRuntimeUsage, searchAllRuntimeSessions, selectedAgent, selectedBrainNodeId, selectedChatDirectoryPath, selectedChatLeafKey, selectedChatRuntimeSessionId, selectedChatTargetRef, selectedKanbanAgent, selectedKanbanTask, setActiveView, setAttachmentError, setAttachmentMenuOpen, setBrainGraph, setBrainGraphStatus, setBrainPan, setChatAttachments, setChatDirectories, setChatProcessByKey, setControlRoomStatus, setChatRuntimeSessionIdsByKey, setChatStreamingByKey, setKanbanBoard, setKanbanError, setKanbanSteerAttachmentError, setKanbanSteerAttachmentMenuOpen, setKanbanSteerAttachments, setKanbanSteerDirectories, setKanbanSteerDraft, setKanbanStorage, setMessagesByAgent, setQuickAddAttachmentError, setQuickAddAttachmentMenuOpen, setQuickAddAttachments, setQuickAddDirectories, setQuickAddDrafts, setRecentDirectoriesExpanded, setRecording, setSelectedBrainNodeId, setSelectedChatPreview, setSelectedChatRuntimeSessionId, setStatus, setStatusAgentId, setText, setVaultStatus, chatDiscussContext, clearChatDiscussContext, setVaultSyncPending, setVaultSyncStatus, setVoiceTarget, setVoiceTranscript, sharedVault, speechRecognitionConstructor, syncthingAutoPairRef, tailscaleDevices, text, updateAgentProfile, updateSharedVault, updateTask, upsertTask, voiceAnimationRef, voiceAudioContextRef, voiceRecognitionRef, voiceStreamRef, voiceTarget, voiceTranscriptRef, walletsByAgent } = props;
@@ -107,22 +109,21 @@ export function useStatusChatInputController(props: any) {
       respondedAt: Date.now(),
     };
     const settleMessages = (items: ChatMessage[] = []) => {
-      const promptIndex = (() => {
+      const pendingPrompt = (() => {
         for (let index = items.length - 1; index >= 0; index -= 1) {
           const message = items[index];
-          if (message?.role === "assistant" && message.agentPrompt && !message.agentPrompt.response) return index;
+          if (message?.role !== "assistant") continue;
+          const agentPrompt = respondedAgentPromptFromMessage(message, String(message.content ?? ""), response, `inline-prompt-${message.createdAt ?? index}`);
+          if (agentPrompt) return { agentPrompt, index };
         }
-        return -1;
+        return null;
       })();
-      if (promptIndex < 0) return items;
+      if (!pendingPrompt) return items;
       const next = [...items];
-      const message = next[promptIndex];
-      next[promptIndex] = {
+      const message = next[pendingPrompt.index];
+      next[pendingPrompt.index] = {
         ...message,
-        agentPrompt: {
-          ...message.agentPrompt,
-          response,
-        },
+        agentPrompt: pendingPrompt.agentPrompt,
       };
       return next;
     };
@@ -649,12 +650,11 @@ export function useStatusChatInputController(props: any) {
       clearComposer: input.clearComposer !== false,
       submittedAt: now,
     };
-    await runChatMessage(chatTurn);
+    return runChatMessage(chatTurn);
   }
-
   async function sendPromptMessage(prompt: string, options: { permissionMode?: unknown; reasoningEffort?: unknown; agentMode?: "act" | "plan"; suppressUserMessage?: boolean; visiblePrompt?: string; attachments?: any[]; promptResponse?: { label: string; value?: string }; workingDirectory?: string; appArtifact?: ChatAppArtifact } = {}) {
     settleLatestAgentPromptResponse(options.promptResponse ?? { label: prompt, value: prompt });
-    await submitChatPrompt({
+    return submitChatPrompt({
       prompt,
       agentMode: options.agentMode ?? "act",
       permissionMode: options.permissionMode,
@@ -668,7 +668,6 @@ export function useStatusChatInputController(props: any) {
       appArtifact: options.appArtifact,
     });
   }
-
   async function sendMessage(event: FormEvent) {
     event.preventDefault();
     if (recording) {
@@ -1159,14 +1158,13 @@ export function useStatusChatInputController(props: any) {
     let lastSealedSegmentText = "";
     let contentEventsSincePaint = 0;
     let currentRuntimeSessionId = localRuntimeSessionId || "";
-    let recoveredAssistantText = "";
-    let streamedAssistantText = "";
-    let latestSessionSummary = "";
+    let recoveredAssistantText = "", recoveredSession = UNKNOWN_RUNTIME_SESSION_RECOVERY;
+    let streamedAssistantText = "", latestSessionSummary = "";
     const seenSessionMessageKeys = new Set<string>();
     const runtimeLabel = runtimeChatFeature(selectedAgent.runtime).label || selectedAgent.runtime || "runtime";
-
     const ingestRuntimeSession = (session: any) => {
       if (!session || typeof session !== "object") return;
+      recoveredSession = runtimeSessionRecoveryState(session);
       const sessionId = String(session.sessionId ?? session.id ?? "").trim();
       if (sessionId) {
         currentRuntimeSessionId = sessionId;
@@ -1458,14 +1456,14 @@ export function useStatusChatInputController(props: any) {
         replacePendingAssistant({ role: "assistant", content: `Error: ${message}`, surface: "chat" });
         updateTask(taskId, { status: "failed", lastMessage: message, completedAt: Date.now() });
         notifyChatIssue(message, taskId);
-        return;
+        return "failed";
       }
       if (!sawAssistantContent && activeApplicationGenerationCard) {
         const content = imageGenerationCardContent(activeApplicationGenerationCard);
         replacePendingAssistant({ role: "assistant", content, surface: "chat" });
         updateTask(taskId, { status: activeApplicationGenerationCard.status === "error" ? "failed" : "completed", lastMessage: content, completedAt: Date.now() });
         if (activeApplicationGenerationCard.status === "error") notifyChatIssue(content, taskId);
-        return;
+        return activeApplicationGenerationCard.status === "error" ? "failed" : "completed";
       }
       const assistantIssue = chatAssistantIssue(streamedAssistantText);
       if (assistantIssue) {
@@ -1474,6 +1472,7 @@ export function useStatusChatInputController(props: any) {
       } else {
         updateTask(taskId, sawAgentPrompt ? { status: "active", completedAt: undefined } : { status: "completed", completedAt: Date.now() });
       }
+      return assistantIssue ? "failed" : sawAgentPrompt ? "active" : "completed";
     } catch (error) {
       const aborted = abortController.signal.aborted;
       const transportInterrupted = !aborted && isChatTransportInterruption(error);
@@ -1489,29 +1488,30 @@ export function useStatusChatInputController(props: any) {
           requestLabel: outgoingLabel,
           sessionId: currentRuntimeSessionId || localRuntimeSessionId || undefined,
           runId: taskId,
-          status: aborted ? "stalled" : "active",
+          status: "active",
         });
         await pollRuntimeSession();
       }
-      if ((aborted || transportInterrupted) && recoveredAssistantText.trim()) {
-        preserveActiveRun = false;
-        replacePendingAssistant({ role: "assistant", content: recoveredAssistantText.trim(), surface: "chat" });
-        updateTask(taskId, { status: "completed", lastMessage: recoveredAssistantText.trim(), completedAt: Date.now() });
-        return;
+      const recoveryResult = interruptedRuntimeRecoveryResult({ assistantIssue: Boolean(chatAssistantIssue(recoveredAssistantText)), assistantText: recoveredAssistantText, interrupted: aborted || transportInterrupted, session: recoveredSession });
+      if (recoveryResult) {
+        preserveActiveRun = recoveryResult === "active";
+        if (preserveActiveRun) updateTask(taskId, { status: "active", lastMessage: `Checking the ${runtimeLabel} session for late activity.`, completedAt: undefined });
+        else replacePendingAssistant({ role: "assistant", content: recoveredAssistantText.trim(), surface: "chat" });
+        if (!preserveActiveRun) updateTask(taskId, { status: recoveryResult, lastMessage: recoveredAssistantText.trim(), completedAt: Date.now() });
+        return recoveryResult;
       }
-      if (transportInterrupted) {
-        updateTask(taskId, { status: "active", lastMessage: `Checking the ${runtimeLabel} session for late activity.`, completedAt: undefined });
-        return;
-      }
-      const message = aborted
-        ? `${runtimeLabel} did not return a chat response within ${Math.round(CHAT_RESPONSE_STALL_TIMEOUT_MS / 1000)} seconds. The session ${latestSessionSummary ? `last reported: ${latestSessionSummary}` : `may still be running in ${runtimeLabel}`}; check the process panel before retrying.`
-        : error instanceof Error && /^(?:load failed|failed to fetch|networkerror)/i.test(error.message.trim())
-          ? "HivemindOS could not reach the local chat runtime route from the desktop webview. The Next/Tauri dev proxy likely dropped the request before the agent runtime started; wait for the app to finish compiling, then retry."
-          : error instanceof Error ? error.message : "Unknown runtime error";
+      const message = recoveredSession.outcome === "failed" && recoveredSession.endReason
+        ? `${runtimeLabel} ended before completing the task (${recoveredSession.endReason}).`
+        : aborted
+          ? `${runtimeLabel} did not return a chat response within ${Math.round(CHAT_RESPONSE_STALL_TIMEOUT_MS / 1000)} seconds. The session ${latestSessionSummary ? `last reported: ${latestSessionSummary}` : `may still be running in ${runtimeLabel}`}; check the process panel before retrying.`
+          : error instanceof Error && /^(?:load failed|failed to fetch|networkerror)/i.test(error.message.trim())
+            ? "HivemindOS could not reach the local chat runtime route from the desktop webview. The Next/Tauri dev proxy likely dropped the request before the agent runtime started; wait for the app to finish compiling, then retry."
+            : error instanceof Error ? error.message : "Unknown runtime error";
       const errorMessage: ChatMessage = { role: "assistant", content: `Error: ${message}`, surface: "chat" };
       replacePendingAssistant(errorMessage);
       updateTask(taskId, { status: "failed", lastMessage: message, completedAt: Date.now() });
       notifyChatIssue(message, taskId);
+      return "failed";
     } finally {
       window.clearTimeout(stallTimer);
       pruneTrailingEmptyAssistant();

@@ -9,8 +9,10 @@ const {
   createAccountTwitterCliRun,
   discoverRelevantXPosts,
   extractEngagementTargetHandles,
+  getXPublicProfile,
 } = await import("../src/lib/services/socials/social-x-discovery.ts");
 const xSessionBindingModule = await import("../src/lib/services/socials/social-x-session-binding.ts").catch(() => null);
+const { normalizeSocialProfileImageUrl, normalizeXProfileImageUrl } = await import("../src/lib/services/socials/social-profile-image.ts");
 assert.ok(xSessionBindingModule, "Socials needs a non-secret per-account X session binding contract");
 const {
   SOCIAL_X_SESSION_MODE_BINDING,
@@ -21,6 +23,15 @@ const {
 assert.equal(typeof createAccountTwitterCliRun, "function", "Socials needs an account-scoped twitter-cli runner");
 const { generateSocialEngagementDrafts } = await import("../src/lib/services/socials/social-engagement-generator.ts");
 const { targetAnchorIsSupported } = await import("../src/lib/services/socials/social-draft-quality.ts");
+
+assert.equal(normalizeSocialProfileImageUrl("https://pbs.twimg.com/profile_images/test.jpg"), "https://pbs.twimg.com/profile_images/test.jpg");
+assert.equal(normalizeSocialProfileImageUrl("http://pbs.twimg.com/profile_images/test.jpg"), undefined);
+assert.equal(normalizeSocialProfileImageUrl("https://token@example.com/profile.jpg"), undefined);
+assert.equal(
+  normalizeXProfileImageUrl("https://pbs.twimg.com/profile_images/123/avatar_normal.jpg"),
+  "https://pbs.twimg.com/profile_images/123/avatar_400x400.jpg",
+  "X avatars are upgraded from the 48px normal variant before display or persistence",
+);
 
 const account = {
   id: "x:thehivemindos",
@@ -142,18 +153,24 @@ assert.match(
   /isolated session/i,
   "a matching per-account session is visibly distinguished from the machine default",
 );
-assert.match(
-  bindXDiscoveryStatusToAccount(accountA, {
+const mismatchedStatus = bindXDiscoveryStatusToAccount(accountA, {
     available: true,
     authenticated: true,
     backend: "agent-reach-twitter-cli",
     checkedAt: "2026-07-27T00:00:00.000Z",
     accountHandle: "someone_else",
+    accountDisplayName: "Someone Else",
+    accountAvatarUrl: "https://pbs.twimg.com/profile_images/someone_else.jpg",
     detail: "Authenticated X discovery as @someone_else.",
-  }).detail,
+  });
+assert.match(
+  mismatchedStatus.detail,
   /update this account's Agent Reach X session/i,
   "a mismatched per-account session points back to the account binding instead of global re-authentication",
 );
+assert.equal(mismatchedStatus.authenticated, false, "a mismatched session is not authenticated for the selected account");
+assert.equal(mismatchedStatus.accountDisplayName, undefined, "a mismatched session cannot replace the selected account's name");
+assert.equal(mismatchedStatus.accountAvatarUrl, undefined, "a mismatched session cannot replace the selected account's avatar");
 assert.deepEqual(
   withSocialXSessionBinding(
     { connectionSlug: "managed-account-a", creditAccountId: "credits-a" },
@@ -221,7 +238,13 @@ const now = new Date("2026-07-20T20:00:00.000Z");
 const post = (id, handle, text, createdAt, likes, extra = {}) => ({
   id,
   text,
-  author: { id: `author-${handle}`, name: handle, screenName: handle, verified: false },
+  author: {
+    id: `author-${handle}`,
+    name: handle,
+    screenName: handle,
+    verified: false,
+    profileImageUrl: `https://pbs.twimg.com/profile_images/${handle}_normal.jpg`,
+  },
   metrics: { likes, retweets: 2, replies: 3, quotes: 1, views: 100, bookmarks: 0 },
   createdAtISO: createdAt,
   isRetweet: false,
@@ -231,7 +254,27 @@ const post = (id, handle, text, createdAt, likes, extra = {}) => ({
 
 const runTwitterImpl = async (args) => {
   if (args[0] === "status") {
-    return { ok: true, data: { authenticated: true, user: { screenName: "TheHivemindOS" } } };
+    return {
+      ok: true,
+      data: {
+        authenticated: true,
+        user: {
+          screenName: "TheHivemindOS",
+          name: "HivemindOS",
+          profileImageUrl: "https://pbs.twimg.com/profile_images/TheHivemindOS_normal.jpg",
+        },
+      },
+    };
+  }
+  if (args[0] === "user") {
+    return {
+      ok: true,
+      data: {
+        screenName: args[1],
+        name: args[1] === "base" ? "Base" : args[1],
+        profileImageUrl: `https://pbs.twimg.com/profile_images/${args[1]}_normal.jpg`,
+      },
+    };
   }
   if (args[0] === "user-posts") {
     return { ok: true, data: [
@@ -262,6 +305,30 @@ const queue = [{
   stateHistory: [{ state: "suggested", at: "2026-07-20T12:00:00.000Z", by: "agent" }],
   createdAt: "2026-07-20T12:00:00.000Z",
 }];
+
+assert.deepEqual(
+  await getXPublicProfile(account, "base", { runTwitterImpl }),
+  {
+    handle: "base",
+    displayName: "Base",
+    avatarUrl: "https://pbs.twimg.com/profile_images/base_400x400.jpg",
+  },
+  "a response target can resolve its own public profile without borrowing the authenticated account identity",
+);
+assert.equal(
+  await getXPublicProfile(account, "base", {
+    runTwitterImpl: async () => ({
+      ok: true,
+      data: {
+        screenName: "someone_else",
+        name: "Someone Else",
+        profileImageUrl: "https://pbs.twimg.com/profile_images/someone_else.jpg",
+      },
+    }),
+  }),
+  null,
+  "a public profile lookup fails closed when the returned handle does not match the requested response target",
+);
 
 const mismatchedCommands = [];
 await assert.rejects(
@@ -314,6 +381,10 @@ assert.equal(discovery.backend, "agent-reach-twitter-cli");
 assert.equal(discovery.authenticatedAs, "TheHivemindOS");
 assert.deepEqual(discovery.candidates.map((candidate) => candidate.externalId).sort(), ["101", "103"]);
 assert.ok(discovery.candidates.every((candidate) => candidate.url === `https://x.com/${candidate.authorHandle}/status/${candidate.externalId}`));
+assert.ok(
+  discovery.candidates.every((candidate) => candidate.authorAvatarUrl?.endsWith("_400x400.jpg")),
+  "new response drafts retain the discovered author's high-resolution profile image",
+);
 assert.equal(discovery.rejected.self, 1);
 assert.equal(discovery.rejected.stale, 1);
 assert.equal(discovery.rejected.seen, 5, "the seen target returned by each configured timeline is rejected every time");

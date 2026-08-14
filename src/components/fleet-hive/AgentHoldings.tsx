@@ -1,183 +1,146 @@
 "use client";
 
-import { ArrowRight } from "lucide-react";
-import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
-import type { HiveAgent } from "./fleet-hive-types";
+import { ArrowRight, WalletCards } from "lucide-react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  formatEconomyHoney,
+  formatEconomyUsd,
+  useFleetEconomyBalances,
+} from "@/components/fleet/use-fleet-economy-balances";
+import type {
+  HiveAgentEconomy,
+  HiveFleetEconomy,
+  HiveMachineEconomy,
+} from "./hive-economy";
+import styles from "./hive-economy.module.css";
 
-type CurrencySymbol = "USD" | "USDC" | "ETH" | "BANKR" | "HIVE";
-
-interface Balance {
-  sym: CurrencySymbol;
-  amount: number;
+function countLabel(count: number, singular: string) {
+  return `${count} ${singular}${count === 1 ? "" : "s"}`;
 }
 
-interface CurrencyMeta {
-  price: number;
-  name: string;
-  color: string;
-  chg: number;
-  fiat?: boolean;
-  img?: string;
-}
-
-interface RankedBalance extends Balance {
-  usd: number;
-  change: number;
-}
-
-const FR_CCY: Record<CurrencySymbol, CurrencyMeta> = {
-  USD: { price: 1, fiat: true, name: "US Dollar", color: "#3b9e6f", chg: 0 },
-  USDC: { price: 1, name: "USD Coin", color: "#2775ca", chg: 0.02 },
-  ETH: { price: 3200, name: "Ethereum", color: "#627eea", chg: 2.48 },
-  BANKR: { price: 0.05, name: "Bankr", color: "#8b5cf6", chg: 4.1 },
-  HIVE: { price: 0.34, name: "Hive", color: "#0e1118", chg: 28.4, img: "/hive-icon.png" },
-};
-
-function isCurrencySymbol(value: string): value is CurrencySymbol {
-  return Object.prototype.hasOwnProperty.call(FR_CCY, value);
-}
-
-function normalizeCurrencySymbol(value?: string | null): CurrencySymbol {
-  const symbol = (value || "USDC").trim().toUpperCase();
-  if (isCurrencySymbol(symbol)) return symbol;
-  if (symbol === "USD COIN") return "USDC";
-  return "USDC";
-}
-
-function normalizePositive(value: unknown) {
-  const numeric = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(numeric) && numeric > 0 ? numeric : 0;
-}
-
-function frFmtAmount(sym: CurrencySymbol, amt: number): string {
-  if (sym === "ETH") return amt.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
-  if (FR_CCY[sym]?.fiat) return `$${Math.round(amt).toLocaleString()}`;
-  if (amt >= 10000) return `${Math.round(amt / 1000)}k`;
-  if (amt >= 1000 && sym !== "USDC") return `${(amt / 1000).toFixed(1)}k`;
-  return Math.round(amt).toLocaleString();
-}
-
-function frFmtUsdFull(v: number): string {
-  if (v >= 1000) return `$${Math.round(v).toLocaleString()}`;
-  return `$${v.toFixed(2)}`;
-}
-
-function frFmtChange(usdChg: number): { text: string; tone: "muted" | "up" | "down" } {
-  const sign = usdChg < 0 ? "-" : "+";
-  const abs = Math.abs(usdChg);
-  if (abs === 0) return { text: "$0.00", tone: "muted" };
-  if (abs < 0.01) return { text: `${sign}<$0.01`, tone: usdChg < 0 ? "down" : "up" };
-  const value = abs >= 1000 ? Math.round(abs).toLocaleString() : abs.toFixed(2);
-  return { text: `${sign}$${value}`, tone: usdChg < 0 ? "down" : "up" };
-}
-
-function frTopBalances(balances: Balance[] = [], n = 4): { top: RankedBalance[]; total: number } {
-  const list = balances
-    .map((balance) => {
-      const usd = balance.amount * (FR_CCY[balance.sym]?.price ?? 0);
-      return { ...balance, usd, change: (usd * (FR_CCY[balance.sym]?.chg ?? 0)) / 100 };
-    })
-    .filter((balance) => balance.amount > 0)
-    .sort((left, right) => right.usd - left.usd);
-  return { top: list.slice(0, n), total: list.reduce((sum, balance) => sum + balance.usd, 0) };
-}
-
-function walletBalances(agent: HiveAgent, wallet?: AgentWalletConfig): Balance[] {
-  const balances: Balance[] = [];
-  if (wallet) {
-    const token = normalizeCurrencySymbol(wallet.tokenSymbol);
-    const onchainUsd = normalizePositive(wallet.onchainBalanceUsd);
-    const tokenUsd = onchainUsd > 0 ? onchainUsd : normalizePositive(wallet.currentBalanceUsd);
-    if (tokenUsd > 0) balances.push({ sym: token, amount: tokenUsd / FR_CCY[token].price });
-  }
-
-  if (balances.length) return balances;
-  const displayWallet = agent.wallet.trim();
-  if (!displayWallet || displayWallet === "—" || displayWallet.toLowerCase() === "off") return [];
-
-  const usdMatch = /^\$([\d,.]+)/.exec(displayWallet);
-  if (usdMatch) return [{ sym: "USD", amount: Number(usdMatch[1].replace(/,/g, "")) || 0 }];
-
-  const tokenMatch = /^([\d,.]+)\s*([a-zA-Z]+)$/.exec(displayWallet);
-  if (!tokenMatch) return [];
-  const symbol = normalizeCurrencySymbol(tokenMatch[2]);
-  return [{ sym: symbol, amount: Number(tokenMatch[1].replace(/,/g, "")) || 0 }];
-}
-
-function TokenIcon({ sym }: { sym: CurrencySymbol }) {
-  const meta = FR_CCY[sym];
-  if (meta.img) {
-    return (
-      <span className="fr-holding-icon" style={{ background: meta.color }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={meta.img} width={32} height={32} alt="" />
-      </span>
-    );
-  }
-  if (sym === "ETH") {
-    return (
-      <span className="fr-holding-icon" style={{ background: meta.color }}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="#fff" aria-hidden="true" focusable="false">
-          <path d="M12 2 5.6 12.1 12 15.9l6.4-3.8L12 2z" opacity="0.92" />
-          <path d="M5.6 13.3 12 22l6.4-8.7L12 17.1 5.6 13.3z" opacity="0.7" />
-        </svg>
-      </span>
-    );
-  }
+function EconomyHeader({ label, totalUsd }: { label: string; totalUsd: number }) {
   return (
-    <span className="fr-holding-icon" style={{ background: meta.color }}>
-      <span>{sym === "BANKR" ? "B" : "$"}</span>
-    </span>
+    <div className={styles.header}>
+      <span className={styles.eyebrow}>{label}</span>
+      <strong>{formatEconomyUsd(totalUsd)}</strong>
+    </div>
+  );
+}
+
+export function HiveFleetEconomyPanel({ economy }: { economy: HiveFleetEconomy }) {
+  const { data, loading } = useFleetEconomyBalances();
+  return (
+    <section className={`${styles.economyRoot} ${styles.fleetCard}`} aria-label="Fleet economy">
+      <EconomyHeader label="Economy" totalUsd={economy.totalUsd} />
+      <p className={styles.summaryCopy}>
+        Unique wallet balance across {countLabel(economy.fundedMachineCount, "machine")} and {countLabel(economy.fundedAgentCount, "agent")}.
+      </p>
+      <div className={styles.fleetMetrics}>
+        <div>
+          <span>Wallets</span>
+          <strong>{economy.wallets.length}</strong>
+        </div>
+        <div title={data?.totalHoney != null ? `${formatEconomyHoney(data.totalHoney)} Honey recorded lifetime` : undefined}>
+          <span>Honey</span>
+          <strong data-loading={loading ? "true" : undefined}>
+            {loading ? "" : data?.availableHoney == null ? "—" : formatEconomyHoney(data.availableHoney)}
+          </strong>
+        </div>
+        <div>
+          <span>Bankr credits</span>
+          <strong data-loading={loading ? "true" : undefined}>
+            {loading ? "" : data?.bankrBalanceUsd == null ? "—" : formatEconomyUsd(data.bankrBalanceUsd)}
+          </strong>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+export function HiveMachineEconomyPanel({ economy }: { economy: HiveMachineEconomy }) {
+  const walletAgents = economy.agents.filter((agent) => agent.wallets.length > 0);
+  return (
+    <section className={`${styles.economyRoot} ${styles.machineCard}`} aria-label={`${economy.machineName} economy`}>
+      <EconomyHeader label="Economy" totalUsd={economy.totalUsd} />
+      <div className={styles.machineMeta}>
+        {countLabel(economy.wallets.length, "unique wallet")} across {countLabel(walletAgents.length, "agent")}
+      </div>
+      <div className={styles.agentBalances}>
+        {walletAgents.length ? walletAgents.map((agent) => (
+            <div className={styles.agentBalanceRow} key={agent.agentId}>
+              <span>
+                <strong>{agent.agentName}</strong>
+                <small>{countLabel(agent.wallets.length, "wallet")}</small>
+              </span>
+              <strong>{formatEconomyUsd(agent.totalUsd)}</strong>
+            </div>
+          )) : (
+            <div className={styles.empty}>No agent wallets on this machine.</div>
+          )}
+      </div>
+    </section>
+  );
+}
+
+function SharedWalletAgents({ agentId, economy }: { agentId: string; economy: HiveAgentEconomy }) {
+  const walletRows = economy.wallets.map((wallet) => ({
+    wallet,
+    otherAgents: wallet.attachedAgentIds
+      .map((id, index) => ({ id, name: wallet.attachedAgentNames[index] || id }))
+      .filter((agent) => agent.id !== agentId),
+  }));
+
+  return (
+    <div className={styles.walletList}>
+      {walletRows.map(({ wallet, otherAgents }) => (
+        <article className={styles.walletCard} key={wallet.id}>
+          <span className={styles.walletIcon} aria-hidden="true"><WalletCards /></span>
+          <div className={styles.walletMain}>
+            <strong>{wallet.name}</strong>
+            <span>{wallet.tokenSummary}</span>
+            {otherAgents.length ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button type="button" className={styles.sharedAgentsLink}>
+                    Shared with {countLabel(otherAgents.length, "agent")}
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="left" sideOffset={8} className={styles.sharedAgentsTooltip}>
+                  <strong>Also using this wallet</strong>
+                  {otherAgents.map((agent) => <span key={agent.id}>{agent.name}</span>)}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
+          <strong className={styles.walletValue}>{formatEconomyUsd(wallet.balanceUsd)}</strong>
+        </article>
+      ))}
+    </div>
   );
 }
 
 export function AgentHoldings({
-  agent,
-  wallet,
-  topN = 4,
+  economy,
   onViewWallet,
 }: {
-  agent: HiveAgent;
-  wallet?: AgentWalletConfig;
-  topN?: number;
+  economy: HiveAgentEconomy;
   onViewWallet?: () => void;
 }) {
-  const { top, total } = frTopBalances(walletBalances(agent, wallet), topN);
-
   return (
-    <section className="fr-holdings" aria-label={`${agent.name} holdings`}>
-      <div className="fr-holdings-header">
-        <span className="fr-eyebrow">Holdings</span>
-        <span>{top.length ? frFmtUsdFull(total) : "—"}</span>
-      </div>
-
-      {top.length ? (
-        <div className="fr-holdings-list">
-          {top.map((balance) => {
-            const meta = FR_CCY[balance.sym];
-            const change = frFmtChange(balance.change);
-            return (
-              <div className="fr-holding-row" key={balance.sym}>
-                <TokenIcon sym={balance.sym} />
-                <div className="fr-holding-main">
-                  <strong>{meta.name}</strong>
-                  <span>{frFmtAmount(balance.sym, balance.amount)} {balance.sym}</span>
-                </div>
-                <div className="fr-holding-value">
-                  <strong>{frFmtUsdFull(balance.usd)}</strong>
-                  <span data-tone={change.tone}>{change.text}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+    <section className={`${styles.economyRoot} ${styles.agentWallets}`} aria-label={`${economy.agentName} wallets`}>
+      <EconomyHeader label="Wallets" totalUsd={economy.totalUsd} />
+      {economy.wallets.length ? (
+        <SharedWalletAgents agentId={economy.agentId} economy={economy} />
       ) : (
-        <div className="fr-holdings-empty">No holdings yet.</div>
+        <div className={styles.empty}>No wallets attached yet.</div>
       )}
-
-      <button type="button" className="fr-holdings-wallet" disabled={!onViewWallet} onClick={onViewWallet}>
+      <button type="button" className={styles.viewWallet} disabled={!onViewWallet} onClick={onViewWallet}>
         See full wallet
-        <ArrowRight aria-hidden="true" size={13} strokeWidth={2} />
+        <ArrowRight aria-hidden="true" />
       </button>
     </section>
   );

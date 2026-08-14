@@ -12,9 +12,12 @@ import {
   userMessagesLikelySameTurn,
 } from "@/features/dashboard/chat-transcript-helpers";
 import { runtimePromptFromSessionMessage } from "@/features/dashboard/hooks/status-chat-input-helpers";
+import { latestChatAppArtifact } from "@/lib/services/chat/chat-app-artifact";
 import {
   mergeChatProcessEvents as mergeProcessEventLists,
   namedToolProcessEventFromRaw,
+  settleUnfinishedChatProcessEvents,
+  type LabeledChatProcessEvent,
 } from "@/lib/services/chat/chat-process-events";
 import type { ChatMessage } from "@/features/dashboard/dashboard-types";
 
@@ -67,8 +70,54 @@ export function chatTranscriptHasAssistantReply(messages: ChatMessage[] | undefi
   return lastMeaningful?.role === "assistant" && Boolean(lastMeaningful.content?.trim() || lastMeaningful.agentPrompt);
 }
 
-export function activeChatRunHasAssistantReply(messages: ChatMessage[] | undefined, run: ActiveChatRunRecord) {
-  return chatTranscriptHasAssistantReply(chatMessagesForActiveRun(messages ?? [], run));
+export type ChatRuntimeReconciliationRequest = {
+  rawUserMessage: string;
+  sinceMs: number;
+};
+
+function transcriptTerminalTransportFailureAt(messages: ChatMessage[]) {
+  let failedAt = 0;
+  for (const message of messages) {
+    for (const event of message.processEvents ?? []) {
+      if (event.status !== "failed") continue;
+      const text = `${event.label ?? ""} ${event.detail ?? ""}`;
+      if (!/runtime stream|chat stream|process finished|operation was aborted|timed? out|timeout/i.test(text)) continue;
+      failedAt = Math.max(failedAt, Number(event.at ?? message.createdAt ?? 0));
+    }
+  }
+  return failedAt;
+}
+
+/** A selected persisted chat gets one bounded late-session lookup when it has
+ * no answer or its transport died after the last narration. */
+export function chatTranscriptRuntimeReconciliationRequest(
+  messages: ChatMessage[] | undefined,
+): ChatRuntimeReconciliationRequest | null {
+  const transcript = messages ?? [];
+  const originalUser = [...transcript].reverse().find((message) => (
+    message.role === "user"
+    && Boolean(message.content.trim())
+    && !isCapabilityContinuationEcho(message)
+    && !/^Approved capability plan\. Continue with the task\.?$/i.test(message.content.trim())
+  ));
+  if (!originalUser) return null;
+  const lastMeaningful = [...transcript].reverse().find((message) => (
+    message.role === "user"
+    || (message.role === "assistant" && Boolean(message.content.trim() || message.agentPrompt || message.capabilityApproval))
+  ));
+  if (lastMeaningful?.role === "assistant" && lastMeaningful.capabilityApproval?.status === "pending") return null;
+  const failureAt = transcriptTerminalTransportFailureAt(transcript);
+  const answeredAfterFailure = failureAt > 0 && transcript.some((message) => (
+    message.role === "assistant"
+    && Boolean(message.content.trim() || message.agentPrompt)
+    && Number(message.createdAt ?? 0) > failureAt
+  ));
+  const needsRecovery = lastMeaningful?.role === "user" || (failureAt > 0 && !answeredAfterFailure);
+  if (!needsRecovery) return null;
+  return {
+    rawUserMessage: originalUser.content,
+    sinceMs: Math.max(0, Number(originalUser.createdAt ?? 0) - 2_000),
+  };
 }
 
 export function chatMessagesForActiveRun(messages: ChatMessage[], run?: ActiveChatRunRecord) {
@@ -103,9 +152,13 @@ function sessionMessageCreatedAtMs(message: { createdAt?: unknown; timestamp?: u
   return raw < 10_000_000_000 ? Math.round(raw * 1000) : Math.round(raw);
 }
 
-export function chatProcessEventsFromSessionMessages(messages: unknown[], run?: Pick<ActiveChatRunRecord, "startedAt" | "runId">) {
+export function chatProcessEventsFromSessionMessages(
+  messages: unknown[],
+  run?: Pick<ActiveChatRunRecord, "startedAt" | "runId">,
+  session?: unknown,
+) {
   const cutoff = run?.startedAt ? run.startedAt - 2_000 : 0;
-  return messages
+  const events = messages
     .map((message: any) => {
       const createdAt = sessionMessageCreatedAtMs(message);
       if (cutoff && (!createdAt || createdAt < cutoff)) return null;
@@ -113,6 +166,20 @@ export function chatProcessEventsFromSessionMessages(messages: unknown[], run?: 
       return entry ? { at: createdAt || Date.now(), runId: run?.runId, ...entry } : null;
     })
     .filter(Boolean) as Array<{ at: number; label: string; detail?: string; status?: string; runId?: string }>;
+  return settleUnfinishedChatProcessEvents(events, runtimeSessionProcessTerminal(session));
+}
+
+function runtimeSessionProcessTerminal(session: unknown) {
+  const source = session as { endedAt?: unknown; endReason?: unknown } | null;
+  const at = sessionMessageCreatedAtMs({ createdAt: source?.endedAt });
+  if (!at) return null;
+  const reason = String(source?.endReason ?? "").trim();
+  const failed = Boolean(reason && !/^(?:complete|completed|success|succeeded|finished)$/i.test(reason));
+  return {
+    at,
+    detail: failed ? `Runtime session ${reason.toLowerCase()}.` : undefined,
+    status: failed ? "failed" as const : "completed" as const,
+  };
 }
 
 function chatProcessFromSessionMessage(message: { role?: string; content?: string; type?: string; raw?: unknown }) {
@@ -148,7 +215,7 @@ export function runtimeSessionMessages(session: unknown): ChatMessage[] {
     : [];
   const sessionId = String((session as { sessionId?: string; id?: string } | null)?.sessionId ?? (session as { id?: string } | null)?.id ?? "");
   const output: ChatMessage[] = [];
-  let pendingProcessEvents: Array<{ at: number; label: string; detail?: string; status?: string; runId?: string }> = [];
+  let pendingProcessEvents: LabeledChatProcessEvent[] = [];
   for (const message of rawMessages.filter((item): item is { role?: string; content?: string; createdAt?: number; index?: number; billing?: unknown; feedback?: unknown; type?: string; applicationGeneration?: unknown; raw?: unknown } => (
       typeof item === "object"
       && item !== null
@@ -182,7 +249,15 @@ export function runtimeSessionMessages(session: unknown): ChatMessage[] {
     output.push(...splitCombinedUserAssistantMessage(normalizedMessage));
     if (role === "assistant" && pendingProcessEvents.length) pendingProcessEvents = [];
   }
+  const sessionTerminal = runtimeSessionProcessTerminal(session);
+  const terminal = sessionTerminal && sessionId
+    ? { ...sessionTerminal, runId: sessionId }
+    : sessionTerminal;
   if (pendingProcessEvents.length) {
+    pendingProcessEvents = settleUnfinishedChatProcessEvents(
+      pendingProcessEvents,
+      terminal,
+    );
     output.push({
       role: "assistant",
       content: "",
@@ -192,7 +267,60 @@ export function runtimeSessionMessages(session: unknown): ChatMessage[] {
       processEvents: pendingProcessEvents,
     });
   }
-  return output;
+  if (!terminal) return output;
+
+  // Process rows are segmented by assistant narration. A terminal lifecycle
+  // event can therefore land in a later segment (or be lost with the stream),
+  // while an earlier card still contains an open `tool running` row. Once the
+  // runtime session has ended, no segment may continue to claim that work is
+  // live. Settle every assistant segment, not only the trailing event buffer.
+  return output.map((message) => (
+    message.role === "assistant" && message.processEvents?.length
+      ? {
+          ...message,
+          processEvents: settleUnfinishedChatProcessEvents(message.processEvents, terminal),
+        }
+      : message
+  ));
+}
+
+/**
+ * Repair persisted transcripts whose explicit terminal event and orphaned
+ * tool row were attached to different assistant narration segments.
+ */
+export function settleTerminalTranscriptProcessEvents(messages: ChatMessage[]) {
+  const terminals = new Map<string, { at: number; detail?: string; status: "failed"; runId: string }>();
+  for (const message of messages) {
+    for (const event of message.processEvents ?? []) {
+      const runId = String(event.runId ?? "").trim();
+      if (!runId || !/^Runtime stream failed$/i.test(String(event.label ?? "").trim())) continue;
+      const at = Number(event.at ?? message.createdAt ?? Date.now());
+      const previous = terminals.get(runId);
+      if (!previous || at >= previous.at) {
+        terminals.set(runId, {
+          at,
+          detail: event.detail,
+          status: "failed",
+          runId,
+        });
+      }
+    }
+  }
+  if (!terminals.size) return messages;
+
+  let changed = false;
+  const settled = messages.map((message) => {
+    if (!message.processEvents?.length) return message;
+    let processEvents = message.processEvents;
+    for (const terminal of terminals.values()) {
+      if (!processEvents.some((event) => event.runId === terminal.runId)) continue;
+      const next = settleUnfinishedChatProcessEvents(processEvents, terminal);
+      if (next.length !== processEvents.length) changed = true;
+      processEvents = next;
+    }
+    return processEvents === message.processEvents ? message : { ...message, processEvents };
+  });
+  return changed ? settled : messages;
 }
 
 function withPreservedProcessEvents(nextMessage: ChatMessage, previousMessage?: ChatMessage) {
@@ -241,6 +369,74 @@ function chatMessageHasGenerationSurface(message?: ChatMessage) {
   return Boolean(message?.applicationGeneration || message?.imageGeneration);
 }
 
+function pruneOutOfOrderRuntimeSuffix(messages: ChatMessage[]) {
+  const result: ChatMessage[] = [];
+  for (let start = 0; start < messages.length;) {
+    if (messages[start]?.role !== "user") {
+      result.push(messages[start]);
+      start += 1;
+      continue;
+    }
+    let end = start + 1;
+    while (end < messages.length && messages[end]?.role !== "user") end += 1;
+    const turn = messages.slice(start, end);
+    const assistantIndexes = turn
+      .map((message, index) => message.role === "assistant" ? index : -1)
+      .filter((index) => index >= 0);
+    const latestIndex = assistantIndexes.reduce((best, index) => (
+      Number(turn[index]?.createdAt || 0) > Number(turn[best]?.createdAt || 0) ? index : best
+    ), assistantIndexes[0] ?? -1);
+    const latest = latestIndex >= 0 ? turn[latestIndex] : undefined;
+    const latestAt = Number(latest?.createdAt || 0);
+    const latestSource = String(latest?.sourceSessionId ?? "").trim();
+    const staleIndexes = assistantIndexes.filter((index) => {
+      if (index <= latestIndex || !latestAt || !latestSource) return false;
+      const candidate = turn[index];
+      const candidateAt = Number(candidate?.createdAt || 0);
+      const candidateSource = String(candidate?.sourceSessionId ?? "").trim();
+      return candidateAt < latestAt && candidateSource !== latestSource;
+    });
+    const trailingAssistantIndexes = assistantIndexes.filter((index) => index > latestIndex);
+    if (staleIndexes.length && staleIndexes.length === trailingAssistantIndexes.length) {
+      const localArtifact = latestChatAppArtifact(staleIndexes.map((index) => turn[index]));
+      if (localArtifact && latest) turn[latestIndex] = { ...latest, appArtifact: latest.appArtifact ?? localArtifact };
+      const stale = new Set(staleIndexes);
+      result.push(...turn.filter((_, index) => !stale.has(index)));
+    } else {
+      result.push(...turn);
+    }
+    start = end;
+  }
+  return result;
+}
+
+function placeTurnAppArtifactOnLatestAssistant(messages: ChatMessage[]) {
+  const result: ChatMessage[] = [];
+  for (let start = 0; start < messages.length;) {
+    if (messages[start]?.role !== "user") {
+      result.push(messages[start]);
+      start += 1;
+      continue;
+    }
+    let end = start + 1;
+    while (end < messages.length && messages[end]?.role !== "user") end += 1;
+    const turn = messages.slice(start, end);
+    const artifact = latestChatAppArtifact(turn);
+    const lastAssistantIndex = findLastChatMessageIndex(turn, (message) => message.role === "assistant");
+    if (!artifact || lastAssistantIndex < 0) {
+      result.push(...turn);
+    } else {
+      result.push(...turn.map((message, index) => {
+        if (message.role !== "assistant") return message;
+        const appArtifact = index === lastAssistantIndex ? artifact : undefined;
+        return message.appArtifact === appArtifact ? message : { ...message, appArtifact };
+      }));
+    }
+    start = end;
+  }
+  return result;
+}
+
 export function dedupeChatTranscript(messages: ChatMessage[]) {
   const output: ChatMessage[] = [];
   for (let index = 0; index < messages.length; index += 1) {
@@ -256,6 +452,7 @@ export function dedupeChatTranscript(messages: ChatMessage[]) {
       continue;
     }
     if (message.role === "user") {
+      if (isCapabilityContinuationEcho(message) && output.some((item) => item.role === "user")) continue;
       const previousUserIndex = findLastChatMessageIndex(output, (item) => sameVisibleChatMessage(item, message));
       // A runtime-session echo of the capability continuation is never a new
       // human turn: the person typed the original words exactly once. Drop the
@@ -309,13 +506,13 @@ export function dedupeChatTranscript(messages: ChatMessage[]) {
     }
     output.push(message);
   }
-  return output;
+  return settleTerminalTranscriptProcessEvents(placeTurnAppArtifactOnLatestAssistant(pruneOutOfOrderRuntimeSuffix(output)));
 }
 
 function preserveLocalTurnProcessEvents(sessionTurn: ChatMessage[], localTurn: ChatMessage[]) {
   const localAssistantMessages = localTurn.filter((message) => message.role === "assistant");
   const localUserMessage = localTurn.find((message) => message.role === "user" && message.content.trim());
-  return sessionTurn.map((message) => {
+  const mapped = sessionTurn.map((message) => {
     if (message.role === "user" && userMessagesLikelySameTurn(localUserMessage, message)) {
       return {
         ...message,
@@ -355,6 +552,12 @@ function preserveLocalTurnProcessEvents(sessionTurn: ChatMessage[], localTurn: C
       createdAt: processSource.createdAt ?? message.createdAt,
     };
   });
+  const localArtifact = latestChatAppArtifact(localAssistantMessages);
+  if (localArtifact && !mapped.some((message) => message.role === "assistant" && message.appArtifact)) {
+    const lastAssistantIndex = findLastChatMessageIndex(mapped, (message) => message.role === "assistant");
+    if (lastAssistantIndex >= 0) mapped[lastAssistantIndex] = { ...mapped[lastAssistantIndex], appArtifact: localArtifact };
+  }
+  return mapped;
 }
 
 export function mergeRuntimeSessionMessages(existing: ChatMessage[], sessionMessages: ChatMessage[]) {
@@ -364,7 +567,10 @@ export function mergeRuntimeSessionMessages(existing: ChatMessage[], sessionMess
   if (sessionUser) {
     const localUserIndex = findLastChatMessageIndex(existing, (message) => userMessagesLikelySameTurn(message, sessionUser));
     if (localUserIndex >= 0) {
-      const nextLocalUserIndex = findNextChatUserIndex(existing, localUserIndex);
+      let nextLocalUserIndex = findNextChatUserIndex(existing, localUserIndex);
+      while (nextLocalUserIndex >= 0 && isCapabilityContinuationEcho(existing[nextLocalUserIndex])) {
+        nextLocalUserIndex = findNextChatUserIndex(existing, nextLocalUserIndex);
+      }
       const localTurn = existing.slice(localUserIndex, nextLocalUserIndex >= 0 ? nextLocalUserIndex : existing.length);
       const sessionTurn = preserveLocalTurnProcessEvents(visibleSessionMessages, localTurn);
       return dedupeChatTranscript([

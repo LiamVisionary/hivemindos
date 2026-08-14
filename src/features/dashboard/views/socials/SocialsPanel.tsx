@@ -74,14 +74,23 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
   const [connectOpen, setConnectOpen] = useState(false);
   const [allAccountsSelected, setAllAccountsSelected] = useState(false);
   const queueScopeRef = useRef<"all" | "account">("account");
-  const [rememberedActiveId, rememberActiveId] = useRememberedDashboardValue(ACTIVE_ACCOUNT_STATE_KEY);
+  const accountsRequestRef = useRef(0);
+  const queueRequestRef = useRef(0);
+  const [rememberedActiveId, rememberActiveId, activeAccountHydrated] = useRememberedDashboardValue(ACTIVE_ACCOUNT_STATE_KEY);
+  const rememberedActiveIdRef = useRef(rememberedActiveId);
+
+  useEffect(() => {
+    rememberedActiveIdRef.current = rememberedActiveId;
+  }, [rememberedActiveId]);
 
   const loadQueue = useCallback(async (accountId?: string, showLoading = false) => {
+    const requestId = ++queueRequestRef.current;
     if (showLoading) setQueueLoading(true);
     try {
       const query = accountId ? `?accountId=${encodeURIComponent(accountId)}` : "";
       const response = await fetch(`/api/socials/queue${query}`, { cache: "no-store" });
       const payload = (await response.json()) as QueuePayload;
+      if (requestId !== queueRequestRef.current) return;
       if (!payload.ok) {
         setError(payload.error ?? `HTTP ${response.status}`);
         return;
@@ -105,6 +114,15 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
       setManagedReadBudget(payload.readBudget ?? null);
       setDraftingRuntime(payload.drafting ?? null);
       setXDiscovery(payload.discovery ?? null);
+      if (accountId && payload.discovery?.authenticated) {
+        const displayName = payload.discovery.accountDisplayName?.trim();
+        const avatarUrl = payload.discovery.accountAvatarUrl?.trim();
+        if (displayName || avatarUrl) {
+          setAccounts((current) => current.map((account) => account.id === accountId
+            ? { ...account, ...(displayName ? { displayName } : {}), ...(avatarUrl ? { avatarUrl } : {}) }
+            : account));
+        }
+      }
       if (payload.analytics) setSocialAnalytics(payload.analytics);
       if (payload.engine) {
         setEngine(payload.engine);
@@ -117,17 +135,21 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
         }));
       }
     } catch (queueError) {
-      setError(queueError instanceof Error ? queueError.message : String(queueError));
+      if (requestId === queueRequestRef.current) {
+        setError(queueError instanceof Error ? queueError.message : String(queueError));
+      }
     } finally {
-      if (showLoading) setQueueLoading(false);
+      if (requestId === queueRequestRef.current) setQueueLoading(false);
     }
   }, []);
 
   const load = useCallback(async (mode: "initial" | "refresh") => {
+    const requestId = ++accountsRequestRef.current;
     if (mode === "refresh") setRefreshing(true);
     try {
       const res = await fetch("/api/socials/accounts", { cache: "no-store" });
       const payload = (await res.json()) as AccountsPayload;
+      if (requestId !== accountsRequestRef.current) return;
       if (!payload.ok) {
         setError(payload.error ?? `HTTP ${res.status}`);
         return;
@@ -138,24 +160,30 @@ export function SocialsPanel({ theme }: { theme: "light" | "dark" }) {
       setSouls(payload.souls ?? []);
       setQueueCounts(payload.queueCounts ?? {});
       if (payload.queue) setQueueMeta(payload.queue);
-      const selected = (payload.accounts ?? []).some((account) => account.id === rememberedActiveId)
-        ? rememberedActiveId
+      const rememberedId = rememberedActiveIdRef.current;
+      const selected = (payload.accounts ?? []).some((account) => account.id === rememberedId)
+        ? rememberedId
         : payload.accounts?.[0]?.id ?? "";
       await loadQueue(queueScopeRef.current === "all" ? undefined : selected, mode === "initial");
     } catch (fetchError) {
-      setError(fetchError instanceof Error ? fetchError.message : String(fetchError));
+      if (requestId === accountsRequestRef.current) {
+        setError(fetchError instanceof Error ? fetchError.message : String(fetchError));
+      }
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === accountsRequestRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
-  }, [loadQueue, rememberedActiveId]);
+  }, [loadQueue]);
 
   useEffect(() => {
+    if (!activeAccountHydrated) return undefined;
     // Deferred like ClawBankStatusCard's initial refresh: the set-state-in-effect
     // rule forbids kicking a state-setting fetch synchronously in the effect body.
     const timer = window.setTimeout(() => void load("initial"), 0);
     return () => window.clearTimeout(timer);
-  }, [load]);
+  }, [activeAccountHydrated, load]);
 
   const activeAccountId = useMemo(() => {
     if (accounts.some((account) => account.id === rememberedActiveId)) return rememberedActiveId;

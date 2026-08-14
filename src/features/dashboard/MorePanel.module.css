@@ -135,6 +135,94 @@
   pointer-events: none;
 }
 
+/* Persistent Hive Compute discovery CTA: visible before the grouped utility
+   catalog, even when Hive Compute is not pinned to the nav rail. */
+.computeSpotlight {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 15px 17px;
+  border: 1px solid var(--m-active-border);
+  border-radius: 14px;
+  background: linear-gradient(110deg, var(--m-active-bg), color-mix(in srgb, var(--m-panel) 88%, transparent));
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
+}
+
+.computeSpotlight:hover {
+  transform: translateY(-2px);
+  border-color: var(--m-interact);
+  box-shadow: 0 18px 48px -34px color-mix(in srgb, var(--m-interact) 70%, transparent);
+}
+
+.computeSpotlight:focus-visible {
+  outline: 2px solid var(--m-interact);
+  outline-offset: 3px;
+}
+
+.computeSpotlightIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--m-tile-border);
+  border-radius: 13px;
+  background: var(--m-tile-fill);
+  color: var(--m-tile-ink);
+}
+
+.computeSpotlightIcon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.computeSpotlightCopy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.computeSpotlightCopy small {
+  color: var(--m-accent-text);
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.computeSpotlightCopy strong {
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.computeSpotlightCopy span {
+  color: var(--m-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.computeSpotlightAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--m-active-ink);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.computeSpotlightAction svg {
+  width: 15px;
+  height: 15px;
+}
+
 /* ---- Pinned row ---- */
 .sectionLabelRow {
   display: flex;
@@ -664,6 +752,15 @@
   .board {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .computeSpotlight {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .computeSpotlightAction {
+    grid-column: 2;
+    white-space: normal;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -677,8 +774,16 @@
     transition: none;
   }
 
+  .computeSpotlight {
+    transition: none;
+  }
+
   .card:hover,
   .chip:hover {
+    transform: none;
+  }
+
+  .computeSpotlight:hover {
     transform: none;
   }
 

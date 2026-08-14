@@ -12,6 +12,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const workspace = await read("src/features/dashboard/views/chat/exchange/AppWorkspace.tsx");
 const hook = await read("src/features/dashboard/views/chat/exchange/use-thread-app-preview.ts");
 const panel = await read("src/features/dashboard/views/chat/exchange/ChatExchangePanel.tsx");
+const controller = await read("src/features/dashboard/hooks/use-status-chat-input-controller.tsx");
 const shelf = await read("src/features/dashboard/views/chat/exchange/ContextShelf.tsx");
 const thread = await read("src/features/dashboard/views/chat/exchange/MessageThread.tsx");
 const drawer = await read("src/features/dashboard/views/chat/exchange/ChatTerminalDrawer.tsx");
@@ -68,6 +69,21 @@ assert.match(panel, /useThreadAppPreview\(/, "the panel must drive preview lifec
 assert.match(panel, /data-workspace-open=\{workspaceOpen/, "the layout must expose the workspace-open state to CSS");
 assert.match(panel, /"chat\.workspace\.width"/, "the workspace width must persist through dashboard state, not browser storage");
 assert.match(panel, /onOpenAppWorkspace=\{openThreadWorkspace\}/, "the thread must be able to open the workspace from an app card");
+
+// Approval allocates the project directory so the worker has somewhere to
+// build, but it must not steal half the chat for an empty scaffold. Only a
+// successfully completed worker turn may auto-open and start the preview.
+const capabilitySubmitBlock = panel.slice(
+  panel.indexOf("async function submitCapabilityPlan"),
+  panel.indexOf("const sourceMachine", panel.indexOf("async function submitCapabilityPlan")),
+);
+const capabilityWorkerIndex = capabilitySubmitBlock.indexOf("await sendPromptMessage");
+const capabilityAutoOpenIndex = capabilitySubmitBlock.indexOf("setWorkspaceOpen(true)");
+assert.ok(capabilityWorkerIndex >= 0 && capabilityAutoOpenIndex > capabilityWorkerIndex, "capability approval must run the worker before auto-opening the App workspace");
+assert.match(capabilitySubmitBlock, /appRunOutcome === "completed"/, "failed, interrupted, or question-paused app turns must keep the workspace closed");
+assert.match(controller, /return runChatMessage\(chatTurn\)/, "the chat controller must propagate the runtime outcome to the approval UI");
+assert.match(controller, /async function sendPromptMessage[\s\S]*?return submitChatPrompt\(/, "sendPromptMessage must return the propagated runtime outcome instead of discarding it");
+assert.match(controller, /return assistantIssue \? "failed" : sawAgentPrompt \? "active" : "completed"/, "runtime completion must distinguish successful, failed, and question-paused turns");
 
 // --- app card in the thread ---
 assert.match(thread, /AppArtifactCard/, "an assistant message with an appArtifact must render the app card");

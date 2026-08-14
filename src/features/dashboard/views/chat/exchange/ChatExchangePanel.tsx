@@ -177,6 +177,7 @@ export function ChatExchangePanel(props: any) {
     removeChatDirectory,
     runRuntimeIntegrationAction,
     runtimeModelSelectionsByRuntime,
+    selectedAgentCanStartFreshChat,
     selectedAgent,
     selectedChatDirectory,
     selectedChatHistoryLoading,
@@ -192,6 +193,7 @@ export function ChatExchangePanel(props: any) {
     setStatusAgentId,
     setText,
     startAgentChat,
+    startSelectedAgentFreshChat,
     startAudioRecording,
     status,
     statusAgentId,
@@ -679,15 +681,15 @@ export function ChatExchangePanel(props: any) {
       for (const folder of machine.folders ?? []) {
         const holdsActiveChat = folder.active || (folder.chats ?? []).some((chat: any) => chat.active);
         if (!holdsActiveChat) continue;
-        if (folder.onStartChat) return { label: folder.label, onStartChat: folder.onStartChat };
-        if (machine.onStartChat) return { label: machine.name, onStartChat: machine.onStartChat };
+        return selectedAgentCanStartFreshChat ? { label: folder.label, onStartChat: startSelectedAgentFreshChat } : null;
       }
     }
-    const fallback = machinesWithChats.find((machine: any) => machine.onStartChat);
-    return fallback?.onStartChat ? { label: fallback.name, onStartChat: fallback.onStartChat } : null;
+    return selectedAgentCanStartFreshChat
+      ? { label: selectedChatMachine?.name ?? selectedAgent?.machineName ?? "General", onStartChat: startSelectedAgentFreshChat }
+      : null;
   })();
 
-  const generalChatTarget = chatSidebarTree.find((machine: any) => machine.key === "unassigned" && machine.onStartChat);
+  const generalChatTarget = selectedAgentCanStartFreshChat ? () => startSelectedAgentFreshChat?.({ general: true }) : undefined;
   const activeProjectMachine = machinesWithChats.find((machine: any) => (
     machine.folders?.some((folder: any) => folder.active || folder.chats?.some((chat: any) => chat.active))
   ));
@@ -926,21 +928,22 @@ export function ChatExchangePanel(props: any) {
         ? [...renderMessages.slice(0, approvalMessageIndex)].reverse().find((message) => message.role === "user")?.attachments ?? []
         : [];
       const appProjectContext = capabilityAppProjectContext(appArtifact);
-      // The Replit moment: the app project now exists, so open the workspace and
-      // queue the preview — it starts on its own the moment the agent's turn ends.
-      if (appArtifact) {
-        setWorkspaceOpen(true);
-        setWorkspaceTab("app");
-        setShelfOpen(false);
-        preview.requestThreadAppPreview();
-      }
-      await sendPromptMessage(`${data.continuationPrompt}${appProjectContext}`, {
+      const appRunOutcome = await sendPromptMessage(`${data.continuationPrompt}${appProjectContext}`, {
         visiblePrompt: "Approved capability plan. Continue with the task.",
         promptResponse: { label: "Capability plan approved", value: `${data.continuationPrompt}${appProjectContext}` },
         attachments: approvalRequestAttachments,
         workingDirectory: appArtifact?.directory,
         appArtifact,
       });
+      // Project allocation happens before the turn so the worker has a durable
+      // directory. The App pane belongs to the finished artifact, not that empty
+      // scaffold: failed, interrupted, or question-paused turns stay in chat.
+      if (appArtifact && appRunOutcome === "completed") {
+        setWorkspaceOpen(true);
+        setWorkspaceTab("app");
+        setShelfOpen(false);
+        preview.requestThreadAppPreview();
+      }
     } catch (error) {
       flashToast(error instanceof Error ? error.message : "Could not submit the capability plan");
     } finally {
@@ -1107,7 +1110,7 @@ export function ChatExchangePanel(props: any) {
             search={sidebarSearch}
             onSearchChange={setSidebarSearch}
             onNewChat={newChatTarget ? () => newChatTarget.onStartChat?.() : undefined}
-            onNewGeneralChat={generalChatTarget ? () => generalChatTarget.onStartChat?.() : undefined}
+            onNewGeneralChat={generalChatTarget}
             onCreateProject={createProjectTarget ? () => createProjectTarget.onCreateProject?.() : undefined}
             onImportProject={importProjectTarget ? () => importProjectTarget.onImportProject?.() : undefined}
             newChatLabel={newChatTarget ? `New chat in ${newChatTarget.label}` : undefined}
@@ -1169,7 +1172,9 @@ export function ChatExchangePanel(props: any) {
                     processEventsTargetKey={processEventsTargetKey}
                     selectedAgent={selectedAgent}
                     sourceMachine={sourceMachine}
+                    collectorUrl={collectorUrl}
                     sendPromptMessage={sendPromptMessage}
+                    onPromptError={flashToast}
                     onCapabilityPlanChange={updateCapabilityPlan}
                     onCapabilityPlanSubmit={submitCapabilityPlan}
                     onForkResponse={handleForkResponse}

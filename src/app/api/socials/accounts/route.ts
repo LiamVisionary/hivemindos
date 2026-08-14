@@ -13,6 +13,7 @@ import {
   withSocialXSessionBinding,
 } from "@/lib/services/socials/social-x-session-binding";
 import {
+  getXPublicProfileForAccount,
   getXDiscoveryStatusForAccount,
   invalidateXDiscoveryStatus,
 } from "@/lib/services/socials/social-x-discovery";
@@ -59,17 +60,26 @@ export async function GET() {
       readSocialQueue(),
       listSocialSoulOptions(),
     ]);
-    const probes = await Promise.all(
-      accounts.map(async (account) => {
+    const [probes, publicProfiles] = await Promise.all([
+      Promise.all(accounts.map(async (account) => {
         try {
           return await socialAdapter(account.platform).connectStatus(account, { env });
         } catch (error) {
           return { ok: false, detail: error instanceof Error ? error.message : String(error) };
         }
-      }),
-    );
+      })),
+      Promise.all(accounts.map((account) => account.platform === "x"
+        ? getXPublicProfileForAccount(account)
+        : Promise.resolve(null))),
+    ]);
     const withStatus = accounts.map((account, index) => ({
       ...account,
+      ...(probes[index].displayName || publicProfiles[index]?.displayName
+        ? { displayName: probes[index].displayName || publicProfiles[index]!.displayName }
+        : {}),
+      ...(probes[index].avatarUrl || publicProfiles[index]?.avatarUrl
+        ? { avatarUrl: probes[index].avatarUrl || publicProfiles[index]!.avatarUrl }
+        : {}),
       probe: probes[index],
       status: (probes[index].ok ? "connected" : account.status === "disconnected" ? "disconnected" : "needs-attention") as SocialAccount["status"],
       capabilities: socialAdapter(account.platform).capabilities(account),

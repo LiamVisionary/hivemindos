@@ -21,6 +21,13 @@ import {
   type SpendApprovalRequest,
 } from "@/lib/services/wallet/spend-approvals";
 import { buildSpendApprovalReasoning } from "@/lib/utils/spend-approval-reasoning";
+import {
+  normalizeAgentWalletAssignments,
+  primaryAgentWalletForAgent,
+  walletPermissionForAgent,
+  walletWithAgentPermission,
+} from "@/lib/utils/agent-wallet";
+import type { AgentWalletPermissionMode } from "@/lib/types/agent-wallet";
 
 /**
  * Single governance chokepoint for every spend rail. It layers three NEW
@@ -96,7 +103,60 @@ export async function loadGovernanceWallet(agentId: string): Promise<{ wallet: A
   const ledger = await readWalletLedger();
   const record = ledger.records.find((entry) => entry.agentId === agentId);
   if (!record) return null;
-  return { wallet: record.wallet, agentName: record.agentName };
+  return { wallet: normalizeAgentWalletAssignments(record.wallet, record.agentId), agentName: record.agentName };
+}
+
+export type GovernedWalletAccess = {
+  walletId: string;
+  wallet: AgentWalletConfig;
+  walletName: string;
+  actingAgentId?: string;
+  permissionMode?: AgentWalletPermissionMode;
+};
+
+/**
+ * Resolve a wallet id (or, for compatibility, an agent id) to an authoritative
+ * ledger wallet. When an acting agent is supplied, attachment is mandatory and
+ * the returned auto-pay flag is narrowed to that agent's permission.
+ */
+export async function resolveGovernedWalletAccess(
+  walletOrAgentId: string,
+  actingAgentId?: string,
+  options: { vaultPath?: string } = {},
+): Promise<GovernedWalletAccess | null> {
+  const requestedId = walletOrAgentId.trim();
+  const actorId = actingAgentId?.trim() || "";
+  if (!requestedId) return null;
+  const ledger = await readWalletLedger(options.vaultPath);
+  const direct = ledger.records.find((entry) => entry.agentId === requestedId);
+  if (direct) {
+    const normalized = normalizeAgentWalletAssignments(direct.wallet, direct.agentId);
+    if (!actorId) {
+      return { walletId: direct.agentId, wallet: normalized, walletName: direct.agentName };
+    }
+    const effective = walletWithAgentPermission(normalized, actorId);
+    if (!effective) return null;
+    return {
+      walletId: direct.agentId,
+      wallet: effective,
+      walletName: direct.agentName,
+      actingAgentId: actorId,
+      permissionMode: walletPermissionForAgent(normalized, actorId) ?? undefined,
+    };
+  }
+
+  const inferredActorId = actorId || requestedId;
+  const walletsById = Object.fromEntries(ledger.records.map((entry) => [entry.agentId, entry.wallet]));
+  const effective = primaryAgentWalletForAgent(walletsById, inferredActorId);
+  if (!effective) return null;
+  const record = ledger.records.find((entry) => entry.agentId === effective.agentId);
+  return {
+    walletId: effective.agentId,
+    wallet: effective,
+    walletName: record?.agentName || effective.name || effective.agentId,
+    actingAgentId: inferredActorId,
+    permissionMode: walletPermissionForAgent(effective, inferredActorId) ?? undefined,
+  };
 }
 
 /**

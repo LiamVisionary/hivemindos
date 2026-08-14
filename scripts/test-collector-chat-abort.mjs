@@ -130,6 +130,7 @@ async function bootCollector(hermesBin, extraEnv = {}) {
       AGENT_TELEMETRY_PORT: String(port),
       AGENT_TELEMETRY_HOST: "127.0.0.1",
       AGENT_TELEMETRY_CHAT_TIMEOUT_MS: "30000",
+      AGENT_TELEMETRY_CHAT_HEARTBEAT_MS: "50",
       HIVEMINDOS_MDNS_DISABLE: "1",
       AGENT_TELEMETRY_DISABLE_SELF_RELOAD: "1",
       AGENT_TELEMETRY_ENV_SYNC_DISABLED: "1",
@@ -195,6 +196,7 @@ async function assertStreamingChatOutput(base) {
     if (!finalAt && streamText.includes("Done from canonical Hermes session.")) finalAt = Date.now();
   }
   assert.match(streamText, /20260718_203500_deadbe/, "collector should surface the pollable Hermes session id");
+  assert.match(streamText, /Hermes CLI stream still working/, "a quiet scoped CLI turn must emit keepalives before the browser stall deadline");
   assert.ok(interimAt > 0 && finalAt > interimAt, "interim assistant text must arrive before the delayed final response");
   assert.match(streamText, /assistant\.reset/, "a later Hermes response segment should replace interim narration");
   assert.match(streamText, /tool\.started/, "Hermes tool lifecycle should stream as process data");

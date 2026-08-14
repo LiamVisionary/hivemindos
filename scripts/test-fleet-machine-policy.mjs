@@ -154,6 +154,12 @@ try {
 
   const prompt = fleetMachinePolicyPrompt(temporarilyAllowed, 4_001);
   assert.match(prompt, /Treat ASK as DENY/);
+  assert.match(
+    prompt,
+    /Merely discovering, listing, or observing connected apps never requires connectedApps approval/,
+    "connected-app discovery alone must not create a machine-access approval",
+  );
+  assert.match(prompt, /only immediately before a concrete call to an app or service advertised by another fleet collector/);
   assert.match(prompt, /^FLEET ACCESS REQUEST: <capability>$/m);
   assert.match(prompt, /^OPTIONS: Allow 15 min \| Always allow \| Deny$/m);
   assert.equal(fleetPolicyRuntimeFlags(temporarilyAllowed, 4_001).HIVEMINDOS_SHARED_ENV_ACCESS, "deny");

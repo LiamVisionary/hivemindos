@@ -185,6 +185,7 @@ const target = {
   url: "https://x.com/base/status/1900000000000000001",
   authorHandle: "base",
   authorName: "Base",
+  authorAvatarUrl: "https://pbs.twimg.com/profile_images/base_normal.jpg",
   authorVerified: true,
   text: "Agents need scoped sessions and clear limits.",
   createdAt: "2026-07-20T16:00:00.000Z",
@@ -209,6 +210,11 @@ const engagementQueueItem = {
 await mutateSocialQueue((queue) => [engagementQueueItem, ...queue]);
 const savedEngagement = (await readSocialQueue()).find((item) => item.id === engagementQueueItem.id);
 assert.equal(savedEngagement?.generation?.target?.url, target.url, "review provenance retains the exact public target snapshot");
+assert.equal(
+  savedEngagement?.generation?.target?.authorAvatarUrl,
+  "https://pbs.twimg.com/profile_images/base_400x400.jpg",
+  "review provenance upgrades and retains the response target's profile image",
+);
 assert.equal(savedEngagement?.generation?.kind, "reply");
 await mutateSocialDraftingRuntime("x:testhandle", () => ({
   lastSuccessAt: engagementQueueItem.generation.generatedAt,

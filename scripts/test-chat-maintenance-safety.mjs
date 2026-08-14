@@ -5,6 +5,7 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { releaseCollectorRestartWindow, reserveCollectorRestartWindow } from "./lib/fleet-watchdog-local-collector.mjs";
 
 const [
   collectorSource,
@@ -200,6 +201,13 @@ try {
     "fake Hermes did not start",
   );
 
+  const activeChatRestart = await reserveCollectorRestartWindow(baseUrl);
+  assert.deepEqual(
+    activeChatRestart,
+    { deferRestart: true, activeChatRunCount: 1 },
+    "the watchdog must not reserve a restart while chat work is active",
+  );
+
   const maintenanceRequestId = "test-maintenance-request";
   const queuedReservation = await fetch(`${baseUrl}/maintenance/reserve-update`, {
     method: "POST",
@@ -249,6 +257,16 @@ try {
     },
   });
   assert.equal(releaseResponse.status, 200);
+
+  const idleRestart = await reserveCollectorRestartWindow(baseUrl);
+  assert.equal(idleRestart.deferRestart, false);
+  assert.equal(idleRestart.activeChatRunCount, 0);
+  assert.ok(idleRestart.reservationToken, "an idle collector should grant an atomic restart window");
+  assert.equal(
+    await releaseCollectorRestartWindow(baseUrl, idleRestart.reservationToken),
+    true,
+    "a failed restart can release its maintenance reservation",
+  );
 } finally {
   if (!collector.killed) collector.kill("SIGTERM");
   await rm(sandbox, { recursive: true, force: true });

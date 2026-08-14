@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { stripJsonRenderPayload } from "@/components/json-render/JsonRenderSurface";
 import { compactCapabilityContinuation } from "@/features/dashboard/chat-transcript-helpers";
+import { selectedAgentFreshChatTarget } from "@/features/dashboard/chat-new-chat-target";
 import { runtimeSessionMessages } from "@/features/dashboard/chat-run-transcripts";
 import { createNativeLocalFolder } from "@/lib/native/filesystem";
 import { runtimeSettingsFeature } from "@/lib/types/agent-runtime";
@@ -342,6 +343,30 @@ export function useChatTreeController(props: any) {
       });
     }
   }, [displayAgents, machineGroups]);
+
+  const selectedAgentCanStartFreshChat = Boolean(
+    selectedAgent
+    && runtimeCan(selectedAgent, "chat")
+    && machineGroups.some((group) => group.agents.some((agent) => agent.id === selectedAgent.id)),
+  );
+  const startSelectedAgentFreshChat = useCallback((options: { general?: boolean } = {}) => {
+    const workingDirectoryPath = options.general || !selectedChatLeafKey
+      ? ""
+      : projectDirectoryPath(selectedChatDirectoryPath);
+    const target = selectedAgentFreshChatTarget({
+      selectedAgentId: selectedAgent?.id,
+      selectedAgentCanChat: runtimeCan(selectedAgent, "chat"),
+      machineGroups,
+      workingDirectoryPath,
+      workingDirectoryKey: workingDirectoryPath ? chatDedupeKey(workingDirectoryPath) : "",
+    });
+    if (!target) return;
+    startAgentChat(target.agentId, {
+      fresh: true,
+      workingDirectoryPath: target.workingDirectoryPath,
+      chatLeafKey: target.chatLeafKey,
+    });
+  }, [chatDedupeKey, machineGroups, runtimeCan, selectedAgent, selectedChatDirectoryPath, selectedChatLeafKey, startAgentChat]);
 
   const openRuntimeSessionChat = useCallback((agent: AgentProfile, sessionId: string, options: { seedMessages?: ChatMessage[]; chatLeafKey: string; workingDirectoryPath?: string }) => {
     void (async () => {
@@ -720,7 +745,12 @@ export function useChatTreeController(props: any) {
         const folderPath = projectDirectoryPath(machine.version?.appDir);
         let fallbackFolder: ChatTreeFolder | undefined;
         const strayFolder = () => ensureFolder("Stray chats");
-        const machineChatFolder = () => ensureFolder("Unsorted chats", startFreshChatInMachine(agent));
+        const machineChatFolder = () => ensureFolder(
+          "Unsorted chats",
+          startFreshChatInMachine(agent),
+          undefined,
+          selectedAgentId === agent.id && selectedChatLeafKey.startsWith(`machine-${machine.key}-`),
+        );
         const defaultFolder = () => {
           if (!folderPath) return strayFolder();
           fallbackFolder ??= ensureFolder(
@@ -912,9 +942,10 @@ export function useChatTreeController(props: any) {
     }
     const latestChat = chatSidebarTree
       .flatMap((machine) => machine.folders.flatMap((folder) => folder.chats))
+      .filter((chat) => !selectedAgent?.id || chat.agentId === selectedAgent.id)
       .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))[0];
     latestChat?.onOpen();
-  }, [activeView, chatSidebarTree, freshChatDraft, selectedChatLeafKey, setSelectedAgentId, setSelectedChatLeafKey]);
+  }, [activeView, chatSidebarTree, freshChatDraft, selectedAgent?.id, selectedChatLeafKey, setSelectedAgentId, setSelectedChatLeafKey]);
 
   const selectedChatMachine = useMemo(() => (
     selectedAgent
@@ -968,5 +999,5 @@ export function useChatTreeController(props: any) {
     window.setTimeout(() => setSetupCommandCopied(false), 2500);
   }
 
-  return { switchRuntime, appendMessage, hasConversation, conversationTitle, hydrateRuntimeSessionChat, startAgentChat, startAgentWorkChat, changeChatWorkingDirectory, clearChatWorkingDirectory, closeChatFolderCreator, createChatFolder, chatSidebarTree, selectedChatMachine, selectedChatDirectory, chatFolderCreatorMachine, chatFolderCreatorParentOptions, openSetupModal, copySetupCommand };
+  return { switchRuntime, appendMessage, hasConversation, conversationTitle, hydrateRuntimeSessionChat, startAgentChat, selectedAgentCanStartFreshChat, startSelectedAgentFreshChat, startAgentWorkChat, changeChatWorkingDirectory, clearChatWorkingDirectory, closeChatFolderCreator, createChatFolder, chatSidebarTree, selectedChatMachine, selectedChatDirectory, chatFolderCreatorMachine, chatFolderCreatorParentOptions, openSetupModal, copySetupCommand };
 }

@@ -77,7 +77,6 @@ export function commandApprovalEvent(input: {
   };
 }
 
-export const RUNTIME_FETCH_TIMEOUT_MS = 10 * 60 * 1000;
 export const execFileAsync = promisify(execFile);
 
 export type WorkspaceSnapshot = {

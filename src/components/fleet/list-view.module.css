@@ -163,20 +163,288 @@
   background: var(--lv-panel-2);
 }
 
-/* add-agent row */
-.addRow {
-  transition: background 0.12s ease;
-}
-.addRow:hover {
-  background: var(--lv-honey-soft);
-}
-
 /* expanded action buttons */
 .actionBtn {
   transition: filter 0.12s ease, background 0.12s ease;
 }
 .actionBtn:hover {
   filter: brightness(1.22);
+}
+
+/* selected machine + agent actions */
+.machineActionsWrap {
+  display: grid;
+  gap: 8px;
+  padding: 12px 20px 14px;
+  border-top: 1px solid var(--lv-line);
+  background: var(--lv-tint);
+}
+
+.compactActionBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.primaryAction,
+.actionsTrigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 13px;
+  border: 1px solid var(--lv-line-2);
+  border-radius: 999px;
+  background: var(--lv-tint-2);
+  color: var(--lv-fg-2);
+  font-family: var(--lv-body);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: filter 0.12s ease, border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.primaryAction {
+  border-color: var(--lv-honey-line);
+  background: var(--lv-honey-soft);
+  color: var(--lv-honey-2);
+}
+
+.chatCallSplit {
+  display: inline-flex;
+  align-items: stretch;
+  min-height: 34px;
+  overflow: hidden;
+  border: 1px solid var(--lv-honey-line);
+  border-radius: 999px;
+  background: var(--lv-honey-soft);
+  color: var(--lv-honey-2);
+}
+
+.chatSegment,
+.callSegment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.chatSegment {
+  gap: 7px;
+  padding: 0 12px 0 13px;
+  font-family: var(--lv-body);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.callSegment {
+  width: 34px;
+  padding: 0;
+  border-left: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+}
+
+.chatSegment > svg,
+.callSegment > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.chatSegment:hover,
+.callSegment:hover {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.chatSegment:focus-visible,
+.callSegment:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, currentColor 48%, transparent);
+}
+
+.primaryAction > svg,
+.actionsTrigger > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.actionsTrigger[data-attention="true"] {
+  border-color: var(--lv-danger-line);
+  background: var(--lv-danger-soft);
+  color: var(--lv-danger);
+}
+
+.primaryAction:hover:not(:disabled),
+.actionsTrigger:hover:not(:disabled) {
+  filter: brightness(1.18);
+}
+
+.primaryAction:focus-visible,
+.actionsTrigger:focus-visible {
+  outline: 2px solid var(--lv-honey);
+  outline-offset: 2px;
+}
+
+.primaryAction:disabled,
+.actionsTrigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.actionCount {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--lv-danger);
+  color: #1a1305;
+  font-family: var(--lv-mono);
+  font-size: 9px;
+  font-weight: 500;
+}
+
+/* The menu is portalled to the document body, so it owns the same dark/light
+   values as the list root instead of relying on scoped token inheritance. */
+.actionMenu {
+  --lv-menu-bg: #181b22;
+  --lv-menu-fg: #f3f0e9;
+  --lv-menu-muted: #a7a39a;
+  --lv-menu-line: rgba(238, 232, 220, 0.13);
+  --lv-menu-hover: rgba(238, 232, 220, 0.07);
+  --lv-menu-honey: #f0c879;
+  --lv-menu-honey-soft: rgba(231, 180, 92, 0.13);
+  --lv-menu-danger: #e58e85;
+  --lv-menu-danger-soft: rgba(229, 142, 133, 0.1);
+  z-index: 1400;
+  width: min(286px, calc(100vw - 24px));
+  padding: 6px;
+  border: 1px solid var(--lv-menu-line);
+  border-radius: 12px;
+  background: var(--lv-menu-bg);
+  color: var(--lv-menu-fg);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.5);
+  font-family: "Geist", "Inter", system-ui, sans-serif;
+}
+
+:global([data-theme="hive-light"]) .actionMenu {
+  --lv-menu-bg: #f8f4ee;
+  --lv-menu-fg: #4a3a2a;
+  --lv-menu-muted: #8a7a6a;
+  --lv-menu-line: rgba(74, 58, 42, 0.16);
+  --lv-menu-hover: rgba(74, 58, 42, 0.07);
+  --lv-menu-honey: #8a5a2a;
+  --lv-menu-honey-soft: rgba(138, 90, 42, 0.14);
+  --lv-menu-danger: #b5483b;
+  --lv-menu-danger-soft: rgba(181, 72, 59, 0.12);
+  box-shadow: 0 18px 45px rgba(74, 58, 42, 0.2);
+}
+
+.actionMenuTitle {
+  padding: 8px 10px 6px;
+  color: var(--lv-menu-fg);
+  font-family: "Geist", "Inter", system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.actionMenuSection {
+  padding: 7px 10px 4px;
+  color: var(--lv-menu-muted);
+  font-family: var(--lv-mono);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.actionMenuItem {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--lv-menu-fg);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.actionMenuItem:focus,
+.actionMenuItem[data-highlighted] {
+  background: var(--lv-menu-hover);
+  color: var(--lv-menu-fg);
+}
+
+.actionMenuItem[data-tone="honey"] {
+  color: var(--lv-menu-honey);
+}
+
+.actionMenuItem[data-tone="honey"]:focus,
+.actionMenuItem[data-tone="honey"][data-highlighted] {
+  background: var(--lv-menu-honey-soft);
+  color: var(--lv-menu-honey);
+}
+
+.actionMenuItem[data-tone="danger"] {
+  color: var(--lv-menu-danger);
+}
+
+.actionMenuItem[data-tone="danger"]:focus,
+.actionMenuItem[data-tone="danger"][data-highlighted] {
+  background: var(--lv-menu-danger-soft);
+  color: var(--lv-menu-danger);
+}
+
+.actionMenuItem[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.actionMenuItem > svg {
+  width: 15px;
+  height: 15px;
+  color: currentColor;
+}
+
+.actionMenuItem > small {
+  max-width: 120px;
+  color: var(--lv-menu-muted);
+  font-size: 9.5px;
+  font-weight: 400;
+  line-height: 1.3;
+  text-align: right;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.actionMenuSeparator {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--lv-menu-line);
+}
+
+.actionSpinner {
+  animation: lv-spin 0.8s linear infinite;
+}
+
+.machineActionMessage {
+  margin: 0;
+  color: var(--lv-fg-3);
+  font-size: 11.5px;
+  line-height: 1.45;
 }
 
 /* status dot */
@@ -198,16 +466,28 @@
   }
 }
 
+@keyframes lv-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dotLive {
     animation: none;
   }
   .press,
   .agentRow,
-  .addRow,
   .actionBtn,
+  .primaryAction,
+  .actionsTrigger,
+  .chatSegment,
+  .callSegment,
   .machineHeader,
   .searchWrap {
     transition: none;
+  }
+  .actionSpinner {
+    animation: none;
   }
 }

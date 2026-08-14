@@ -359,6 +359,7 @@ export function fleetMachinePolicyPrompt(policy, now = Date.now()) {
     "MACHINE ACCESS POLICY (set by this collector's master hub):",
     ...lines,
     "Treat ASK as DENY until the human approves it. Never work around DENY or ASK with shell, direct filesystem access, another app, or another machine.",
+    "Merely discovering, listing, or observing connected apps never requires connectedApps approval. Request connectedApps only immediately before a concrete call to an app or service advertised by another fleet collector; first name that app or service and its target machine in one plain sentence.",
     "If the task truly requires one ASK capability, stop before accessing it and end with exactly these three lines (replace <capability> with its key above):",
     "ACTION NEEDED: Approve or deny this machine access before I continue.",
     "FLEET ACCESS REQUEST: <capability>",

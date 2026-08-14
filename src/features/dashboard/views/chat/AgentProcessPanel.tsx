@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 import {
   getMiroSharkProcessSummary,
   MiroSharkProcessCard,
@@ -155,6 +157,15 @@ export function AgentProcessPanel(props: { active?: boolean; events?: ProcessEve
   const visibleEvents = processDisplayEvents(events);
   const latestActive = active && processEventsAreActive(visibleEvents);
   const mirosharkProcess = getMiroSharkProcessSummary(visibleEvents, latestActive);
+  const processScrollRef = useRef<HTMLDivElement>(null);
+  const latestEvent = visibleEvents.at(-1);
+  const processScrollSignature = [visibleEvents.length, latestEvent?.at, latestEvent?.label, latestEvent?.detail, latestEvent?.status].join("\u001f");
+
+  useEffect(() => {
+    const node = processScrollRef.current;
+    if (!node) return;
+    node.scrollTo({ top: node.scrollHeight, behavior: "smooth" });
+  }, [processScrollSignature]);
 
   if (!visibleEvents.length) return null;
 
@@ -197,6 +208,7 @@ export function AgentProcessPanel(props: { active?: boolean; events?: ProcessEve
         </div>
       ) : null}
       <div
+        ref={processScrollRef}
         className={many ? "cx-scroll" : undefined}
         style={{
           position: "relative",

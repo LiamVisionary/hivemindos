@@ -10,7 +10,7 @@ import { loadDashboardStateSnapshot, saveDashboardStateValue } from "@/lib/servi
 import { sendApprovedPersonalWalletAsset, sendApprovedWalletUsdc, type WalletSendUsdcRequest } from "@/lib/services/wallet/send-usdc-client";
 import { executeAgentFunding, fundingNetworkLabel, resolvePersonalWalletRecordForAsset, stableSendAssetForNetwork } from "@/lib/services/wallet/fund-agent-client";
 import { refreshWalletUntilAssetBalance } from "@/lib/services/wallet/post-send-balance-refresh";
-import { getSurvivalSnapshot, hasConfiguredAgentWallet, resolveAgentWallet } from "@/lib/utils/agent-wallet";
+import { getSurvivalSnapshot, hasConfiguredAgentWallet, isPersonalWalletId, normalizeAgentWalletAssignments, resolveAgentWallet } from "@/lib/utils/agent-wallet";
 import { exportAgentWalletSecret, exportPersonalWalletGroupSecret } from "./wallet-secret-export-actions";
 import { fetchBankrWallet, type BankrWalletInfo } from "./trade/trade-api";
 import { WalletSelectModal, type PickableWallet } from "./trade/WalletSelectModal";
@@ -409,14 +409,6 @@ function personalWalletNeedsTokenRefresh(wallet: any) {
   return !tokens.length || Date.now() - lastSync > PERSONAL_WALLET_TOKEN_REFRESH_MS;
 }
 
-// Configured-wallet detection is shared with the Trade tab's wallet picker via
-// hasConfiguredAgentWallet so both screens agree on what "set up" means.
-function agentWalletSortTier(agent: any, wallet: any, balanceUsd: number): number {
-  if (balanceUsd > 0) return 0;
-  if (hasConfiguredAgentWallet(agent, wallet)) return 1;
-  return 2;
-}
-
 function compareRuntimeAgentWalletRows(left: any, right: any): number {
   return left.sortTier - right.sortTier
     || left.name.localeCompare(right.name, undefined, { sensitivity: "base" })
@@ -605,48 +597,67 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
     personalWallets.forEach((wallet) => addWalletTokenPriceHints(tokenPrices, wallet));
   }
 
-  agents
-    .map((agent: any) => {
-      const wallet = resolveAgentWallet(agent, walletsByAgent[agent.id] ?? agent.wallet);
+  const uniqueWallets = new Map<string, any>();
+  Object.entries(walletsByAgent)
+    .sort(([leftKey, leftWallet]: any, [rightKey, rightWallet]: any) => Number(leftKey !== leftWallet?.agentId) - Number(rightKey !== rightWallet?.agentId))
+    .forEach(([entryId, rawWallet]: any) => {
+      const walletId = firstStringValue(rawWallet?.agentId, entryId);
+      if (!walletId || isPersonalWalletId(walletId) || uniqueWallets.has(walletId)) return;
+      uniqueWallets.set(walletId, normalizeAgentWalletAssignments({ ...rawWallet, agentId: walletId }, entryId));
+    });
+
+  [...uniqueWallets.values()]
+    .map((storedWallet: any) => {
+      const attachedAgentIds = Object.keys(storedWallet.agentPermissions ?? {});
+      const attachedAgents = attachedAgentIds.map((agentId) => agentsById.get(agentId)).filter(Boolean);
+      const primaryAgent = attachedAgents[0];
+      const wallet = primaryAgent ? resolveAgentWallet(primaryAgent, storedWallet) : storedWallet;
       const balanceUsd = walletBalanceUsd(wallet);
       const address = String(wallet?.walletAddress || wallet?.vaultAddress || (wallet as any)?.address || "");
       return {
-        agent,
+        agent: primaryAgent,
+        attachedAgentIds,
+        attachedAgents,
         wallet,
         balanceUsd,
         address,
-        sortTier: agentWalletSortTier(agent, wallet, balanceUsd),
-        name: agent.name || agent.id,
-        id: agent.id,
+        sortTier: balanceUsd > 0 ? 0 : 1,
+        name: firstStringValue(wallet.name, attachedAgents.length === 1 ? `${primaryAgent?.name} wallet` : "", "Agent wallet"),
+        id: wallet.agentId,
       };
     })
+    .filter(({ agent, wallet }: any) => hasConfiguredAgentWallet(agent ?? {}, wallet))
     .sort(compareRuntimeAgentWalletRows)
-    .forEach(({ agent, wallet, balanceUsd, address, sortTier }: any) => {
-      const machine = agent.machineName || agent.machineKey || "This Mac";
+    .forEach(({ agent, attachedAgentIds, attachedAgents, wallet, balanceUsd, address, sortTier, name, id }: any) => {
+      const machine = "Shared agent access";
       const provider = walletProviderForDropIn(wallet);
       const symbol = String(wallet?.tokenSymbol || "USDC").toUpperCase();
       const balanceRows = walletTokenRows(wallet, symbol, balanceUsd, tokenPrices);
       const burn = Number(wallet?.dailyComputeBurnUsd ?? wallet?.dailySpendUsd ?? wallet?.burnUsdPerDay ?? wallet?.dailyBudgetUsd ?? 0) || 0;
       const maxPay = Number(wallet?.maxPaymentUsd ?? wallet?.spendLimitUsd ?? wallet?.maxPayUsd ?? Math.max(10, burn * 2)) || 10;
       const enabled = wallet?.enabled !== false && !wallet?.disabled;
-      const configured = hasConfiguredAgentWallet(agent, wallet);
-      const action = walletActionsByAgent[agent.id] ?? {};
-      const llmFundingSource = buildLlmFundingSourceMeta(agent, wallet, agentsById, walletsByAgent, personalWallets);
+      const action = walletActionsByAgent[id] ?? {};
+      const llmFundingSource = agent ? buildLlmFundingSourceMeta(agent, wallet, agentsById, walletsByAgent, personalWallets) : null;
+      const attachedNames = attachedAgents.map((attachedAgent: any) => attachedAgent.name || attachedAgent.id);
+      const permissionSummary = attachedAgentIds.reduce((summary: Record<string, string>, agentId: string) => {
+        summary[agentId] = wallet.agentPermissions?.[agentId] === "autonomous" ? "autonomous" : "approval-required";
+        return summary;
+      }, {});
 
       const row = {
-        id: agent.id,
-        name: agent.name || agent.id,
-        runtime: props?.RUNTIME_LABELS?.[agent.runtime] || agent.runtime || "Agent",
-        state: wallet?.setupRequired || !configured ? "setup" : enabled ? "ready" : "scheduled",
-        role: agent.role || agent.workerClass || "Agent",
+        id,
+        name,
+        runtime: `${attachedAgentIds.length} attached agent${attachedAgentIds.length === 1 ? "" : "s"}`,
+        state: enabled ? "ready" : "scheduled",
+        role: "Agent wallet",
         wallet: balanceUsd ? `$${Math.round(balanceUsd).toLocaleString()}` : "—",
-        task: agent.currentTask || agent.task || "Ready for wallet work",
-        since: agent.lastSeenLabel || "now",
+        task: attachedNames.length ? attachedNames.join(", ") : "No agents attached",
+        since: "now",
       };
       machineGroups.set(machine, [...(machineGroups.get(machine) ?? []), row]);
-      walletMeta[agent.id] = {
+      walletMeta[id] = {
         enabled,
-        autoUse: Boolean(wallet?.autoPayEnabled ?? wallet?.autoUse ?? wallet?.allowAutoUse),
+        autoUse: Object.values(permissionSummary).includes("autonomous"),
         provider,
         rawProvider: provider,
         network: walletNetworkForDropIn(wallet),
@@ -656,9 +667,12 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
         dailyBudget: Number(wallet?.dailyBudgetUsd ?? 0) || 0,
         monthlyBudget: Number(wallet?.monthlyBudgetUsd ?? 0) || 0,
         addr: address,
-        honey: honeyByAgentMap.get(agent.id) ?? (Number(wallet?.honey ?? 0) || 0),
-        setup: wallet?.setupRequired || !configured,
+        honey: attachedAgentIds.reduce((total: number, agentId: string) => total + (honeyByAgentMap.get(agentId) ?? 0), 0) || (Number(wallet?.honey ?? 0) || 0),
+        setup: false,
         sortTier,
+        attachedAgentIds,
+        attachedAgentNames: attachedNames,
+        agentPermissions: permissionSummary,
         trading: Boolean(wallet?.trading || wallet?.bankrEnabled),
         duplicateGuard: wallet?.duplicatePaymentGuardEnabled !== false,
         veilAutoSend: wallet?.veilAutoSendEnabled === true,
@@ -671,8 +685,11 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
         llmFundingSourceDetail: llmFundingSource?.detail || "",
         llmFundingSourceId: llmFundingSource?.id || "",
       };
-      balances[agent.id] = balanceRows;
-      rewards[agent.id] = { gas: Number(wallet?.nativeBalance ?? wallet?.gasBalance ?? 0) || 0, used: usageTokensByAgent.get(agent.id) ?? (Number(wallet?.tokensUsed ?? 0) || 0) };
+      balances[id] = balanceRows;
+      rewards[id] = {
+        gas: Number(wallet?.nativeBalance ?? wallet?.gasBalance ?? 0) || 0,
+        used: attachedAgentIds.reduce((total: number, agentId: string) => total + (usageTokensByAgent.get(agentId) ?? 0), 0) || (Number(wallet?.tokensUsed ?? 0) || 0),
+      };
     });
 
   return {
@@ -696,6 +713,12 @@ function buildDropInRuntimeData(props: any, personalWallets: any[] | null, railE
     walletMeta,
     balances,
     rewards,
+    agentOptions: agents.map((agent: any) => ({
+      id: agent.id,
+      name: agent.name || agent.id,
+      runtime: props?.RUNTIME_LABELS?.[agent.runtime] || agent.runtime || "Agent",
+      machineName: agent.machineName || agent.machineKey || "This Mac",
+    })),
     tokenPrices,
     activityLedger: buildActivityLedger(walletActivity, agents),
     usageRows,
@@ -1021,7 +1044,16 @@ function WalletPanelComponent(props: any) {
     onRunWalletVaultBackupAction: (action: "refresh" | "restore") => props.runWalletVaultBackupAction?.(action),
     onToggleAgentSpend: (agentId: string, enabled: boolean) => props.updateWallet?.(agentId, { enabled }),
     onUpdateAgentWallet: (agentId: string, patch: any) => props.updateWallet?.(agentId, patch),
-    onCreateAgentWallet: (agentId: string, network: string) => props.createLocalWallet?.(agentId, chainToNetwork(network)),
+    onCreateAgentWallet: async (input: { name: string; network: string; agentPermissions: Record<string, unknown> }) => {
+      if (!props.createLocalWallet) throw new Error("Agent wallet creation is not available in this build.");
+      const walletId = `agent-wallet:${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`}`;
+      const created = await props.createLocalWallet(walletId, input.network, {
+        name: input.name,
+        agentPermissions: input.agentPermissions,
+      });
+      if (!created) throw new Error("Could not create the agent wallet.");
+      return created;
+    },
     onRefreshAgentWallet: async (agentId: string) => {
       const refreshed = await refreshWalletBalance?.(agentId);
       if (refreshed) setFreshWalletsByAgent((current) => mergeWalletsByAgentWithFresh(current, { [agentId]: refreshed }));
@@ -1030,10 +1062,15 @@ function WalletPanelComponent(props: any) {
     onResetAgentRunway: (agentId: string) => props.resetWalletBurnClock?.(agentId),
     onCopyAgentPrompt: (agentId: string) => effectiveWalletsByAgent?.[agentId] ? props.copyPaymentPrompt?.(effectiveWalletsByAgent[agentId]) : undefined,
     onOpenLlmFundingSource: (agentId: string) => setLlmFundingAgentId(agentId),
-    onExportAgentWallet: (agentId: string, confirmation?: string) => {
-      const agent = props.displayAgents?.find((item: any) => item.id === agentId);
-      if (!agent) return { ok: false, error: "Could not find this agent wallet." };
-      return exportAgentWalletSecret(agent, props.exportWalletSecrets, props.updateWalletAction, { confirmation });
+    onExportAgentWallet: (walletId: string, confirmation?: string) => {
+      const wallet = effectiveWalletsByAgent?.[walletId];
+      if (!wallet) return { ok: false, error: "Could not find this agent wallet." };
+      return exportAgentWalletSecret(
+        { id: walletId, name: String(wallet.name || "Agent wallet") },
+        props.exportWalletSecrets,
+        props.updateWalletAction,
+        { confirmation },
+      );
     },
     onExportPersonalWallet: (walletId: string, confirmation?: string) => {
       const group = buildGroupedPersonalWallets(mergedPersonalWallets).find((wallet) => wallet.id === walletId || wallet.spendId === walletId);

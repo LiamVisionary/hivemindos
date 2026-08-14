@@ -306,7 +306,7 @@ function baseConnectedAppAliases(app: ContextConnectedApp) {
       "render",
     ] : []),
     ...(app.kind === "ai" ? ["ai", "chat", "assistant", "llm"] : []),
-    ...(app.kind === "media" ? ["media", "video", "render", "generation"] : []),
+    ...(app.kind === "media" ? ["media"] : []),
     ...(app.kind === "service" ? ["api", "endpoint", "service", "automation"] : []),
     ...(appHaystack.includes("workflow") ? ["workflow", "workflow automation"] : []),
     ...(appHaystack.includes("generate") || appHaystack.includes("generation") ? ["generation", "generate"] : []),

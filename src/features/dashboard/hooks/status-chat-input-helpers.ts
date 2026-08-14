@@ -204,17 +204,38 @@ export function isChatTransportInterruption(error: unknown) {
 }
 
 export function compactRepeatedAssistantText(value: string) {
-  const text = value.replace(/\r\n/g, "\n");
+  let text = value.replace(/\r\n/g, "\n");
+  // Some runtimes switch from token deltas to a cumulative snapshot mid-stream.
+  // When that snapshot starts with the prose already rendered, the transport can
+  // leave one long exact prefix twice before the real continuation. Compact only
+  // substantial adjacent prefixes so intentional short repetition is preserved.
+  for (let pass = 0; pass < 2; pass += 1) {
+    const maxPrefixLength = Math.floor(text.length / 2);
+    if (maxPrefixLength < 80) break;
+    const seed = text.slice(0, Math.min(80, maxPrefixLength));
+    let repeatAt = text.indexOf(seed, seed.length);
+    let compacted = false;
+    while (repeatAt >= seed.length && repeatAt <= maxPrefixLength) {
+      const prefix = text.slice(0, repeatAt);
+      if (text.startsWith(prefix, repeatAt)) {
+        text = `${prefix}${text.slice(repeatAt + prefix.length)}`;
+        compacted = true;
+        break;
+      }
+      repeatAt = text.indexOf(seed, repeatAt + 1);
+    }
+    if (!compacted) break;
+  }
   const draftMatches = [...text.matchAll(/(?:^|\n)draft:\s*\n/gi)];
-  if (draftMatches.length < 2) return value;
+  if (draftMatches.length < 2) return text;
   const firstStart = draftMatches[0].index ?? 0;
   const secondStart = draftMatches[1].index ?? 0;
   const normalized = (content: string) => content.replace(/\s+/g, " ").trim().toLowerCase();
   const firstBody = normalized(text.slice(firstStart, secondStart));
   const secondBody = normalized(text.slice(secondStart));
-  if (!firstBody || !secondBody) return value;
+  if (!firstBody || !secondBody) return text;
   if (firstBody.startsWith(secondBody) || secondBody.startsWith(firstBody)) return text.slice(0, secondStart).trimEnd();
-  return value;
+  return text;
 }
 
 export function extractGeneratedKanbanTask(rawText: string, fallbackTitle: string) {

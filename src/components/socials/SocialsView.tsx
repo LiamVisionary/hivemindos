@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- authenticated/public provider avatars use validated runtime URLs. */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -121,7 +122,10 @@ export function SocialsView() {
                   data-active={!desk.allAccountsSelected && desk.activeAccountId === account.id}
                   onClick={() => desk.selectAccount(account.id)}
                 >
-                  <span className="sc-account-glyph">{platformGlyph(account)}</span>
+                  <span className="sc-account-glyph">
+                    {platformGlyph(account)}
+                    {account.avatarUrl ? <img key={account.avatarUrl} src={account.avatarUrl} alt="" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}
+                  </span>
                   <span>@{account.handle}</span>
                   <span className="sc-account-status" data-tone={account.probe.ok ? "live" : "warn"} aria-label={account.probe.ok ? "Connected" : "Needs attention"} />
                   <span className="sc-account-count">{desk.queueCounts[account.id] ?? 0}</span>

@@ -62,7 +62,7 @@ export function createHermesCliStreamProtocol(handlers = {}) {
       segmentEnded = Boolean(activeSegment);
       return;
     }
-    if (/^tool\.(?:generating|started|completed|failed)$/.test(String(event.type || ""))) {
+    if (/^(?:tool\.(?:generating|started|completed|failed)|capability\.(?:started|completed|failed))$/.test(String(event.type || ""))) {
       handlers.onProcessEvent?.(event);
     }
   };

@@ -56,10 +56,10 @@ import {
   commandApprovalEvent,
   commandSuccessText,
   recordChatHoney,
-  RUNTIME_FETCH_TIMEOUT_MS,
   runtimeFetchError,
   type AgentMode,
 } from "./runtime-helpers";
+import { createRuntimeStreamingFetch, RUNTIME_REQUEST_TIMEOUT_MS, startRuntimeStreamKeepalive } from "./runtime-stream-supervision";
 import {
   buildOpenAICompatibleUrl,
   finalAdaptiveOpenRouterError,
@@ -439,6 +439,7 @@ export async function streamOpenAICompatibleRuntime(
   const fetchStartedAt = Date.now();
   const preflightProcessPayload = runtimeProcessEventsSsePayload(telemetry?.preflightProcessEvents ?? []);
   let upstream: Response | null = null;
+  const fetchStreamingResponse = createRuntimeStreamingFetch();
   let model = candidateModels[0] ?? openAICompatibleModel(profile);
   let lastStatus = 0;
   let lastFetchError: unknown = null;
@@ -583,11 +584,10 @@ export async function streamOpenAICompatibleRuntime(
     }
     let upstreamErrorText: string | null = null;
     try {
-      upstream = await fetch(candidateUrl, {
+      upstream = await fetchStreamingResponse(candidateUrl, {
         method: "POST",
         headers: attemptHeaders,
         body: requestBody,
-        signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
       });
       // Some OpenAI-compatible providers reject a `tools` array with a 400. Retry the
       // same candidate once without tools so image chats still get a normal text reply.
@@ -606,11 +606,10 @@ export async function streamOpenAICompatibleRuntime(
           sentTools = false;
           upstreamErrorText = null;
           requestBody = requestBodyFor(false);
-          upstream = await fetch(candidateUrl, {
+          upstream = await fetchStreamingResponse(candidateUrl, {
             method: "POST",
             headers: attemptHeaders,
             body: requestBody,
-            signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
           });
         }
       }
@@ -636,11 +635,10 @@ export async function streamOpenAICompatibleRuntime(
       }
       if (await startLmStudioServerForProfile(candidateProfile, candidateUrl, error)) {
         try {
-          upstream = await fetch(candidateUrl, {
+          upstream = await fetchStreamingResponse(candidateUrl, {
             method: "POST",
             headers: attemptHeaders,
             body: requestBody,
-            signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
           });
           recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.fetch.retry_response", {
             ...telemetryPayloadForProfile(candidateProfile),
@@ -677,6 +675,7 @@ export async function streamOpenAICompatibleRuntime(
     }
     lastStatus = upstream.status;
     const errorText = upstreamErrorText ?? await upstream.text().catch(() => "");
+    fetchStreamingResponse.stop();
     recordRuntimeTelemetry(telemetry, "agent_runtime.openai_compatible.upstream_error", {
       ...telemetryPayloadForProfile(candidateProfile),
       url: candidateUrl,
@@ -766,6 +765,7 @@ export async function streamOpenAICompatibleRuntime(
   }
 
   if (!upstream.body) {
+    fetchStreamingResponse.stop();
     await appendRuntimeChatSessionEvent(runtimeSessionId, "OpenAI-compatible response body is empty").catch(() => undefined);
     await finishRuntimeChatSession(runtimeSessionId, "failed").catch(() => undefined);
     return new Response(
@@ -777,6 +777,7 @@ export async function streamOpenAICompatibleRuntime(
   const contentType = upstream.headers.get("content-type") ?? "";
   if (!contentType.includes("text/event-stream")) {
     const json = await upstream.json().catch(async () => ({ text: await upstream.text().catch(() => "") }));
+    fetchStreamingResponse.stop();
     const rawChunk = extractChunk(json);
     const leakedToolCalls = winningRequest?.sentTools ? extractLeakedToolCalls(rawChunk) : [];
     const toolCalls = winningRequest?.sentTools ? [...extractOpenAIToolCalls(json), ...leakedToolCalls] : [];
@@ -786,7 +787,7 @@ export async function streamOpenAICompatibleRuntime(
         request: winningRequest,
         toolDefinitions: activeToolDefinitions,
         maxToolRounds: offerCommandTool ? 6 : offerXAccountTool ? 3 : 1,
-        timeoutMs: RUNTIME_FETCH_TIMEOUT_MS,
+        timeoutMs: RUNTIME_REQUEST_TIMEOUT_MS,
         runToolCalls: runNonStreamToolCalls,
       });
       if (toolRun.prompted) {
@@ -874,10 +875,10 @@ export async function streamOpenAICompatibleRuntime(
       } },
     );
   }
-  const encoder = new TextEncoder();
-  const decoder = new TextDecoder();
+  const encoder = new TextEncoder(), decoder = new TextDecoder();
   const readable = new ReadableStream({
     async start(controller) {
+      const stopKeepalive = startRuntimeStreamKeepalive((payload) => controller.enqueue(encoder.encode(payload)));
       let sessionWrite = Promise.resolve();
       const queueSessionWrite = (operation: () => Promise<void>) => {
         if (!runtimeSessionId) return;
@@ -921,6 +922,7 @@ export async function streamOpenAICompatibleRuntime(
         while (true) {
           const { value, done } = await streamReader.read();
           if (done) break;
+          fetchStreamingResponse.touch();
           buffer += decoder.decode(value, { stream: true });
           const events = buffer.split("\n\n");
           buffer = events.pop() ?? "";
@@ -1422,11 +1424,10 @@ export async function streamOpenAICompatibleRuntime(
           };
           let continuation: Response | null = null;
           try {
-            continuation = await fetch(winningRequest.url, {
+            continuation = await fetchStreamingResponse(winningRequest.url, {
               method: "POST",
               headers: winningRequest.headers,
               body: JSON.stringify(continuationBody),
-              signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
             });
           } catch {
             continuation = null;
@@ -1485,6 +1486,8 @@ export async function streamOpenAICompatibleRuntime(
         controller.enqueue(encoder.encode(ssePayload({ error: message })));
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
       } finally {
+        fetchStreamingResponse.stop();
+        stopKeepalive();
         await sessionWrite.catch(() => undefined);
         controller.close();
       }

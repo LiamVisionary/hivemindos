@@ -11,7 +11,7 @@ import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { veilEnvValue } from "@/lib/services/wallet/veil-cli";
 import { executeVeilPrivateTransfer, veilPrivateTransferErrorMessage } from "@/lib/services/wallet/veil-private-transfer";
 import { requireAuth } from "@/lib/utils/server-auth";
-import { evaluateSpend, loadGovernanceWallet, resolveSpendGovernance } from "@/lib/services/wallet/spend-governance";
+import { evaluateSpend, loadGovernanceWallet, resolveGovernedWalletAccess, resolveSpendGovernance } from "@/lib/services/wallet/spend-governance";
 import { appendSpend, shortTarget } from "@/lib/services/wallet/spend-ledger";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
 import {
@@ -30,6 +30,7 @@ const ETH_DECIMAL = /^\d+(?:\.\d{1,18})?$/;
 
 type VeilTransferBody = {
   agentId?: string;
+  actingAgentId?: string;
   enabled?: boolean;
   provider?: string;
   network?: string;
@@ -56,8 +57,17 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json().catch(() => ({})) as VeilTransferBody;
-    const agentId = body.agentId?.trim();
-    const persisted = agentId ? await loadGovernanceWallet(agentId).catch(() => null) : null;
+    const requestedWalletId = body.agentId?.trim();
+    const actingAgentId = body.actingAgentId?.trim() || "";
+    const access = requestedWalletId && !requestedWalletId.startsWith("user:")
+      ? await resolveGovernedWalletAccess(requestedWalletId, actingAgentId || undefined).catch(() => null)
+      : null;
+    if (actingAgentId && !access) return sendError("This agent is not attached to that wallet.", 403);
+    const agentId = access?.walletId ?? requestedWalletId;
+    const storedGovernance = agentId ? await loadGovernanceWallet(agentId).catch(() => null) : null;
+    const persisted = access
+      ? { wallet: access.wallet, agentName: access.walletName }
+      : storedGovernance;
     const governance = persisted
       ? await resolveSpendGovernance(agentId!, { companyTaskId: body.companyTaskId })
       : null;
@@ -65,7 +75,7 @@ export async function POST(request: NextRequest) {
     // required for a private transfer, regardless of any persisted policy.
     const isPersonalWallet = Boolean(body.agentId?.trim().startsWith("user:"));
     const validation = validateTransferBody(body, {
-      autoSendAllowed: !isPersonalWallet && canAutoSendVeilTransfer(persisted?.wallet),
+      autoSendAllowed: !isPersonalWallet && Boolean(actingAgentId) && canAutoSendVeilTransfer(persisted?.wallet),
       wallet: persisted?.wallet,
     });
     if (validation) return validation;
@@ -145,7 +155,7 @@ export async function POST(request: NextRequest) {
     });
     if (governance) {
       await appendSpend({
-        agentId: body.agentId!.trim(),
+        agentId: agentId!,
         companyId,
         kind: "veil-transfer",
         asset,

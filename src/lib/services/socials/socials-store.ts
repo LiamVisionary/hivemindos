@@ -6,6 +6,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
+import { normalizeXProfileImageUrl } from "@/lib/services/socials/social-profile-image";
 import { validAwakeHoursConfiguration } from "@/lib/services/socials/social-queue-domain";
 import { socialPlatformRow } from "@/lib/services/socials/social-platform-matrix";
 import { DEFAULT_SHARED_VAULT } from "@/lib/types/agent-runtime";
@@ -159,6 +160,7 @@ function normalizeEngagementTarget(raw: unknown): SocialEngagementTarget | null 
   if (record.authorName !== undefined && typeof record.authorName !== "string") return null;
   if (record.authorVerified !== undefined && typeof record.authorVerified !== "boolean") return null;
   if (record.sourceQuery !== undefined && typeof record.sourceQuery !== "string") return null;
+  const authorAvatarUrl = normalizeXProfileImageUrl(record.authorAvatarUrl);
   return {
     platform: "x",
     externalId: record.externalId,
@@ -166,6 +168,7 @@ function normalizeEngagementTarget(raw: unknown): SocialEngagementTarget | null 
     authorHandle: record.authorHandle,
     ...(typeof record.authorName === "string" && record.authorName.trim() ? { authorName: record.authorName.trim() } : {}),
     ...(typeof record.authorVerified === "boolean" ? { authorVerified: record.authorVerified } : {}),
+    ...(authorAvatarUrl ? { authorAvatarUrl } : {}),
     text: record.text.trim(),
     createdAt: record.createdAt,
     discoveredAt: record.discoveredAt,

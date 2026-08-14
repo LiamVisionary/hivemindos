@@ -76,6 +76,8 @@ import { reconcileAppBuilderRuntimesAtBoot } from "./lib/app-builder-boot-reconc
 import { createAsyncTtlCache } from "./lib/async-ttl-cache.mjs";
 import { createCollectorMaintenance } from "./lib/collector-maintenance.mjs";
 import { collectorChatRecovery } from "./lib/collector-chat-recovery.mjs";
+import { createHermesCapabilityRun } from "./lib/runtime-capability-materialization.mjs";
+import { createActivityWatchdog, findChatSession, startSseHeartbeat, waitForValue } from "./lib/chat-stream-supervision.mjs";
 import { collectorUpdateCommand } from "./lib/collector-update-command.mjs";
 import { readCollectorAppVersion } from "./lib/collector-source-version.mjs";
 import { startSelfReloadWatcher } from "./lib/collector-self-reload.mjs";
@@ -183,6 +185,9 @@ const HERMES_EMPTY_TRANSCRIPT_MESSAGE =
   "Hermes session found. Send a message to resume it.";
 const chatTimeoutMs = Number(
   process.env.AGENT_TELEMETRY_CHAT_TIMEOUT_MS || 20 * 60_000,
+);
+const chatHeartbeatMs = Number(
+  process.env.AGENT_TELEMETRY_CHAT_HEARTBEAT_MS || 15_000,
 );
 const collectorMaintenance = createCollectorMaintenance({
   reservationTtlMs: Number(
@@ -606,9 +611,9 @@ function safeAgentEnv(value) {
 function runtimeProcessEnv(extra = {}, options = {}) {
   const inherited = { ...process.env };
   for (const key of options.excludeKeys ?? []) delete inherited[key];
-  const pathParts = [dirname(process.execPath), process.env.PATH].filter(
-    Boolean,
-  );
+  // GUI collectors must expose HivemindOS helpers and standard local runtimes.
+  const pathParts = [dirname(process.execPath), join(homedir(), ".local", "bin"), ...(process.platform === "darwin" ? ["/opt/homebrew/bin"] : []), "/usr/local/bin", ...(process.env.PATH || "").split(delimiter)]
+    .filter((entry, index, entries) => entry && entries.indexOf(entry) === index);
   return sanitizeProcessEnvEntries({
     ...inherited,
     PATH: pathParts.join(delimiter),
@@ -7531,7 +7536,40 @@ async function listRecentHermesDbSessions(hermesHome, sinceMs = 0) {
   ).filter(Boolean);
 }
 
-async function listRecentHermesApiSessions(hermesHome, sinceMs = 0) {
+async function listMatchingHermesDbSessions(hermesHome, sinceMs, text) {
+  const dbPath = join(hermesHome, "state.db");
+  try {
+    await access(dbPath, constants.R_OK);
+  } catch {
+    return [];
+  }
+  const sinceSeconds = Math.max(0, Math.floor(Number(sinceMs || 0) / 1000));
+  const escapedNeedle = String(text || "").trim().slice(0, 80).replaceAll("'", "''");
+  if (!escapedNeedle) return [];
+  const rows = await execJson(
+    "sqlite3",
+    [
+      "-json",
+      dbPath,
+      `
+    select distinct s.id
+    from sessions s
+    join messages m on m.session_id = s.id
+    where s.started_at >= ${sinceSeconds}
+      and m.role = 'user'
+      and instr(coalesce(m.content, ''), '${escapedNeedle}') > 0
+    order by s.started_at desc
+    limit 20;
+  `,
+    ],
+    [],
+  );
+  return (
+    await Promise.all(rows.map((row) => readHermesDbSession(hermesHome, row.id)))
+  ).filter(Boolean);
+}
+
+async function listRecentHermesApiSessions(hermesHome, sinceMs = 0, limit = 20) {
   const dir = join(hermesHome, "sessions");
   const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
   const files = [];
@@ -7546,7 +7584,7 @@ async function listRecentHermesApiSessions(hermesHome, sinceMs = 0) {
   return (
     await Promise.all(
       files
-        .slice(0, 20)
+        .slice(0, Math.max(1, Math.min(100, Number(limit || 20))))
         .map((file) =>
           readHermesApiSession(hermesHome, hermesSessionIdFromFile(file.name)),
         ),
@@ -7567,6 +7605,7 @@ async function readRuntimeSession(runtime, options = {}) {
   if (RESERVED_HERMES_PROFILE_SLUGS.has(hermesHomeSlug)) return null;
   const sessionId = options.sessionId || "";
   const sinceMs = Number(options.sinceMs || 0);
+  const messageNeedle = String(options.message || "").trim().slice(0, 80);
   if (sessionId) {
     for (const root of hermesSessionRoots(hermesHome)) {
       const apiSession = await readHermesApiSession(root, sessionId);
@@ -7580,13 +7619,18 @@ async function readRuntimeSession(runtime, options = {}) {
   }
   const sessionGroups = await Promise.all(
     hermesSessionRoots(hermesHome).map(async (root) => [
-      ...(await listRecentHermesApiSessions(root, sinceMs)),
-      ...(await listRecentHermesDbSessions(root, sinceMs)),
+      ...(await listRecentHermesApiSessions(root, sinceMs, messageNeedle ? 100 : 20)),
+      ...(messageNeedle
+        ? await listMatchingHermesDbSessions(root, sinceMs, messageNeedle)
+        : await listRecentHermesDbSessions(root, sinceMs)),
     ]),
   );
   const session =
     sessionGroups
       .flat()
+      .filter((candidate) => !messageNeedle || candidate.messages.some(
+        (message) => message.role === "user" && message.content.includes(messageNeedle),
+      ))
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0] ?? null;
   return session ? { ...session, runtime: "hermes" } : null;
 }
@@ -7606,13 +7650,7 @@ async function findHermesCliSession(hermesHome, sinceMs, text) {
 }
 
 async function waitForHermesCliSession(hermesHome, sinceMs, text) {
-  const deadline = Date.now() + sessionDiscoveryTimeoutMs;
-  while (Date.now() < deadline) {
-    const session = await findHermesCliSession(hermesHome, sinceMs, text);
-    if (session) return session;
-    await sleep(250);
-  }
-  return null;
+  return waitForValue(() => findHermesCliSession(hermesHome, sinceMs, text), sessionDiscoveryTimeoutMs);
 }
 
 async function waitForHermesApiSession(
@@ -7621,36 +7659,15 @@ async function waitForHermesApiSession(
   text,
   requestMarker = "",
 ) {
-  const needle = text.trim().slice(0, 80);
-  const deadline = Date.now() + sessionDiscoveryTimeoutMs;
-  while (Date.now() < deadline) {
+  return waitForValue(async () => {
     const sessionGroups = await Promise.all(
       hermesSessionRoots(hermesHome).map(async (root) => [
         ...(await listRecentHermesApiSessions(root, sinceMs)),
         ...(await listRecentHermesDbSessions(root, sinceMs)),
       ]),
     );
-    const sessions = sessionGroups.flat();
-    if (requestMarker) {
-      const markerMatched = sessions.find((session) =>
-        session.messages.some((message) =>
-          message.content.includes(requestMarker),
-        ),
-      );
-      if (markerMatched) return markerMatched;
-    }
-    const matched = sessions.find(
-      (session) =>
-        !needle ||
-        session.messages.some(
-          (message) =>
-            message.role === "user" && message.content.includes(needle),
-        ),
-    );
-    if (matched) return matched;
-    await sleep(250);
-  }
-  return null;
+    return findChatSession(sessionGroups.flat(), text, requestMarker);
+  }, sessionDiscoveryTimeoutMs);
 }
 
 async function proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy = null) {
@@ -7700,9 +7717,9 @@ async function proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy 
     return false;
   }
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), chatTimeoutMs);
+  const activityWatchdog = createActivityWatchdog(chatTimeoutMs, () => controller.abort(new Error(`Hermes API stream was inactive for ${chatTimeoutMs}ms.`)));
   let sessionTimer = null;
-  let heartbeatTimer = null;
+  let stopHeartbeat = () => undefined;
   let emittedSession = false;
   let sessionLookupInFlight = false;
   let observedHermesSessionId = "";
@@ -7732,6 +7749,7 @@ async function proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy 
       if (!session || emittedSession || response.writableEnded) return;
       emittedSession = true;
       observedHermesSessionId = session.sessionId || observedHermesSessionId;
+      activityWatchdog.touch();
       void emitTelemetry("session.detected", {
         hermesSessionId: observedHermesSessionId,
         sessionSource: safeTelemetryText(session.source || "hermes", 80),
@@ -7771,10 +7789,7 @@ async function proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy 
     });
     ensureHeaders();
     response.write(": waiting for Hermes API stream\n\n");
-    heartbeatTimer = setInterval(() => {
-      if (response.writableEnded || response.destroyed) return;
-      response.write(": Hermes API stream still working\n\n");
-    }, 15_000);
+    stopHeartbeat = startSseHeartbeat(response, "Hermes API stream still working", chatHeartbeatMs);
     sessionTimer = setInterval(() => {
       void emitSession().catch(() => undefined);
     }, 1_000);
@@ -7809,6 +7824,7 @@ async function proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy 
       }),
       signal: controller.signal,
     });
+    activityWatchdog.touch();
     const upstreamHermesSessionId = hermesSessionIdFromResponse(upstream.headers);
     if (upstreamHermesSessionId) {
       observedHermesSessionId = upstreamHermesSessionId;
@@ -7880,6 +7896,7 @@ async function proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy 
     while (true) {
       const { value, done } = await reader.read();
       if (done) break;
+      activityWatchdog.touch();
       upstreamChunkCount += 1;
       upstreamByteCount += value?.byteLength ?? value?.length ?? 0;
       if (firstByteElapsedMs === null) {
@@ -8065,9 +8082,9 @@ async function proxyHermesApiChat(body, response, text, hermesHome, fleetPolicy 
     }
     return true;
   } finally {
-    clearTimeout(timer);
+    activityWatchdog.stop();
     if (sessionTimer) clearInterval(sessionTimer);
-    if (heartbeatTimer) clearInterval(heartbeatTimer);
+    stopHeartbeat();
   }
 }
 
@@ -8099,13 +8116,13 @@ async function streamHermesChat(body, response, options = {}) {
       : Array.isArray(body.messages)
         ? extractUserTextFromMessages(body.messages)
         : rawMessage;
-  const text =
+  const baseText =
     (typeof message === "string" ? message.trim() : "") ||
     (Array.isArray(body.messages)
       ? attachmentPromptFromMessages(body.messages)
       : "");
-  const sessionMatchText = rawMessage || text;
-  if (!text) {
+  const sessionMatchText = rawMessage || baseText;
+  if (!baseText) {
     response.writeHead(400, {
       "content-type": "text/event-stream",
       "cache-control": "no-cache",
@@ -8137,6 +8154,8 @@ async function streamHermesChat(body, response, options = {}) {
     releaseCollectorChatRun();
     return;
   }
+  const capabilityRun = await createHermesCapabilityRun({ approvedCapabilities: body.approvedCapabilities, defaultSyncPath, hermesHome, projectionScript: join(appDir, "scripts", "sync-shared-skill-projections.mjs"), prompt: baseText, sharedVaultPath: expandHome((body.sharedVault || body.obsidianVault)?.vaultPath || "") });
+  const text = `${baseText}${capabilityRun.context}`;
   const openAiSelection = await resolveBillingSafeOpenAiAgent(requestedAgent, hermesHome, sharedHiveEnv);
   const agent = openAiSelection.profile;
   await repairHermesCodexAuthBeforeChat(agent, hermesHome);
@@ -8150,6 +8169,7 @@ async function streamHermesChat(body, response, options = {}) {
       ? await readHermesModelConfig(defaultHermesDir)
       : null;
   const agentNeedsScopedCli =
+    capabilityRun.requiresScopedCli ||
     hermesHome !== defaultHermesDir ||
     !hermesApiSelectionMatchesAgent(agent, gatewaySelection) ||
     fleetPolicyNeedsIsolatedHermes(fleetPolicy);
@@ -8184,13 +8204,14 @@ async function streamHermesChat(body, response, options = {}) {
   const cwd = await resolveChatWorkingDirectory(body.workingDirectory);
   const requestStartedAt = Date.now();
 
-  // Latest shared creds (provider keys) win only when this machine's master-hub
+  // Latest shared creds and JIT capability adapters stay scoped to this runtime; provider keys win only when this machine's master-hub
   // policy allows shared-env access. ASK/DENY strips inherited copies too.
   const spawnEnv = fleetPolicySpawnEnv(fleetPolicy, sharedHiveEnv, {
     ...agentEnv,
     ...hermesModelHostEnv(body, agent),
     HERMES_HOME: hermesHome,
     HERMES_ACCEPT_HOOKS: "1",
+    ...capabilityRun.spawnEnv,
     PAGER: "cat",
     ...hermesPrivacyGuardEnv(hermesHome, fleetPolicy),
   });
@@ -8208,6 +8229,7 @@ async function streamHermesChat(body, response, options = {}) {
   let emittedHermesSessionId = "";
   let sessionLookupInFlight = false;
   let sessionTimer = null;
+  let stopHeartbeat = () => undefined;
   response.writeHead(200, {
     "content-type": "text/event-stream",
     "cache-control": "no-cache",
@@ -8226,19 +8248,35 @@ async function streamHermesChat(body, response, options = {}) {
         response.write(ssePayload({ type: "assistant.reset", content }));
       }
     },
-    onProcessEvent: (event) => browserPreviewEvents.push(event),
+    onProcessEvent: (event) => { capabilityRun.observeProcessEvent(event); browserPreviewEvents.push(event); },
   });
+  capabilityRun.provisioningEvents.forEach((event) => browserPreviewEvents.push(event));
 
   const finish = (payload = null) => {
     if (settled) return;
     settled = true;
-    clearTimeout(timeout);
+    activityWatchdog.stop();
     if (sessionTimer) clearInterval(sessionTimer);
+    stopHeartbeat();
     if (!response.writableEnded && !response.destroyed) {
       if (payload) response.write(ssePayload(payload));
       response.end("data: [DONE]\n\n");
     }
   };
+  /*
+   * This is deliberately an inactivity watchdog, not a wall-clock deadline.
+   * A generated-media task can run longer than chatTimeoutMs while continuing
+   * to emit model/tool activity; each real CLI chunk refreshes the watchdog.
+   */
+  const activityWatchdog = createActivityWatchdog(chatTimeoutMs, () => {
+    if (emittedSession) {
+      child.unref();
+      finish({ error: `Hermes CLI stopped reporting activity for ${chatTimeoutMs}ms; its durable session may still be running.` });
+    } else {
+      child.kill("SIGTERM");
+      finish({ error: `Hermes chat timed out after ${chatTimeoutMs}ms before a pollable session was created.` });
+    }
+  });
   async function emitSession() {
     if (
       emittedSession ||
@@ -8265,6 +8303,7 @@ async function streamHermesChat(body, response, options = {}) {
         return;
       emittedSession = true;
       emittedHermesSessionId = session.sessionId;
+      activityWatchdog.touch();
       response.write(
         ssePayload({
           session: {
@@ -8287,24 +8326,16 @@ async function streamHermesChat(body, response, options = {}) {
   }, 1_000);
   void emitSession().catch(() => undefined);
 
-  const timeout = setTimeout(() => {
-    if (emittedSession) {
-      child.unref();
-      finish();
-      return;
-    }
-    child.kill("SIGTERM");
-    finish({
-      error: `Hermes chat timed out after ${chatTimeoutMs}ms before a pollable session was created.`,
-    });
-  }, chatTimeoutMs);
+  response.write(": waiting for Hermes CLI stream\n\n");
+  stopHeartbeat = startSseHeartbeat(response, "Hermes CLI stream still working", chatHeartbeatMs);
 
   response.on("close", () => {
     if (settled) return;
     if (emittedSession) {
       settled = true;
-      clearTimeout(timeout);
+      activityWatchdog.stop();
       if (sessionTimer) clearInterval(sessionTimer);
+      stopHeartbeat();
       child.unref();
       return;
     }
@@ -8312,12 +8343,14 @@ async function streamHermesChat(body, response, options = {}) {
   });
 
   child.stdout.on("data", (chunk) => {
+    activityWatchdog.touch();
     const textChunk = chunk.toString("utf8");
     stdout += textChunk;
     streamProtocol.push(textChunk);
   });
 
   child.stderr.on("data", (chunk) => {
+    activityWatchdog.touch();
     stderr += chunk.toString("utf8");
   });
 
@@ -8338,6 +8371,8 @@ async function streamHermesChat(body, response, options = {}) {
       const errorText = stripHermesCliMetadata(stderr);
       const terminalFailure = hermesCliFailureSummary(`${errorText}\n${content}`);
       if (code === 0) {
+        const capabilityExecutionError = capabilityRun.executionError();
+        if (capabilityExecutionError) return finish({ error: capabilityExecutionError });
         const completedSession = emittedHermesSessionId
           ? await readHermesDbSession(hermesHome, emittedHermesSessionId).catch(() => null)
           : await findHermesCliSession(hermesHome, requestStartedAt - 2_000, sessionMatchText).catch(() => null);
@@ -9752,10 +9787,12 @@ async function handleCollectorRequest(request, response) {
         .toLowerCase() || "hermes";
     const localDataDir = requestUrl.searchParams.get("localDataDir") || "";
     const sinceMs = Number(requestUrl.searchParams.get("sinceMs") || 0);
+    const message = requestUrl.searchParams.get("message") || "";
     const session = await readRuntimeSession(runtime, {
       sessionId,
       localDataDir,
       sinceMs,
+      message,
     });
     jsonResponse(
       response,
@@ -9769,7 +9806,7 @@ async function handleCollectorRequest(request, response) {
   if (pathname === "/chat/recover" && request.method === "POST") {
     const rawBody = await readBody(request);
     const body = rawBody ? JSON.parse(rawBody) : {};
-    jsonResponse(response, 200, await collectorChatRecovery(body, { activeChatRunCount: () => activeCollectorChatRuns.size, defaultHermesDir, expandHome, hermesSessionRoots, listRecentHermesApiSessions, listRecentHermesDbSessions, now: Date.now, sanitizeLocalDataDir }));
+    jsonResponse(response, 200, await collectorChatRecovery(body, { activeChatRunCount: () => activeCollectorChatRuns.size, defaultHermesDir, expandHome, hermesSessionRoots, listMatchingHermesDbSessions, listRecentHermesApiSessions, listRecentHermesDbSessions, now: Date.now, sanitizeLocalDataDir }));
     return;
   }
   if (pathname === "/chat" && request.method === "POST") {

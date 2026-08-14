@@ -46,6 +46,7 @@ import {
   providerErrorMessage,
 } from "./openai-compat";
 import { withRuntimeBrowserPreviewUrl } from "./browser-preview";
+import { approvedRuntimeCapabilities } from "@/lib/services/chat/approved-runtime-capabilities";
 
 const ADAPTIVE_HERMES_OPENROUTER_FREE_ATTEMPTS = 5;
 // Time allowed for an attempt to produce its first stream byte. Once the
@@ -184,6 +185,7 @@ export async function streamAdaptiveHermesOpenRouterRuntime(
                   ...(openRouterToken ? { OPENROUTER_API_KEY: openRouterToken } : {}),
                 }),
                 rawUserMessage: userText,
+                approvedCapabilities: approvedRuntimeCapabilities(userText),
                 forceHermesCli: true,
                 // The HivemindOS runtimeSessionId is not a Hermes CLI session id,
                 // so resume only once a prior attempt reported the real CLI

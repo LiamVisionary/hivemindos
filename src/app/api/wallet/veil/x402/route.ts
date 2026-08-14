@@ -6,6 +6,7 @@ import { veilEnvValue } from "@/lib/services/wallet/veil-cli";
 import { type X402FetchPolicy } from "@/lib/services/wallet/x402-agent-fetch";
 import { requireAuth } from "@/lib/utils/server-auth";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
+import { resolveGovernedWalletAccess } from "@/lib/services/wallet/spend-governance";
 import {
   assertTradingPlatformFeeReady,
   collectTradingPlatformFee,
@@ -18,6 +19,7 @@ export const maxDuration = 300;
 
 type VeilX402Body = {
   agentId?: string;
+  actingAgentId?: string;
   provider?: string;
   url?: string;
   method?: string;
@@ -75,8 +77,14 @@ export async function POST(request: NextRequest) {
     const validation = validateBody(body);
     if (validation) return validation;
 
-    const agentId = body.agentId!.trim();
-    const policy = normalizePolicy(body.policy);
+    const requestedWalletId = body.agentId!.trim();
+    const actingAgentId = body.actingAgentId?.trim() || "";
+    const access = requestedWalletId.startsWith("user:")
+      ? null
+      : await resolveGovernedWalletAccess(requestedWalletId, actingAgentId || undefined).catch(() => null);
+    if (actingAgentId && !access) return sendError("This agent is not attached to that wallet.", 403);
+    const agentId = access?.walletId ?? requestedWalletId;
+    const policy = normalizePolicy({ ...body.policy, ...(access?.wallet ?? {}) });
     const veilKey = await veilEnvValue("VEIL_KEY");
     if (!veilKey) return sendError("VEIL_KEY is not configured in the server environment. Run Veil setup before private x402 payments.", 424);
 

@@ -8,15 +8,17 @@ export async function collectorChatRecovery(body, dependencies) {
   );
   const message = String(body.rawUserMessage || body.message || "").trim();
   const needle = message.slice(0, 80);
-  const sinceMs = Math.max(
-    dependencies.now() - 10 * 60_000,
-    Number(body.sinceMs || 0),
-  );
+  const requestedSinceMs = Number(body.sinceMs || 0);
+  const sinceMs = requestedSinceMs > 0
+    ? requestedSinceMs
+    : dependencies.now() - 10 * 60_000;
   const sessionGroups = needle
     ? await Promise.all(
         dependencies.hermesSessionRoots(hermesHome).map(async (root) => [
           ...(await dependencies.listRecentHermesApiSessions(root, sinceMs)),
-          ...(await dependencies.listRecentHermesDbSessions(root, sinceMs)),
+          ...(dependencies.listMatchingHermesDbSessions
+            ? await dependencies.listMatchingHermesDbSessions(root, sinceMs, needle)
+            : await dependencies.listRecentHermesDbSessions(root, sinceMs)),
         ]),
       )
     : [];

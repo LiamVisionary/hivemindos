@@ -354,24 +354,36 @@ export function MachineSendFileModal({ machine, onClose }: MachineSendFileModalP
       <section
         role="dialog"
         aria-modal="true"
-        aria-label={`HiveDrop a file to ${machine.name}`}
+        aria-label={`Send a file privately to ${machine.name} via HiveDrop`}
         className={styles.modal}
         onClick={(event) => event.stopPropagation()}
       >
         <div className={styles.header}>
           <span className={styles.headerTitle}>
             <FileUp size={14} aria-hidden="true" style={{ color: "var(--sf-accent)", flex: "none" }} />
-            <span>HiveDrop to {machine.name}</span>
+            <span>Send file to {machine.name}</span>
           </span>
           <CloseIconButton
             type="button"
-            aria-label="Close HiveDrop"
+            aria-label="Close file sender"
             onClick={onClose}
             style={{ width: 26, height: 26 }}
           />
         </div>
 
         <div className={styles.body}>
+          <div className={styles.brandHero}>
+            <span className={styles.brandMark}>
+              <FileUp size={23} strokeWidth={1.8} aria-hidden="true" />
+            </span>
+            <span className={styles.brandIdentity}>
+              <span className={styles.brandEyebrow}>HivemindOS private transfer</span>
+              <span className={styles.brandName}>HiveDrop</span>
+            </span>
+          </div>
+
+          <p className={styles.intro}>Drag & Drop or Browse to send a file privately via HiveDrop</p>
+
           <div className={styles.field}>
             <span className={styles.label}>File</span>
             <button
@@ -467,11 +479,11 @@ export function MachineSendFileModal({ machine, onClose }: MachineSendFileModalP
           >
             {state === "sending" ? (
               <>
-                <LoaderCircle size={12} className="animate-spin" aria-hidden="true" /> Sending with HiveDrop
+                <LoaderCircle size={12} className="animate-spin" aria-hidden="true" /> Sending file
               </>
             ) : (
               <>
-                <FileUp size={12} aria-hidden="true" /> Send with HiveDrop
+                <FileUp size={12} aria-hidden="true" /> Send file
               </>
             )}
           </button>

@@ -1,4 +1,5 @@
 import { socialPlatformRow } from "@/lib/services/socials/social-platform-matrix";
+import { normalizeSocialProfileImageUrl } from "@/lib/services/socials/social-profile-image";
 import type { SocialAccount } from "@/lib/services/socials/socials-types";
 import {
   accountEnvValue,
@@ -28,7 +29,7 @@ export const farcasterAdapter: SocialPlatformAdapter = {
         headers: { "x-api-key": key },
       });
       if (!res.ok) return { ok: false, detail: `Neynar rejected the key or fid (HTTP ${res.status}).` };
-      const body = (await res.json()) as { users?: Array<{ username?: string; display_name?: string }> };
+      const body = (await res.json()) as { users?: Array<{ username?: string; display_name?: string; pfp_url?: string }> };
       const user = body.users?.[0];
       if (!user) return { ok: false, detail: `No Farcaster user found for fid ${fid}.` };
       const signer = (account.binding?.signerUuid ?? "").trim();
@@ -39,6 +40,7 @@ export const farcasterAdapter: SocialPlatformAdapter = {
           : `Key valid for @${user.username ?? fid}, but no signerUuid binding — casting needs a signer.`,
         handle: user.username,
         displayName: user.display_name,
+        avatarUrl: normalizeSocialProfileImageUrl(user.pfp_url),
       };
     } catch (error) {
       return { ok: false, detail: `Neynar probe failed: ${error instanceof Error ? error.message : String(error)}` };

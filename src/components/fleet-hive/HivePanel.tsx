@@ -1,7 +1,7 @@
 "use client";
 
 /* HivePanel.tsx — the contextual detail panel on the right. Three modes:
-   queen overview, machine detail, agent detail. Every action chip is wired to
+   queen overview, machine detail, agent detail. Every action control is wired to
    a real handler so the Hive view reaches parity with the legacy FleetView. */
 
 import * as React from "react";
@@ -10,28 +10,22 @@ import { fleetAgentCanChat, type FleetAgentChat } from "@/components/fleet/fleet
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import {
   AlertTriangle,
+  Check,
   ChevronLeft,
-  Copy,
-  Cpu,
   Download,
   ExternalLink,
-  FileUp,
-  GitBranch,
-  MessageSquare,
   Network,
   Pencil,
-  PhoneCall,
   Plus,
   RefreshCcw,
   Settings,
   Smartphone,
-  SquareTerminal,
-  Trash2,
-  Wallet,
-  Wrench,
+  X,
   type LucideIcon,
 } from "lucide-react";
-import { AgentHoldings } from "./AgentHoldings";
+import { AgentHoldings, HiveFleetEconomyPanel, HiveMachineEconomyPanel } from "./AgentHoldings";
+import { HiveAgentActions, HiveChatCallSplitButton, HiveMachineActions } from "./HivePanelActions";
+import { buildHiveFleetEconomy } from "./hive-economy";
 import { MachineSettingsPanel } from "./MachineSettingsPanel";
 import type { HiveAgent, HiveMachine, HiveSelection } from "./fleet-hive-types";
 import { frFleetSummary, frMachineState, frStateMeta, hivePhoneStatus, isHiveMobileMachine } from "./fleet-hive-types";
@@ -73,7 +67,7 @@ export interface HivePanelHandlers {
   /** Start a voice call with the Queen (opens the Queen voice overlay). */
   onCallQueen?: () => void;
   onUpdateMachine?: (m: HiveMachine) => void;
-  onRenameMachine?: (m: HiveMachine) => void;
+  onRenameMachine?: (m: HiveMachine, name: string) => void;
   onOpenCodeProof?: (m: HiveMachine) => void;
   onFixSyncIssue?: (m: HiveMachine) => void;
   onFixNetworkIssue?: (m: HiveMachine) => void;
@@ -131,6 +125,176 @@ function FrMiniMeters({ m }: { m: HiveMachine }) {
   );
 }
 
+function MachineNameEditor({
+  machine,
+  onRenameMachine,
+}: {
+  machine: HiveMachine;
+  onRenameMachine?: HivePanelHandlers["onRenameMachine"];
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [draft, setDraft] = React.useState(machine.name);
+  const [machineNameFontSize, setMachineNameFontSize] = React.useState(28);
+  const machineNameRowRef = React.useRef<HTMLDivElement>(null);
+  const machineNameHeadingRef = React.useRef<HTMLHeadingElement>(null);
+  const renameButtonRef = React.useRef<HTMLButtonElement>(null);
+  const normalizedDraft = draft.trim();
+  const hasRename = Boolean(onRenameMachine);
+
+  React.useLayoutEffect(() => {
+    if (editing) return undefined;
+    const row = machineNameRowRef.current;
+    const heading = machineNameHeadingRef.current;
+    if (!row || !heading) return undefined;
+
+    const fitName = () => {
+      const renameButtonWidth = renameButtonRef.current?.offsetWidth ?? 0;
+      const availableWidth = row.clientWidth - renameButtonWidth - (renameButtonWidth ? 7 : 0);
+      const previousFontSize = heading.style.fontSize;
+      heading.style.fontSize = "28px";
+      const fullSizeWidth = heading.scrollWidth;
+      heading.style.fontSize = previousFontSize;
+      const nextFontSize = fullSizeWidth > 0
+        ? Math.min(28, Math.max(12, (28 * Math.max(0, availableWidth - 1)) / fullSizeWidth))
+        : 28;
+      setMachineNameFontSize(Math.floor(nextFontSize * 10) / 10);
+    };
+
+    fitName();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const observer = new ResizeObserver(fitName);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [editing, hasRename, machine.name]);
+
+  const cancelRename = () => {
+    setDraft(machine.name);
+    setEditing(false);
+  };
+
+  const saveRename = () => {
+    if (!normalizedDraft) return;
+    setEditing(false);
+    setDraft(normalizedDraft);
+    if (normalizedDraft !== machine.name) {
+      onRenameMachine?.(machine, normalizedDraft);
+    }
+  };
+
+  if (editing) {
+    return (
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          saveRename();
+        }}
+        style={{ display: "flex", alignItems: "center", gap: 7, marginTop: 10 }}
+      >
+        <input
+          value={draft}
+          autoFocus
+          required
+          aria-label={`New name for ${machine.name}`}
+          onFocus={(event) => event.currentTarget.select()}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cancelRename();
+            }
+          }}
+          style={{
+            flex: "1 1 auto",
+            minWidth: 0,
+            border: "1px solid var(--honey-line)",
+            borderRadius: 9,
+            background: "var(--panel-2)",
+            color: "var(--fg)",
+            fontFamily: "var(--f-display)",
+            fontSize: 19,
+            fontWeight: 600,
+            letterSpacing: "-0.015em",
+            padding: "5px 8px",
+          }}
+        />
+        <button
+          type="submit"
+          aria-label={`Save ${machine.name} rename`}
+          title="Save machine name"
+          disabled={!normalizedDraft}
+          style={{
+            display: "inline-grid",
+            placeItems: "center",
+            width: 30,
+            height: 30,
+            flex: "0 0 auto",
+            border: "1px solid var(--honey-line)",
+            borderRadius: 8,
+            background: "var(--honey-soft)",
+            color: "var(--honey)",
+            cursor: normalizedDraft ? "pointer" : "default",
+            opacity: normalizedDraft ? 1 : 0.55,
+          }}
+        >
+          <Check size={16} strokeWidth={2.2} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          aria-label={`Cancel renaming ${machine.name}`}
+          title="Cancel rename"
+          onClick={cancelRename}
+          style={{
+            display: "inline-grid",
+            placeItems: "center",
+            width: 30,
+            height: 30,
+            flex: "0 0 auto",
+            border: "1px solid var(--line-2)",
+            borderRadius: 8,
+            background: "transparent",
+            color: "var(--fg-3)",
+            cursor: "pointer",
+          }}
+        >
+          <X size={16} strokeWidth={2.2} aria-hidden="true" />
+        </button>
+      </form>
+    );
+  }
+
+  return (
+    <div ref={machineNameRowRef} style={{ display: "flex", alignItems: "center", width: "100%", minWidth: 0, gap: 7, marginTop: 10 }}>
+      <h2 ref={machineNameHeadingRef} style={{ flex: "0 1 auto", minWidth: 0, fontFamily: "var(--f-display)", fontWeight: 600, fontSize: machineNameFontSize, lineHeight: 1.15, letterSpacing: "-0.02em", whiteSpace: "nowrap", margin: 0 }}>{machine.name}</h2>
+      {onRenameMachine ? (
+        <button
+          ref={renameButtonRef}
+          type="button"
+          aria-label={`Rename ${machine.name}`}
+          title="Rename machine"
+          onClick={() => {
+            setDraft(machine.name);
+            setEditing(true);
+          }}
+          style={{
+            display: "inline-grid",
+            placeItems: "center",
+            width: 28,
+            height: 28,
+            flex: "0 0 auto",
+            border: 0,
+            borderRadius: 8,
+            background: "transparent",
+            color: "var(--fg-3)",
+            cursor: "pointer",
+          }}
+        >
+          <Pencil size={15} aria-hidden="true" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function FrPhoneStatusRow({ label, value, tone = "var(--fg-2)" }: { label: string; value: string; tone?: string }) {
   return (
     <div style={{ display: "grid", gap: 4, padding: "11px 0", borderTop: "1px solid var(--line)" }}>
@@ -158,6 +322,10 @@ export function HivePanel({
   tailnetLabel?: string;
 }) {
   const s = frFleetSummary(machines);
+  const economy = React.useMemo(
+    () => buildHiveFleetEconomy(machines, walletsByAgent),
+    [machines, walletsByAgent],
+  );
   const [settingsMachineId, setSettingsMachineId] = React.useState<string | null>(null);
   let body: React.ReactNode;
   const renderPhoneBody = (selectedMobileMachine?: HiveMachine) => {
@@ -270,16 +438,18 @@ export function HivePanel({
         {(queenChatTarget || handlers.onCallQueen || handlers.onOpenQueenSettings || handlers.onAddMachine) ? (
           <div className="fr-queen-actions" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 20 }}>
             {queenChatTarget ? (
-              <button type="button" className="fr-act fr-act-primary" onClick={() => handlers.onOpenChat?.(queenChatTarget.m, queenChatTarget.a)}>
-                <ActionIcon icon={MessageSquare} size={14} />
-                Chat
-              </button>
-            ) : null}
-            {handlers.onCallQueen ? (
-              <button type="button" className="fr-act" onClick={() => handlers.onCallQueen?.()}>
-                <ActionIcon icon={PhoneCall} size={14} />
-                Call
-              </button>
+              <HiveChatCallSplitButton
+                name={queenName}
+                callLabel="Call"
+                onChat={() => handlers.onOpenChat?.(queenChatTarget.m, queenChatTarget.a)}
+                onCall={handlers.onCallQueen ? () => handlers.onCallQueen?.() : undefined}
+              />
+            ) : handlers.onCallQueen ? (
+              <HiveChatCallSplitButton
+                name={queenName}
+                callLabel="Call"
+                onCall={() => handlers.onCallQueen?.()}
+              />
             ) : null}
             {handlers.onOpenQueenSettings ? (
               <button type="button" className="fr-act" onClick={() => handlers.onOpenQueenSettings?.()}>
@@ -295,6 +465,8 @@ export function HivePanel({
             ) : null}
           </div>
         ) : null}
+
+        <HiveFleetEconomyPanel economy={economy} />
 
         <div className="fr-eyebrow" style={{ marginTop: 24 }}>Working now</div>
         <div style={{ marginTop: 4 }}>
@@ -359,8 +531,8 @@ export function HivePanel({
     }
     else {
       const working = m.agents.filter((a) => a.state === "working").length;
+      const machineEconomy = economy.machines.find((candidate) => candidate.machineId === m.id);
       const update = handlers.getMachineUpdate?.(m) ?? null;
-      const sync = m.source.syncIssue;
       const network = m.source.networkIssue;
       const networkFixStatus = handlers.getNetworkFixStatus?.(m) ?? null;
       body = (
@@ -369,99 +541,24 @@ export function HivePanel({
             <span style={{ display: "inline-grid", placeItems: "center", width: 22, height: 22 }}><Dot state={frMachineState(m)} size={9} /></span>
             <span className="fr-eyebrow">{m.kind} · {m.role}</span>
           </div>
-          <h2 style={{ fontFamily: "var(--f-display)", fontWeight: 600, fontSize: 28, letterSpacing: "-0.02em", margin: "10px 0 0" }}>{m.name}</h2>
+          <MachineNameEditor key={m.id} machine={m} onRenameMachine={handlers.onRenameMachine} />
           <div style={{ fontSize: 12, color: "var(--fg-3)", fontFamily: "var(--f-mono)", marginTop: 6 }}>{[m.os, m.chip, m.place].filter(Boolean).join(" · ")}</div>
 
           <FrMiniMeters m={m} />
 
-          {/* machine action chips */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
-            {handlers.onAddAgent ? (
-              <button type="button" className="fr-chip fr-chip-honey" data-bee={`fleet-hive-add-${m.name}`} onClick={() => handlers.onAddAgent?.(m)}>
-                <ActionIcon icon={Plus} />
-                Add agent
-              </button>
-            ) : null}
-            {m.source.collectorUrl ? (
-              <button type="button" className="fr-chip" onClick={() => setSettingsMachineId(m.id)}>
-                <ActionIcon icon={Settings} />
-                Settings
-              </button>
-            ) : null}
-            {update?.canUpdate && handlers.onUpdateMachine ? (
-              <button type="button" className="fr-chip" disabled={update.busy} onClick={() => handlers.onUpdateMachine?.(m)}>
-                <ActionIcon icon={RefreshCcw} />
-                {update.label}
-              </button>
-            ) : null}
-            {sync && handlers.onFixSyncIssue ? (
-              <button type="button" className="fr-chip" onClick={() => handlers.onFixSyncIssue?.(m)} title={sync.title}>
-                <ActionIcon icon={AlertTriangle} />
-                Fix sync
-              </button>
-            ) : null}
-            {network?.fixAction && handlers.onFixNetworkIssue ? (
-              <button type="button" className="fr-chip" onClick={() => handlers.onFixNetworkIssue?.(m)} title={network.title}>
-                <ActionIcon icon={Wrench} />
-                {network.fixLabel ?? "Fix network"}
-              </button>
-            ) : null}
-            {handlers.onOpenShell ? (
-              m.source.remoteShell === false ? (
-                <button
-                  type="button"
-                  className="fr-chip"
-                  disabled
-                  title={`Remote shell isn't available on ${m.name} yet — Windows machines don't support it.`}
-                >
-                  <ActionIcon icon={SquareTerminal} />
-                  Shell
-                </button>
-              ) : (
-                <button type="button" className="fr-chip" onClick={() => handlers.onOpenShell?.(m)}>
-                  <ActionIcon icon={SquareTerminal} />
-                  Shell
-                </button>
-              )
-            ) : null}
-            {handlers.onSendFile ? (
-              <button
-                type="button"
-                className="fr-chip"
-                disabled={m.source.fileTransfers === false}
-                title={m.source.fileTransfers === false
-                  ? `HiveDrop needs file access prepared by Setup on ${m.name}.`
-                  : undefined}
-                onClick={() => handlers.onSendFile?.(m)}
-              >
-                <ActionIcon icon={FileUp} />
-                HiveDrop
-              </button>
-            ) : null}
-            {handlers.onOpenUsePodHost ? (
-              <button
-                type="button"
-                className="fr-chip fr-chip-usepod"
-                onClick={() => handlers.onOpenUsePodHost?.(m)}
-                aria-label={`Rent ${m.name} compute through Hive Compute`}
-              >
-                <ActionIcon icon={Cpu} />
-                Rent compute
-              </button>
-            ) : null}
-            {handlers.onRenameMachine ? (
-              <button type="button" className="fr-chip" onClick={() => handlers.onRenameMachine?.(m)}>
-                <ActionIcon icon={Pencil} />
-                Rename
-              </button>
-            ) : null}
-            {handlers.onOpenCodeProof ? (
-              <button type="button" className="fr-chip" onClick={() => handlers.onOpenCodeProof?.(m)}>
-                <ActionIcon icon={GitBranch} />
-                Code proof
-              </button>
-            ) : null}
-          </div>
+          <HiveMachineActions
+            machine={m}
+            update={update}
+            onAddAgent={handlers.onAddAgent}
+            onOpenSettings={m.source.collectorUrl ? () => setSettingsMachineId(m.id) : undefined}
+            onUpdateMachine={handlers.onUpdateMachine}
+            onFixSyncIssue={handlers.onFixSyncIssue}
+            onFixNetworkIssue={handlers.onFixNetworkIssue}
+            onOpenShell={handlers.onOpenShell}
+            onSendFile={handlers.onSendFile}
+            onOpenCompute={handlers.onOpenUsePodHost}
+            onOpenCodeProof={handlers.onOpenCodeProof}
+          />
 
           {update?.detail ? (
             <div
@@ -492,6 +589,8 @@ export function HivePanel({
               </span>
             </div>
           ) : null}
+
+          {machineEconomy ? <HiveMachineEconomyPanel economy={machineEconomy} /> : null}
 
           <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginTop: 18 }}>
             <span className="fr-eyebrow">Agents</span>
@@ -540,6 +639,9 @@ export function HivePanel({
       // runtimes (Hermes/OpenClaw, or an explicit canChat) get chat/task-chat.
       const canChat = fleetAgentCanChat(a.source);
       const recentChats = (a.source.recentChats ?? []).filter((chat) => chat.id !== "current");
+      const agentEconomy = economy.machines
+        .find((candidate) => candidate.machineId === m.id)
+        ?.agents.find((candidate) => candidate.agentId === a.id);
       body = (
         <div key={"a" + a.id} style={{ animation: "fr-fade-up .3s ease" }}>
           <button
@@ -567,62 +669,25 @@ export function HivePanel({
             {a.wallet !== "—" ? <span style={{ fontSize: 11.5, color: "var(--fg-3)", fontFamily: "var(--f-mono)", border: "1px solid var(--line-2)", borderRadius: 99, padding: "5px 11px" }}>{a.wallet}</span> : null}
           </div>
 
-          {(handlers.onCallAgent || (canChat && handlers.onOpenChat)) ? (
-            <div style={{ display: "flex", gap: 8, marginTop: 22 }}>
-              {canChat && handlers.onOpenChat ? (
-                <button type="button" className="fr-act fr-act-primary" onClick={() => handlers.onOpenChat?.(m, a)}>
-                  <ActionIcon icon={MessageSquare} />
-                  Chat
-                </button>
-              ) : null}
-              {handlers.onCallAgent ? (
-                <button type="button" className="fr-act" onClick={() => handlers.onCallAgent?.(m, a)}>
-                  <ActionIcon icon={PhoneCall} />
-                  Call agent
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-
-          {/* secondary agent actions */}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }}>
-            {canChat && handlers.onOpenTaskChat ? (
-              <button type="button" className="fr-chip" onClick={() => handlers.onOpenTaskChat?.(m, a)}>
-                <ActionIcon icon={MessageSquare} />
-                Task chat
-              </button>
-            ) : null}
-            {handlers.onOpenWallet ? (
-              <button type="button" className="fr-chip" onClick={() => handlers.onOpenWallet?.(m, a)}>
-                <ActionIcon icon={Wallet} />
-                Wallet
-              </button>
-            ) : null}
-            {handlers.onEditSettings ? (
-              <button type="button" className="fr-chip" onClick={() => handlers.onEditSettings?.(m, a)}>
-                <ActionIcon icon={Settings} />
-                Settings
-              </button>
-            ) : null}
-            {handlers.onDuplicate ? (
-              <button type="button" className="fr-chip" onClick={() => handlers.onDuplicate?.(m, a)}>
-                <ActionIcon icon={Copy} />
-                Duplicate
-              </button>
-            ) : null}
-            {handlers.onRemove ? (
-              <button type="button" className="fr-chip fr-act-danger" onClick={() => handlers.onRemove?.(m, a)}>
-                <ActionIcon icon={Trash2} />
-                Remove
-              </button>
-            ) : null}
-          </div>
-
-          <AgentHoldings
+          <HiveAgentActions
+            machine={m}
             agent={a}
-            wallet={walletsByAgent[a.id]}
-            onViewWallet={handlers.onOpenWallet ? () => handlers.onOpenWallet?.(m, a) : undefined}
+            canChat={canChat}
+            onOpenChat={handlers.onOpenChat}
+            onCallAgent={handlers.onCallAgent}
+            onOpenTaskChat={handlers.onOpenTaskChat}
+            onOpenWallet={handlers.onOpenWallet}
+            onEditSettings={handlers.onEditSettings}
+            onDuplicate={handlers.onDuplicate}
+            onRemove={handlers.onRemove}
           />
+
+          {agentEconomy ? (
+            <AgentHoldings
+              economy={agentEconomy}
+              onViewWallet={handlers.onOpenWallet ? () => handlers.onOpenWallet?.(m, a) : undefined}
+            />
+          ) : null}
 
           {canChat && recentChats.length && handlers.onOpenTaskChat ? (
             <div style={{ marginTop: 20 }}>

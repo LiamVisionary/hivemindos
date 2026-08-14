@@ -36,6 +36,17 @@ const POLL_MS = 15_000;
 const NOTICE_AUTO_DISMISS_MS = 5_000;
 const USE_ZHC_DEMO_DATA = false;
 
+function normalizeKanbanTaskHold(value: unknown): KanbanTaskLite["held"] {
+  if (!value || typeof value !== "object") return undefined;
+  const held = value as Record<string, unknown>;
+  if (typeof held.at !== "number" || !Number.isFinite(held.at) || typeof held.by !== "string" || !held.by.trim()) return undefined;
+  return {
+    at: held.at,
+    by: held.by,
+    ...(typeof held.note === "string" && held.note.trim() ? { note: held.note } : {}),
+  };
+}
+
 async function postCompanies(body: Record<string, unknown>): Promise<{ ok: boolean; company?: Company; error?: string }> {
   const res = await fetch("/api/companies", {
     method: "POST",
@@ -519,6 +530,7 @@ function ZeroHumanCompaniesLiveView({
             loop: t.loop && typeof t.loop === "object" ? (t.loop as KanbanTaskLite["loop"]) : undefined,
             loopReceipts: Array.isArray(t.loopReceipts) ? (t.loopReceipts as KanbanTaskLite["loopReceipts"]) : undefined,
             targetMachine: t.targetMachine && typeof t.targetMachine === "object" ? (t.targetMachine as KanbanTaskLite["targetMachine"]) : undefined,
+            held: normalizeKanbanTaskHold(t.held),
             createdAt: typeof t.createdAt === "number" ? t.createdAt : undefined,
             updatedAt: typeof t.updatedAt === "number" ? t.updatedAt : undefined,
             completedAt: typeof t.completedAt === "number" ? t.completedAt : undefined,

@@ -8,6 +8,8 @@ const inputHelpersPath = "src/features/dashboard/hooks/status-chat-input-helpers
 const processPanelPath = "src/features/dashboard/views/chat/AgentProcessPanel.tsx";
 const streamStatePath = "src/features/dashboard/hooks/status-chat-stream-state.ts";
 const chatTreeControllerPath = "src/features/dashboard/hooks/use-chat-tree-controller.tsx";
+const agentSessionRoutePath = "src/app/api/chat/agent-session/route.ts";
+const collectorPath = "scripts/agent-telemetry-collector.mjs";
 
 const controller = readFileSync(controllerPath, "utf8");
 const dashboard = readFileSync(dashboardPath, "utf8");
@@ -16,6 +18,8 @@ const inputHelpers = readFileSync(inputHelpersPath, "utf8");
 const processPanel = readFileSync(processPanelPath, "utf8");
 const streamState = readFileSync(streamStatePath, "utf8");
 const chatTreeController = readFileSync(chatTreeControllerPath, "utf8");
+const agentSessionRoute = readFileSync(agentSessionRoutePath, "utf8");
+const collector = readFileSync(collectorPath, "utf8");
 
 function assertIncludes(source, needle, label) {
   if (!source.includes(needle)) {
@@ -26,6 +30,12 @@ function assertIncludes(source, needle, label) {
 function assertMatch(source, pattern, label) {
   if (!pattern.test(source)) {
     throw new Error(`${label} missing: ${pattern}`);
+  }
+}
+
+function assertDoesNotMatch(source, pattern, label) {
+  if (pattern.test(source)) {
+    throw new Error(`${label} still matches: ${pattern}`);
   }
 }
 
@@ -58,8 +68,8 @@ assertMatch(
 assertIncludes(controller, "const transportInterrupted = !aborted && isChatTransportInterruption(error);", "transport interruption catch path");
 assertIncludes(controller, "preserveActiveRun = transportInterrupted;", "transport interruption preserves active run marker");
 assertIncludes(controller, "sessionId: currentRuntimeSessionId || localRuntimeSessionId || undefined", "interruption records fallback session id");
-assertIncludes(controller, "status: aborted ? \"stalled\" : \"active\"", "transport interruption stays active for reload polling");
-assertIncludes(controller, "if (transportInterrupted) {", "transport interruption returns without final error bubble");
+assertIncludes(controller, "status: \"active\"", "both browser stalls and transport interruptions stay active for durable-session polling");
+assertIncludes(controller, "interruptedRuntimeRecoveryResult", "recovered narration is settled through the terminal-aware recovery contract");
 assertIncludes(controller, "if (!preserveActiveRun && (sawDone || !abortController.signal.aborted || recoveredAssistantText.trim())) clearActiveChatRun?.(selectedStorageKey, taskId);", "finally clears only the completed active run");
 
 assertIncludes(processPanel, "cancelled|canceled|error", "process panel treats error events as terminal");
@@ -69,5 +79,13 @@ assertIncludes(inputHelpers, "namedToolProcessEventFromRaw(message?.raw)", "live
 assertIncludes(chatTreeController, "runtimeSessionMessages(data?.session)", "opening runtime history hydrates process rows instead of dropping every tool message");
 assertIncludes(dashboard, "? !endedAt", "runtime poller uses the explicit session end marker rather than partial assistant text");
 assertIncludes(dashboard, "reconcilePolledChatStreamState", "runtime poll reconciliation is monotonic and run-scoped");
+assertIncludes(dashboard, "const activeRuns = readActiveChatRuns(dashboardState);", "reload restores the persisted active marker before the runtime poll answers");
+assertDoesNotMatch(dashboard, /Object\.entries\(readActiveChatRuns\(dashboardState\)\)[\s\S]{0,180}activeChatRunHasAssistantReply/, "interim assistant narration cannot erase an active run during hydration");
+assertDoesNotMatch(dashboard, /hasReply\s*\|\|\s*now - lastActivityAt/, "background active runs are not cleared merely because they streamed interim narration");
+assertIncludes(dashboard, "chatTranscriptRuntimeReconciliationRequest", "reload checks unresolved historical transcripts for late runtime output");
+assertIncludes(dashboard, "rawUserMessage: sessionId ? undefined : recoveryRequest?.rawUserMessage", "historical recovery identifies the exact user turn");
+assertIncludes(agentSessionRoute, "findLocalHermesSession", "agent-session fallback searches the durable Hermes store by prompt");
+assertIncludes(agentSessionRoute, "reconcileRuntimeSessionAfterWrapperFailure", "late Hermes completion repairs a failed wrapper session");
+assertIncludes(collector, "messageNeedle", "remote session lookup filters by the requested prompt instead of returning an unrelated newest session");
 
 console.log("chat reload resume regression passed");

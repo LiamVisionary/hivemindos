@@ -60,6 +60,7 @@ import { isHiveMobileMachine } from "./fleet-hive-types";
 import { HiveStage } from "./HiveStage";
 import { LegacyHiveStage } from "./LegacyHiveStage";
 import { HivePanel, type HivePanelHandlers } from "./HivePanel";
+import { MachineSettingsPanel } from "./MachineSettingsPanel";
 import { TopBar } from "./TopBar";
 import { useFrTheme } from "./use-fr-theme";
 import "./fleet-hive.css";
@@ -315,6 +316,7 @@ export function FleetHiveView({
   const [terminalMachine, setTerminalMachine] = React.useState<FleetMachine | null>(null);
   const [sendFileMachine, setSendFileMachine] = React.useState<FleetMachine | null>(null);
   const [usePodHostMachine, setUsePodHostMachine] = React.useState<FleetMachine | null>(null);
+  const [listSettingsMachineId, setListSettingsMachineId] = React.useState<string | null>(null);
   const [phonePairingOpen, setPhonePairingOpen] = React.useState(false);
   const newAgentTimerRef = React.useRef<number>(0);
   const locateAnimationTimerRef = React.useRef<number>(0);
@@ -355,6 +357,9 @@ export function FleetHiveView({
     onRemove?.(m, a);
   }, [onRemove]);
   const callAgentFleet = React.useCallback((m: FleetMachine, a: FleetAgent) => { void onCallAgent?.(m, a); }, [onCallAgent]);
+  const listSettingsMachine = listSettingsMachineId
+    ? displayMachines.find((machine) => machine.id === listSettingsMachineId) ?? null
+    : null;
 
   const captureLocateOrigin = React.useCallback(() => {
     if (locateOriginRef.current) return;
@@ -710,10 +715,7 @@ export function FleetHiveView({
     onOpenQueenSettings,
     onCallQueen: () => emitQueenVoiceToggle(),
     onUpdateMachine: onUpdateMachine ? (m) => onUpdateMachine(m.source) : undefined,
-    onRenameMachine: onRenameMachine ? (m) => {
-      const next = window.prompt("Rename machine", m.name);
-      if (next && next.trim() && next.trim() !== m.name) onRenameMachine(m.id, next.trim());
-    } : undefined,
+    onRenameMachine: onRenameMachine ? (m, name) => onRenameMachine(m.id, name) : undefined,
     onOpenCodeProof: onOpenCodeProof ? (m) => onOpenCodeProof(m.source) : undefined,
     onFixSyncIssue: onFixSyncIssue ? (m) => { void onFixSyncIssue(m.source); } : undefined,
     onFixNetworkIssue: fixNetworkIssue,
@@ -985,6 +987,20 @@ export function FleetHiveView({
                   onEditSettings={onEditSettings}
                   onDuplicate={onDuplicate}
                   onRemove={onRemove ? removeAgentFleet : undefined}
+                  updateStatusByMachine={updateStatusByMachine}
+                  updateDetailByMachine={updateDetailByMachine}
+                  onUpdateMachine={onUpdateMachine}
+                  onRenameMachine={onRenameMachine}
+                  onOpenCodeProof={onOpenCodeProof}
+                  onFixSyncIssue={onFixSyncIssue}
+                  onFixNetworkIssue={(machine) => {
+                    const hiveMachine = displayMachines.find((candidate) => candidate.id === machine.id);
+                    if (hiveMachine) return fixNetworkIssue(hiveMachine);
+                  }}
+                  onOpenMachineSettings={(machine) => setListSettingsMachineId(machine.id)}
+                  onOpenShell={setTerminalMachine}
+                  onSendFile={setSendFileMachine}
+                  onOpenCompute={setUsePodHostMachine}
                   viewMode={viewMode}
                   onSelectViewMode={chooseViewMode}
                   headerAux={layoutToggle}
@@ -1023,6 +1039,42 @@ export function FleetHiveView({
           document.body,
         )
         : null}
+
+      {listSettingsMachine ? (
+        <div
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setListSettingsMachineId(null);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1200,
+            display: "grid",
+            placeItems: "center",
+            padding: 20,
+            background: "rgba(4, 5, 8, 0.72)",
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Settings for ${listSettingsMachine.name}`}
+            style={{
+              width: "min(620px, 100%)",
+              maxHeight: "min(780px, calc(100vh - 40px))",
+              overflow: "auto",
+              border: "1px solid var(--line)",
+              borderRadius: 16,
+              background: "var(--bg-2)",
+              boxShadow: "0 30px 100px rgba(0, 0, 0, 0.58)",
+              padding: 20,
+            }}
+          >
+            <MachineSettingsPanel machine={listSettingsMachine} onClose={() => setListSettingsMachineId(null)} />
+          </section>
+        </div>
+      ) : null}
 
       <ConnectPhoneModal open={phonePairingOpen} onClose={() => setPhonePairingOpen(false)} />
     </div>

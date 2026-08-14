@@ -9,6 +9,7 @@ export const walletX402FetchAction = defineHiveAction({
     "Execute a governed x402 paid HTTP request from a local agent wallet, settling the endpoint's USDC quote only after spend policy and confirmation checks.",
   schema: z.object({
     agentId: z.string().describe("Wallet vault id whose local wallet signs and pays."),
+    actingAgentId: z.string().optional().describe("Agent requesting use of the wallet; required for per-agent autonomous permission."),
     url: z.string().describe("The x402-priced HTTP endpoint to call."),
     method: z.string().optional().describe("HTTP method, default GET."),
     headers: z.record(z.string(), z.string()).optional(),

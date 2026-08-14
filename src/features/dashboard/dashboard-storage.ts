@@ -3,7 +3,7 @@ import { beeRoleIconPath } from "@/lib/config/bee-role-icons";
 import { beeWorkerPreset, renderBeeSoulTemplate } from "@/lib/config/bee-worker-presets";
 import { ONBOARDING_BRAIN_LOOPS } from "@/lib/config/brain-loops";
 import { RESEARCH_STORM_SKILL_SLUG, normalizeResearchMethod } from "@/lib/config/research-methods";
-import { createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
+import { createDefaultAgentWallet, createDefaultHoneyTreasuryConfig, normalizeAgentWalletAssignments, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
 import { normalizeAgentLocalDataDir } from "@/lib/utils/agent-local-data-dir";
 import { normalizeAgentTelemetryUrl } from "@/lib/utils/agent-telemetry-url";
 import { isAutomationTranscriptText } from "@/lib/utils/automation-transcript";
@@ -824,7 +824,10 @@ export function parseStoredWallets(snapshot: DashboardStateSnapshot = {}): Recor
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
     return Object.fromEntries(Object.entries(parsed)
       .filter(([agentId, wallet]) => typeof agentId === "string" && wallet && typeof wallet === "object")
-      .map(([agentId, wallet]) => [agentId, stripUnfundedWalletBalance({ ...createDefaultAgentWallet(agentId), ...wallet, agentId })]));
+      .map(([walletId, wallet]) => {
+        const normalized = stripUnfundedWalletBalance({ ...createDefaultAgentWallet(walletId), ...wallet, agentId: wallet.agentId || walletId });
+        return [walletId, normalizeAgentWalletAssignments(normalized, walletId)];
+      }));
   } catch {
     return {};
   }

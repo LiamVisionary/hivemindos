@@ -1,0 +1,305 @@
+.economyRoot {
+  --economy-surface: color-mix(in srgb, var(--panel-2) 72%, transparent);
+  --economy-surface-strong: color-mix(in srgb, var(--panel-hi) 84%, transparent);
+  --economy-line: var(--line-2);
+  --economy-muted: var(--fg-3);
+  --economy-value: var(--fg);
+  --economy-accent: var(--honey-2);
+  margin-top: 20px;
+  color: var(--fg);
+  font-family: var(--f-body);
+}
+
+:global([data-theme="hive-light"]) .economyRoot,
+:global(.fr-root[data-fr-theme="light"]) .economyRoot {
+  --economy-surface: color-mix(in srgb, var(--panel-2) 54%, transparent);
+  --economy-surface-strong: color-mix(in srgb, var(--panel-hi) 92%, transparent);
+  --economy-line: rgba(74, 58, 42, 0.16);
+  --economy-muted: #8a7a6a;
+  --economy-value: #4a3a2a;
+  --economy-accent: #8a5a2a;
+}
+
+.fleetCard,
+.machineCard,
+.agentWallets {
+  padding: 14px;
+  border: 1px solid var(--economy-line);
+  border-radius: 13px;
+  background: var(--economy-surface);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.header > strong {
+  color: var(--economy-accent);
+  font-family: var(--f-display);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.eyebrow {
+  color: var(--economy-muted);
+  font-family: var(--f-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.summaryCopy,
+.machineMeta {
+  margin: 5px 0 0;
+  color: var(--economy-muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.fleetMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.fleetMetrics > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--economy-surface-strong);
+}
+
+.fleetMetrics span {
+  color: var(--economy-muted);
+  font-family: var(--f-mono);
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.fleetMetrics strong {
+  min-height: 15px;
+  color: var(--economy-value);
+  font-family: var(--f-display);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.fleetMetrics strong[data-loading="true"] {
+  width: 58%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--line) 0%, var(--line-3) 48%, var(--line) 100%);
+  background-size: 200% 100%;
+  animation: economy-shimmer 1.2s ease-in-out infinite;
+}
+
+.agentBalances,
+.walletList {
+  display: grid;
+  gap: 0;
+  margin-top: 10px;
+}
+
+.agentBalanceRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--line);
+}
+
+.agentBalanceRow > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.agentBalanceRow > span > strong {
+  color: var(--economy-value);
+  font-size: 11px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.agentBalanceRow small {
+  color: var(--economy-muted);
+  font-size: 9px;
+}
+
+.agentBalanceRow > strong {
+  color: var(--economy-value);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+}
+
+.agentBalanceRow > strong[data-empty="true"] {
+  color: var(--economy-muted);
+  font-weight: 400;
+}
+
+.walletCard {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 10px;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+}
+
+.walletIcon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: var(--honey-soft);
+  color: var(--economy-accent);
+}
+
+.walletIcon > svg {
+  width: 14px;
+  height: 14px;
+}
+
+.walletMain {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.walletMain > strong {
+  color: var(--economy-value);
+  font-size: 11px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.walletMain > span {
+  color: var(--economy-muted);
+  font-family: var(--f-mono);
+  font-size: 8.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.walletValue {
+  color: var(--economy-value);
+  font-family: var(--f-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sharedAgentsLink {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--economy-muted);
+  font-family: var(--f-body);
+  font-size: 9px;
+  font-weight: 400;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 44%, transparent);
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.sharedAgentsLink:hover,
+.sharedAgentsLink:focus-visible {
+  color: var(--economy-accent);
+}
+
+.sharedAgentsLink:focus-visible {
+  outline: 2px solid var(--honey-line);
+  outline-offset: 3px;
+}
+
+.sharedAgentsTooltip {
+  display: grid;
+  gap: 4px;
+  min-width: 160px;
+  padding: 9px 10px;
+}
+
+.sharedAgentsTooltip > strong {
+  margin-bottom: 2px;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.sharedAgentsTooltip > span {
+  color: var(--button-popover-foreground);
+  font-size: 10px;
+  opacity: 0.72;
+}
+
+.empty {
+  margin-top: 10px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  color: var(--economy-muted);
+  font-size: 10.5px;
+}
+
+.viewWallet {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  margin-top: 10px;
+  border: 1px solid var(--economy-line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-2);
+  font-family: var(--f-body);
+  font-size: 10.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.viewWallet:hover:not(:disabled) {
+  border-color: var(--honey-line);
+  color: var(--economy-accent);
+}
+
+.viewWallet:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+
+.viewWallet > svg {
+  width: 13px;
+  height: 13px;
+}
+
+@keyframes economy-shimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fleetMetrics strong[data-loading="true"] {
+    animation: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .fleetMetrics {
+    grid-template-columns: 1fr;
+  }
+}

@@ -93,14 +93,24 @@ assert.match(
   "terminal modal must explain the unavailable state",
 );
 
-const hivePanel = await readFile(
-  new URL("../src/components/fleet-hive/HivePanel.tsx", import.meta.url),
+const hivePanelActions = await readFile(
+  new URL("../src/components/fleet-hive/HivePanelActions.tsx", import.meta.url),
   "utf8",
 );
 assert.match(
-  hivePanel,
-  /m\.source\.remoteShell === false/,
-  "hive panel Shell chip must gate on remoteShell",
+  hivePanelActions,
+  /machine\.source\.remoteShell === false/,
+  "hive panel Shell action must gate on remoteShell",
+);
+
+const listMachineActions = await readFile(
+  new URL("../src/components/fleet/list-view-machine-actions.tsx", import.meta.url),
+  "utf8",
+);
+assert.match(
+  listMachineActions,
+  /machine\.remoteShell === false/,
+  "fleet List Shell action must gate on remoteShell",
 );
 
 const tooltip = await readFile(

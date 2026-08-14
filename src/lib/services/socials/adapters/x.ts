@@ -1,7 +1,13 @@
-import { getManagedXGatewayStatus, proxyManagedXServerCall } from "@/lib/services/managed-x-api-client";
+import { getManagedXConnections, proxyManagedXServerCall } from "@/lib/services/managed-x-api-client";
+import {
+  managedXConnectionHandle,
+  managedXConnectionId,
+  managedXConnectionsFromPayload,
+} from "@/lib/services/managed-x-connections";
 import { socialPlatformRow } from "@/lib/services/socials/social-platform-matrix";
 import { resolveManagedXCredit } from "@/lib/services/socials/managed-x-credit-binding";
 import { deliverXEngagement } from "@/lib/services/socials/social-x-engagement-delivery";
+import { normalizeXProfileImageUrl } from "@/lib/services/socials/social-profile-image";
 import type { SocialAccount, SocialCapability, SocialCapabilitySupport } from "@/lib/services/socials/socials-types";
 import {
   accountEnvValue,
@@ -19,7 +25,7 @@ const X_MCP_ENV_KEYS = ["X_MCP_CLIENT_ID", "X_MCP_CLIENT_SECRET"] as const;
 
 /**
  * X adapter. Three connect methods have intentionally different probe depths:
- * managed-oauth checks the hosted gateway and connection binding; api-token
+ * managed-oauth verifies the bound OAuth identity; api-token
  * validates credential presence and verifies them with the first signed post;
  * MCP is agent-side only and is not presented as a dashboard posting rail.
  */
@@ -29,13 +35,64 @@ export const xAdapter: SocialPlatformAdapter = {
   async connectStatus(account: SocialAccount, ctx: SocialAdapterContext): Promise<SocialConnectProbe> {
     if (account.method === "managed-oauth") {
       try {
-        const status = await getManagedXGatewayStatus();
         const slug = (account.binding?.connectionSlug ?? "").trim();
-        if (!status.configured) return { ok: false, detail: "Managed X gateway is not configured." };
         if (!slug) return { ok: false, detail: "Gateway reachable, but no connection slug bound — finish the managed X sign-in." };
         const managed = await resolveManagedXCredit(account);
-        if (!managed.credentials) return { ok: false, detail: managed.error };
-        return { ok: true, detail: `Managed X connection bound (${slug}).`, handle: account.handle };
+        const credentials = managed.credentials;
+        if (!credentials) return { ok: false, detail: managed.error };
+        const response = await getManagedXConnections(credentials.creditToken, credentials.creditSlug);
+        if (!response.ok) {
+          return { ok: false, detail: `Managed X connection check failed (HTTP ${response.status}) — reconnect the OAuth account.` };
+        }
+        const connections = managedXConnectionsFromPayload(await response.json().catch(() => ({})));
+        const connection = connections.find((candidate) => managedXConnectionId(candidate) === credentials.connectionId);
+        if (!connection) return { ok: false, detail: "The saved managed X connection no longer exists — reconnect the OAuth account." };
+        const handle = managedXConnectionHandle(connection);
+        if (!handle) return { ok: false, detail: "Managed X OAuth returned no account handle — reconnect the account." };
+        if (handle.toLowerCase() !== account.handle.replace(/^@/, "").toLowerCase()) {
+          return {
+            ok: false,
+            detail: `Managed X OAuth is connected as @${handle}, but this Socials account is @${account.handle.replace(/^@/, "")} — reconnect the correct account.`,
+            handle,
+          };
+        }
+        const identityResponse = await proxyManagedXServerCall({
+          creditToken: credentials.creditToken,
+          slug: credentials.creditSlug,
+          connectionId: credentials.connectionId,
+          method: "GET",
+          path: "/2/users/me",
+          query: { "user.fields": "name,username,profile_image_url" },
+        });
+        if (!identityResponse.ok) {
+          const failure = await identityResponse.json().catch(() => null);
+          const invalidCredential = /(?:token[^a-z]+(?:was[^a-z]+)?invalid|invalid[^a-z]+token|expired)/i.test(JSON.stringify(failure));
+          return {
+            ok: false,
+            detail: invalidCredential
+              ? `Managed X OAuth for @${handle} is invalid or expired — reconnect the account.`
+              : `Managed X OAuth identity check failed (HTTP ${identityResponse.status}) — reconnect @${handle}.`,
+            handle,
+          };
+        }
+        const user = ((await identityResponse.json()) as {
+          data?: { name?: string; username?: string; profile_image_url?: string };
+        }).data;
+        const verifiedHandle = user?.username?.trim().replace(/^@/, "");
+        if (!verifiedHandle || verifiedHandle.toLowerCase() !== handle.toLowerCase()) {
+          return {
+            ok: false,
+            detail: `Managed X OAuth returned ${verifiedHandle ? `@${verifiedHandle}` : "no account handle"} for the saved @${handle} connection — reconnect the correct account.`,
+            ...(verifiedHandle ? { handle: verifiedHandle } : { handle }),
+          };
+        }
+        return {
+          ok: true,
+          detail: `Managed X OAuth verified as @${verifiedHandle}.`,
+          handle: verifiedHandle,
+          displayName: user?.name?.trim() || undefined,
+          avatarUrl: normalizeXProfileImageUrl(user?.profile_image_url),
+        };
       } catch (error) {
         return { ok: false, detail: `Managed X gateway unreachable: ${error instanceof Error ? error.message : String(error)}` };
       }

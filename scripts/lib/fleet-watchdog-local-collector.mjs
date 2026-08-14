@@ -59,3 +59,49 @@ export function selectHealthyLocalCollector(checks, expectedAppDir) {
   }
   return null;
 }
+
+export function collectorMaintenanceRestartDecision(payload) {
+  const count = Number(payload?.activeChatRunCount);
+  const activeChatRunCount = Number.isInteger(count) && count >= 0 ? count : 0;
+  const reservationToken = String(payload?.reservationToken ?? "").trim();
+  if (payload?.ok === true && activeChatRunCount === 0 && reservationToken) {
+    return { deferRestart: false, activeChatRunCount, reservationToken };
+  }
+  if (activeChatRunCount > 0 || payload?.updateStarting === true || payload?.updateQueued === true) {
+    return { deferRestart: true, activeChatRunCount };
+  }
+  return { deferRestart: false, activeChatRunCount: 0 };
+}
+
+function maintenanceUrl(collectorUrl) {
+  return `${String(collectorUrl ?? "").replace(/\/+$/u, "")}/maintenance/reserve-update`;
+}
+
+export async function reserveCollectorRestartWindow(collectorUrl, timeoutMs = 1_500) {
+  try {
+    const response = await fetch(maintenanceUrl(collectorUrl), {
+      method: "POST",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const payload = await response.json().catch(() => null);
+    return collectorMaintenanceRestartDecision(payload);
+  } catch {
+    // Pre-maintenance-contract collectors retain the existing remediation path.
+    return { deferRestart: false, activeChatRunCount: 0 };
+  }
+}
+
+export async function releaseCollectorRestartWindow(collectorUrl, reservationToken, timeoutMs = 1_500) {
+  const token = String(reservationToken ?? "").trim();
+  if (!token) return false;
+  try {
+    const response = await fetch(maintenanceUrl(collectorUrl), {
+      method: "DELETE",
+      headers: { "x-hivemind-maintenance-reservation": token },
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}

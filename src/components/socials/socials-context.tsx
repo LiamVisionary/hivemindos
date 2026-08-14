@@ -16,11 +16,13 @@ import type {
   SocialMetricSnapshot,
   SocialXDiscoveryStatus,
 } from "@/lib/services/socials/socials-types";
+import type { SocialConnectProbe } from "@/lib/services/socials/adapters/types";
 import type { SocialXSessionBinding } from "@/lib/services/socials/social-x-session-binding";
 
 /** Account as the desk renders it: definition + live probe + capability projection. */
 export type SocialsAccountView = SocialAccount & {
-  probe: { ok: boolean; detail: string; handle?: string; displayName?: string };
+  avatarUrl?: string;
+  probe: SocialConnectProbe;
   capabilities: Record<SocialCapability, SocialCapabilitySupport>;
 };
 

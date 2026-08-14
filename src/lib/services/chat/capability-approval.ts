@@ -19,10 +19,12 @@ import {
   normalizeChatPermissionMode,
   type ChatPermissionMode,
 } from "@/lib/types/chat-permissions";
+import { capabilityExecutionReceiptRequired } from "@/lib/services/chat/approved-runtime-capabilities";
 
 const CAPABILITY_SEARCH_KINDS = ["skill", "tool-schema", "api-route", "connected-app", "app-endpoint", "connector", "runtime"] as const;
 const MAX_CANDIDATES_PER_ITEM = 8;
 const SEARCH_CANDIDATE_LIMIT = 80;
+const SEARCH_SKILL_CANDIDATE_LIMIT = 40;
 
 type CapabilityIntent = {
   id: string;
@@ -178,7 +180,7 @@ export const CAPABILITY_APPROVAL_INTENTS: CapabilityIntent[] = [
     query: "image generation photo illustration graphic visual asset imagegen comfyui generative media",
     matches: (task) => /\b(image|photo|picture|illustration|graphic|thumbnail|poster|banner|logo|icon|visual\s+asset)\b/i.test(task),
     candidatePattern: /\b(image\s+(?:generation|generator|editing)|imagegen|photo\s+generation|illustration|text.?to.?image|txt2img|comfyui|generative\s+(?:image|media)|media\s+studio)\b/i,
-    preferredCandidatePattern: /\b(comfyui-image-generation|imagegen|media\s+studio|muapi-generative-media)\b/i,
+    preferredCandidatePattern: /\b(image\s+(?:generation|generator|editing)|text.?to.?image|photo\s+generation)\b/i,
   },
   {
     id: "video-generation",
@@ -191,7 +193,10 @@ export const CAPABILITY_APPROVAL_INTENTS: CapabilityIntent[] = [
     rejectCandidate: (context, candidate, candidateItem) => {
       const requestedVideoWork = context.intentTaskContext || context.task;
       const candidateIdentity = `${candidateItem.id} ${candidateItem.title}`;
-      if (/\b(video[-\s]+render[-\s]+qa|video[-\s]+generator[-\s]+prompting|prompt[-\s]+optimizer)\b/i.test(candidateIdentity)) return true;
+      if (/\b(?:video[-\s]+)?(?:prompt(?:ing)?|prompt[-\s]+(?:guide|optimizer)|render[-\s]+qa|quality[-\s]+assurance|analy[sz](?:er|is)|transcript(?:ion)?)\b/i.test(candidateIdentity)
+        || /\b(?:class[-\s]+level|capability)[-\s]+(?:playbook|router|umbrella)\b/i.test(candidateItem.summary)) return true;
+      if ((candidateItem.kind === "connected-app" || candidateItem.kind === "app-endpoint")
+        && !/\b(?:app capabilities:[^.]*\b(?:video|image-to-video|text-to-video)|mcp video generation configured|text.?to.?video|image.?to.?video|video generation|generate(?:s|d|ing)?[^.]{0,80}\bvideo|video[^.]{0,80}\b(?:generate|generation|production)|comfyui proxy)\b/i.test(candidateItem.summary)) return true;
       if (!/\b(launch|promo|startup|product\s+demo)\b/i.test(requestedVideoWork)
         && /\b(?:launch|startup|product[-\s]+demo|viral[-\s]+startup)[-\s]+video\b/i.test(candidateIdentity)) return true;
       if (/\bwebsite-to-video\b/i.test(candidate)
@@ -438,6 +443,11 @@ function candidateLocator(item: ContextIndexItem) {
   return item.route || item.path || item.load.target || undefined;
 }
 
+function publicMachineName(value?: string) {
+  const redacted = value?.replace(/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, "").replace(/\s+/g, " ").trim();
+  return redacted || undefined;
+}
+
 function toCandidate(item: ContextIndexItem): CapabilityCandidate {
   const githubCapability = githubCapabilityForContextId(item.id);
   return {
@@ -447,7 +457,7 @@ function toCandidate(item: ContextIndexItem): CapabilityCandidate {
     kind: item.kind,
     availability: isSetupRequired(item) ? "setup-required" : "ready",
     locator: candidateLocator(item),
-    machineName: item.machineName,
+    machineName: publicMachineName(item.machineName),
     setupOptions: githubCapability?.setupOptions.map((option) => ({ ...option })),
   };
 }
@@ -515,10 +525,12 @@ const GENERIC_TASK_WORDS = new Set([
   "analyze", "app", "application", "billing", "build", "capability", "card", "checkout", "code", "cool", "create", "daily", "dashboard", "deploy", "design", "develop", "draw", "generate", "generation", "host", "hourly", "implement", "install", "interface", "make", "monthly", "pair", "payment", "payments", "produce", "prototype", "publish", "record", "refactor", "render", "repair", "report", "research", "schedule", "scheduled", "send", "service", "setup", "ship", "spreadsheet", "the", "this", "from", "use", "using", "weekly", "workflow", "write",
 ]);
 
-function distinctiveTaskTokens(taskContext: string) {
+function distinctiveTaskTokens(taskContext: string, intent: CapabilityIntent) {
+  const intentWords = new Set(`${intent.label} ${intent.reason} ${intent.query}`.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
   return [...new Set(taskContext.toLowerCase().split(/[^a-z0-9]+/).filter((token) => (
     (token.length >= 4 || (token.length >= 3 && /\d/.test(token)))
     && !GENERIC_TASK_WORDS.has(token)
+    && !intentWords.has(token)
   )))];
 }
 
@@ -538,7 +550,7 @@ function candidateSortScore(intent: CapabilityIntent, item: ContextIndexItem, co
   if (/\b(swarm-goal|work\s+board\s+delegat|queen\s+bee\s+orchestrat)\b/i.test(directText)) return null;
   const titleAndId = `${item.id} ${item.title}`.toLowerCase();
   const fullText = text.toLowerCase();
-  const tokens = distinctiveTaskTokens(context.intentTaskContext);
+  const tokens = distinctiveTaskTokens(context.intentTaskContext, intent);
   const exactNameBonus = tokens.reduce((score, token) => score + (titleAndId.includes(token) ? 420 : 0), 0);
   const contextBonus = Math.min(120, tokens.reduce((score, token) => score + (fullText.includes(token) ? 24 : 0), 0));
   const primaryBonus = intent.primaryCandidatePattern?.test(titleAndId) ? 240 : 0;
@@ -558,6 +570,35 @@ function rankCandidates(intent: CapabilityIntent, items: ContextIndexItem[], con
     })
     .sort((left, right) => right.score - left.score || left.item.title.localeCompare(right.item.title))
     .map((entry) => toCandidate(entry.item));
+}
+
+type CandidateSourceGroup = "fleet" | "skill" | "other";
+
+function candidateSourceGroup(candidate: CapabilityCandidate): CandidateSourceGroup {
+  if (candidate.kind === "connected-app" || candidate.kind === "app-endpoint") return "fleet";
+  if (candidate.kind === "skill" || candidate.id.startsWith("skill:")) return "skill";
+  return "other";
+}
+
+function boundedCandidates(intent: CapabilityIntent, candidates: CapabilityCandidate[]) {
+  if (intent.id !== "video-generation") return candidates.slice(0, MAX_CANDIDATES_PER_ITEM);
+  const quotas: Record<CandidateSourceGroup, number> = { fleet: 3, skill: 3, other: 2 };
+  const selected = new Set<CapabilityCandidate>();
+  for (const group of Object.keys(quotas) as CandidateSourceGroup[]) {
+    candidates.filter((candidate) => candidateSourceGroup(candidate) === group).slice(0, quotas[group]).forEach((candidate) => selected.add(candidate));
+  }
+  for (const candidate of candidates) {
+    if (selected.size >= MAX_CANDIDATES_PER_ITEM) break;
+    selected.add(candidate);
+  }
+  return candidates.filter((candidate) => selected.has(candidate)).slice(0, MAX_CANDIDATES_PER_ITEM);
+}
+
+function explicitlyRequestedCapability(task: string, candidate: CapabilityCandidate) {
+  const taskTokens = new Set(task.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  const generic = new Set(["api", "app", "capability", "connected", "generate", "generation", "generator", "media", "optional", "packaged", "runtime", "shared", "skill", "tool", "video"]);
+  return `${candidate.id} ${candidate.name}`.toLowerCase().split(/[^a-z0-9]+/)
+    .some((token) => (token.length >= 4 || (token.length >= 3 && /\d/.test(token))) && !generic.has(token) && taskTokens.has(token));
 }
 
 function unavailableCandidate(intent: CapabilityIntent): CapabilityCandidate {
@@ -649,30 +690,43 @@ export async function buildCapabilityApprovalPlan(input: {
     ? applyAppPreferences(discoveredConnectedApps, await readAppPreferences().catch(() => []))
     : discoveredConnectedApps;
   const search = input.search ?? searchContextIndexBatch;
-  const results = await search({
-    vaultPath: input.vaultPath,
-    connectedApps,
-    includeRuntimeProviders: false,
-    kinds: [...CAPABILITY_SEARCH_KINDS],
-  }, intents.map((intent) => ({ query: `${intent.query}\nRequested ${intent.label}: ${intentTaskContext(task, intent)}`, limit: SEARCH_CANDIDATE_LIMIT })));
+  const intentQueries = intents.map((intent) => `${intent.query}\nRequested ${intent.label}: ${intentTaskContext(task, intent)}`);
+  const videoIntentIndexes = intents.flatMap((intent, index) => intent.id === "video-generation" ? [index] : []);
+  const [results, videoSkillResults] = await Promise.all([
+    search({
+      vaultPath: input.vaultPath,
+      connectedApps,
+      includeRuntimeProviders: false,
+      kinds: [...CAPABILITY_SEARCH_KINDS],
+    }, intentQueries.map((query) => ({ query, limit: SEARCH_CANDIDATE_LIMIT }))),
+    videoIntentIndexes.length
+      ? search({ vaultPath: input.vaultPath, includeRuntimeProviders: false, kinds: ["skill"] }, videoIntentIndexes.map((index) => ({ query: intentQueries[index], limit: SEARCH_SKILL_CANDIDATE_LIMIT })))
+      : Promise.resolve([]),
+  ]);
+  const videoSkillsByIntent = new Map(videoIntentIndexes.map((intentIndex, resultIndex) => [intentIndex, videoSkillResults[resultIndex]?.items ?? []]));
   const items: CapabilityApprovalItem[] = await Promise.all(intents.map(async (intent, index) => {
     const builtIn = builtInCandidate(intent);
-    const ranked = rankCandidates(intent, results[index]?.items ?? [], {
+    const ranked = rankCandidates(intent, [...(results[index]?.items ?? []), ...(videoSkillsByIntent.get(index) ?? [])], {
       task,
       intentTaskContext: intentTaskContext(task, intent),
       workingDirectory: input.workingDirectory,
     });
-    const candidates = await resolveInstalledCandidates(dedupeCandidateImplementations(builtIn
+    const candidates = await resolveInstalledCandidates(boundedCandidates(intent, dedupeCandidateImplementations(builtIn
       ? [builtIn, ...ranked.filter((candidate) => candidate.id !== builtIn.id)]
-      : ranked).slice(0, MAX_CANDIDATES_PER_ITEM));
+      : ranked)));
     const availableCandidates = candidates.length ? candidates : [unavailableCandidate(intent)];
-    const selected = availableCandidates[0];
+    const selected = availableCandidates.find((candidate) => explicitlyRequestedCapability(task, candidate))
+      ?? availableCandidates.find((candidate) => candidate.availability === "ready")
+      ?? availableCandidates[0];
+    const orderedCandidates = selected === availableCandidates[0]
+      ? availableCandidates
+      : [selected, ...availableCandidates.filter((candidate) => candidate !== selected)];
     return {
       id: `${intent.id}-${stableId(`${task}:${intent.id}`)}`,
       intent: intent.id,
       label: intent.label,
       reason: intent.reason,
-      candidates: availableCandidates,
+      candidates: orderedCandidates,
       selectedCapabilityId: selected.id,
       decision: selected.availability === "ready" ? "use" : "approve-setup",
     };
@@ -770,7 +824,7 @@ export function capabilityApprovalContinuationPrompt(plan: CapabilityApprovalPla
     CAPABILITY_APPROVAL_CONTINUATION_MARKER,
     automatic
       ? "HivemindOS found ready capabilities automatically. Fixed infrastructure choices remain selected; when multiple viable ready options are listed, the worker model must choose from their actual task fit and runtime evidence. This does not bypass spend, secret, deploy, destructive-action, external-send, or runtime permission gates."
-      : "The user approved this capability plan. Continue the original task now and treat this approval as authorization only for the capability setup described below; existing spend, secret, deploy, and destructive-action gates still apply.",
+      : "The user approved this capability plan. Continue the original task now. Each manually selected capability is the required first implementation route for its step, not a suggestion; existing spend, secret, deploy, and destructive-action gates still apply. A fallback is allowed only after a real attempt to use the selected capability fails for a concrete, evidenced reason such as a provider rejection, missing required prerequisite, permission denial, or terminal runtime failure. Do not substitute merely because another tool is easier, and do not treat a missing convenience helper as capability failure when the selected capability still has a documented direct execution route.",
     "",
     `Original task: ${plan.task}`,
     "",
@@ -782,6 +836,7 @@ export function capabilityApprovalContinuationPrompt(plan: CapabilityApprovalPla
     const modelSelects = automatic && capability?.id !== "hive-action:apps.build" && readyOptions.length > 1;
     if (modelSelects) {
       lines.push(`- ${item.label}: model-select the best ready option for the original task. Candidate order is discovery-only and is not a recommendation.`);
+      lines.push(`  Capability intent: ${item.intent}`);
       lines.push("  Compare required inputs, exact task fit, confirmed readiness, configured user preferences, side-effect controls, cost policy, and output needs using only available evidence; do not invent provider quality or price claims.");
       for (const candidate of readyOptions) {
         lines.push(`  - ${candidate.name}${candidate.machineName ? ` on ${candidate.machineName}` : ""} (already available)`);
@@ -793,8 +848,21 @@ export function capabilityApprovalContinuationPrompt(plan: CapabilityApprovalPla
       continue;
     }
     lines.push(`- ${item.label}: ${capability?.name ?? "agent-selected capability"}${capability?.availability === "setup-required" ? " (setup/install approved)" : " (already available)"}`);
+    lines.push(`  Capability intent: ${item.intent}`);
     if (capability?.id) lines.push(`  Capability id: ${capability.id}`);
     if (capability?.locator) lines.push(`  Capability locator: ${capability.locator}`);
+    if (capability?.id) {
+      lines.push(`  Capability execution receipt: ${!automatic && capabilityExecutionReceiptRequired(item.intent) ? "required" : "not-required"}`);
+    }
+    if (capability?.id.startsWith("skill:shared:")) {
+      lines.push("  Shared-skill execution: this capability is the workflow at its locator, not a promise of a same-named native tool. Load its instructions and execute them through the runtime tools it documents; do not call the capability unavailable merely because no same-named tool or route appears.");
+      if (!automatic && capabilityExecutionReceiptRequired(item.intent)) {
+        lines.push(`  Runtime receipt: on the first real selected-capability invocation, prefix the terminal command with HIVEMINDOS_CAPABILITY_ID='${capability.id}'. Credential checks, instruction reads, and capability discovery do not count as an invocation.`);
+      }
+    }
+    if (!automatic) {
+      lines.push("  Execution contract: load and use this exact selected capability for this step before considering any substitute. If it cannot run, preserve the actual failure evidence, explain it plainly, and only then use the best viable fallback.");
+    }
     if (capability?.id === "hive-action:apps.build") {
       lines.push('  Use the available invoke_hive_capability tool with surface="hive_action", operation="invoke", capabilityId="apps.build", method="POST", and App Builder request fields inside arguments. Keep all implementation inside the assigned App Builder directory and do not substitute an untracked background preview server.');
     }

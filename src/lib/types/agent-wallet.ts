@@ -3,12 +3,21 @@ export type AgentPaymentProvider = "manual" | "bankr" | "clawcard" | "moneyclaw"
 export type AgentSurvivalTier = "dead" | "critical" | "low_compute" | "normal" | "high";
 export type AgentSpendCapAsset = "USDC" | "USDG" | "ETH";
 export type AgentAssetSpendCaps = Partial<Record<AgentSpendCapAsset, number>>;
+export type AgentWalletPermissionMode = "approval-required" | "autonomous";
+export type AgentWalletAgentPermissions = Record<string, AgentWalletPermissionMode>;
 
 /** Stock-buying rail: regulated brokerage or on-chain tokenized equities. */
 export type AgentTradingVenue = "alpaca" | "robinhood-agentic" | "xstocks" | "robinhood-chain";
 
 export interface AgentWalletConfig {
+  /** Stable wallet/vault id. Legacy records used the owning agent id here. */
   agentId: string;
+  /** Operator-facing wallet name. Wallet identity is no longer derived from an agent. */
+  name?: string;
+  /** Agents allowed to use this wallet and whether each may spend without per-action approval. */
+  agentPermissions?: AgentWalletAgentPermissions;
+  /** Transient runtime identity used to enforce this agent's attachment and permission. */
+  actingAgentId?: string;
   enabled: boolean;
   provider: AgentPaymentProvider;
   providerSelectedAt?: number;

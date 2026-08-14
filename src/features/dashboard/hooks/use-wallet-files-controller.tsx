@@ -7,7 +7,7 @@ import { nativeRuntimeFileRequest } from "@/lib/native/runtime-files";
 import { readNativeRuntimeUsage } from "@/lib/native/runtime-usage";
 import { isTauriDesktopRuntime } from "@/lib/native/desktop-status";
 import { VEIL_CASH_DEFAULT_X402_URL } from "@/lib/config/veil-cash";
-import { assetSpendCapFor } from "@/lib/utils/agent-wallet";
+import { assetSpendCapFor, normalizeAgentWalletAssignments, normalizeAgentWalletPermissions, primaryAgentWalletForAgent } from "@/lib/utils/agent-wallet";
 import { saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import { sendApprovedWalletUsdc } from "@/lib/services/wallet/send-usdc-client";
 import {
@@ -43,16 +43,27 @@ export function useWalletFilesController(props: any) {
     setSharedVault((current) => ({ ...current, ...patch }));
   }
 
-  function updateWallet(agentId: string, patch: Partial<AgentWalletConfig>) {
+  function resolveWalletEntry(walletOrAgentId: string, source = walletsByAgent) {
+    const direct = source[walletOrAgentId];
+    if (direct) return { walletId: direct.agentId || walletOrAgentId, wallet: direct };
+    const attached = primaryAgentWalletForAgent(source, walletOrAgentId);
+    return attached
+      ? { walletId: attached.agentId, wallet: attached }
+      : { walletId: walletOrAgentId, wallet: createDefaultAgentWallet(walletOrAgentId) };
+  }
+
+  function updateWallet(walletOrAgentId: string, patch: Partial<AgentWalletConfig>) {
     setWalletsByAgent((current) => {
-      const existing = current[agentId] ?? createDefaultAgentWallet(agentId);
+      const { walletId, wallet: existing } = resolveWalletEntry(walletOrAgentId, current);
+      const updated = {
+        ...existing,
+        ...patch,
+        agentId: walletId,
+        updatedAt: Date.now(),
+      };
       return {
         ...current,
-        [agentId]: {
-          ...existing,
-          ...patch,
-          updatedAt: Date.now(),
-        },
+        [walletId]: normalizeAgentWalletAssignments(updated, walletId),
       };
     });
   }
@@ -468,14 +479,21 @@ export function useWalletFilesController(props: any) {
     }));
   }
 
-  async function createLocalWallet(agentId: string, network: string) {
-    updateWalletAction(agentId, { busy: true, error: "", message: "Creating local wallet..." });
+  async function createLocalWallet(
+    walletId: string,
+    network: string,
+    options: { name?: string; agentPermissions?: Record<string, unknown> } = {},
+  ) {
+    const agentPermissions = normalizeAgentWalletPermissions(options.agentPermissions);
+    updateWalletAction(walletId, { busy: true, error: "", message: "Creating local wallet..." });
     const response = await fetch("/api/wallet/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        agentId,
+        agentId: walletId,
         network,
+        name: options.name,
+        agentPermissions,
         vaultPath: sharedVault.enabled ? sharedVault.vaultPath.trim() : undefined,
       }),
     }).catch(() => null);
@@ -486,18 +504,23 @@ export function useWalletFilesController(props: any) {
       error?: string;
     } | null;
     if (!response?.ok || !data?.ok || !data.wallet) {
-      updateWalletAction(agentId, { busy: false, error: data?.error ?? "Could not create wallet.", message: "" });
-      return;
+      updateWalletAction(walletId, { busy: false, error: data?.error ?? "Could not create wallet.", message: "" });
+      return null;
     }
-    updateWallet(agentId, {
+    const createdWallet = {
+      name: options.name?.trim() || undefined,
+      agentPermissions,
+      provider: "x402",
+      providerSelectedAt: Date.now(),
       custodyMode: "local",
       vaultAddress: data.wallet.address,
       walletAddress: data.wallet.address,
       network: data.wallet.network,
       enabled: false,
       survivalStartedAt: Date.now(),
-    });
-    updateWalletAction(agentId, {
+    };
+    updateWallet(walletId, createdWallet);
+    updateWalletAction(walletId, {
       busy: false,
       error: "",
       message: data.vaultSync?.ok
@@ -505,16 +528,17 @@ export function useWalletFilesController(props: any) {
         : `Wallet created. Encrypted vault sync needs attention: ${data.vaultSync?.error ?? "not refreshed"}`,
     });
     await refreshWalletVaultBackupStatus();
+    return { ...createDefaultAgentWallet(walletId), ...createdWallet, agentId: walletId };
   }
 
-  async function refreshWalletBalance(agentId: string) {
-    const wallet = walletsByAgent[agentId] ?? createDefaultAgentWallet(agentId);
+  async function refreshWalletBalance(walletOrAgentId: string) {
+    const { walletId, wallet } = resolveWalletEntry(walletOrAgentId);
     const address = wallet.walletAddress || wallet.vaultAddress;
     if (!address) {
-      updateWalletAction(agentId, { error: "Create or paste a wallet address first.", message: "" });
+      updateWalletAction(walletId, { error: "Create or paste a wallet address first.", message: "" });
       return null;
     }
-    updateWalletAction(agentId, { busy: true, error: "", message: "Checking on-chain balance..." });
+    updateWalletAction(walletId, { busy: true, error: "", message: "Checking on-chain balance..." });
     const response = await fetch("/api/wallet/balance", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -526,7 +550,7 @@ export function useWalletFilesController(props: any) {
       error?: string;
     } | null;
     if (!response?.ok || !data?.ok || !data.balance) {
-      updateWalletAction(agentId, { busy: false, error: data?.error ?? "Could not fetch balance.", message: "" });
+      updateWalletAction(walletId, { busy: false, error: data?.error ?? "Could not fetch balance.", message: "" });
       return null;
     }
     const totalValueUsd = Number(data.balance.totalValueUsd);
@@ -542,16 +566,16 @@ export function useWalletFilesController(props: any) {
       updatedAt: Date.now(),
     };
     setWalletsByAgent((current) => {
-      const existing = current[agentId] ?? createDefaultAgentWallet(agentId);
+      const existing = current[walletId] ?? createDefaultAgentWallet(walletId);
       return {
         ...current,
-        [agentId]: {
+        [walletId]: {
           ...existing,
           ...refreshedWallet,
         },
       };
     });
-    updateWalletAction(agentId, { busy: false, error: "", message: `Balance refreshed: $${currentBalanceUsd.toFixed(2)} total · ${data.balance.tokenBalance.toFixed(6)} USDC.` });
+    updateWalletAction(walletId, { busy: false, error: "", message: `Balance refreshed: $${currentBalanceUsd.toFixed(2)} total · ${data.balance.tokenBalance.toFixed(6)} USDC.` });
     return refreshedWallet;
   }
 

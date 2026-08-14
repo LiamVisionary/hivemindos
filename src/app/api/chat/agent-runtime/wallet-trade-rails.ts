@@ -259,14 +259,15 @@ function buyStockExecutionSse(input: {
         let network: string | undefined;
         let secret: string | undefined;
         let fromAddress: string | undefined;
+        const walletId = wallet?.agentId?.trim() || input.profile.id;
         if (draft.venue === "xstocks" || draft.venue === "robinhood-chain") {
-          const stored = await getWalletSecret(input.profile.id);
+          const stored = await getWalletSecret(walletId);
           if (!stored) throw new Error(`No local ${draft.venue === "xstocks" ? "Solana" : "Robinhood Chain"} wallet exists for this agent.`);
           network = stored.info.network;
           secret = stored.secret;
           fromAddress = stored.info.address;
         } else if ((draft.venue === "alpaca" && wallet?.alpacaPaper === false) || draft.venue === "robinhood-agentic") {
-          const stored = await getWalletSecret(input.profile.id).catch(() => null);
+          const stored = await getWalletSecret(walletId).catch(() => null);
           if (stored) {
             network = stored.info.network;
             secret = stored.secret;
@@ -283,7 +284,7 @@ function buyStockExecutionSse(input: {
         await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS, `Execute ${side}`, "Submitting the order.", "running");
         const startedAt = Date.now();
         const result = await executeStockTrade({
-          agentId: input.profile.id,
+          agentId: walletId,
           policy: buyStockPolicy(wallet!),
           ticker: draft.ticker,
           notionalUsd: draft.notionalUsd ?? 0,

@@ -21,6 +21,7 @@ const socialsPanel = readFileSync("src/features/dashboard/views/socials/SocialsP
 const socialsContext = readFileSync("src/components/socials/socials-context.tsx", "utf8");
 const dashboardApp = readFileSync("src/features/dashboard/DashboardApp.tsx", "utf8");
 const accountsRoute = readFileSync("src/app/api/socials/accounts/route.ts", "utf8");
+const profileRoute = readFileSync("src/app/api/socials/profile/route.ts", "utf8");
 const draftingGenerator = readFileSync("src/lib/services/socials/social-draft-generator.ts", "utf8");
 const draftingModel = readFileSync("src/lib/services/socials/social-draft-model.ts", "utf8");
 const engagementGenerator = readFileSync("src/lib/services/socials/social-engagement-generator.ts", "utf8");
@@ -52,6 +53,9 @@ for (const platform of ["x", "telegram", "farcaster", "linkedin", "reddit", "fac
 }
 assert.match(platformPreview, /data-social-focus-editor/, "platform previews preserve the keyboard-edit target");
 assert.match(platformPreview, /social-engagement-target/, "X reply and quote previews preserve source context");
+assert.match(platformPreview, /account\?\.avatarUrl/, "own-account previews use the connected account's profile image");
+assert.match(platformPreview, /authorAvatarUrl/, "response previews use the target author's stored profile image");
+assert.match(platformPreview, /\/api\/socials\/profile/, "older response drafts can lazily resolve the target author's public profile image");
 assert.match(platformPreviewStyles, /data-theme=["']hive-light["']/, "platform previews include the app light theme");
 assert.match(workspace, /reply: "Replies"/, "review filters use the correct Replies label");
 assert.match(workspace, /canDeliver.*account\?\.probe\.ok/, "publishing controls require a live connection probe");
@@ -71,6 +75,15 @@ assert.match(xSessionCard, /SOCIAL_X_.*_AUTH_TOKEN|suggestedSocialXSessionEnvKey
 assert.match(socialsContext, /setXSessionBinding/);
 assert.match(socialsPanel, /action: ["']set-x-session["']/);
 assert.match(socialsPanel, /setQueueCounts/, "queue actions keep per-account review badges current");
+assert.match(socialsPanel, /activeAccountHydrated/, "Socials waits for the remembered account before its initial read");
+assert.match(socialsPanel, /if \(!activeAccountHydrated\)/, "Socials cannot paint a fallback account before hydration");
+assert.match(socialsPanel, /accountsRequestRef/, "stale account reads cannot repaint the route");
+assert.match(socialsPanel, /queueRequestRef/, "stale queue reads cannot repaint the route");
+assert.match(
+  socialsPanel,
+  /payload\.discovery\?\.authenticated/,
+  "an X discovery session can decorate the selected account only after its identity is authenticated",
+);
 assert.match(
   dashboardApp,
   /import\("@\/features\/dashboard\/views\/trade\/TradePanel"\),\s*\n\s*\(\) => import\("@\/features\/dashboard\/views\/socials\/SocialsPanel"\)/,
@@ -82,8 +95,14 @@ assert.match(accountsRoute, /withSocialXSessionBinding/);
 assert.match(accountsRoute, /invalidateXDiscoveryStatus/);
 assert.match(accountsRoute, /getXDiscoveryStatusForAccount/, "the server verifies the selected cookies belong to the connected handle before persisting them");
 assert.match(accountsRoute, /queueCounts/, "account chips receive real review-queue counts");
+assert.match(accountsRoute, /getXPublicProfileForAccount/, "account reads resolve the explicitly connected X handle's public profile");
+assert.match(accountsRoute, /avatarUrl/, "account reads return profile images to the Socials UI");
+assert.match(profileRoute, /getXPublicProfile/, "response targets have a dedicated public-profile resolver");
+assert.match(profileRoute, /accountId/);
+assert.match(profileRoute, /handle/);
 assert.match(engagementGenerator, /human review/);
 assert.match(discovery, /execFile/, "X discovery uses argument-safe process execution");
+assert.match(discovery, /profileImageUrl/, "X discovery captures the author profile image for response drafts");
 assert.doesNotMatch(discovery, /\bexec\(/, "X discovery never interpolates a shell command");
 assert.match(
   discovery,

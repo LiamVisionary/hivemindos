@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element -- authenticated/public provider avatars use validated runtime URLs. */
 "use client";
 
 import { Plus } from "lucide-react";
@@ -28,7 +29,10 @@ export function AccountRail() {
             data-active={account.id === desk.activeAccountId}
             onClick={() => desk.selectAccount(account.id)}
           >
-            <span className="sc-acct-glyph">{PLATFORM_GLYPH[account.platform]}</span>
+            <span className="sc-acct-glyph">
+              {PLATFORM_GLYPH[account.platform]}
+              {account.avatarUrl ? <img key={account.avatarUrl} src={account.avatarUrl} alt="" onError={(event) => { event.currentTarget.hidden = true; }} /> : null}
+            </span>
             <span style={{ minWidth: 0 }}>
               <span className="sc-acct-name">@{account.handle}</span>
               <div className="sc-acct-sub">

@@ -11,6 +11,7 @@ register(new URL("./lib/ts-relative-loader.mjs", import.meta.url));
 const { resolvedIssueAnswer, resolvedIssueEnvAnswer } = await import("../src/features/dashboard/views/zero-human-companies/issue-resume.ts");
 const { agentsAtWork } = await import("../src/features/dashboard/views/zero-human-companies/data.ts");
 const { buildColony } = await import("../src/features/dashboard/views/zero-human-companies/mappers.ts");
+const { collectCompanyDeliverables } = await import("../src/features/dashboard/views/zero-human-companies/company-deliverables.ts");
 const { emailQaDeliverableRef, emailQaHandledIssueLabels, isEmailQaFindingHandled, isEmailQaIssueHandled } = await import("../src/features/dashboard/views/zero-human-companies/email-qa-directives.ts");
 const { issueGroupReasoningTrail, issueReasoningTrail } = await import("../src/features/dashboard/views/zero-human-companies/issue-reason.ts");
 const { isGenuineHumanAsk } = await import("../src/features/dashboard/kanban-result-format.ts");
@@ -220,6 +221,108 @@ assert.ok(workApprovalView.explanation?.evidence.some((line) => line.includes("R
 assert.equal(workApprovalLink(workApprovalIssue), "https://www.facebook.com/100088584159731/", "Work Board approval link extraction keeps the concrete target");
 assert.equal(isWorkApprovalIssue(issue), false, "ordinary needs-human blockers remain issues");
 
+// A parked task stays needs-human in the Work Board audit trail, but the
+// Companies cockpit must treat it as deferred everywhere: Issues, Approvals,
+// Deliverables, activity, and the headline work counts. This is the live WEBS
+// regression where 50 held cards were still rendered as 48 issues + 9 approvals.
+const parkedWorkColony = buildColony({
+  company: {
+    id: "co-held",
+    name: "Held Work Co",
+    ticker: "HELD",
+    sector: "Web",
+    agentIds: ["agent-1"],
+    autonomy: true,
+    frozen: false,
+    createdAt: "",
+    createdAtMs: Date.now(),
+    updatedAt: "",
+    apexGoal: { title: "Ship sites", metric: "sites", target: "4", unit: "number", current: "1" },
+  },
+  rollup: {
+    companyId: "co-held",
+    memberCount: 1,
+    dailySpentUsd: 0,
+    monthlySpentUsd: 0,
+    totalSpentUsd: 0,
+    dailyRemainingUsd: null,
+    monthlyRemainingUsd: null,
+    totalRemainingUsd: null,
+  },
+  revenueShare: undefined,
+  approvals: [],
+  agentsById: new Map([["agent-1", { id: "agent-1", name: "Ada Lovelace", runtime: "hermes" }]]),
+  tasks: [
+    {
+      id: "t_live_issue",
+      title: "Provide the verified account ID",
+      status: "needs-human",
+      source: "company:co-held:r1",
+      assignee: "agent-1",
+      result: "ACTION NEEDED: Provide the verified account ID.",
+      updatedAt: 40,
+      deliverables: [{ id: "d_live", label: "Live review", kind: "url", url: "https://example.org/live-review" }],
+    },
+    {
+      id: "t_parked_approval",
+      title: "Approve the retired send packet",
+      status: "needs-human",
+      source: "company:co-held:r1",
+      assignee: "agent-1",
+      result: "ACTION NEEDED: Approve or reject publishing the retired packet.",
+      held: { at: 50, by: "operator", note: "Deferred historical packet" },
+      updatedAt: 50,
+      deliverables: [{ id: "d_held_approval", label: "Retired packet", kind: "url", url: "https://example.org/retired-packet" }],
+    },
+    {
+      id: "t_parked_issue",
+      title: "Repair retired infrastructure",
+      status: "needs-human",
+      source: "company:co-held:r1",
+      assignee: "agent-1",
+      result: "ACTION NEEDED: Add the retired provider key.",
+      held: { at: 60, by: "operator", note: "Deferred infrastructure" },
+      updatedAt: 60,
+      deliverables: [{ id: "d_held_issue", label: "Retired report", kind: "url", url: "https://example.org/retired-report" }],
+    },
+    {
+      id: "t_done",
+      title: "Ship current site",
+      status: "done",
+      source: "company:co-held:r1",
+      assignee: "agent-1",
+      updatedAt: 70,
+      completedAt: 70,
+      deliverables: [{ id: "d_done", label: "Current site", kind: "url", url: "https://example.org/current-site" }],
+    },
+  ],
+});
+assert.deepEqual(
+  parkedWorkColony.issues.map((candidate) => candidate.work?.taskId),
+  ["t_live_issue", "t_done"],
+  "parked tasks stay out of the company issue model while live and completed work remain",
+);
+assert.equal(
+  parkedWorkColony.issues.filter(isWorkApprovalIssue).length,
+  0,
+  "parked approve/reject tasks do not inflate the company Approvals count",
+);
+assert.deepEqual(
+  collectCompanyDeliverables(parkedWorkColony).map((item) => item.classified.deliverable.url).sort(),
+  ["https://example.org/current-site", "https://example.org/live-review"],
+  "parked task outputs do not inflate the company Deliverables count",
+);
+assert.deepEqual(
+  { done: parkedWorkColony.workBlock.done, total: parkedWorkColony.workBlock.total },
+  { done: 1, total: 2 },
+  "parked tasks do not inflate the company's active work-block totals",
+);
+assert.doesNotMatch(
+  parkedWorkColony.activity.join("\n"),
+  /retired/i,
+  "parked tasks do not reappear in current company activity",
+);
+
 const emailQaServiceSource = readFileSync("src/lib/services/company-email-qa.ts", "utf8");
 assert.match(emailQaServiceSource, /threadFindingTimestamp\(thread\)/, "Email QA findings prefer stable sent timestamps for reload suppression");
 const agentMailboxesSource = readFileSync("src/lib/services/agent-mailboxes.ts", "utf8");
@@ -270,6 +373,7 @@ const liveSource = readFileSync("src/features/dashboard/views/zero-human-compani
 assert.match(liveSource, /action: "answer"/, "live resolver uses the Work Board answer action");
 assert.match(liveSource, /resolvedIssueAnswer\(issue\)/, "live resolver uses the audited resume message");
 assert.match(liveSource, /pickupScheduled/, "live resolver reports immediate pickup status");
+assert.match(liveSource, /held:\s*normalizeKanbanTaskHold\(t\.held\)/, "Companies keeps the server's held marker when normalizing Work Board tasks");
 
 const boardSource = readFileSync("src/features/dashboard/views/zero-human-companies/IssueBoard.tsx", "utf8");
 assert.doesNotMatch(boardSource, /WebkitLineClamp|textOverflow:\s*"ellipsis"/, "issue blockers are not silently truncated");

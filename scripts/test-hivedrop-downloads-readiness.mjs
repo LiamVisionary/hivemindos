@@ -2,7 +2,20 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [linkMain, linkFile, installer, collector, sender, nativeSetup, fleetData, dashboardMapper, hivePanel] = await Promise.all([
+const [
+  linkMain,
+  linkFile,
+  installer,
+  collector,
+  sender,
+  nativeSetup,
+  fleetData,
+  dashboardMapper,
+  hivePanel,
+  hivePanelActions,
+  listViewActions,
+  sendFileModal,
+] = await Promise.all([
   readFile(new URL("../cmd/hivemind-linkd/main.go", import.meta.url), "utf8"),
   readFile(new URL("../cmd/hivemind-linkd/file.go", import.meta.url), "utf8"),
   readFile(new URL("./install-telemetry-collector.sh", import.meta.url), "utf8"),
@@ -12,6 +25,9 @@ const [linkMain, linkFile, installer, collector, sender, nativeSetup, fleetData,
   readFile(new URL("../src/components/fleet/fleet-data.ts", import.meta.url), "utf8"),
   readFile(new URL("../src/features/dashboard/hooks/use-dashboard-derived-state.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/components/fleet-hive/HivePanel.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/components/fleet-hive/HivePanelActions.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/components/fleet/list-view-machine-actions.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/components/fleet/machine-send-file-modal.tsx", import.meta.url), "utf8"),
 ]);
 
 assert.match(
@@ -76,9 +92,18 @@ assert.match(
   "collector readiness should reach the fleet machine model",
 );
 assert.match(
-  hivePanel,
-  /disabled=\{m\.source\.fileTransfers === false\}/,
+  hivePanelActions,
+  /disabled=\{machine\.source\.fileTransfers === false\}/,
   "Hive Drop should be disabled when setup has not prepared the receiver",
 );
+assert.match(hivePanel, /<HiveMachineActions/, "the Hive machine panel should mount the compact action group");
+assert.match(hivePanelActions, /label="Send file"/, "the Hive machine action should use the plain Send file label");
+assert.match(listViewActions, /label="Send file"/, "the Fleet list action should use the plain Send file label");
+assert.match(
+  sendFileModal,
+  /Drag & Drop or Browse to send a file privately via HiveDrop/,
+  "the send modal should explain that HiveDrop transfers the file privately",
+);
+assert.match(sendFileModal, /className=\{styles\.brandHero\}/, "the send modal should present HiveDrop as a signature feature");
 
 console.log("Hive Drop Downloads readiness checks passed");

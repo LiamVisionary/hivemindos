@@ -539,3 +539,124 @@ After the bounded/idempotent repair, warm full setup fell from 74.14 seconds to
 4.95 seconds; and the real native wizard reached **This Mac is ready** in at
 most 18.109 seconds with the optional Bonjour package unavailable, no package
 install, and no privilege prompt. Fixed 2026-08-07.
+
+## G11 - A healthy long agent turn fails at an exact round-number deadline
+
+### Symptom
+
+Chat shows genuine tool activity and a durable runtime session, then reports a
+timeout at exactly ten minutes. Reload may show the last tool as running, or an
+App workspace can open from an interim progress sentence before the build has
+finished.
+
+### Why it fools you
+
+- Generated media and production builds really can take several minutes, so a
+  transport deadline looks like proof that the worker was too slow.
+- `AbortSignal.timeout()` attached to `fetch` supervises the response body too;
+  receiving headers and hundreds of valid events does not reset it.
+- An SSE heartbeat can keep the browser alive while an independent server timer
+  still aborts the same healthy stream later.
+- Assistant text is not a completion signal. Hermes deliberately emits progress
+  narration before tools, and that text remains present while the session is
+  still active.
+- An expired dashboard active-run marker is not proof the worker produced no
+  later output. The HivemindOS wrapper and Hermes durable session have different
+  ids, and older CLI sessions may flush their final assistant row without
+  setting `ended_at`.
+
+### Root cause and fix
+
+Trace all timeout layers independently: browser stall watchdog, Tauri proxy,
+Next route budget, HivemindOS-to-collector fetch, collector-to-Hermes request,
+and the worker process. Long streaming work must be supervised by inactivity,
+with a timer reset by upstream bytes, while inert downstream SSE comments keep
+intermediary sockets and the webview reader alive. Completion must come from
+the runtime's terminal marker (`endedAt`/end reason or the normal stream end),
+never from elapsed time or the presence of assistant prose. Keep a finite idle
+budget so a genuinely silent upstream still fails actionably. Reload recovery
+must identify a historical worker session by the original prompt and turn start,
+not by “newest Hermes session,” then reconcile it against the already-terminal
+wrapper. A matched assistant-final written after a failed wrapper is completion
+evidence even when an older CLI omitted `ended_at`.
+
+### Diagnosis recipe
+
+1. Record start, abort, last upstream byte, worker process exit, final build,
+   and final assistant timestamps. An exact round-number abort with later worker
+   completion is a transport bug, not a slow-task verdict.
+2. Identify which collector path ran from `X-Hermes-Stream-Source`; verify both
+   gateway and scoped CLI paths emit heartbeats.
+3. Inspect the actual fetch signal. A one-shot timeout on a streaming fetch is
+   total wall time even if the body remains active.
+4. Reload during a tool wait. The process card and worker bee must remain active
+   until the polled session has `endedAt`.
+5. Interrupt the browser stream after interim narration. The App workspace must
+   stay closed and the durable session must remain recoverable.
+6. Reload after the active-run TTL expires. The selected unresolved transcript
+   must perform one bounded prompt-matched lookup, render the later final answer,
+   remove the stale failed-wrapper suffix, and retain its App workspace.
+
+### Fixed evidence
+
+The reported turn was aborted at 599,996 ms. Hermes completed its production
+build about four seconds later and its final response about 24 seconds later;
+the full worker turn was about 10m19s. The replacement watchdog regression
+crosses its original deadline while receiving activity, then aborts only after
+the configured idle period. A hermetic live collector turn proves the scoped
+CLI heartbeat reaches the SSE client, and UI regressions prove active recovery
+text cannot complete an unfinished app turn. The exact historical wrapper now
+resolves to Hermes session `20260813_134347_c729d2`, whose later final assistant
+response repairs the failed wrapper and restores the generated App workspace on
+reload. Fixed 2026-08-13.
+
+## G12 - Hydrated route state can quietly run the initial loader twice
+
+### Symptom
+
+A route opens with real content, clears or changes account, then renders real
+content again a few seconds later. Network activity shows two identical account
+reads even though React mounted the route only once from the user's perspective.
+
+### Why it fools you
+
+- The first response is valid for the fallback selection, so neither request
+  fails and ordinary error logging stays quiet.
+- An async remembered-value hook initially returns its default, then hydrates
+  the durable value. If a loader callback closes over that value, the callback
+  identity changes and restarts an effect that looks like mount-only code.
+- Loading flags belong to both requests, so an older `finally` can hide content
+  or clear a spinner while the authoritative request is still running.
+- Selecting another account can recreate the same full loader when only the
+  scoped queue needs to change.
+
+### Root cause and fix
+
+Treat durable selection hydration as part of route readiness. Expose a settled
+signal from the canonical remembered-state hook, wait for it before the initial
+read, and keep the loader independent of selection changes by reading the latest
+selection from a ref. Give each account and scoped-content request a monotonic
+id; only the newest request may update state or loading flags. Explicit account
+changes should request only the new account's content unless the account list
+itself must be refreshed.
+
+### Diagnosis recipe
+
+1. Reproduce through the reported navigation control, not only a direct URL.
+2. Record request start/end times, selection text, workspace visibility, and
+   loading state from navigation until the route settles.
+3. Inspect every dependency of the initial effect and its callback. Trace any
+   asynchronously hydrated value that changes after the first render.
+4. Delay one response to prove a stale request cannot repaint current state or
+   clear the authoritative loading indicator.
+5. Verify the real route counts one initial account read and remains mounted
+   after its first content paint; a compile or source assertion is insufficient.
+
+### Fixed evidence
+
+The reported Socials path started two overlapping account reads, painted the
+fallback Facebook queue, then repainted the remembered X queue roughly 2.1
+seconds later. The repaired authenticated browser path performs one initial
+account read, keeps the workspace visible after first paint, and retains the
+remembered `@TheHivemindOS` account. Focused source coverage guards hydration,
+stable loaders, and stale-response ids. Fixed 2026-08-13.

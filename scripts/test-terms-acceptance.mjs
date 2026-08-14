@@ -60,6 +60,11 @@ for (const requiredLanguage of [
   "limited automatic technical connections",
   "honey rewards are disabled by default",
   "signed github release endpoint",
+  "hivemindos browser extension",
+  "does not continuously monitor browsing activity",
+  "local, unsynchronized chrome extension storage",
+  "chrome web store user data policy",
+  "limited use requirements",
   "do not sell personal information",
   "privacy@hivemindos.app",
 ]) {

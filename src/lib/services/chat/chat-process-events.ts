@@ -6,6 +6,54 @@ export type ChatProcessEvent = {
   runId?: string;
 };
 
+export type LabeledChatProcessEvent = ChatProcessEvent & { label: string };
+
+type ChatProcessTerminal = {
+  at: number;
+  detail?: string;
+  status: "completed" | "failed";
+  runId?: string;
+};
+
+function chatProcessLifecycle(event: ChatProcessEvent) {
+  const label = String(event.label ?? "").trim();
+  const starting = label.match(/^Starting (\S+)$/);
+  if (starting) return { phase: "open" as const, tool: starting[1] };
+  const running = label.match(/^(\S+) running$/);
+  if (running) return { phase: "open" as const, tool: running[1] };
+  const finished = label.match(/^(\S+) finished$/);
+  if (finished) return { phase: "close" as const, tool: finished[1] };
+  return null;
+}
+
+/** Close tool rows whose terminal lifecycle event was lost with the stream. */
+export function settleUnfinishedChatProcessEvents(
+  events: readonly LabeledChatProcessEvent[] = [],
+  terminal?: ChatProcessTerminal | null,
+): LabeledChatProcessEvent[] {
+  if (!terminal) return [...events];
+  const openByTool = new Map<string, { event: ChatProcessEvent; tool: string }>();
+  for (const event of events) {
+    if (terminal.runId && event.runId !== terminal.runId) continue;
+    const lifecycle = chatProcessLifecycle(event);
+    if (!lifecycle) continue;
+    const key = `${event.runId ?? ""}\u001f${lifecycle.tool}`;
+    if (lifecycle.phase === "close") openByTool.delete(key);
+    else openByTool.set(key, { event, tool: lifecycle.tool });
+  }
+  if (!openByTool.size) return [...events];
+  return [
+    ...events,
+    ...[...openByTool.values()].map(({ event, tool }) => ({
+      at: Math.max(terminal.at, Number(event.at ?? 0)),
+      label: `${tool} finished`,
+      detail: terminal.detail,
+      status: terminal.status,
+      runId: event.runId,
+    })),
+  ];
+}
+
 function processEventBaseKey(event: ChatProcessEvent) {
   return [event.runId ?? "", event.label ?? "", event.detail ?? ""].join("\u001f");
 }

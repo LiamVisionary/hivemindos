@@ -480,7 +480,7 @@ function privateX402ExecutionSse(input: {
         if (Number.isFinite(maxPaymentUsd) && maxPaymentUsd > 0) {
           const feeQuote = await quoteTradingPlatformFee({ source: "veil-x402", network: VEIL_CASH_NETWORK, amountUsd: maxPaymentUsd });
           if (feeQuote.enabled) {
-            feeWallet = await getWalletSecret(input.profile.id);
+            feeWallet = await getWalletSecret(input.wallet?.agentId?.trim() || input.profile.id);
             if (!feeWallet) throw new Error("No local wallet exists for this agent, so the HivemindOS platform fee cannot be collected.");
             await assertTradingPlatformFeeReady({ source: "veil-x402", network: feeWallet.info.network, amountUsd: maxPaymentUsd });
           }
@@ -515,7 +515,7 @@ function privateX402ExecutionSse(input: {
           result = {
             ...result,
             platformFee: await collectTradingPlatformFee({
-              agentId: input.profile.id,
+              agentId: input.wallet?.agentId?.trim() || input.profile.id,
               network: feeWallet.info.network,
               secret: feeWallet.secret,
               fromAddress: feeWallet.info.address,
@@ -615,7 +615,7 @@ function miroSharkX402ExecutionSse(input: {
           `Cap ${formatMoney(Math.min(input.wallet.maxPaymentUsd, Math.max(MIROSHARK_X402_SIMULATION_PRICE_USD, input.draft.maxPaymentUsd)))} ${stableAssetForNetwork(input.wallet.network)} · ${input.draft.seedKind}`,
         );
         const paidStartedAt = Date.now();
-        const paidRun = await executeMiroSharkChatRun(input.profile.id, input.wallet, input.draft);
+        const paidRun = await executeMiroSharkChatRun(input.wallet.agentId?.trim() || input.profile.id, input.wallet, input.draft);
         const runId = extractMiroSharkRunId(paidRun.miroshark, paidRun.result.bodyJson);
         await recordRouteTelemetry(input.request, "agent_runtime.miroshark_x402.started", {
           ...telemetryPayloadForProfile(input.profile),
@@ -717,7 +717,8 @@ function publicX402ExecutionSse(input: {
         if (!wallet) throw new Error("No wallet is configured for this agent.");
         const approvedMax = Number(input.draft.maxPayment);
         if (!Number.isFinite(approvedMax) || approvedMax <= 0) throw new Error("Confirmed x402 draft has no valid max payment.");
-        const stored = await getWalletSecret(input.profile.id);
+        const walletId = wallet.agentId?.trim() || input.profile.id;
+        const stored = await getWalletSecret(walletId);
         if (!stored) throw new Error("No local wallet exists for this agent.");
         const policy = publicX402Policy(wallet, stored.info.network, approvedMax);
         await sendTool(
@@ -729,7 +730,7 @@ function publicX402ExecutionSse(input: {
         await sendTool(RUNTIME_STREAM_EVENT_TYPES.TOOL_PROGRESS, "Execute public x402 payment", "Signing from the local wallet vault.", "running");
         const startedAt = Date.now();
         const result = await executeX402Fetch({
-          agentId: input.profile.id,
+          agentId: walletId,
           network: stored.info.network,
           secret: stored.secret,
           fromAddress: stored.info.address,
@@ -746,7 +747,7 @@ function publicX402ExecutionSse(input: {
               `URL: ${input.draft.url}`,
               `Method: ${input.draft.method}`,
               `Approved max: ${formatMoney(policy.maxPaymentUsd)}`,
-              `Wallet: ${input.profile.id}`,
+              `Wallet: ${walletId}`,
             ],
             source: "Agent runtime public x402",
           },

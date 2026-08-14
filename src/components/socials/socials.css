@@ -58,6 +58,8 @@
 }
 
 .sc-acct-glyph {
+  position: relative;
+  overflow: hidden;
   width: 34px;
   height: 34px;
   border-radius: 10px;
@@ -69,6 +71,15 @@
   flex: none;
   font-size: 13px;
   font-weight: 700;
+}
+
+.sc-acct-glyph img,
+.sc-account-glyph img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .sc-acct-name {
@@ -974,6 +985,8 @@
 .sc-shell .sc-account-chip.sc-acct[data-active="true"] { color: var(--sc-honey); border-color: var(--sc-honey-line); background: var(--sc-honey-soft); }
 
 .sc-account-glyph {
+  position: relative;
+  overflow: hidden;
   display: grid;
   place-items: center;
   width: 23px;

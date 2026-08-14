@@ -15,16 +15,17 @@ includes(source, "function cleanProcessEnvValue(value)", "collector defines env 
 includes(source, "return value.replace(/\\0/g, \"\");", "collector strips NUL bytes from env values");
 includes(source, "function sanitizeProcessEnvEntries(value)", "collector sanitizes env maps");
 includes(source, "function safeAgentEnv(value) {\n  return sanitizeProcessEnvEntries(value);\n}", "agent-provided env goes through sanitizer");
-includes(source, "return sanitizeProcessEnvEntries({\n    ...process.env,", "inherited process env goes through sanitizer");
-includes(source, "function hermesPrivacyGuardEnv(hermesHome = defaultHermesDir)", "collector defines Hermes privacy guard env");
-includes(source, "HERMES_SAFE_FILE_SEARCH_ROOTS: hermesSafeFileSearchRoots(hermesHome)", "collector passes safe search roots to Hermes");
+includes(source, "return sanitizeProcessEnvEntries({\n    ...inherited,", "inherited process env goes through sanitizer");
+includes(source, "function hermesPrivacyGuardEnv(hermesHome = defaultHermesDir, fleetPolicy = null)", "collector defines Hermes privacy guard env");
+includes(source, "HERMES_SAFE_FILE_SEARCH_ROOTS: hermesSafeFileSearchRoots(hermesHome, fleetPolicy)", "collector passes safe search roots to Hermes");
 includes(source, "HERMES_ALLOW_HOME_WIDE_FILE_SEARCH", "collector disables home-wide Hermes file search by default");
 includes(source, "value = cleanProcessEnvValue(value) ?? \"\";", "fresh shared hive env values go through sanitizer");
-includes(source, "...sharedHiveEnv,\n      ...agentEnv,", "spawn env still gives shared env and agent env to Hermes");
-includes(source, "...hermesPrivacyGuardEnv(hermesHome),", "Hermes spawn env includes privacy guard settings");
+includes(source, "prepareFleetSharedEnvChat(fleetPolicy, sharedHiveEnv, safeAgentEnv(body.agentEnv)", "shared env and sanitized agent env pass through fleet policy before Hermes spawn");
+includes(source, "fleetPolicySpawnEnv(fleetPolicy, sharedHiveEnv, {", "Hermes spawn resolves the policy-governed shared env");
+includes(source, "...hermesPrivacyGuardEnv(hermesHome, fleetPolicy),", "Hermes spawn env includes privacy guard settings");
 
 const helperStart = source.indexOf("const ENV_KEY_PATTERN");
-const helperEnd = source.indexOf("function hermesContextEnv", helperStart);
+const helperEnd = source.indexOf("async function readSharedHiveEnvForSpawn", helperStart);
 assert.ok(helperStart > -1 && helperEnd > helperStart, "collector sanitizer helper block should be extractable");
 
 const sandbox = {
@@ -39,6 +40,7 @@ const sandbox = {
   homedir: () => "/Users/tester",
   process: {
     execPath: "/usr/local/bin/node",
+    platform: "darwin",
     env: {
       PATH: "/usr/bin",
       PUBLIC_PREVIEW_BASE_URL: "https://preview.example.test\0\0",
@@ -65,6 +67,8 @@ const runtimeEnv = helpers.runtimeProcessEnv({ EXTRA_KEY: "z\0z" });
 assert.equal(runtimeEnv.PUBLIC_PREVIEW_BASE_URL, "https://preview.example.test", "runtimeProcessEnv sanitizes inherited process env");
 assert.equal(runtimeEnv.EXTRA_KEY, "zz", "runtimeProcessEnv sanitizes extra spawn env");
 assert.ok(runtimeEnv.PATH.includes("/usr/local/bin"), "runtimeProcessEnv keeps node dirname in PATH");
+assert.ok(runtimeEnv.PATH.includes("/Users/tester/.local/bin"), "runtimeProcessEnv exposes HivemindOS shared-env helpers to GUI-launched workers");
+assert.ok(runtimeEnv.PATH.includes("/opt/homebrew/bin"), "runtimeProcessEnv exposes the standard Apple Silicon package-manager bin directory");
 const hermesGuard = helpers.hermesPrivacyGuardEnv("/Users/tester/.hermes");
 const safeRoots = hermesGuard.HERMES_SAFE_FILE_SEARCH_ROOTS.split(delimiter);
 assert.ok(safeRoots.includes("/Users/tester/Documents/Obsidian/hivemindos-vault"), "Hermes can search the shared vault");

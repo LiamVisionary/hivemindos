@@ -32,6 +32,7 @@ const requiredFiles = [
   "src/components/fleet/hive-compute-host-modal.tsx",
   "src/components/fleet/hive-compute-host-console.tsx",
   "src/components/fleet/hive-compute-host-earnings.tsx",
+  "src/components/fleet/list-view-machine-actions.tsx",
   "src/components/fleet/hive-compute-benchmark-recovery.ts",
   "src/components/fleet/hive-compute-concurrency.ts",
   "src/components/fleet/hive-compute-price-draft.ts",
@@ -64,6 +65,8 @@ const marketplaceRoute = read("src/app/api/hive-compute/marketplace/route.ts");
 const computeRentalsConfig = read("src/lib/config/compute-rentals.ts");
 const fleetView = read("src/components/fleet/FleetView.tsx");
 const fleetHiveView = read("src/components/fleet-hive/FleetHiveView.tsx");
+const fleetListView = read("src/components/fleet/list-view.tsx");
+const fleetListMachineActions = read("src/components/fleet/list-view-machine-actions.tsx");
 const hiveHostModal = read("src/components/fleet/hive-compute-host-modal.tsx");
 const hiveHostConsole = read("src/components/fleet/hive-compute-host-console.tsx");
 const benchmarkRecovery = read("src/components/fleet/hive-compute-benchmark-recovery.ts");
@@ -104,6 +107,9 @@ assert(marketplaceRoute.includes("export const maxDuration = 600"), "The benchma
 assert(computeRentalsConfig.includes("NEXT_PUBLIC_HIVEMINDOS_USEPOD_COMPUTE_RENTALS_ENABLED") && computeRentalsConfig.includes("=== \"1\""), "UsePod compute rentals must stay behind an explicit public flag.");
 assert(fleetView.includes("USEPOD_COMPUTE_RENTALS_ENABLED") && fleetView.includes("HiveComputeHostModal"), "Legacy Fleet compute rental entry must default to Hive Compute with UsePod flag fallback.");
 assert(fleetHiveView.includes("USEPOD_COMPUTE_RENTALS_ENABLED") && fleetHiveView.includes("HiveComputeHostModal"), "Hive Fleet compute rental entry must default to Hive Compute with UsePod flag fallback.");
+assert(fleetListView.includes("FleetListMachineActions") && fleetListView.includes("onOpenCompute={onOpenCompute}"), "Fleet list machine cards must render their machine action bar and forward the compute-host action.");
+assert(fleetListMachineActions.includes('label="Rent compute"') && fleetListMachineActions.includes("<span>Add agent</span>") && fleetListMachineActions.includes('label="Send file"'), "Fleet list machine cards must keep compute hosting and the other core machine actions discoverable together.");
+assert(fleetHiveView.includes("onOpenCompute={setUsePodHostMachine}") && fleetView.includes("onOpenCompute={setUsePodHostMachine}"), "Both Fleet list hosts must open the canonical compute-host modal from machine cards.");
 assert(hiveHostModal.includes("HiveComputeHostConsole") && dashboardComputePanel.includes("HiveComputeHostConsole"), "Fleet and dashboard surfaces must share one Hive Compute host console.");
 assert(hiveHostConsole.includes("Set up hosting") && hiveHostConsole.includes("Advanced diagnostics") && hiveHostConsole.includes("Open MPP session") && hiveHostConsole.includes("Privacy:"), "Shared Hive Compute host UI must keep one-click setup primary while surfacing MPP and TEE privacy gates.");
 assert(hiveHostConsole.includes("selectedModelIds: null") && hiveHostConsole.includes("Models to advertise") && hiveHostConsole.includes("aria-pressed") && hiveHostConsole.includes("Enable all"), "Shared Hive Compute host UI must expose default-on model advertising chips.");
@@ -131,6 +137,7 @@ assert(!hiveHostConsole.includes("Competitive") && !hiveHostConsole.includes("Ma
 assert(!hiveHostConsole.includes("List markdown"), "Retired list-markdown pricing jargon must not remain in the host UI.");
 assert(dashboardNav.includes('compute: { label: "Hive Compute"'), "Dashboard route catalog must include Hive Compute.");
 assert(morePanel.includes('id: "compute"'), "More launcher must include a Hive Compute tile.");
+assert(morePanel.includes("Earn while you sleep. Host your compute.") && morePanel.includes("activate(items.compute)"), "More must carry a persistent compute-hosting discovery CTA wired to the Hive Compute route.");
 assert(!agentSettingsModal.includes('selectedProviderSlug === "hive-compute"'), "Agent settings must not special-case a standalone Hive Compute picker.");
 assert(!agentSettingsModal.includes("hiveComputeSelected"), "Agent settings must not keep the standalone Hive Compute picker state.");
 assert(!modelPillSelector.includes("statusLabel") && !modelPillSelector.includes("modelStatus"), "Model pill selector must not render stale Hive Compute-only capacity status.");

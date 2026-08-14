@@ -22,6 +22,7 @@ import type { FleetHostedApp } from "./active-apps";
 import { HiveComputeHostModal } from "./hive-compute-host-modal";
 import { UsePodHostModal } from "./usepod-host-modal";
 import { MachineTerminalModal } from "./machine-terminal-modal";
+import { MachineSendFileModal } from "./machine-send-file-modal";
 import { USEPOD_COMPUTE_RENTALS_ENABLED } from "@/lib/config/compute-rentals";
 import { dashboardStateValue, loadDashboardStateSnapshot, removeDashboardStateValue, saveDashboardStateValue } from "@/lib/services/dashboard-state-client";
 import {
@@ -94,7 +95,7 @@ export interface FleetViewProps {
   onOpenQueenSettings?: () => void;
   /** "Message the hive" composer (new Hive layout only; legacy FleetView ignores it). */
   onSendMessage?: (text: string) => void;
-  /** Optional wallet configs used by the Fleet Hive selected-agent holdings panel. */
+  /** Wallet registry plus per-agent aliases used by the Fleet Hive economy panels. */
   walletsByAgent?: Record<string, AgentWalletConfig>;
   /** Optional host-provided Hive/Classic switcher, rendered in the classic stage toolbar. */
   layoutToggle?: React.ReactNode;
@@ -171,6 +172,7 @@ export function FleetView({
   const [newAgentKey, setNewAgentKey] = React.useState<string | null>(null);
   const [usePodHostMachine, setUsePodHostMachine] = React.useState<FleetMachine | null>(null);
   const [terminalMachine, setTerminalMachine] = React.useState<FleetMachine | null>(null);
+  const [sendFileMachine, setSendFileMachine] = React.useState<FleetMachine | null>(null);
   const newAgentTimerRef = React.useRef<number>(0);
   const [settledFleet, setSettledFleet] = React.useState<SettledFleetViewData>({
     machines: [],
@@ -692,6 +694,15 @@ export function FleetView({
                   onEditSettings={onEditSettings}
                   onDuplicate={onDuplicate}
                   onRemove={onRemove ? handleRemove : undefined}
+                  updateStatusByMachine={updateStatusByMachine}
+                  updateDetailByMachine={updateDetailByMachine}
+                  onUpdateMachine={onUpdateMachine}
+                  onRenameMachine={onRenameMachine}
+                  onOpenCodeProof={onOpenCodeProof}
+                  onFixSyncIssue={onFixSyncIssue}
+                  onOpenShell={setTerminalMachine}
+                  onSendFile={setSendFileMachine}
+                  onOpenCompute={setUsePodHostMachine}
                 />
               )}
               {refreshing ? <FleetScanOverlay /> : null}
@@ -851,6 +862,10 @@ export function FleetView({
 
         {terminalMachine && typeof document !== "undefined" ? (
           <MachineTerminalModal machine={terminalMachine} onClose={() => setTerminalMachine(null)} />
+        ) : null}
+
+        {sendFileMachine && typeof document !== "undefined" ? (
+          <MachineSendFileModal machine={sendFileMachine} onClose={() => setSendFileMachine(null)} />
         ) : null}
 
         {aeonDeleteTarget && onRemove ? (

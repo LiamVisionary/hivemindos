@@ -4,7 +4,7 @@ import { join } from "path";
 
 import { resolveObsidianVaultPath } from "@/lib/services/obsidian/vault-path";
 import type { AgentAssetSpendCaps, AgentSpendCapAsset, AgentWalletConfig, AgentWalletTokenBalance } from "@/lib/types/agent-wallet";
-import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
+import { DEFAULT_DUPLICATE_PAYMENT_GUARD_SECONDS, normalizeAgentWalletAssignments, normalizeAgentWalletPermissions, stripUnfundedWalletBalance } from "@/lib/utils/agent-wallet";
 import { personalWalletOptionalNumber } from "@/lib/utils/personal-wallet-grouping";
 
 const WALLET_FOLDER = "Projects/HivemindOS/Wallets";
@@ -150,6 +150,8 @@ function renderRecordMarkdown(record: WalletLedgerRecord): string {
   const frontmatter: Array<[string, unknown]> = [
     ["agentId", record.agentId],
     ["agentName", record.agentName],
+    ["walletName", record.wallet.name ?? record.agentName],
+    ["agentPermissions", record.wallet.agentPermissions ?? {}],
     ["runtime", record.runtime ?? ""],
     ["machineName", record.machineName ?? ""],
     ["dashboardMachine", record.dashboardMachine],
@@ -220,6 +222,8 @@ function parseRecordMarkdown(filename: string, content: string): WalletLedgerRec
   if (!agentId) return null;
   const wallet: AgentWalletConfig = {
     agentId,
+    name: typeof fm.walletName === "string" && fm.walletName ? fm.walletName : undefined,
+    agentPermissions: normalizeAgentWalletPermissions(fm.agentPermissions, agentId, Boolean(fm.autoPayEnabled)),
     enabled: Boolean(fm.enabled),
     provider: (typeof fm.provider === "string" ? fm.provider : "bankr") as AgentWalletConfig["provider"],
     walletAddress: typeof fm.walletAddress === "string" ? fm.walletAddress : "",
@@ -266,7 +270,7 @@ function parseRecordMarkdown(filename: string, content: string): WalletLedgerRec
     machineName: typeof fm.machineName === "string" ? fm.machineName : undefined,
     dashboardMachine: typeof fm.dashboardMachine === "string" ? fm.dashboardMachine : "",
     updatedAt: typeof fm.updatedAt === "string" ? fm.updatedAt : new Date(0).toISOString(),
-    wallet: stripUnfundedWalletBalance(wallet),
+    wallet: normalizeAgentWalletAssignments(stripUnfundedWalletBalance(wallet), agentId),
   };
 }
 
@@ -327,7 +331,7 @@ export async function writeWalletRecord(input: {
     machineName: input.machineName,
     dashboardMachine: hostname(),
     updatedAt: new Date().toISOString(),
-    wallet: stripUnfundedWalletBalance({ ...input.wallet, agentId: input.agentId }),
+    wallet: normalizeAgentWalletAssignments(stripUnfundedWalletBalance({ ...input.wallet, agentId: input.agentId }), input.agentId),
   };
   const filePath = join(folderPath, fileNameFor(input.agentId));
   await writeFile(filePath, renderRecordMarkdown(record), "utf8");

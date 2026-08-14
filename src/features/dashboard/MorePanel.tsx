@@ -181,7 +181,7 @@ export function MorePanel({
       marketplace: { id: "marketplace", icon: <LayoutGrid aria-hidden="true" />, eyebrow: "Selling agent", title: "Marketplace", body: "List items with photos and a description, let the Queen research pricing, and have an agent manage buyers end to end.", keywords: "marketplace facebook listing listings sell selling offers buyers price research car" },
       governance: { id: "governance", icon: <Landmark aria-hidden="true" />, eyebrow: "Companies & budgets", title: "Zero Human Company", body: "Group agents into companies, set budgets and kill switches, and clear spend approvals.", keywords: "governance company companies budget approvals kill switch zhc", ...approvalBadge },
       cloud: { id: "cloud", icon: <Cloud aria-hidden="true" />, eyebrow: "Always-on Hermes", title: "Managed Cloud Agents", body: "Deploy dedicated pay-as-you-go agents with persistent workspaces that run while your computers are off.", keywords: "cloud managed hosted always on hermes pay as you go deploy", dot: "live" },
-      compute: { id: "compute", icon: <Cpu aria-hidden="true" />, eyebrow: "GPU marketplace", title: "Hive Compute", body: "Route model calls through marketplace GPUs or install a worker to earn from spare local GPU capacity.", keywords: "compute gpu marketplace inference worker ollama earn rent models" },
+      compute: { id: "compute", icon: <Cpu aria-hidden="true" />, eyebrow: "GPU marketplace", title: "Hive Compute", body: "Host your spare compute, earn when marketplace jobs reach your models, or route model calls through other hosts.", keywords: "compute gpu marketplace inference worker ollama earn while sleep host rent models" },
       "credit-admin": { id: "credit-admin", icon: <Coins aria-hidden="true" />, eyebrow: "Service credits", title: "Credit Accounts", body: "View every internal prepaid credit account and its balance, and fund any of them directly.", keywords: "credit credits accounts fund funding balance service account top up admin rail" },
       stake: { id: "stake", icon: <Coins aria-hidden="true" />, eyebrow: "Community tiers", title: "Stake HIVE", body: "Lock HIVE for Holder–Visionary status, alpha rooms, governance, and curator rights.", keywords: "stake hive holder visionary alpha governance curator", href: "/stake" },
       maintenance: { id: "maintenance", icon: <ShieldCheck aria-hidden="true" />, eyebrow: "Fleet checks", title: "Diagnostics", body: "Run dashboard and runtime health checks.", keywords: "diagnostics maintenance health checks repair", ...maintenanceBadge },
@@ -327,6 +327,19 @@ export function MorePanel({
         />
         <kbd className={styles.kbd}>/</kbd>
       </label>
+
+      <button type="button" className={styles.computeSpotlight} onClick={() => activate(items.compute)}>
+        <span className={styles.computeSpotlightIcon}><Cpu aria-hidden="true" /></span>
+        <span className={styles.computeSpotlightCopy}>
+          <small>Hive Compute hosting</small>
+          <strong>Earn while you sleep. Host your compute.</strong>
+          <span>Put spare local GPU capacity to work and earn when marketplace jobs run on your models.</span>
+        </span>
+        <span className={styles.computeSpotlightAction}>
+          Set up hosting
+          <ChevronRight aria-hidden="true" />
+        </span>
+      </button>
 
       <div className={styles.sectionLabelRow}>
         <p className={styles.sectionLabel}>Pinned</p>

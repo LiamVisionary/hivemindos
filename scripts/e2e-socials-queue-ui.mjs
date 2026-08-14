@@ -48,7 +48,12 @@ try {
   const page = await context.newPage();
   const apiFailures = [];
   const pageErrors = [];
+  let accountsReadCount = 0;
   page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname === "/api/socials/accounts") accountsReadCount += 1;
+  });
   page.on("response", (response) => {
     const url = new URL(response.url());
     if (url.pathname.startsWith("/api/socials/") && response.status() >= 400) {
@@ -56,12 +61,18 @@ try {
     }
   });
 
-  await page.goto(`${baseUrl}/?view=socials`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  await page.goto(`${baseUrl}/?view=fleet`, { waitUntil: "domcontentloaded", timeout: 60_000 });
+  const socialsNav = page.locator('[data-bee-nav="socials"]');
+  await socialsNav.waitFor({ state: "visible", timeout: 60_000 });
+  await socialsNav.click();
   if (temporaryTheme) await page.evaluate((theme) => document.documentElement.setAttribute("data-theme", theme), temporaryTheme);
   await page.getByText("Socials", { exact: true }).first().waitFor({ state: "visible", timeout: 60_000 });
 
   const workspace = page.getByTestId("social-queue-workspace");
   await workspace.waitFor({ state: "visible", timeout: 60_000 });
+  await page.waitForTimeout(400);
+  assert.equal(await workspace.isVisible(), true, "The Socials workspace must remain mounted after its first content paint.");
+  assert.equal(accountsReadCount, 1, "Socials must perform one initial account read after remembered-account hydration.");
   await page.getByTestId("social-queue-composer").waitFor({ state: "visible" });
   const platformPreview = page.getByTestId("social-platform-preview").first();
   if (await platformPreview.count()) {
@@ -73,6 +84,27 @@ try {
     );
     await platformPreview.locator("[data-social-focus-editor]").waitFor({ state: "visible" });
   }
+  const repliesFilter = workspace.getByRole("button", { name: /^Replies/ });
+  if (await repliesFilter.count()) {
+    await repliesFilter.click();
+    const responseTarget = page.getByTestId("social-engagement-target").first();
+    if (await responseTarget.count()) {
+      await responseTarget.waitFor({ state: "visible" });
+      const targetAvatar = responseTarget.locator("img");
+      assert.equal(await targetAvatar.count(), 1, "Response drafts should expose the other user's profile image.");
+      await page.waitForFunction((image) => image.complete, await targetAvatar.elementHandle(), { timeout: 15_000 });
+      assert.equal(
+        await targetAvatar.evaluate((image) => image.complete && image.naturalWidth > 0),
+        true,
+        "The response target's profile image must finish loading in the real browser path.",
+      );
+      assert.ok(
+        await targetAvatar.evaluate((image) => image.naturalWidth >= 200),
+        "The response target's profile image must not use X's blurry 48px normal variant.",
+      );
+    }
+    await workspace.getByRole("button", { name: /^All/ }).click();
+  }
   await page.getByRole("button", { name: "Process queue" }).waitFor({ state: "visible" });
   await page.getByTestId("social-drafting-automation").waitFor({ state: "visible" });
   const allAccounts = page.locator(".sc-account-chip").filter({ hasText: "All accounts" });
@@ -81,7 +113,25 @@ try {
   await page.getByTestId("social-queue-workspace").waitFor({ state: "visible" });
   const xAccount = page.locator(".sc-acct").filter({ hasText: "@TheHivemindOS" });
   if (await xAccount.count()) {
+    const xAvatar = xAccount.first().locator("img");
+    assert.equal(await xAvatar.count(), 1, "The connected HivemindOS account should expose its public profile image.");
+    await page.waitForFunction((image) => image.complete, await xAvatar.elementHandle(), { timeout: 15_000 });
+    assert.equal(
+      await xAvatar.evaluate((image) => image.complete && image.naturalWidth > 0),
+      true,
+      "The connected HivemindOS profile image must finish loading in the real browser path.",
+    );
+    assert.ok(
+      await xAvatar.evaluate((image) => image.naturalWidth >= 200),
+      "The connected HivemindOS profile image must not use X's blurry 48px normal variant.",
+    );
     await xAccount.click();
+    await platformPreview.getByText("HivemindOS", { exact: true }).waitFor({ state: "visible" });
+    assert.match(
+      await platformPreview.innerText(),
+      /HivemindOS\s+@TheHivemindOS/,
+      "The platform preview must render the connected OAuth account's matched identity.",
+    );
     await page.getByRole("button", { name: "Settings", exact: true }).click();
     await page.locator(".sc-settings-route > nav").getByRole("button", { name: /^Connection/ }).click();
     await page.getByTestId("social-x-session").waitFor({ state: "visible" });

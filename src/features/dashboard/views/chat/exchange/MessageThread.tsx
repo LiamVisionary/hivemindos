@@ -9,6 +9,7 @@ import { imageGenerationToApplicationGeneration } from "@/features/dashboard/cha
 import { generatedMediaCardFromAssistantText } from "@/features/dashboard/chat-generated-media";
 import { shouldRenderImageGenerationCard } from "@/features/dashboard/hooks/status-chat-process-image-generation";
 import { ChatAttachmentView } from "@/features/chat/chat-attachment-view";
+import { resolveChatFleetAccessAnswer } from "@/features/dashboard/chat-fleet-access";
 import { parseUserSlashCommandDisplay } from "@/features/queen-voice/queen-command-display";
 import { chatProcessTimerIsActive, isHiddenChatProcessEvent, markdownText, messageKey, messageText, promptUiFromMessage } from "@/features/dashboard/views/chat/chat-panel-helpers";
 import { AgentProcessPanel, normalizeProcessEvents, processEventsAreActive, type ProcessEvent } from "@/features/dashboard/views/chat/AgentProcessPanel";
@@ -25,6 +26,7 @@ import { formatModelCreditAmount } from "@/lib/utils/model-credits";
 import type { CapabilityApprovalPlan } from "@/lib/types/capability-approval";
 import type { DeliverableSourceMachine } from "@/lib/services/deliverable-open-client";
 import { Dot, Glyph, ICON } from "./primitives";
+import { SpinnerIco } from "./composer-primitives";
 import { AppArtifactCard } from "./AppArtifactCard";
 import { CapabilityApprovalCard } from "./CapabilityApprovalCard";
 import { HyperframesPromptBuilder } from "../HyperframesPromptBuilder";
@@ -164,22 +166,41 @@ function UserMessageContent({ ChatMarkdown, text }: { ChatMarkdown?: ChatMarkdow
   );
 }
 
-function InteractivePromptControls({ allowFreeText = true, disabled, options, sendPromptMessage, Send }: {
+function InteractivePromptControls({ allowFreeText = true, collectorUrl, disabled, message, onError, options, sendPromptMessage, Send }: {
   allowFreeText?: boolean;
+  collectorUrl?: string;
   disabled?: boolean;
+  message: string;
+  onError?: (message: string) => void;
   options: PromptOption[];
   sendPromptMessage?: (prompt: string, options?: SendPromptOptions) => void | Promise<void>;
   Send?: IconComponent;
 }) {
   const [otherOpen, setOtherOpen] = useState(false);
   const [otherText, setOtherText] = useState("");
+  const [submittingValue, setSubmittingValue] = useState("");
   if (!sendPromptMessage || !options.length) return null;
-  const submitOption = (option: PromptOption) => {
+  const submitOption = async (option: PromptOption) => {
     const prompt = option.value.trim();
-    if (!prompt) return;
-    void sendPromptMessage(prompt, {
+    if (!prompt || disabled || submittingValue) return;
+    setSubmittingValue(prompt);
+    let outboundPrompt = prompt;
+    let visiblePrompt: string | undefined;
+    try {
+      const fleetResolution = await resolveChatFleetAccessAnswer({ answer: prompt, collectorUrl, message });
+      if (fleetResolution.handled) {
+        outboundPrompt = fleetResolution.prompt;
+        visiblePrompt = prompt;
+      }
+    } catch (error) {
+      setSubmittingValue("");
+      onError?.(error instanceof Error ? error.message : "Could not update Fleet access.");
+      return;
+    }
+    void sendPromptMessage(outboundPrompt, {
       ...(option.permissionMode ? { permissionMode: option.permissionMode } : {}),
       suppressUserMessage: option.suppressUserMessage,
+      ...(visiblePrompt ? { visiblePrompt } : {}),
       promptResponse: { label: decisionResponseLabel(option.label, prompt), value: prompt },
     });
     setOtherText("");
@@ -200,11 +221,17 @@ function InteractivePromptControls({ allowFreeText = true, disabled, options, se
             key={`${option.value}-${index}`}
             type="button"
             className="cx-promptbtn"
-            onClick={() => submitOption(option)}
-            disabled={disabled}
+            onClick={() => void submitOption(option)}
+            disabled={Boolean(disabled || submittingValue)}
+            aria-busy={submittingValue === option.value}
             style={{ ...promptButtonStyle, ...(isAffirmativeOption(option.label) ? promptButtonPrimary : promptButtonSecondary) }}
           >
-            {option.label}
+            {submittingValue === option.value ? (
+              <span role="status" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 7 }}>
+                <SpinnerIco size={13} />
+                {/^deny\b/i.test(option.label) ? "Denying…" : /^allow\b/i.test(option.label) ? "Granting…" : "Sending…"}
+              </span>
+            ) : option.label}
           </button>
         ))}
         {allowFreeText ? (
@@ -213,7 +240,7 @@ function InteractivePromptControls({ allowFreeText = true, disabled, options, se
             className="cx-promptbtn"
             onClick={() => setOtherOpen((open) => !open)}
             aria-expanded={otherOpen}
-            disabled={disabled}
+            disabled={Boolean(disabled || submittingValue)}
             style={{ ...promptButtonStyle, border: "1px solid color-mix(in srgb, var(--fg-4) 35%, transparent)", background: "var(--panel-2)", color: "var(--fg-3)" }}
           >
             Other
@@ -233,10 +260,10 @@ function InteractivePromptControls({ allowFreeText = true, disabled, options, se
             value={otherText}
             onChange={(event) => setOtherText(event.currentTarget.value)}
             placeholder="Type another answer..."
-            disabled={disabled}
+            disabled={Boolean(disabled || submittingValue)}
             autoFocus
           />
-          <button type="submit" className="fr-chat-prompt-send-button" disabled={disabled || !otherText.trim()} aria-label="Send other answer">
+          <button type="submit" className="fr-chat-prompt-send-button" disabled={Boolean(disabled || submittingValue || !otherText.trim())} aria-label="Send other answer">
             {Send ? <Send aria-hidden="true" /> : "Send"}
           </button>
         </form>
@@ -720,12 +747,14 @@ function MessageThreadBase({
   processEventsTargetKey,
   selectedAgent,
   sourceMachine,
+  collectorUrl,
   sendPromptMessage,
   onCapabilityPlanChange,
   onCapabilityPlanSubmit,
   onForkResponse,
   onMessageFeedback,
   onOpenAppWorkspace,
+  onPromptError,
   onAgentNameClick,
   setCopiedMessageKey,
   setOpenKanbanTaskMenuKey,
@@ -757,12 +786,14 @@ function MessageThreadBase({
   processEventsTargetKey: string;
   selectedAgent?: AgentProfile | null;
   sourceMachine?: DeliverableSourceMachine;
+  collectorUrl?: string;
   sendPromptMessage?: (prompt: string, options?: SendPromptOptions) => void | Promise<void>;
   onCapabilityPlanChange?: (plan: CapabilityApprovalPlan) => void;
   onCapabilityPlanSubmit?: (plan: CapabilityApprovalPlan) => void | Promise<void>;
   onForkResponse?: (responseIndex: number) => void;
   onMessageFeedback?: (message: ThreadMessage, renderKey: string, rating: "up" | "down") => void | Promise<void>;
   onOpenAppWorkspace?: () => void;
+  onPromptError?: (message: string) => void;
   /** Click on the agent's name in a message header → open the assets overview popover at this anchor. */
   onAgentNameClick?: (anchor: { x: number; y: number }) => void;
   setCopiedMessageKey: Dispatch<SetStateAction<string>>;
@@ -875,6 +906,7 @@ function MessageThreadBase({
           : undefined;
         const hasAssistantBody = Boolean(content || capabilityApprovalNeedsReview || applicationGenerationCard || generatedMediaPathCard || mirosharkCard || transcriptCard || appArtifact);
         const promptUi = !isUser && content ? promptUiFromMessage(message, content) : null;
+        const promptPending = Boolean(promptUi?.options.length && !promptUi.response && !messages.slice(index + 1).some((later) => later.role === "user"));
         const isHyperframesPromptBuilder = !isUser && message.agentPrompt?.id === HYPERFRAMES_PROMPT_BUILDER_ID;
         const hyperframesSourceRequest = isHyperframesPromptBuilder
           ? userRequestBeforeMessage(messages, index, chatDisplayContent)
@@ -983,7 +1015,7 @@ function MessageThreadBase({
                   ) : (
                     <strong className="fr-chat-agent-message-name">{selectedAgent?.name ?? "Agent"}</strong>
                   )}
-                  {(capabilityApprovalNeedsReview && capabilityApproval?.status === "pending") || (promptUi?.options?.length && !promptUi.response) ? (
+                  {(capabilityApprovalNeedsReview && capabilityApproval?.status === "pending") || promptPending ? (
                     /* Prototype 599: a pending decision reads "needs approval". */
                     <span className="fr-chat-agent-message-state is-approval">needs approval</span>
                   ) : activeChatTaskRunning && index === messages.length - 1 ? (
@@ -1069,8 +1101,13 @@ function MessageThreadBase({
                     : renderInline(assistantDisplayTextWithoutJsonRender)}
                   {isHyperframesPromptBuilder ? null : promptUi?.response ? (
                     <InteractivePromptResponse response={promptUi.response} />
-                  ) : promptUi?.options?.length ? (
-                    <InteractivePromptControls allowFreeText={promptUi.allowFreeText !== false} disabled={false} options={promptUi.options} sendPromptMessage={sendPromptMessage} Send={Send} />
+                  ) : promptPending ? (
+                    <InteractivePromptControls allowFreeText={promptUi?.allowFreeText !== false} collectorUrl={collectorUrl} disabled={false} message={content} onError={onPromptError} options={promptUi?.options ?? []} sendPromptMessage={sendPromptMessage} Send={Send} />
+                  ) : null}
+                  {activeChatTaskRunning && index === messages.length - 1 && !assistantError && !promptPending ? (
+                    <div style={{ paddingTop: 6 }}>
+                      <ThinkingLoader AgentResponseLoader={AgentResponseLoader} />
+                    </div>
                   ) : null}
                 </div>
                 {responseBilling ? <div className="fr-chat-response-billing">{responseBilling}</div> : null}

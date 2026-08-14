@@ -629,6 +629,7 @@ export const sendUsdcAction = defineHiveAction({
     "Execute a governed stablecoin send through the wallet route after explicit confirmation: USDC on Base/Solana, USDG on Robinhood Chain.",
   schema: z.object({
     ...governedSpendSchema,
+    actingAgentId: z.string().optional().describe("Agent requesting use of the wallet; required for per-agent autonomous permission."),
     wallet: z.record(z.string(), z.unknown()).optional(),
     recipientAddress: z.string().optional(),
     toAddress: z.string().optional(),

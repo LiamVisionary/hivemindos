@@ -21,9 +21,14 @@ function readArg(name) {
 const sourceArg = readArg("--source");
 const targetArg = readArg("--target");
 const agent = readArg("--agent");
+const requestedSlug = readArg("--slug").trim();
 
 if (!sourceArg || !targetArg || !agent) {
-  console.error("Usage: sync-shared-skill-projections.mjs --source <vault-skills> --target <runtime-skills> --agent <id>");
+  console.error("Usage: sync-shared-skill-projections.mjs --source <vault-skills> --target <runtime-skills> --agent <id> [--slug <skill-slug>]");
+  process.exit(2);
+}
+if (requestedSlug && !/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(requestedSlug)) {
+  console.error("The requested skill slug is invalid.");
   process.exit(2);
 }
 
@@ -93,7 +98,12 @@ function writeProjectionMetadata(destination, sourceSkill, sourceChecksum) {
 
 mkdirSync(targetRoot, { recursive: true });
 const sourceSkills = sortedEntries(sourceRoot)
-  .filter((entry) => entry.isDirectory() && existsSync(join(sourceRoot, entry.name, "SKILL.md")));
+  .filter((entry) => entry.isDirectory() && existsSync(join(sourceRoot, entry.name, "SKILL.md")))
+  .filter((entry) => !requestedSlug || entry.name === requestedSlug);
+if (requestedSlug && !sourceSkills.length) {
+  console.error(`Shared skill not found: ${requestedSlug}`);
+  process.exit(3);
+}
 const sourceSlugs = new Set(sourceSkills.map((entry) => entry.name));
 let synced = 0;
 let unchanged = 0;
@@ -132,7 +142,7 @@ for (const entry of sourceSkills) {
 // Never prune from an empty or misconfigured shelf. When the shelf is valid,
 // remove only directories carrying HivemindOS projection metadata whose source
 // belonged to this exact shelf and has since been deleted.
-if (sourceSkills.length > 0) {
+if (!requestedSlug && sourceSkills.length > 0) {
   for (const entry of sortedEntries(targetRoot)) {
     if (!entry.isDirectory() || sourceSlugs.has(entry.name)) continue;
     const destination = join(targetRoot, entry.name);

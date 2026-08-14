@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const { collapseProcessEvents, mergeProcessEvents } = await import("../src/features/dashboard/views/chat/process-event-collapse.ts");
-const { runtimeSessionMessages } = await import("../src/features/dashboard/chat-run-transcripts.ts");
+const { chatTranscriptRuntimeReconciliationRequest, dedupeChatTranscript, runtimeSessionMessages } = await import("../src/features/dashboard/chat-run-transcripts.ts");
 const { mergeRuntimeHydratedChatMessages } = await import("../src/lib/services/chat/runtime-session-message-merge.ts");
 const { compactChatMessagesForStorage, parseStoredChatMessages } = await import("../src/features/dashboard/dashboard-storage.ts");
 const { isHiddenChatProcessEvent } = await import("../src/features/dashboard/views/chat/chat-panel-helpers.ts");
@@ -23,6 +23,41 @@ const { chatAppArtifactFromCapabilityContext, chatAppDirectoryFromTaskRecords } 
 const { CAPABILITY_APPROVAL_CONTINUATION_MARKER } = await import("../src/lib/types/capability-approval.ts");
 
 // --- tool lifecycle collapse -------------------------------------------------
+
+const failedAt = Date.now() - 60_000;
+const lateRecovery = chatTranscriptRuntimeReconciliationRequest([
+  { role: "user", content: "build a scroll-driven shoe website", createdAt: failedAt - 600_000 },
+  { role: "user", content: "Approved capability plan. Continue with the task.", createdAt: failedAt - 590_000 },
+  {
+    role: "assistant",
+    content: "The generated video is being validated.",
+    createdAt: failedAt - 500_000,
+    processEvents: [{ at: failedAt, label: "process finished", detail: "The operation was aborted due to timeout", status: "failed" }],
+  },
+]);
+assert.equal(lateRecovery?.rawUserMessage, "build a scroll-driven shoe website", "reload recovery uses the person's original request");
+assert.equal(lateRecovery?.sinceMs, failedAt - 602_000);
+assert.equal(
+  isCapabilityContinuationEcho({ role: "user", content: "Approved capability plan. Continue with the task." }),
+  true,
+  "the persisted compact approval row remains runtime plumbing after reload",
+);
+assert.equal(
+  chatTranscriptRuntimeReconciliationRequest([
+    { role: "user", content: "build a scroll-driven shoe website", createdAt: failedAt - 600_000 },
+    { role: "assistant", content: "Built and verified the site.", createdAt: failedAt + 1 },
+  ]),
+  null,
+  "a completed transcript must not launch historical recovery",
+);
+const migratedLateTranscript = dedupeChatTranscript([
+  { role: "user", content: "build the app", createdAt: 1 },
+  { role: "assistant", content: "Working.", createdAt: 20, sourceSessionId: "authoritative" },
+  { role: "assistant", content: "Built and verified.", createdAt: 30, sourceSessionId: "authoritative" },
+  { role: "assistant", content: "Working.", createdAt: 10, sourceSessionId: "failed-wrapper", appArtifact: { protocol: "hivemindos.chat-app/v1", projectId: "app", name: "App", directory: "/tmp/app", templateId: "nextjs", machineKey: "local", machineName: "This Mac", status: "stopped", dependenciesReady: true, createdAt: 1, updatedAt: 1 } },
+]);
+assert.deepEqual(migratedLateTranscript.map((message) => message.content), ["build the app", "Working.", "Built and verified."], "late recovery removes the older failed-wrapper suffix");
+assert.equal(migratedLateTranscript.at(-1)?.appArtifact?.directory, "/tmp/app", "late recovery retains the chat's app workspace");
 
 const lifecycle = collapseProcessEvents([
   { at: 1, label: "Starting terminal", detail: "terminal", status: "running" },
@@ -136,6 +171,75 @@ assert.deepEqual(
 );
 assert.ok(affectedProcessEvents.every((event) => event.runId === "run-1"), "hydrated events retain their run identity across reload");
 assert.equal(collapseProcessEvents(affectedProcessEvents).length, 2, "two repeated stored calls render as two visible steps");
+
+const failedRuntimeSession = runtimeSessionMessages({
+  sessionId: "run-failed",
+  endedAt: 10,
+  endReason: "failed",
+  messages: [
+    { index: 0, role: "user", content: "build the app", createdAt: 1 },
+    { index: 1, role: "tool", type: "process", content: "tool.started", createdAt: 2, raw: { type: "tool.started", name: "terminal", status: "running" } },
+    { index: 2, role: "tool", type: "process", content: "Runtime stream failed\nThe operation was aborted due to timeout", createdAt: 10 },
+  ],
+});
+const failedRuntimeEvents = failedRuntimeSession.flatMap((message) => message.processEvents ?? []);
+const failedRuntimeRows = collapseProcessEvents(failedRuntimeEvents);
+assert.equal(failedRuntimeRows[0]?.label, "Command failed", "a terminal session closes its orphaned tool row instead of reloading it as running");
+assert.equal(failedRuntimeRows[0]?.status, "failed");
+assert.equal(failedRuntimeRows.at(-1)?.label, "Runtime stream failed", "the terminal runtime reason remains visible after reload");
+
+const failedSegmentedRuntimeSession = runtimeSessionMessages({
+  sessionId: "run-failed-segmented",
+  endedAt: 10,
+  endReason: "failed",
+  messages: [
+    { index: 0, role: "user", content: "build the app", createdAt: 1 },
+    { index: 1, role: "tool", type: "process", content: "tool.started", createdAt: 2, raw: { type: "tool.started", name: "process", status: "running" } },
+    { index: 2, role: "assistant", content: "The render is still running.", createdAt: 3 },
+    { index: 3, role: "tool", type: "process", content: "Runtime stream failed\nThe operation was aborted due to timeout", createdAt: 10 },
+  ],
+});
+const segmentedProcessRows = failedSegmentedRuntimeSession
+  .filter((message) => message.role === "assistant")
+  .flatMap((message) => collapseProcessEvents(message.processEvents ?? []));
+assert.equal(
+  segmentedProcessRows.find((row) => row.label === "process failed")?.status,
+  "failed",
+  "terminal hydration settles a running tool already attached to an earlier narration segment",
+);
+assert.equal(
+  segmentedProcessRows.some((row) => row.status === "running"),
+  false,
+  "a terminal session never reloads with a stale running row in an older process card",
+);
+
+const persistedTerminalTranscript = dedupeChatTranscript([
+  {
+    role: "assistant",
+    content: "The render is still running.",
+    processEvents: [
+      { at: 2, label: "Starting process", status: "running", runId: "persisted-run" },
+    ],
+  },
+  {
+    role: "assistant",
+    content: "",
+    processEvents: [
+      { at: 10, label: "Runtime stream failed", detail: "The operation timed out.", status: "failed", runId: "persisted-run" },
+    ],
+  },
+]);
+const persistedTerminalRows = persistedTerminalTranscript.flatMap((message) => collapseProcessEvents(message.processEvents ?? []));
+assert.equal(
+  persistedTerminalRows.some((row) => row.status === "running"),
+  false,
+  "stored terminal evidence settles an orphaned tool row in another assistant segment on reload",
+);
+assert.equal(
+  persistedTerminalRows.find((row) => row.label === "process failed")?.status,
+  "failed",
+  "cross-segment settlement stays scoped to the terminal run id",
+);
 
 const monotonicHydration = mergeRuntimeHydratedChatMessages(
   [{ role: "assistant", content: "", sourceSessionId: "run-1", processEvents: affectedProcessEvents }],
@@ -259,6 +363,7 @@ const sessionStore = await read("src/lib/services/chat/runtime-session-store.ts"
 assert.match(sessionStore, /export async function sealRuntimeChatSessionAssistantSegment/, "the session store can seal a streamed segment");
 
 const messageThread = await read("src/features/dashboard/views/chat/exchange/MessageThread.tsx");
+const processPanel = await read("src/features/dashboard/views/chat/AgentProcessPanel.tsx");
 assert.match(messageThread, /lastAppArtifactIndexByProject/, "one app renders one Open-app card, on the run's last carrier");
 assert.doesNotMatch(messageThread, /userLiveEvents/, "single-anchor model: there is no user-anchored live panel to hand off to (the handoff caused appear-vanish-reappear churn)");
 assert.match(messageThread, /const isLiveTail = !isUser && busy && index === messages\.length - 1;/, "the live tail panel is exempt from the reveal gate so current activity never blinks out");
@@ -270,5 +375,8 @@ assert.match(streamState, /chatStreamHasLocalRun/, "stream state distinguishes r
 assert.match(dashboardApp, /chatStreamHasLocalRun\(chatStreamingByKeyRef\.current\[storageKey\]\)/, "the 5s poll never merges into a thread this tab is actively streaming — the stream is the single source of truth");
 assert.match(messageThread, /firstTypingIndex >= 0 && index > firstTypingIndex/, "sequential reveal: blocks below a still-typing message hold their turn instead of landing mid-animation");
 assert.match(messageThread, /document\.hidden/, "a hidden tab renders streamed text instantly instead of accruing typewriter lag behind throttled timers");
+assert.match(processPanel, /processScrollRef/, "the process timeline must own its internal scroll container");
+assert.match(processPanel, /scrollTo\(\{ top: node\.scrollHeight/, "new process activity must keep the internal timeline pinned to its newest row");
+assert.match(messageThread, /activeChatTaskRunning && index === messages\.length - 1[\s\S]*?<ThinkingLoader AgentResponseLoader=\{AgentResponseLoader\}/, "an active turn keeps the bee visible after interim narration has made the assistant body non-empty");
 
 console.log("chat process timeline checks passed");

@@ -1,8 +1,11 @@
 import { HIVEMIND_OS_RUNTIME } from "@/lib/types/agent-runtime";
 import { compactCapabilityContinuation } from "@/features/dashboard/chat-transcript-helpers";
+import { compactRepeatedAssistantText } from "@/features/dashboard/hooks/status-chat-input-helpers";
 import { isAgentColdStartProcessEvent } from "@/lib/services/chat/agent-cold-start";
 import { normalizeChatPermissionMode } from "@/lib/types/chat-permissions";
 import type { ChatPermissionMode } from "@/lib/types/chat-permissions";
+import { FLEET_MACHINE_ACCESS_CAPABILITIES, parseFleetMachineAccessRequest } from "@/lib/types/fleet-machine-policy";
+import type { ChatMessage } from "@/features/dashboard/dashboard-types";
 
 type ChatAgentLike = {
   id?: string;
@@ -40,6 +43,8 @@ type ChatMessageLike = {
   text?: unknown;
   body?: unknown;
   agentPrompt?: {
+    id?: unknown;
+    type?: unknown;
     question?: unknown;
     choices?: unknown;
     allowFreeText?: unknown;
@@ -387,9 +392,48 @@ export function promptUiFromMessage(message: ChatMessageLike, content: string): 
     };
   }
 
-  const lines = content.split(/\r?\n/);
+  const cleanedContent = compactRepeatedAssistantText(content);
+  const lines = cleanedContent.split(/\r?\n/);
+  const fleetRequest = parseFleetMachineAccessRequest(cleanedContent);
+  if (fleetRequest.requested) {
+    const inlineOptionsIndex = lines.findIndex((line) => /^options?\s*:\s*\S/i.test(line.trim()));
+    const inlineOptionsText = inlineOptionsIndex >= 0
+      ? lines[inlineOptionsIndex]?.replace(/^options?\s*:\s*/i, "") ?? ""
+      : "";
+    const options = inlineOptionsText.split(/\s*\|\s*/).map((item) => plainPromptOptionText(item)).filter(Boolean)
+      .map((value) => ({ label: promptOptionButtonLabel(value), value }));
+    if (options.length >= 2) {
+      const capabilityLabel = FLEET_MACHINE_ACCESS_CAPABILITIES.find((item) => item.id === fleetRequest.capability)?.label
+        ?? fleetRequest.rawCapability;
+      const actionMarkerIndex = cleanedContent.search(/ACTION NEEDED\s*:/i);
+      const contextLines = (actionMarkerIndex >= 0 ? cleanedContent.slice(0, actionMarkerIndex) : cleanedContent).split(/\r?\n/);
+      const context = contextLines.filter((line) => (
+        !/^action needed\s*:/i.test(line.trim())
+        && !/^fleet access request\s*:/i.test(line.trim())
+        && !/^options?\s*:/i.test(line.trim())
+      )).join("\n").trim();
+      return {
+        displayText: [context, `Allow this agent to use ${capabilityLabel.toLowerCase()}?`].filter(Boolean).join("\n\n"),
+        options,
+        allowFreeText: false,
+      };
+    }
+  }
   const markdownDecision = markdownDecisionPrompt(lines);
   if (markdownDecision) return markdownDecision;
+  const inlineOptionsIndex = lines.findIndex((line) => /^options?\s*:\s*\S/i.test(line.trim()));
+  if (inlineOptionsIndex >= 0) {
+    const inlineOptionsText = lines[inlineOptionsIndex]?.replace(/^options?\s*:\s*/i, "") ?? "";
+    const options = inlineOptionsText.split(/\s*\|\s*/).map((item) => plainPromptOptionText(item)).filter(Boolean)
+      .map((value) => ({ label: promptOptionButtonLabel(value), value }));
+    if (options.length >= 2) {
+      return {
+        displayText: lines.filter((_, index) => index !== inlineOptionsIndex).join("\n").trim(),
+        options,
+        allowFreeText: true,
+      };
+    }
+  }
   const optionsIndex = lines.findIndex((line) => /^options?\s*:?\s*$/i.test(line.trim()));
   if (optionsIndex < 0) return null;
   const options: Array<{ label: string; value: string }> = [];
@@ -411,6 +455,29 @@ export function promptUiFromMessage(message: ChatMessageLike, content: string): 
     ...trailingLines,
   ].join("\n").replace(/\n{3,}/g, "\n\n").trim();
   return { displayText: displayText || content, options };
+}
+
+export function respondedAgentPromptFromMessage(
+  message: ChatMessageLike,
+  content: string,
+  response: NonNullable<NonNullable<ChatMessage["agentPrompt"]>["response"]>,
+  fallbackId: string,
+): ChatMessage["agentPrompt"] | null {
+  const promptUi = promptUiFromMessage(message, content);
+  if (!promptUi?.options.length || promptUi.response) return null;
+  const current = message.agentPrompt;
+  const currentType = String(current?.type ?? "");
+  const type = ["clarify", "approval", "sudo", "secret", "prompt"].includes(currentType)
+    ? currentType as NonNullable<ChatMessage["agentPrompt"]>["type"]
+    : "prompt";
+  return {
+    id: String(current?.id ?? "").trim() || fallbackId,
+    type,
+    question: promptUi.displayText,
+    choices: promptUi.options,
+    allowFreeText: promptUi.allowFreeText !== false,
+    response,
+  };
 }
 
 export function processText(events: ProcessEventLike[] = []) {

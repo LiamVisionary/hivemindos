@@ -102,17 +102,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { createEscalationTracker, formatEscalationAlert } from "./lib/fleet-watchdog-escalation.mjs";
-import {
-  localCollectorPortCandidates,
-  selectHealthyLocalCollector,
-} from "./lib/fleet-watchdog-local-collector.mjs";
-import {
-  collectorChatFailureResult,
-  collectorChatProbeDecision,
-  createMachineCacheSnapshot,
-  readFreshMachineCache,
-  shouldAttemptRemediation,
-} from "./lib/fleet-watchdog-discovery.mjs";
+import { localCollectorPortCandidates, releaseCollectorRestartWindow, reserveCollectorRestartWindow, selectHealthyLocalCollector } from "./lib/fleet-watchdog-local-collector.mjs";
+import { collectorChatFailureResult, collectorChatProbeDecision, createMachineCacheSnapshot, readFreshMachineCache, shouldAttemptRemediation } from "./lib/fleet-watchdog-discovery.mjs";
 import { linkdSourcesChangedBetween } from "./lib/linkd-staleness.mjs";
 import { shouldUseTailscaleCliFallback } from "./lib/tailscale-optional.mjs";
 
@@ -947,13 +938,17 @@ function optionalFileText(path) {
 }
 
 const loggedSelfCollectorPortMismatches = new Set();
-async function probeSelfCollector(deep) {
-  const candidates = localCollectorPortCandidates({
+function selfCollectorCandidates() {
+  return localCollectorPortCandidates({
     configuredPort: collectorEnv.AGENT_TELEMETRY_PORT,
     launchAgentText: platform() === "darwin" ? optionalFileText(COLLECTOR_LAUNCH_AGENT) : "",
     systemdUnitText: platform() === "linux" ? optionalFileText(COLLECTOR_SYSTEMD_UNIT) : "",
     scanPorts: COLLECTOR_PORTS,
   });
+}
+
+async function probeSelfCollector(deep) {
+  const candidates = selfCollectorCandidates();
   const probeCandidates = (items) => Promise.all(items.map(async (candidate) => {
     try {
       const response = await fetchJson(`http://127.0.0.1:${candidate.port}/health`, {}, 1_500);
@@ -1112,9 +1107,11 @@ async function remediateLocal(kind) {
 function selfTargets() {
   if (!SELF_ENABLED) return [];
   const targets = [];
+  const collectorPort = selfCollectorCandidates()[0]?.port || 8787;
   targets.push({
     key: "self:collector",
     name: "self collector",
+    machineBase: `http://127.0.0.1:${collectorPort}`,
     os: platform() === "darwin" ? "macos" : platform(),
     kind: "collector",
     local: true,
@@ -1329,6 +1326,7 @@ async function runCycle(cycle) {
     }
     if (result.severe) escalations.recordSevereFailure(target.key, result.reason);
     if (fails >= threshold && (cooldownUntil.get(target.key) || 0) < Date.now()) {
+      let restartWindow = null;
       if (target.kind === "collector") {
         const finalProbe = await target.probe(result.severe ? deep : false);
         if (finalProbe.healthy) {
@@ -1339,11 +1337,22 @@ async function runCycle(cycle) {
           await log(`${target.name}: recovered before remediation (final safety probe passed; no restart)`);
           continue;
         }
+        restartWindow = await reserveCollectorRestartWindow(target.machineBase);
+        if (restartWindow.deferRestart) {
+          unhealthy -= 1;
+          healthy += 1;
+          consecutiveFailures.set(target.key, 0);
+          await log(`${target.name}: restart deferred — collector reports ${restartWindow.activeChatRunCount > 0 ? `${restartWindow.activeChatRunCount} active chat run(s)` : "maintenance already starting"}`);
+          continue;
+        }
       }
       await log(`${target.name}: REMEDIATING — restart ${target.kind} via ${target.local ? "local shell" : "linkd shell"}`);
       const ok = target.local
         ? await remediateLocal(target.kind)
         : await remediate(target.machineBase, target.os, target.kind);
+      if (!ok && restartWindow?.reservationToken) {
+        await releaseCollectorRestartWindow(target.machineBase, restartWindow.reservationToken);
+      }
       escalations.recordRemediationAttempt(target.key);
       await log(`${target.name}: remediation ${ok ? "sent" : "FAILED"}; cooling down ${Math.round(COOLDOWN_MS / 1000)}s`);
       await alert(`remediate:${target.key}`, `${target.name} was down (${result.reason}) — restart ${ok ? "sent" : "FAILED"}`);

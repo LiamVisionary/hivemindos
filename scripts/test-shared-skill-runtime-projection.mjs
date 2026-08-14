@@ -142,6 +142,43 @@ try {
   assert.equal(update.status, 0, update.stderr || update.stdout);
   assert.match(read(join(projectedAgentReach, "SKILL.md")), /description: Updated shared router/);
 
+  const exactTarget = join(tmp, "exact-runtime-skills");
+  const unrelatedManaged = join(exactTarget, "unrelated-managed");
+  mkdirSync(unrelatedManaged, { recursive: true });
+  writeFileSync(join(unrelatedManaged, "SKILL.md"), "---\nname: unrelated-managed\n---\n");
+  writeFileSync(join(unrelatedManaged, ".hivemind-skill-source.json"), JSON.stringify({
+    managedBy: "hivemindos",
+    provider: "shared-brain",
+    sourcePath: join(vault, "Skills", "removed-from-shelf", "SKILL.md"),
+  }));
+  const exactProjection = spawnSync("node", [
+    "scripts/sync-shared-skill-projections.mjs",
+    "--source",
+    join(vault, "Skills"),
+    "--target",
+    exactTarget,
+    "--agent",
+    "hermes-runtime-overlay",
+    "--slug",
+    "agent-reach",
+  ], { cwd: root, encoding: "utf8" });
+  assert.equal(exactProjection.status, 0, exactProjection.stderr || exactProjection.stdout);
+  assert.match(read(join(exactTarget, "agent-reach", "SKILL.md")), /description: Updated shared router/);
+  assert.equal(read(join(unrelatedManaged, "SKILL.md")).includes("unrelated-managed"), true, "exact projection must not prune unrelated managed skills");
+
+  const missingExactSkill = spawnSync("node", [
+    "scripts/sync-shared-skill-projections.mjs",
+    "--source",
+    join(vault, "Skills"),
+    "--target",
+    exactTarget,
+    "--agent",
+    "hermes-runtime-overlay",
+    "--slug",
+    "does-not-exist",
+  ], { cwd: root, encoding: "utf8" });
+  assert.equal(missingExactSkill.status, 3, "a selected skill missing from the shared shelf must fail materialization explicitly");
+
   const missingShelf = spawnSync("node", [
     "scripts/sync-shared-skill-projections.mjs",
     "--source",

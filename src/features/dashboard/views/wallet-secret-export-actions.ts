@@ -1,4 +1,3 @@
-import type { AgentProfile } from "@/lib/types/agent-runtime";
 import type { WalletActionState } from "@/features/dashboard/dashboard-types";
 import type { GroupedPersonalWallet } from "@/lib/utils/personal-wallet-grouping";
 
@@ -43,18 +42,18 @@ export async function exportPersonalWalletGroupSecret(
 }
 
 export async function exportAgentWalletSecret(
-  agent: AgentProfile,
+  wallet: { id: string; name: string },
   exportWalletSecrets: ExportWalletSecrets,
   updateWalletAction: WalletActionUpdater,
   options: { confirmation?: string } = {},
 ) {
-  updateWalletAction(agent.id, { busy: true, error: "", message: "Preparing wallet secret export..." });
+  updateWalletAction(wallet.id, { busy: true, error: "", message: "Preparing wallet secret export..." });
   const result = await exportWalletSecrets({
-    agentIds: [agent.id],
-    label: `${agent.name} agent wallet`,
+    agentIds: [wallet.id],
+    label: wallet.name,
     confirmation: options.confirmation,
   });
-  updateWalletAction(agent.id, exportResultAction(result, 1));
+  updateWalletAction(wallet.id, exportResultAction(result, 1));
   return result;
 }
 

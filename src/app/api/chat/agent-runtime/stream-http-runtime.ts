@@ -45,12 +45,12 @@ import {
   buildWalletTools,
   readWorkspaceSnapshot,
   recordChatHoney,
-  RUNTIME_FETCH_TIMEOUT_MS,
   runtimeFetchError,
   runtimeStreamErrorMessage,
   workspaceChangeSummary,
   type AgentMode,
 } from "./runtime-helpers";
+import { createRuntimeStreamingFetch, startRuntimeStreamKeepalive } from "./runtime-stream-supervision";
 import {
   isAdaptiveOpenRouterProfile,
   isOpenAICompatibleRuntime,
@@ -66,6 +66,7 @@ import { isXaiOAuthProvider } from "@/lib/services/xai-oauth-inference-contract"
 import { resolveXaiOAuthRuntimeProfile } from "@/lib/services/xai-oauth-inference";
 import { runtimeSessionErrorResponse } from "./runtime-session-response";
 import { recoverCollectorChatAfterFetchFailure } from "./collector-chat-recovery";
+import { approvedRuntimeCapabilities } from "@/lib/services/chat/approved-runtime-capabilities";
 
 export async function streamHttpRuntime(
   profile: AgentProfile,
@@ -196,6 +197,7 @@ export async function streamHttpRuntime(
     model: runtimeProfile.model || undefined,
     agentEnv: safeAgentEnv(runtimeProfile.agentEnv),
     rawUserMessage: inputCheck.text,
+    approvedCapabilities: approvedRuntimeCapabilities(inputCheck.text),
     agentMode,
     mode: agentMode,
     runtimeSessionId: runtimeSessionId || undefined,
@@ -211,14 +213,14 @@ export async function streamHttpRuntime(
     context: hermesSlashCommand ? undefined : promptEnvelope.systemContext || undefined,
     lmStudioBaseUrl: lmStudioFleetHost?.baseUrl || undefined,
   });
-  const fetchRuntime = () => fetch(url, {
+  const fetchRuntime = createRuntimeStreamingFetch();
+  const requestRuntime = () => fetchRuntime(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       ...(profile.token ? { Authorization: `Bearer ${profile.token}` } : {}),
     },
     body: runtimeRequestBody,
-    signal: AbortSignal.timeout(RUNTIME_FETCH_TIMEOUT_MS),
   });
   let fetchSettled = false;
   const slowTimers = [10_000, 30_000, 60_000].map((waitMs) => setTimeout(() => {
@@ -255,7 +257,7 @@ export async function streamHttpRuntime(
         { type: AGENT_COLD_START_EVENT_TYPE },
       ).catch(() => undefined);
     }
-    upstream = await fetchRuntime();
+    upstream = await requestRuntime();
     recordRuntimeTelemetry(telemetry, "agent_runtime.http.fetch.response", {
       ...telemetryPayloadForProfile(runtimeProfile),
       url,
@@ -268,6 +270,7 @@ export async function streamHttpRuntime(
     });
     if (upstream.ok) recordAgentRuntimeWarm(runtimeProfile);
   } catch (error) {
+    fetchRuntime.stop();
     recordRuntimeTelemetry(telemetry, "agent_runtime.http.fetch.failed", {
       ...telemetryPayloadForProfile(runtimeProfile),
       url,
@@ -310,7 +313,7 @@ export async function streamHttpRuntime(
         "The interrupted request had not started a Hermes session, so HivemindOS retried it once.",
       ).catch(() => undefined);
       try {
-        upstream = await fetchRuntime();
+        upstream = await requestRuntime();
         recordRuntimeTelemetry(telemetry, "agent_runtime.http.fetch.retry_response", {
           ...telemetryPayloadForProfile(runtimeProfile),
           url,
@@ -342,6 +345,7 @@ export async function streamHttpRuntime(
   }
 
   if (!upstream.ok) {
+    fetchRuntime.stop();
     const errorText = await upstream.text().catch(() => "");
     const message = upstream.status === 404 && profile.runtime === "hermes" && profile.telemetryUrl
       ? "This machine's local agent bridge is connected but does not have the Hermes chat bridge yet. Run Update/Setup on that machine, then try again."
@@ -365,6 +369,7 @@ export async function streamHttpRuntime(
 
   const contentType = upstream.headers.get("content-type") ?? "";
   if (!contentType.includes("text/event-stream")) {
+    fetchRuntime.stop();
     recordRuntimeTelemetry(telemetry, "agent_runtime.http.non_stream_response", {
       ...telemetryPayloadForProfile(runtimeProfile),
       url,
@@ -419,6 +424,7 @@ export async function streamHttpRuntime(
           // The browser may have already closed the SSE stream.
         }
       };
+      const stopKeepalive = startRuntimeStreamKeepalive(safeEnqueue);
       let sessionWrite = Promise.resolve();
       const queueSessionWrite = (operation: () => Promise<void>) => {
         if (!runtimeSessionId) return;
@@ -433,6 +439,8 @@ export async function streamHttpRuntime(
       if (preflightProcessPayload) safeEnqueue(preflightProcessPayload);
       const reader = upstream.body?.getReader();
       if (!reader) {
+        fetchRuntime.stop();
+        stopKeepalive();
         safeEnqueue(ssePayload({ error: "Runtime response body is empty" }));
         safeEnqueue("data: [DONE]\n\n");
         queueSessionWrite(() => appendRuntimeChatSessionEvent(runtimeSessionId, "Runtime response body is empty"));
@@ -463,6 +471,7 @@ export async function streamHttpRuntime(
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
+          fetchRuntime.touch();
           if (!sawFirstChunk) {
             sawFirstChunk = true;
             recordRuntimeTelemetry(telemetry, "agent_runtime.http.stream.first_chunk", {
@@ -709,6 +718,8 @@ export async function streamHttpRuntime(
         safeEnqueue(ssePayload({ error: message }));
         safeEnqueue("data: [DONE]\n\n");
       } finally {
+        fetchRuntime.stop();
+        stopKeepalive();
         await sessionWrite.catch(() => undefined);
         safeClose();
       }

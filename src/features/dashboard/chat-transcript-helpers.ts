@@ -32,7 +32,10 @@ export function compactCapabilityContinuation(text: string) {
 }
 
 export function isCapabilityContinuationEcho(message: Pick<ChatMessage, "role" | "content"> | undefined) {
-  return message?.role === "user" && Boolean(message.content?.startsWith(CAPABILITY_APPROVAL_CONTINUATION_MARKER));
+  if (message?.role !== "user") return false;
+  const content = message.content?.trim() ?? "";
+  return content.startsWith(CAPABILITY_APPROVAL_CONTINUATION_MARKER)
+    || /^Approved capability plan\. Continue with the task\.?$/i.test(content);
 }
 
 export function normalizedChatMessageContent(message: Pick<ChatMessage, "content">) {

@@ -9,6 +9,12 @@ import { readRuntimeChatSession } from "@/lib/services/chat/runtime-session-stor
 import { chatTelemetrySession } from "@/lib/services/telemetry/chat-dev-telemetry";
 import { recordTelemetryBatch } from "@/lib/services/telemetry/local-telemetry";
 import { canonicalLocalCollectorUrl } from "@/lib/services/local-collector-url";
+import {
+  reconcileRuntimeSessionAfterWrapperFailure,
+  runtimeSessionHasUserPrompt,
+  runtimeSessionOriginalUserPrompt,
+  type RuntimeSessionLike,
+} from "@/lib/services/chat/runtime-session-reconciliation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,9 +96,48 @@ async function readLocalHermesSession(agent: AgentProfile | undefined, sessionId
   return null;
 }
 
-function sessionMatchesRequest(session: { chatStorageKey?: unknown; id?: unknown; sessionId?: unknown } | null | undefined, sessionId = "", chatStorageKey = "") {
+async function findLocalHermesSession(
+  agent: AgentProfile | undefined,
+  sinceMs: number,
+  rawUserMessage: string,
+) {
+  if (agent?.runtime !== "hermes") return null;
+  const needle = rawUserMessage.replace(/\s+/g, " ").trim().slice(0, 80);
+  if (!needle) return null;
+  const dbCandidates = [
+    agent.localDataDir ? join(agent.localDataDir, "state.db") : "",
+    join(homedir(), ".hermes", "state.db"),
+  ].filter((value, index, list) => value && list.indexOf(value) === index && existsSync(value));
+  const sinceSeconds = Math.max(0, Math.floor(sinceMs / 1000));
+  const matches: RuntimeSessionLike[] = [];
+  for (const dbPath of dbCandidates) {
+    const rows = await execSqliteJson<Array<{ id: string }>>(dbPath, `
+      select distinct s.id
+      from sessions s
+      join messages m on m.session_id = s.id
+      where s.started_at >= ${sinceSeconds}
+        and m.role = 'user'
+        and instr(replace(replace(coalesce(m.content, ''), char(10), ' '), char(13), ' '), ${sqlString(needle)}) > 0
+      order by s.started_at desc
+      limit 20;
+    `, []);
+    for (const row of rows) {
+      const session = await readLocalHermesSession(agent, row.id, 0);
+      if (session && runtimeSessionHasUserPrompt(session, rawUserMessage)) matches.push(session);
+    }
+  }
+  return matches.sort((left, right) => Number(right.updatedAt || 0) - Number(left.updatedAt || 0))[0] ?? null;
+}
+
+function sessionMatchesRequest(
+  session: RuntimeSessionLike | null | undefined,
+  sessionId = "",
+  chatStorageKey = "",
+  rawUserMessage = "",
+) {
   if (!session) return false;
   if (sessionId) return [session.sessionId, session.id].some((value) => String(value ?? "") === sessionId);
+  if (rawUserMessage) return runtimeSessionHasUserPrompt(session, rawUserMessage);
   return !chatStorageKey || String(session.chatStorageKey ?? "") === chatStorageKey;
 }
 
@@ -116,11 +161,12 @@ async function recordAgentSessionTelemetry(type: string, body: { agent?: AgentPr
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as { agent?: AgentProfile; sessionId?: string; sinceMs?: number; chatStorageKey?: string };
+    const body = (await request.json()) as { agent?: AgentProfile; sessionId?: string; sinceMs?: number; chatStorageKey?: string; rawUserMessage?: string };
     const telemetryUrl = await canonicalLocalCollectorUrl(body.agent);
     const sessionId = body.sessionId?.trim();
     const sinceMs = Number(body.sinceMs || 0);
     const chatStorageKey = body.chatStorageKey?.trim();
+    const rawUserMessage = body.rawUserMessage?.trim() ?? "";
     await recordAgentSessionTelemetry("chat.agent_session.request", body);
     if (!body.agent || (!sessionId && !sinceMs && !chatStorageKey)) {
       await recordAgentSessionTelemetry("chat.agent_session.invalid", body);
@@ -133,7 +179,22 @@ export async function POST(request: NextRequest) {
       runtime: body.agent?.runtime?.trim(),
       agentId: body.agent?.id?.trim() || body.agent?.agentId?.trim(),
     });
-    const fallbackLocalSession = async () => await readLocalHermesSession(body.agent, sessionId, sinceMs) ?? await fallbackSession();
+    const wrapper = await fallbackSession();
+    const recoveryPrompt = rawUserMessage || runtimeSessionOriginalUserPrompt(wrapper);
+    const recoverySinceMs = sinceMs || Math.max(0, Number(wrapper?.startedAt || 0) - 30_000);
+    const wrapperOwnsRequestedId = Boolean(
+      sessionId
+      && wrapper?.source === "hivemindos-chat"
+      && String(wrapper.sessionId ?? wrapper.id ?? "") === sessionId,
+    );
+    const collectorSessionId = wrapperOwnsRequestedId && recoveryPrompt ? "" : sessionId;
+    const fallbackLocalSession = async () => {
+      const exactLocal = await readLocalHermesSession(body.agent, sessionId, sinceMs);
+      const matchedLocal = recoveryPrompt
+        ? await findLocalHermesSession(body.agent, recoverySinceMs, recoveryPrompt)
+        : null;
+      return reconcileRuntimeSessionAfterWrapperFailure(wrapper, matchedLocal ?? exactLocal) ?? wrapper;
+    };
     if (!telemetryUrl) {
       const session = await fallbackLocalSession();
       if (session) {
@@ -145,9 +206,10 @@ export async function POST(request: NextRequest) {
     }
     const buildUrl = (pathname: string) => {
       const url = new URL(`${telemetryUrl}${pathname}`);
-      if (sessionId) url.searchParams.set("sessionId", sessionId);
-      if (sinceMs) url.searchParams.set("sinceMs", String(sinceMs));
+      if (collectorSessionId) url.searchParams.set("sessionId", collectorSessionId);
+      if (recoverySinceMs) url.searchParams.set("sinceMs", String(recoverySinceMs));
       if (chatStorageKey) url.searchParams.set("chatStorageKey", chatStorageKey);
+      if (recoveryPrompt) url.searchParams.set("message", recoveryPrompt);
       if (body.agent?.runtime?.trim()) url.searchParams.set("runtime", body.agent.runtime.trim());
       if (body.agent?.localDataDir?.trim()) url.searchParams.set("localDataDir", body.agent.localDataDir.trim());
       return url;
@@ -181,7 +243,7 @@ export async function POST(request: NextRequest) {
       await recordAgentSessionTelemetry("chat.agent_session.bridge_error", body, { bridgeStatus: response.status, error: data?.error || null });
       return NextResponse.json({ ok: false, error: data?.error || `Agent bridge returned ${response.status}` }, { status: response.ok ? 502 : response.status });
     }
-    if (!sessionMatchesRequest(data.session, sessionId, chatStorageKey)) {
+    if (!sessionMatchesRequest(data.session, collectorSessionId, chatStorageKey, recoveryPrompt)) {
       const session = await fallbackLocalSession();
       if (session) {
         await recordAgentSessionTelemetry("chat.agent_session.response", body, { via: "mismatch-fallback", session: chatTelemetrySession(session) });
@@ -190,8 +252,9 @@ export async function POST(request: NextRequest) {
       await recordAgentSessionTelemetry("chat.agent_session.mismatch", body, { bridgeSession: chatTelemetrySession(data.session) });
       return NextResponse.json({ ok: false, error: "No runtime session found for this chat." }, { status: 404 });
     }
-    await recordAgentSessionTelemetry("chat.agent_session.response", body, { via: "bridge", session: chatTelemetrySession(data.session) });
-    return NextResponse.json({ ok: true, session: data.session });
+    const session = reconcileRuntimeSessionAfterWrapperFailure(wrapper, data.session) ?? data.session;
+    await recordAgentSessionTelemetry("chat.agent_session.response", body, { via: "bridge", session: chatTelemetrySession(session) });
+    return NextResponse.json({ ok: true, session });
   } catch (error) {
     return NextResponse.json({
       ok: false,

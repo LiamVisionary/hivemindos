@@ -11,6 +11,7 @@ import { readFileSync } from "node:fs";
 import { createEscalationTracker, formatEscalationAlert } from "./lib/fleet-watchdog-escalation.mjs";
 import {
   collectorHealthBelongsToApp,
+  collectorMaintenanceRestartDecision,
   localCollectorPortCandidates,
   selectHealthyLocalCollector,
 } from "./lib/fleet-watchdog-local-collector.mjs";
@@ -170,6 +171,26 @@ check("stale metadata cannot hide the healthy owned collector", () => {
   assert.deepEqual(selected?.candidate, { port: 8792, source: "launchd", authoritative: true });
 });
 
+check("an active collector chat run vetoes watchdog remediation", () => {
+  assert.deepEqual(
+    collectorMaintenanceRestartDecision({ ok: false, activeChatRunCount: 1 }),
+    { deferRestart: true, activeChatRunCount: 1 },
+  );
+  assert.deepEqual(
+    collectorMaintenanceRestartDecision({ ok: true, activeChatRunCount: 0, reservationToken: "safe-window" }),
+    { deferRestart: false, activeChatRunCount: 0, reservationToken: "safe-window" },
+  );
+  assert.deepEqual(
+    collectorMaintenanceRestartDecision({ ok: false, activeChatRunCount: 0, updateStarting: true }),
+    { deferRestart: true, activeChatRunCount: 0 },
+    "a competing maintenance reservation must suppress a second restart",
+  );
+  assert.deepEqual(
+    collectorMaintenanceRestartDecision({ ok: true, activeChatRunCount: "not-a-number" }),
+    { deferRestart: false, activeChatRunCount: 0 },
+  );
+});
+
 check("fleet cache snapshots preserve only recently confirmed machine state", () => {
   const now = Date.parse("2026-08-10T05:00:00.000Z");
   const machines = [{ name: "worker", online: true, collectorUrl: "http://worker:8787" }];
@@ -262,9 +283,14 @@ check("the watchdog discovers the owned local collector and rechecks before reme
   assert.match(watchdog, /recovered before remediation \(final safety probe passed; no restart\)/);
   const remediationBranch = watchdog.indexOf("if (fails >= threshold");
   const safetyProbe = watchdog.indexOf("const finalProbe =", remediationBranch);
+  const activeChatGuard = watchdog.indexOf("restart deferred — collector reports", remediationBranch);
   const remediation = watchdog.indexOf("REMEDIATING — restart", remediationBranch);
   assert.ok(safetyProbe > remediationBranch, "the final safety probe should run inside the remediation branch");
+  assert.ok(activeChatGuard > safetyProbe, "active chat readiness must be checked after the final health probe fails");
+  assert.ok(remediation > activeChatGuard, "the collector cannot be restarted before the active chat guard");
   assert.ok(remediation > safetyProbe, "the watchdog must pass the final safety probe before it can restart a collector");
+  assert.match(watchdog, /reserveCollectorRestartWindow\(target\.machineBase\)/);
+  assert.match(watchdog, /releaseCollectorRestartWindow\(target\.machineBase/);
 });
 
 check("stale discovery caches and unreachable peers fail closed without restart spam", () => {

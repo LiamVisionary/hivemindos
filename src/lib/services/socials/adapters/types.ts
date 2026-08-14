@@ -27,6 +27,7 @@ export type SocialConnectProbe = {
   detail: string;
   handle?: string;
   displayName?: string;
+  avatarUrl?: string;
 };
 
 export type SocialPostInput = {

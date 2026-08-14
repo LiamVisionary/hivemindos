@@ -78,9 +78,21 @@ export interface KanbanTaskLite {
   proofs?: GitLawbProof[];
   /** Machine that ran the task; its name is shown as deliverable provenance. */
   targetMachine?: { name?: string } | null;
+  /** Reversible operator deferral. Held tasks remain on the Work Board but are not current company work. */
+  held?: { at: number; by: string; note?: string };
   createdAt?: number;
   updatedAt?: number;
   completedAt?: number;
+}
+
+/**
+ * Company surfaces show current work, not the complete Work Board audit trail.
+ * Archived tasks are historical, while held tasks are explicitly deferred by
+ * the operator and must leave Issues, Approvals, Deliverables, activity, and
+ * headline work counts until their hold is cleared.
+ */
+export function isCompanyTaskVisible(task: Pick<KanbanTaskLite, "status" | "held">): boolean {
+  return task.status !== "archived" && !task.held;
 }
 
 const ROLES: Role[] = ["Queen", "Engineer", "Product", "Designer", "QA", "DevOps", "Auditor", "Growth", "Research", "Treasury"];
@@ -242,7 +254,7 @@ function resolveAssigneeName(assignee: string | null | undefined, byId: Map<stri
 }
 
 export function mapIssues(tasks: KanbanTaskLite[], ticker: string, byId: Map<string, string>, names: Set<string>): Issue[] {
-  const visibleTasks = tasks.filter((t) => t.status !== "archived" && STATUS_TO_LANE[t.status]);
+  const visibleTasks = tasks.filter((t) => isCompanyTaskVisible(t) && STATUS_TO_LANE[t.status]);
   const baseKeys = visibleTasks.map((t) => `${ticker}-${hash3(t.id)}`);
   const baseKeyCounts = new Map<string, number>();
   for (const baseKey of baseKeys) {
@@ -434,16 +446,16 @@ export function buildColony({ company, rollup, revenueShare, revenueRail, approv
     names.add(a.name);
   }
 
-  const liveTasks = tasks.filter((t) => t.status !== "archived");
-  const doneCount = liveTasks.filter((t) => t.status === "done").length;
-  const totalCount = liveTasks.length;
+  const visibleTasks = tasks.filter(isCompanyTaskVisible);
+  const doneCount = visibleTasks.filter((t) => t.status === "done").length;
+  const totalCount = visibleTasks.length;
   const hasWork = totalCount > 0;
 
   const alignment = company.alignment ?? (hasWork ? clamp(Math.round((doneCount / totalCount) * 100)) : 0);
   const status = deriveStatus(company, agents, approvals, alignment, hasWork);
   const burn = deriveBurn(company, rollup, agents);
-  const capabilityCapital = deriveCapabilityCapital(company, rollup, liveTasks, agents);
-  const pipeline = extractWorkBoardPipelineSummary(liveTasks) ?? undefined;
+  const capabilityCapital = deriveCapabilityCapital(company, rollup, visibleTasks, agents);
+  const pipeline = extractWorkBoardPipelineSummary(visibleTasks) ?? undefined;
 
   const unit = company.apexGoal?.unit;
   const apex = {
@@ -517,12 +529,12 @@ export function buildColony({ company, rollup, revenueShare, revenueRail, approv
     revenueShare,
     revenueRail,
     pipeline,
-    velocity: deriveVelocity(liveTasks),
+    velocity: deriveVelocity(visibleTasks),
     approvals: approvals.map((a) => mapApproval(a, company.dailyBudgetUsd)),
     agents,
-    issues: mapIssues(liveTasks, ticker, byId, names),
+    issues: mapIssues(visibleTasks, ticker, byId, names),
     governance: deriveGovernance(company, approvals),
-    activity: deriveActivity(liveTasks, byId, names),
+    activity: deriveActivity(visibleTasks, byId, names),
     frozen: company.frozen,
     lastDispatchedAt: company.lastDispatchedAt,
     hasApexGoal: Boolean(company.apexGoal?.title?.trim()),

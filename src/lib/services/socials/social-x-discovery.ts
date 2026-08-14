@@ -12,6 +12,7 @@ import {
   socialXSessionBinding,
   validSocialXSessionEnvKey,
 } from "@/lib/services/socials/social-x-session-binding";
+import { normalizeXProfileImageUrl } from "@/lib/services/socials/social-profile-image";
 import type {
   SocialAccount,
   SocialEngagementTarget,
@@ -23,6 +24,8 @@ const execFileAsync = promisify(execFile);
 const TWITTER_TIMEOUT_MS = 45_000;
 const TWITTER_MAX_BUFFER = 4 * 1024 * 1024;
 const STATUS_CACHE_MS = 60_000;
+const PROFILE_CACHE_MS = 15 * 60_000;
+const MAX_PROFILE_CACHE_ENTRIES = 256;
 const MAX_TARGET_HANDLES = 16;
 const MAX_QUERIES = 4;
 const MAX_CANDIDATES = 60;
@@ -59,6 +62,25 @@ export type TwitterCliExecute = (
 
 let statusCache: { expiresAt: number; value: SocialXDiscoveryStatus } | null = null;
 const accountStatusCache = new Map<string, { expiresAt: number; value: SocialXDiscoveryStatus }>();
+const publicProfileCache = new Map<string, { expiresAt: number; value: SocialXPublicProfile | null }>();
+
+export type SocialXPublicProfile = {
+  handle: string;
+  displayName?: string;
+  avatarUrl?: string;
+};
+
+function cachePublicProfile(key: string, value: SocialXPublicProfile | null): void {
+  const now = Date.now();
+  for (const [cachedKey, cached] of publicProfileCache) {
+    if (cached.expiresAt <= now) publicProfileCache.delete(cachedKey);
+  }
+  if (!publicProfileCache.has(key) && publicProfileCache.size >= MAX_PROFILE_CACHE_ENTRIES) {
+    const oldestKey = publicProfileCache.keys().next().value;
+    if (oldestKey) publicProfileCache.delete(oldestKey);
+  }
+  publicProfileCache.set(key, { expiresAt: now + PROFILE_CACHE_MS, value });
+}
 
 async function existingFile(candidates: string[]): Promise<string | null> {
   for (const candidate of candidates) {
@@ -213,12 +235,16 @@ function statusFromResponse(value: unknown, checkedAt: string): SocialXDiscovery
   const authenticated = record?.authenticated === true;
   const user = objectRecord(record?.user);
   const handle = typeof user?.screenName === "string" ? user.screenName.trim() : "";
+  const displayName = typeof user?.name === "string" ? user.name.trim() : "";
+  const avatarUrl = normalizeXProfileImageUrl(user?.profileImageUrl);
   return {
     available: true,
     authenticated,
     backend: "agent-reach-twitter-cli",
     checkedAt,
     ...(handle ? { accountHandle: handle } : {}),
+    ...(displayName ? { accountDisplayName: displayName } : {}),
+    ...(avatarUrl ? { accountAvatarUrl: avatarUrl } : {}),
     detail: authenticated
       ? `Authenticated X discovery${handle ? ` as @${handle}` : ""}.`
       : "twitter-cli is installed, but its X session is not authenticated. Finish X auth in Apps & Services → Agent Reach.",
@@ -265,6 +291,8 @@ export function bindXDiscoveryStatusToAccount(
   return {
     ...status,
     authenticated: false,
+    accountDisplayName: undefined,
+    accountAvatarUrl: undefined,
     detail: `Agent Reach is authenticated as @${sessionHandle || "unknown"}, but this Socials account is connected as @${connectedHandle}. Comment finder and X engagement require the same account. ${recovery} before finding or publishing replies and quote posts.`,
   };
 }
@@ -303,6 +331,46 @@ export function invalidateXDiscoveryStatus(accountId?: string): void {
 function validHandle(value: string): string | null {
   const handle = value.trim().replace(/^@/, "");
   return /^[A-Za-z0-9_]{1,15}$/.test(handle) ? handle : null;
+}
+
+/** Resolve the requested public X profile, independent of which account owns the read session. */
+export async function getXPublicProfile(
+  account: SocialAccount,
+  handle: string,
+  input: { force?: boolean; runTwitterImpl?: TwitterCliRun } = {},
+): Promise<SocialXPublicProfile | null> {
+  if (account.platform !== "x") return null;
+  const requestedHandle = validHandle(handle);
+  if (!requestedHandle) return null;
+  const cacheKey = `${account.id}:${requestedHandle.toLowerCase()}`;
+  const cached = publicProfileCache.get(cacheKey);
+  if (!input.force && !input.runTwitterImpl && cached && cached.expiresAt > Date.now()) return cached.value;
+  let value: SocialXPublicProfile | null = null;
+  try {
+    const runImpl = input.runTwitterImpl ?? await createAccountTwitterCliRun(account);
+    const record = objectRecord(responseData(await runImpl(["user", requestedHandle, "--json"])));
+    const returnedHandle = typeof record?.screenName === "string" ? validHandle(record.screenName) : null;
+    if (returnedHandle?.toLowerCase() === requestedHandle.toLowerCase()) {
+      const displayName = typeof record?.name === "string" ? record.name.trim() : "";
+      const avatarUrl = normalizeXProfileImageUrl(record?.profileImageUrl);
+      value = {
+        handle: returnedHandle,
+        ...(displayName ? { displayName } : {}),
+        ...(avatarUrl ? { avatarUrl } : {}),
+      };
+    }
+  } catch {
+    // Public identity decoration is best-effort and never changes connection authority.
+  }
+  if (!input.runTwitterImpl) cachePublicProfile(cacheKey, value);
+  return value;
+}
+
+export function getXPublicProfileForAccount(
+  account: SocialAccount,
+  input: { force?: boolean; runTwitterImpl?: TwitterCliRun } = {},
+): Promise<SocialXPublicProfile | null> {
+  return getXPublicProfile(account, account.handle, input);
 }
 
 function addHandle(output: string[], seen: Set<string>, value: string, self: string): void {
@@ -356,6 +424,7 @@ function normalizeCandidate(raw: unknown, source: SocialEngagementTarget["source
   const externalId = typeof record?.id === "string" ? record.id.trim() : "";
   const text = typeof record?.text === "string" ? record.text.trim() : "";
   const authorHandle = typeof author?.screenName === "string" ? validHandle(author.screenName) : null;
+  const authorAvatarUrl = normalizeXProfileImageUrl(author?.profileImageUrl);
   const createdValue = typeof record?.createdAtISO === "string" ? record.createdAtISO : record?.createdAt;
   const created = typeof createdValue === "string" ? Date.parse(createdValue) : Number.NaN;
   if (!/^\d+$/.test(externalId) || !text || !authorHandle || !Number.isFinite(created)) return null;
@@ -368,6 +437,7 @@ function normalizeCandidate(raw: unknown, source: SocialEngagementTarget["source
       authorHandle,
       ...(typeof author?.name === "string" && author.name.trim() ? { authorName: author.name.trim() } : {}),
       ...(typeof author?.verified === "boolean" ? { authorVerified: author.verified } : {}),
+      ...(authorAvatarUrl ? { authorAvatarUrl } : {}),
       text,
       createdAt: new Date(created).toISOString(),
       discoveredAt: now.toISOString(),

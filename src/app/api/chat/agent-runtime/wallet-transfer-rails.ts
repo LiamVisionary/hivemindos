@@ -260,7 +260,7 @@ function findB20IssuerDraft(messages: IncomingMessage[]) {
 }
 
 async function resolveB20IssuerSource(profile: AgentProfile, wallet?: AgentWalletConfig): Promise<{ agentId: string; address: string } | { error: string }> {
-  const agentId = profile.id;
+  const agentId = wallet?.agentId?.trim() || profile.id;
   if (wallet?.walletAddress?.startsWith("0x")) {
     return { agentId, address: wallet.walletAddress };
   }
@@ -281,7 +281,7 @@ function chatMessagesForB20(messages: IncomingMessage[]) {
 
 function agentWalletFallback(profile: AgentProfile, wallet?: AgentWalletConfig) {
   return wallet?.walletAddress
-    ? { agentId: profile.id, address: wallet.walletAddress, network: wallet.network }
+    ? { agentId: wallet.agentId?.trim() || profile.id, address: wallet.walletAddress, network: wallet.network }
     : undefined;
 }
 
@@ -680,13 +680,13 @@ function privateTransferExecutionSse(input: {
         if (Number.isFinite(feeNotionalUsd) && feeNotionalUsd > 0) {
           const feeQuote = await quoteTradingPlatformFee({ source: "veil-transfer", network: VEIL_CASH_NETWORK, amountUsd: feeNotionalUsd });
           if (feeQuote.enabled) {
-            feeWallet = await getWalletSecret(input.profile.id);
+            feeWallet = await getWalletSecret(input.wallet?.agentId?.trim() || input.profile.id);
             if (!feeWallet) throw new Error("No local wallet exists for this agent, so the HivemindOS platform fee cannot be collected.");
             await assertTradingPlatformFeeReady({ source: "veil-transfer", network: feeWallet.info.network, amountUsd: feeNotionalUsd });
           }
         }
         let result: PrivateTransferExecutionResult = await executeVeilPrivateTransfer({
-          agentId: input.profile.id,
+          agentId: input.wallet?.agentId?.trim() || input.profile.id,
           asset: input.draft.asset,
           amount: input.draft.amount,
           recipient: input.draft.recipient,
@@ -710,7 +710,7 @@ function privateTransferExecutionSse(input: {
           result = {
             ...result,
             platformFee: await collectTradingPlatformFee({
-              agentId: input.profile.id,
+              agentId: input.wallet?.agentId?.trim() || input.profile.id,
               network: feeWallet.info.network,
               secret: feeWallet.secret,
               fromAddress: feeWallet.info.address,

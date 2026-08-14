@@ -11,23 +11,26 @@
 
 .modal {
   --sf-bg: #0b0b0d;
-  --sf-fg: #e4e6eb;
-  --sf-accent: #6ed88f;
+  --sf-fg: #f3f0e9;
+  --sf-accent: #6fcdba;
+  --sf-honey: #e7b45c;
+  --sf-honey-soft: rgba(231, 180, 92, 0.14);
   --sf-link: #79b8ff;
-  --sf-dim: #8e8e93;
+  --sf-dim: #9b9891;
   --sf-line: rgba(148, 163, 184, 0.16);
   --sf-mono: "JetBrains Mono", var(--f-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sf-display: "Space Grotesk", var(--f-display), sans-serif;
 
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(94vw, 460px);
+  width: min(94vw, 480px);
   max-height: calc(100vh - 48px);
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 16px;
   background: var(--sf-bg);
-  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 36px 84px rgba(0, 0, 0, 0.62);
   color: var(--sf-fg);
 }
 
@@ -37,7 +40,7 @@
   gap: 10px;
   padding: 10px 14px;
   border-bottom: 1px solid var(--sf-line);
-  background: rgba(15, 23, 42, 0.55);
+  background: rgba(15, 23, 42, 0.42);
 }
 
 .headerTitle {
@@ -47,9 +50,9 @@
   align-items: center;
   gap: 8px;
   font-family: var(--sf-mono);
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.035em;
 }
 
 .headerTitle span {
@@ -64,6 +67,64 @@
   overflow-y: auto;
 }
 
+.brandHero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  padding: 12px;
+  border: 1px solid var(--sf-line);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.brandMark {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(111, 205, 186, 0.24);
+  border-radius: 10px;
+  background: rgba(111, 205, 186, 0.1);
+  color: var(--sf-accent);
+}
+
+.brandIdentity {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.brandEyebrow {
+  color: var(--sf-dim);
+  font-family: var(--sf-mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.brandName {
+  width: fit-content;
+  color: var(--sf-fg);
+  font-family: var(--sf-display);
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+
+.intro {
+  margin: 0;
+  color: var(--sf-fg);
+  font-family: var(--sf-display);
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  line-height: 1.45;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -74,7 +135,7 @@
   color: var(--sf-dim);
   font-family: var(--sf-mono);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -92,29 +153,30 @@
   color: var(--sf-fg);
   font-family: var(--sf-mono);
   font-size: 11.5px;
+  transition: border-color 160ms ease, background 160ms ease;
 }
 
 .dropZone:hover {
-  border-color: rgba(110, 216, 143, 0.5);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(111, 205, 186, 0.5);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .dropZoneActive,
 .dropZoneActive:hover {
   border-style: solid;
   border-color: var(--sf-accent);
-  background: rgba(110, 216, 143, 0.16);
-  box-shadow: 0 0 0 3px rgba(110, 216, 143, 0.18);
+  background: rgba(111, 205, 186, 0.12);
+  box-shadow: 0 0 0 3px rgba(111, 205, 186, 0.12);
 }
 
 .dropZoneIcon {
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: rgba(110, 216, 143, 0.14);
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(111, 205, 186, 0.1);
   color: var(--sf-accent);
   /* Children must not eat drag events, or moving over them fires dragleave on
      the zone and the hover state flickers off mid-drag. */
@@ -157,10 +219,10 @@
 
 .textInput {
   width: 100%;
-  padding: 9px 11px;
+  padding: 11px 12px;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 9px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.035);
   color: var(--sf-fg);
   font-family: var(--sf-mono);
   font-size: 11.5px;
@@ -168,7 +230,8 @@
 }
 
 .textInput:focus {
-  border-color: var(--sf-link);
+  border-color: var(--sf-accent);
+  box-shadow: 0 0 0 3px rgba(111, 205, 186, 0.1);
 }
 
 .progressPanel {
@@ -254,19 +317,22 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 8px 16px;
-  border: 1px solid rgba(110, 216, 143, 0.4);
-  border-radius: 9px;
-  background: rgba(110, 216, 143, 0.16);
-  color: var(--sf-accent);
+  min-height: 38px;
+  padding: 9px 18px;
+  border: 1px solid rgba(231, 180, 92, 0.5);
+  border-radius: 999px;
+  background: var(--sf-honey-soft);
+  color: #f4d89f;
   font-family: var(--sf-mono);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
 }
 
 .sendButton:hover:not(:disabled) {
-  background: rgba(110, 216, 143, 0.26);
+  border-color: rgba(231, 180, 92, 0.68);
+  background: rgba(231, 180, 92, 0.2);
 }
 
 .sendButton:disabled {
@@ -301,11 +367,14 @@
   --sf-bg: rgba(255, 252, 246, 0.98);
   --sf-fg: var(--foreground);
   --sf-accent: var(--success, #6b8f5e);
+  --sf-honey: #8c5e0a;
+  --sf-honey-soft: rgba(140, 94, 10, 0.09);
   --sf-link: var(--accent-strong);
   --sf-dim: var(--text-soft);
   --sf-line: var(--line);
 
   border-color: var(--line);
+  background: var(--sf-bg);
   box-shadow: 0 30px 80px rgba(82, 61, 22, 0.18);
 }
 
@@ -322,17 +391,53 @@
   border-color: var(--line);
 }
 
+:global(:root[data-theme="hive-light"]) .brandHero {
+  border-color: var(--line);
+  background: var(--surface-soft);
+}
+
 :global(:root[data-theme="hive-light"]) .progressTrack {
   background: rgba(72, 55, 22, 0.08);
   border-color: var(--line);
 }
 
 :global(:root[data-theme="hive-light"]) .sendButton {
-  border-color: rgba(107, 143, 94, 0.4);
-  background: var(--button-accent);
-  color: var(--accent-strong);
+  border-color: rgba(140, 94, 10, 0.28);
+  background: rgba(140, 94, 10, 0.1);
+  color: #6a4505;
 }
 
 :global(:root[data-theme="hive-light"]) .statusNoteError {
   color: var(--danger, #b5483b);
+}
+
+@media (max-width: 520px) {
+  .backdrop {
+    padding: 10px;
+  }
+
+  .modal {
+    max-height: calc(100vh - 20px);
+    border-radius: 17px;
+  }
+
+  .body {
+    padding: 16px 15px 8px;
+  }
+
+  .brandName {
+    font-size: 22px;
+  }
+
+  .footer {
+    padding-right: 15px;
+    padding-left: 15px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dropZone,
+  .sendButton {
+    transition: none;
+  }
 }

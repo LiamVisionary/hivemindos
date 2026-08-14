@@ -158,6 +158,8 @@ protocol.push(firstLine.slice(17));
 protocol.push(eventLine({ type: "assistant.segment_end" }));
 protocol.push(eventLine({ type: "tool.started", name: "write_file" }));
 protocol.push(eventLine({ type: "tool.completed", name: "write_file" }));
+protocol.push(eventLine({ type: "capability.started", id: "skill:shared:muapi-seedance-video", name: "skill:shared:muapi-seedance-video" }));
+protocol.push(eventLine({ type: "capability.completed", id: "skill:shared:muapi-seedance-video", name: "skill:shared:muapi-seedance-video" }));
 protocol.push(eventLine({ type: "assistant.delta", delta: "## Build complete\n" }));
 protocol.push(eventLine({ type: "assistant.delta", delta: "Verified." }));
 protocol.flush();
@@ -166,10 +168,15 @@ assert.deepEqual(streamEvents, [
   ["delta", "I am checking the scaffold."],
   ["process", "tool.started", "write_file"],
   ["process", "tool.completed", "write_file"],
+  ["process", "capability.started", "skill:shared:muapi-seedance-video"],
+  ["process", "capability.completed", "skill:shared:muapi-seedance-video"],
   ["reset", "I am checking the scaffold."],
   ["delta", "## Build complete\n"],
   ["delta", "Verified."],
 ]);
+
+assert.match(bridge, /HIVEMINDOS_APPROVED_CAPABILITY_IDS/, "the private Hermes bridge reads the approved execution-receipt contract");
+assert.match(bridge, /HIVEMINDOS_CAPABILITY_ID/, "the private Hermes bridge recognizes a selected-capability invocation marker");
 
 const fallbackEvents = [];
 const fallbackProtocol = createHermesCliStreamProtocol({

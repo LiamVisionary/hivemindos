@@ -142,14 +142,41 @@ const fetchImpl = async (url, init = {}) => {
   calls.push({ href, init, json: typeof init.body === "string" && init.headers?.["Content-Type"] === "application/json" ? JSON.parse(init.body) : null });
   if (href.includes("api.x.com/2/tweets")) return response({ data: { id: "x123" } }, 201);
   if (href.includes("api.telegram.org") && href.endsWith("/sendMessage")) return response({ ok: true, result: { message_id: 88 } });
+  if (href.includes("api.neynar.com/v2/farcaster/user/bulk")) {
+    return response({ users: [{ username: "test", display_name: "Test Caster", pfp_url: "https://images.example/farcaster.jpg" }] });
+  }
   if (href.includes("api.neynar.com/v2/farcaster/cast")) return response({ success: true, cast: { hash: "0xfarcaster" } });
-  if (href.endsWith("linkedin.com/v2/userinfo")) return response({ sub: "li123", name: "Test" });
+  if (href.endsWith("linkedin.com/v2/userinfo")) {
+    return response({ sub: "li123", name: "Test", picture: "https://images.example/linkedin.jpg" });
+  }
   if (href.endsWith("linkedin.com/v2/ugcPosts")) return response({}, 201, { "x-restli-id": "urn:li:share:123" });
   if (href.includes("reddit.com/api/v1/access_token")) return response({ access_token: "reddit-token" });
+  if (href.endsWith("oauth.reddit.com/api/v1/me")) return response({ name: "user", icon_img: "https://images.example/reddit.jpg" });
   if (href.includes("oauth.reddit.com/api/submit")) return response({ json: { data: { name: "t3_abc", url: "https://reddit.com/r/test/comments/abc" }, errors: [] } });
   if (href.includes("oauth.reddit.com/api/comment")) return response({ json: { data: { things: [{ data: { name: "t1_reply" } }] }, errors: [] } });
   throw new Error(`unexpected fetch ${href}`);
 };
+
+const linkedInProbe = await SOCIAL_ADAPTERS.linkedin.connectStatus(
+  { ...baseAccount, id: "linkedin:test", platform: "linkedin", method: "oauth" },
+  { env: { LINKEDIN_ACCESS_TOKEN: "li-token" }, fetchImpl },
+);
+assert.equal(linkedInProbe.avatarUrl, "https://images.example/linkedin.jpg");
+
+const farcasterProbe = await SOCIAL_ADAPTERS.farcaster.connectStatus(
+  { ...baseAccount, id: "farcaster:test", platform: "farcaster", binding: { fid: "3", signerUuid: "signer" } },
+  { env: { NEYNAR_API_KEY: "neynar" }, fetchImpl },
+);
+assert.equal(farcasterProbe.avatarUrl, "https://images.example/farcaster.jpg");
+
+const redditProbe = await SOCIAL_ADAPTERS.reddit.connectStatus(
+  { ...baseAccount, id: "reddit:test", platform: "reddit", binding: { defaultSubreddit: "test" } },
+  {
+    env: { REDDIT_CLIENT_ID: "id", REDDIT_CLIENT_SECRET: "secret", REDDIT_USERNAME: "user", REDDIT_PASSWORD: "pass" },
+    fetchImpl,
+  },
+);
+assert.equal(redditProbe.avatarUrl, "https://images.example/reddit.jpg");
 
 const xAgentReachCalls = [];
 const xAgentReachRun = async (args) => {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { AgentWalletConfig } from "@/lib/types/agent-wallet";
 import { getWalletSecret } from "@/lib/services/wallet/local-wallet-vault";
+import { resolveGovernedWalletAccess } from "@/lib/services/wallet/spend-governance";
 import { executeX402Fetch, normalizeX402Policy } from "@/lib/services/wallet/x402-agent-fetch";
 
 export const runtime = "nodejs";
@@ -11,6 +12,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({})) as {
       agentId?: string;
+      actingAgentId?: string;
       url?: string;
       method?: string;
       headers?: Record<string, string>;
@@ -19,20 +21,33 @@ export async function POST(request: NextRequest) {
       confirmation?: string;
       companyTaskId?: string;
     };
-    const agentId = body.agentId?.trim();
+    const requestedWalletId = body.agentId?.trim();
     const url = body.url?.trim();
-    if (!agentId) return NextResponse.json({ ok: false, error: "agentId is required" }, { status: 400 });
+    if (!requestedWalletId) return NextResponse.json({ ok: false, error: "agentId is required" }, { status: 400 });
     if (!url) return NextResponse.json({ ok: false, error: "url is required" }, { status: 400 });
 
-    const stored = await getWalletSecret(agentId);
+    const isPersonalWallet = requestedWalletId.startsWith("user:");
+    const access = isPersonalWallet
+      ? null
+      : await resolveGovernedWalletAccess(requestedWalletId, body.actingAgentId?.trim() || undefined);
+    if (!isPersonalWallet && !access) {
+      return NextResponse.json({ ok: false, error: body.actingAgentId ? "This agent is not attached to that wallet." : "No governed wallet record exists for this wallet." }, { status: body.actingAgentId ? 403 : 404 });
+    }
+    const walletId = access?.walletId ?? requestedWalletId;
+
+    const stored = await getWalletSecret(walletId);
     if (!stored) return NextResponse.json({ ok: false, error: "No local wallet exists for this agent." }, { status: 404 });
 
     // Personal (`user:`) wallets never auto-spend: force auto-pay off so x402
     // always needs an explicit confirmation. An explicit pay-from-my-wallet
     // still works; the no-human auto path does not.
-    const policy = normalizeX402Policy(body.policy, stored.info.network, agentId.startsWith("user:"));
+    const policy = normalizeX402Policy({
+      ...body.policy,
+      ...(access?.wallet ?? {}),
+      autoPayEnabled: access?.permissionMode === "autonomous" && access.wallet.enabled,
+    }, stored.info.network, isPersonalWallet || !body.actingAgentId?.trim());
     const result = await executeX402Fetch({
-      agentId,
+      agentId: walletId,
       network: stored.info.network,
       secret: stored.secret,
       fromAddress: stored.info.address,
@@ -51,7 +66,7 @@ export async function POST(request: NextRequest) {
         evidence: [
           `URL: ${url}`,
           `Method: ${body.method || "GET"}`,
-          `Wallet: ${agentId}`,
+          `Wallet: ${walletId}`,
           `Network: ${stored.info.network}`,
         ],
         source: "Wallet x402 API",

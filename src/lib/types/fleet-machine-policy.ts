@@ -1,4 +1,16 @@
 export type FleetMachineAccessDecision = "allow" | "ask" | "deny";
+export type FleetMachineAccessResolutionDecision = "allow-temporary" | "allow" | "deny";
+
+const FLEET_MACHINE_ACCESS_ANSWER_DECISIONS = new Map([
+  ["allow 15 min", "allow-temporary"],
+  ["always allow", "allow"],
+  ["deny", "deny"],
+] as const);
+
+export function fleetMachineAccessDecisionFromAnswer(answer: unknown): FleetMachineAccessResolutionDecision | null {
+  const normalized = typeof answer === "string" ? answer.trim().toLowerCase() : "";
+  return FLEET_MACHINE_ACCESS_ANSWER_DECISIONS.get(normalized as "allow 15 min" | "always allow" | "deny") ?? null;
+}
 
 export type FleetMachineAccessCapability =
   | "sharedBrain"

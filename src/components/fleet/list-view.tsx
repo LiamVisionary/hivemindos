@@ -6,21 +6,15 @@ import {
   Bell,
   Check,
   ChevronRight,
-  Copy,
   Cpu,
   Database,
   Laptop,
   MessageSquare,
   Monitor,
-  PhoneCall,
-  Plus,
   Search,
   Server,
-  Settings2,
   Smartphone,
-  Trash2,
   Users,
-  Wallet,
   X,
   Zap,
   type LucideIcon,
@@ -48,6 +42,9 @@ import {
   fleetAgentsForDisplay,
   nextFleetAgentLimit,
 } from "./list-view-pagination";
+import { FleetListMachineActions } from "./list-view-machine-actions";
+import { FleetListAgentActions } from "./list-view-agent-actions";
+import type { MachineUpdateButtonDetail, MachineUpdateButtonStatus } from "./roster";
 
 export type FleetListViewMode = "hive" | "graph" | "map" | "list";
 type FilterKey = "all" | "working" | "attention" | "idle";
@@ -66,6 +63,17 @@ interface ListViewProps {
   onEditSettings?: (m: FleetMachine, a: FleetAgent) => void;
   onDuplicate?: (m: FleetMachine, a: FleetAgent) => void;
   onRemove?: (m: FleetMachine, a: FleetAgent) => void;
+  updateStatusByMachine?: Record<string, MachineUpdateButtonStatus>;
+  updateDetailByMachine?: Record<string, MachineUpdateButtonDetail>;
+  onUpdateMachine?: (m: FleetMachine) => void;
+  onRenameMachine?: (machineId: string, name: string) => void;
+  onOpenCodeProof?: (m: FleetMachine) => void;
+  onFixSyncIssue?: (m: FleetMachine) => void | Promise<void>;
+  onFixNetworkIssue?: (m: FleetMachine) => void | Promise<void>;
+  onOpenMachineSettings?: (m: FleetMachine) => void;
+  onOpenShell?: (m: FleetMachine) => void;
+  onSendFile?: (m: FleetMachine) => void;
+  onOpenCompute?: (m: FleetMachine) => void;
   /** When provided, the list renders its full-screen chrome (header, summary
    *  strip, search + filters, and the view-mode switcher). Omit for the bare
    *  card list embedded inside the legacy FleetView shell. */
@@ -256,6 +264,17 @@ export function ListView({
   onEditSettings,
   onDuplicate,
   onRemove,
+  updateStatusByMachine,
+  updateDetailByMachine,
+  onUpdateMachine,
+  onRenameMachine,
+  onOpenCodeProof,
+  onFixSyncIssue,
+  onFixNetworkIssue,
+  onOpenMachineSettings,
+  onOpenShell,
+  onSendFile,
+  onOpenCompute,
   viewMode,
   onSelectViewMode,
   headerAux,
@@ -335,15 +354,6 @@ export function ListView({
   }, [machines, q, filter, statusOk]);
 
   const noResults = groups.length === 0;
-
-  const fire = (
-    m: FleetMachine,
-    a: FleetAgent,
-    fn?: (m: FleetMachine, a: FleetAgent) => void,
-  ) => (event: React.MouseEvent) => {
-    event.stopPropagation();
-    fn?.(m, a);
-  };
 
   const showMoreAgents = React.useCallback((machineId: string) => {
     setAgentLimitsByMachine((current) => ({
@@ -912,6 +922,23 @@ export function ListView({
                     ))}
                   </div>
                 )}
+                {isMSel ? (
+                  <FleetListMachineActions
+                    machine={m}
+                    updateStatus={updateStatusByMachine?.[m.id]}
+                    updateDetail={updateDetailByMachine?.[m.id]}
+                    onAddAgent={onAddAgent}
+                    onOpenSettings={onOpenMachineSettings}
+                    onUpdateMachine={onUpdateMachine}
+                    onFixSyncIssue={onFixSyncIssue}
+                    onFixNetworkIssue={onFixNetworkIssue}
+                    onOpenShell={onOpenShell}
+                    onSendFile={onSendFile}
+                    onOpenCompute={onOpenCompute}
+                    onRenameMachine={onRenameMachine}
+                    onOpenCodeProof={onOpenCodeProof}
+                  />
+                ) : null}
               </div>
 
               {/* AGENTS */}
@@ -1046,72 +1073,16 @@ export function ListView({
                               </div>
                             )}
 
-                            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                              {canChat && onOpenChat && (
-                                <button
-                                  type="button"
-                                  onClick={fire(m, a, onOpenChat)}
-                                  className={styles.actionBtn}
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    gap: 8,
-                                    height: 32,
-                                    padding: "0 13px",
-                                    borderRadius: 9,
-                                    cursor: "pointer",
-                                    background: "var(--lv-live-soft)",
-                                    border: "1px solid var(--lv-live-line)",
-                                    color: "var(--lv-live)",
-                                    fontFamily: "var(--lv-mono)",
-                                    fontSize: 10,
-                                    fontWeight: 700,
-                                    letterSpacing: "0.06em",
-                                    textTransform: "uppercase",
-                                  }}
-                                >
-                                  <MessageSquare size={13} aria-hidden />
-                                  New chat
-                                </button>
-                              )}
-                              {[
-                                { id: "call", label: "Call", Icon: PhoneCall, fn: onCallAgent },
-                                { id: "wallet", label: "Wallet", Icon: Wallet, fn: onOpenWallet },
-                                { id: "settings", label: "Settings", Icon: Settings2, fn: onEditSettings },
-                                { id: "dup", label: "Duplicate", Icon: Copy, fn: onDuplicate },
-                                { id: "remove", label: "Remove", Icon: Trash2, fn: onRemove, danger: true },
-                              ]
-                                .filter((ac) => Boolean(ac.fn))
-                                .map((ac) => (
-                                  <button
-                                    key={ac.id}
-                                    type="button"
-                                    onClick={fire(m, a, ac.fn)}
-                                    title={ac.label}
-                                    className={styles.actionBtn}
-                                    style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: 8,
-                                      height: 32,
-                                      padding: "0 12px",
-                                      borderRadius: 9,
-                                      cursor: "pointer",
-                                      background: ac.danger ? "var(--lv-danger-soft)" : "var(--lv-tint-2)",
-                                      border: `1px solid ${ac.danger ? "var(--lv-danger-line)" : "var(--lv-line-2)"}`,
-                                      color: ac.danger ? "var(--lv-danger)" : "var(--lv-fg-2)",
-                                      fontFamily: "var(--lv-mono)",
-                                      fontSize: 10,
-                                      fontWeight: 700,
-                                      letterSpacing: "0.06em",
-                                      textTransform: "uppercase",
-                                    }}
-                                  >
-                                    <ac.Icon size={13} aria-hidden />
-                                    {ac.label}
-                                  </button>
-                                ))}
-                            </div>
+                            <FleetListAgentActions
+                              machine={m}
+                              agent={a}
+                              onOpenChat={canChat ? onOpenChat : undefined}
+                              onCallAgent={onCallAgent}
+                              onOpenWallet={onOpenWallet}
+                              onEditSettings={onEditSettings}
+                              onDuplicate={onDuplicate}
+                              onRemove={onRemove}
+                            />
                           </div>
                         )}
                       </div>
@@ -1170,42 +1141,6 @@ export function ListView({
                     </div>
                   )}
 
-                  <div
-                    className={styles.addRow}
-                    onClick={(e) => { e.stopPropagation(); onAddAgent(m); }}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 14,
-                      padding: padRow,
-                      borderTop: "1px solid var(--lv-line)",
-                      cursor: "pointer",
-                    }}
-                  >
-                    <span
-                      style={{
-                        flex: "0 0 auto",
-                        width: 38,
-                        height: 38,
-                        borderRadius: 10,
-                        border: "1px dashed var(--lv-honey-line)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "var(--lv-honey)",
-                      }}
-                    >
-                      <Plus size={16} aria-hidden />
-                    </span>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                      <strong style={{ fontFamily: "var(--lv-display)", fontSize: 13.5, fontWeight: 600, color: "var(--lv-honey)" }}>
-                        Add agent
-                      </strong>
-                      <span style={{ fontFamily: "var(--lv-mono)", fontSize: 10, color: "var(--lv-fg-3)" }}>
-                        deploy a new agent to {m.name}
-                      </span>
-                    </div>
-                  </div>
                 </div>
               )}
 

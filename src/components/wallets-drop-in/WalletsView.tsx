@@ -9,6 +9,7 @@ import type { DropInWallet, WalletBankrInfo, WalletHolding, WalletRail, WalletRa
 import { chainBadgeSrc, personalWalletSpendAccountForAsset, personalWalletTransferTargets, txExplorerName, txExplorerUrl, type GroupedPersonalWallet, type PersonalWalletAccount } from "@/lib/utils/personal-wallet-grouping";
 import { PERSONAL_WALLET_ADDABLE_CHAINS } from "@/lib/config/personal-wallet-chains";
 import { ClawBankStatusCard } from "./ClawBankStatusCard";
+import { AgentWalletAccessModal, CreateAgentWalletModal, type CreateAgentWalletInput } from "./AgentWalletAccessModal";
 import { CreateImportWalletModal } from "./CreateImportWalletModal";
 import { WalletRewardsActions, type WalletRewardsActionsSlice } from "./WalletRewardsActions";
 import { WalletSecretExportSheet } from "./WalletSecretExportSheet";
@@ -44,7 +45,7 @@ type WalletModalActionInput = { wallet?: unknown; name?: string; chain?: string;
 export type WalletDropInActions = WalletRewardsActionsSlice & HoneyContributionActions & {
   onToggleAgentSpend?: (agentId: string, enabled: boolean) => unknown;
   onUpdateAgentWallet?: (agentId: string, patch: Record<string, unknown>) => unknown;
-  onCreateAgentWallet?: (agentId: string, network: string) => unknown;
+  onCreateAgentWallet?: (input: CreateAgentWalletInput) => Promise<unknown> | unknown;
   onRefreshAgentWallet?: (agentId: string) => unknown;
   onResetAgentRunway?: (agentId: string) => unknown;
   onCopyAgentPrompt?: (agentId: string) => unknown;
@@ -70,7 +71,7 @@ export type WalletDropInActions = WalletRewardsActionsSlice & HoneyContributionA
 const {
   FR_CCY, FR_MACHINES, frFmtAmount, frFmtUsd, frFmtUsdFull, frFmtChange, frTopBalances,
   frStateMeta, frFleetSummary, frMachineState,
-  FR_WALLET_PANELS, FR_PROVIDER, FR_RAIL_CONFIG, FR_LEDGER, FR_LEDGER_TYPE, FR_MODELS,
+  FR_WALLET_PANELS, FR_PROVIDER, FR_RAIL_CONFIG, FR_LEDGER, FR_LEDGER_TYPE, FR_MODELS, FR_AGENT_OPTIONS,
   FR_USAGE_SERIES, FR_HONEY_LEDGER, FR_HONEY_KIND, FR_USEPOD, FR_MONEYCLAW_ENV,
   FR_MY_WALLETS, FR_WALLET_META,
   frWallets, frRunway, frWalletSummary, frTokenRollup, frRailCfg, frRailReady, frAgentRail,
@@ -855,7 +856,7 @@ function AssetSelect({ holdings, value, disabled = false, onChange }: { holdings
 }
 function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure, actions }: { w: DropInWallet; enabled: boolean; setEnabled: React.Dispatch<React.SetStateAction<boolean>>; compact?: boolean; onCollapse?: () => void; onConfigure?: (railId: WalletRailId) => void; actions?: WalletDropInActions }) {
   const [sheet, setSheet] = React.useState<string | null>(null);
-  const [auto, setAuto] = React.useState(!!w.meta.autoUse);
+  const [accessOpen, setAccessOpen] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const [dup, setDup] = React.useState(!!w.policy.dupGuard);
   const [veilAuto, setVeilAuto] = React.useState(!!w.meta.veilAutoSend);
@@ -866,7 +867,6 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
   const promptSeed = w.meta.notes || ("Spend only on " + w.role.toLowerCase() + " work. Prefer the cheapest route under caps.");
   const [promptText, setPromptText] = React.useState(promptSeed);
   React.useEffect(() => setPromptText(promptSeed), [w.id, promptSeed]);
-  React.useEffect(() => setAuto(!!w.meta.autoUse), [w.id, w.meta.autoUse]);
   React.useEffect(() => setDup(!!w.policy.dupGuard), [w.id, w.policy.dupGuard]);
   React.useEffect(() => setVeilAuto(!!w.meta.veilAutoSend), [w.id, w.meta.veilAutoSend]);
   const rw = frRunway({ ...w, meta: { ...w.meta, enabled } });
@@ -880,7 +880,9 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
   const stable = (sendHoldings.find((b) => b.sym === networkStable) || sendHoldings[0] || { sym: networkStable }).sym;
   const sendSym = sendSymState || stable;
   const confirmLabel = w.meta.rawProvider === "veil" ? "CONFIRM" : "SEND_USDC";
-  const requiresSendConfirmation = w.meta.rawProvider === "veil" ? !veilAuto : !auto;
+  // A click from this operator-owned card is always a human-authorized send.
+  // Autonomous access is evaluated per acting agent by the server routes.
+  const requiresSendConfirmation = true;
   const sendBal = sendHoldings.find((b) => b.sym === sendSym);
   const others = frWallets().filter((a) => a.id !== w.id && !a.meta.setup && a.meta.addr && a.meta.network === w.meta.network && (w.provider !== "veil" || /^0x[a-fA-F0-9]{40}$/.test(a.meta.addr)));
   const sendAmount = Number(sendAmt);
@@ -899,7 +901,6 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
   const toggleSheet = (s: string) => setSheet((c) => (c === s ? null : s));
   const copyAddr = () => { try { navigator.clipboard.writeText(w.meta.addr); } catch { /* clipboard unavailable */ } setCopied(true); setTimeout(() => setCopied(false), 1400); };
   const flipEnabled = () => setEnabled((v) => { const next = !v; actions?.onToggleAgentSpend?.(w.id, next); return next; });
-  const flipAuto = () => setAuto((v) => { const next = !v; actions?.onUpdateAgentWallet?.(w.id, { autoPayEnabled: next, allowAutoUse: next }); return next; });
   const flipVeilAuto = () => setVeilAuto((v) => { const next = !v; actions?.onUpdateAgentWallet?.(w.id, { veilAutoSendEnabled: next }); return next; });
   const flipDup = () => setDup((v) => { const next = !v; actions?.onUpdateAgentWallet?.(w.id, { duplicatePaymentGuardEnabled: next }); return next; });
   const commitNum = (key: string) => (value: string) => { const n = Number(value); if (Number.isFinite(n) && n >= 0) actions?.onUpdateAgentWallet?.(w.id, { [key]: n }); };
@@ -935,12 +936,12 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
       {!enabled ? (
         <div className="fw-banner">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 4v8M7.5 7a7 7 0 1 0 9 0" /></svg>
-          <div><strong>Spending is off</strong>The wallet is ready, but this agent can't spend until you switch it on.</div>
+          <div><strong>Spending is off</strong>The wallet is ready, but attached agents can&apos;t spend until you switch it on.</div>
         </div>
       ) : rw.tone === "danger" && !w.meta.alert && w.state !== "failed" ? (
         <div className="fw-banner" data-tone="danger">
           <BIcon name="alert" size={15} />
-          <div><strong>Needs funding</strong>Top up before this agent runs out of runway.</div>
+          <div><strong>Needs funding</strong>Top up before this wallet runs out of runway.</div>
         </div>
       ) : null}
       {actionStatus ? (
@@ -957,7 +958,7 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
       {sheet === "send" ? (
         <div className="fw-sheet">
           <SheetTitle onClose={() => setSheet(null)}>Send</SheetTitle>
-          <p className="fw-sheet-help">Hard cap per payment: {frFmtUsdFull(w.meta.maxPay)}. {w.meta.rawProvider === "veil" ? veilAuto ? "Veil auto-send is on - private sends under the asset cap execute without CONFIRM." : `Private sends require ${confirmLabel}.` : auto ? "Auto-use is on - transfers under the cap send without another prompt." : `Auto-use is off - type ${confirmLabel} to confirm.`}</p>
+          <p className="fw-sheet-help">Hard cap per payment: {frFmtUsdFull(w.meta.maxPay)}. Type {confirmLabel} to authorize this operator-initiated transfer. Agent autonomy is configured separately under Agent access.</p>
           <div className="fb-grid2">
             <label className="fb-label">Asset
               <AssetSelect holdings={sendHoldings} value={sendSym} onChange={setSendSym} />
@@ -966,12 +967,12 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
           </div>
           <div className="fb-label">Send to
             <div className="fb-seg sub" style={{ alignSelf: "flex-start", marginTop: 2 }}>
-              <button type="button" data-active={recipMode === "agent" ? "" : undefined} onClick={() => setRecipMode("agent")}>Another agent</button>
+              <button type="button" data-active={recipMode === "agent" ? "" : undefined} onClick={() => setRecipMode("agent")}>Another agent wallet</button>
               <button type="button" data-active={recipMode === "address" ? "" : undefined} onClick={() => setRecipMode("address")}>Address</button>
             </div>
           </div>
           {recipMode === "agent" ? (
-            <label className="fb-label">Recipient agent
+            <label className="fb-label">Recipient wallet
               <select className="fb-select" value={recipAgent || (others[0] ? others[0].id : "")} onChange={(e) => setRecipAgent(e.target.value)}>
                 {others.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.machine}</option>)}
               </select>
@@ -1057,13 +1058,13 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
           {w.meta.trading ? <span className="fw-rail" data-state="ready"><b /> Bankr trading</span> : null}
         </div>
       </div>
-      <div className="fw-autouse" onClick={flipAuto} role="button" aria-pressed={auto}>
+      <button type="button" className="fw-autouse" onClick={() => setAccessOpen(true)}>
         <span>
-          <strong>Allow auto-use</strong>
-          <small>{auto ? "Agent may spend within the hard cap without asking." : `Agent must ask before paying over ${frFmtUsdFull(w.meta.askOver)}.`}</small>
+          <strong>Agent access</strong>
+          <small>{w.meta.attachedAgentNames.length ? `${w.meta.attachedAgentNames.join(", ")} · ${Object.values(w.meta.agentPermissions).filter((mode) => mode === "autonomous").length} autonomous` : "No agents attached. This wallet is unavailable to agents."}</small>
         </span>
-        <Toggle on={auto} onChange={(e) => { e.stopPropagation(); flipAuto(); }} />
-      </div>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--fg-2)", fontSize: 11.5 }}>Manage <BIcon name="branch" size={13} /></span>
+      </button>
       {w.meta.llmFundingSource ? (
         <button type="button" className="fw-autouse" onClick={() => actions?.onOpenLlmFundingSource?.(w.id)}>
           <span>
@@ -1107,6 +1108,15 @@ function DetailedCard({ w, enabled, setEnabled, compact, onCollapse, onConfigure
           </div>
         </div>
       </Disclosure>
+      {accessOpen ? (
+        <AgentWalletAccessModal
+          agents={FR_AGENT_OPTIONS}
+          initialPermissions={w.meta.agentPermissions}
+          title={`Agent access · ${w.name}`}
+          onClose={() => setAccessOpen(false)}
+          onSave={async (agentPermissions) => { await actions?.onUpdateAgentWallet?.(w.id, { agentPermissions }); }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1114,36 +1124,6 @@ function WalletCard({ w, density, expanded, onToggle, onConfigure, actions }: { 
   const [enabled, setEnabled] = React.useState(w.meta.enabled);
   React.useEffect(() => setEnabled(w.meta.enabled), [w.id, w.meta.enabled]);
   const detailed = density === "detailed" || expanded;
-  if (w.meta.setup && !detailed) {
-    return <CompactCard w={w} enabled={enabled} onOpen={onToggle} />;
-  }
-  if (w.meta.setup) {
-    return (
-      <div className="fw-card" data-tone="muted" data-bee={`wallet-agent-${w.id}`} data-bee-wallet-action="setup">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 9, minWidth: 0 }}>
-            {density === "compact" ? <button type="button" className="fw-x" onClick={onToggle} aria-label="Collapse" style={{ transform: "rotate(45deg)" }}><BIcon name="plus" size={14} sw={2} /></button> : <Dot state={w.state} />}
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 600, letterSpacing: "-0.01em" }}>{w.name}</div>
-              <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{w.runtime} · {w.machine}</div>
-            </div>
-          </div>
-          <Badge tone="honey">Setup</Badge>
-        </div>
-        <p style={{ fontSize: 12.5, color: "var(--fg-3)", lineHeight: 1.5, margin: "4px 0 8px" }}>No wallet yet. Initialise a rail to let this agent pay for what it needs.</p>
-        {w.meta.llmFundingSource ? (
-          <button type="button" className="fw-autouse" onClick={() => actions?.onOpenLlmFundingSource?.(w.id)}>
-            <span>
-              <strong>LLM Funding Source</strong>
-              <small>{w.meta.llmFundingSource} · {w.meta.llmFundingSourceDetail || "Tap to choose a funding wallet."}</small>
-            </span>
-            <BIcon name="branch" size={15} />
-          </button>
-        ) : null}
-        <button type="button" className="fb-btn primary" style={{ width: "100%" }} data-bee={`wallet-create-${w.id}`} onClick={() => actions?.onCreateAgentWallet?.(w.id, w.meta.network || "base")}><BIcon name="plus" size={15} /> Create wallet</button>
-      </div>
-    );
-  }
   if (!detailed) return <CompactCard w={w} enabled={enabled} onOpen={onToggle} />;
   return <DetailedCard w={w} enabled={enabled} setEnabled={setEnabled} compact={density === "compact"} onCollapse={onToggle} onConfigure={onConfigure} actions={actions} />;
 }
@@ -1317,7 +1297,7 @@ function MyWalletCard({ w, actions }: { w: GroupedPersonalWallet; actions?: Wall
     >
       <div className="top">
         <WalletChainBadges w={w} />
-        <div style={{ flex: "1 1 auto", minWidth: 0 }}>
+        <div className="fw-wallet-identity">
           {editingName ? (
             <div className="fw-rename">
               <input
@@ -1335,13 +1315,15 @@ function MyWalletCard({ w, actions }: { w: GroupedPersonalWallet; actions?: Wall
             </div>
           ) : (
             <div className="fw-rename">
-              <span className="nm" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>{w.name}</span>
+              <span className="nm">{w.name}</span>
               <button type="button" className="fw-rename-btn" onClick={beginRename} aria-label="Rename wallet" title="Rename wallet"><BIcon name="pencil" size={13} /></button>
             </div>
           )}
-          <div className="sub">{w.kind} · {w.network}</div>
+          <div className="fw-wallet-meta">
+            <div className="sub">{w.kind} · {w.network}</div>
+            {w.primary ? <Badge tone="honey">Primary</Badge> : null}
+          </div>
         </div>
-        {w.primary ? <Badge tone="honey">Primary</Badge> : null}
         <button type="button" className="fw-wallet-card-caret" onClick={toggleExpanded} aria-label={expanded ? "Collapse" : "Expand"} aria-expanded={expanded}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: expanded ? "rotate(180deg)" : "none", transition: "transform .2s" }}><path d="M6 9l6 6 6-6" /></svg>
         </button>
@@ -1686,6 +1668,7 @@ function MyWallets({ actions, onNavigate }: { actions?: WalletDropInActions; onN
 }
 function AgentsPanel({ onConfigure, actions, onNavigate }: { onConfigure: (railId: WalletRailId) => void; actions?: WalletDropInActions; onNavigate?: (id: string) => void }) {
   const [filter, setFilter] = React.useState("all");
+  const [createOpen, setCreateOpen] = React.useState(false);
   const [density, setDensity] = React.useState(() => {
     try { return localStorage.getItem(FW_DENSITY_KEY) || "compact"; } catch { return "compact"; }
   });
@@ -1707,6 +1690,7 @@ function AgentsPanel({ onConfigure, actions, onNavigate }: { onConfigure: (railI
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <span style={{ fontSize: 11.5, color: "var(--fg-3)", fontFamily: "var(--f-mono)" }}>{shown.length} of {wallets.length}</span>
+          <BBtn variant="primary" sm onClick={() => setCreateOpen(true)}><BIcon name="plus" size={14} /> Create agent wallet</BBtn>
           <div className="fw-density" role="tablist" aria-label="Card density">
             <button type="button" data-active={density === "compact" ? "" : undefined} onClick={() => setD("compact")} title="Compact">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg> Compact
@@ -1718,9 +1702,20 @@ function AgentsPanel({ onConfigure, actions, onNavigate }: { onConfigure: (railI
         </div>
       </div>
       <div className={"fw-grid" + (density === "compact" ? " compact" : "")}>
-        {shown.map((w) => <WalletCard key={w.id} w={w} density={density} expanded={expanded === w.id} onToggle={() => toggle(w.id)} onConfigure={onConfigure} actions={actions} />)}
+        {shown.length ? shown.map((w) => <WalletCard key={w.id} w={w} density={density} expanded={expanded === w.id} onToggle={() => toggle(w.id)} onConfigure={onConfigure} actions={actions} />) : (
+          <div className="fb-card pad" style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 18, flexWrap: "wrap" }}>
+            <div>
+              <strong style={{ display: "block", fontSize: 14 }}>No agent wallets created</strong>
+              <span style={{ display: "block", marginTop: 5, color: "var(--fg-3)", fontSize: 12.5 }}>Create a wallet, then attach any agents that should be allowed to use it.</span>
+            </div>
+            <BBtn variant="primary" sm onClick={() => setCreateOpen(true)}><BIcon name="plus" size={14} /> Create wallet</BBtn>
+          </div>
+        )}
       </div>
       </div>
+      {createOpen && actions?.onCreateAgentWallet ? (
+        <CreateAgentWalletModal agents={FR_AGENT_OPTIONS} onClose={() => setCreateOpen(false)} onCreate={actions.onCreateAgentWallet} />
+      ) : null}
     </div>
   );
 }

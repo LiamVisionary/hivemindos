@@ -1,4 +1,5 @@
 import { socialPlatformRow } from "@/lib/services/socials/social-platform-matrix";
+import { normalizeSocialProfileImageUrl } from "@/lib/services/socials/social-profile-image";
 import type { SocialAccount } from "@/lib/services/socials/socials-types";
 import {
   accountEnvValue,
@@ -53,8 +54,13 @@ export const redditAdapter: SocialPlatformAdapter = {
         headers: { Authorization: `Bearer ${mint.token}`, "User-Agent": REDDIT_USER_AGENT },
       });
       if (!res.ok) return { ok: false, detail: `Reddit identity check failed (HTTP ${res.status}).` };
-      const body = (await res.json()) as { name?: string };
-      return { ok: true, detail: `Authenticated as u/${body.name ?? "unknown"}.`, handle: body.name };
+      const body = (await res.json()) as { name?: string; icon_img?: string };
+      return {
+        ok: true,
+        detail: `Authenticated as u/${body.name ?? "unknown"}.`,
+        handle: body.name,
+        avatarUrl: normalizeSocialProfileImageUrl(body.icon_img),
+      };
     } catch (error) {
       return { ok: false, detail: `Reddit probe failed: ${error instanceof Error ? error.message : String(error)}` };
     }

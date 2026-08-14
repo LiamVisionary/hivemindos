@@ -57,6 +57,9 @@ export type WalletMeta = {
   honey: number;
   setup: boolean;
   sortTier: number;
+  attachedAgentIds: string[];
+  attachedAgentNames: string[];
+  agentPermissions: Record<string, "approval-required" | "autonomous">;
   trading: boolean;
   duplicateGuard: boolean;
   veilAutoSend: boolean;
@@ -69,6 +72,13 @@ export type WalletMeta = {
   llmFundingSourceDetail: string;
   llmFundingSourceId: string;
   alert?: string;
+};
+
+export type WalletAgentOption = {
+  id: string;
+  name: string;
+  runtime: string;
+  machineName: string;
 };
 
 export type WalletRewards = { gas: number; used: number };
@@ -184,6 +194,7 @@ export type WalletRuntimeData = {
   walletMeta?: Record<string, WalletMeta>;
   balances?: Record<string, WalletBalanceRow[]>;
   rewards?: Record<string, WalletRewards>;
+  agentOptions?: WalletAgentOption[];
   activityLedger?: WalletLedgerEntry[];
   usageSeries?: WalletUsagePoint[];
   usageRows?: WalletUsageRow[];
@@ -198,6 +209,7 @@ export type WalletRuntimeData = {
 };
 
 export const FR_MACHINES: WalletMachine[] = [];
+export const FR_AGENT_OPTIONS: WalletAgentOption[] = [];
 export const FR_CCY: Record<string, WalletTokenMeta> = {
   USD:   { price: 1,    fiat: true, name: "US Dollar", color: "#3b9e6f", chg: 0 },
   USDC:  { price: 1,    name: "USD Coin",  color: "#2775ca", chg: 0.02 },
@@ -270,7 +282,7 @@ export function frMachineState(m: WalletMachine) {
   return "ready";
 }
 export const FR_WALLET_PANELS = [
-  { id: "agents",   label: "Agents",   title: "Agent wallets", subtitle: "every agent's purse, its runway, and what it may spend" },
+  { id: "agents",   label: "Agents",   title: "Agent wallets", subtitle: "created wallets, shared agent access, and per-agent approval rules" },
   { id: "holdings", label: "Holdings", title: "Agent Treasury holdings", subtitle: "the whole fleet's balance, by token" },
   { id: "activity", label: "Activity", title: "Payment activity", subtitle: "what the agents have been paying for" },
   { id: "usage",    label: "Usage",    title: "Runtime usage", subtitle: "tokens and compute spend, by agent and model" },
@@ -371,6 +383,7 @@ export function frApplyRuntimeWalletData(data: WalletRuntimeData | null | undefi
     });
   }
   FR_MACHINES.splice(0, FR_MACHINES.length, ...data.machines);
+  FR_AGENT_OPTIONS.splice(0, FR_AGENT_OPTIONS.length, ...(Array.isArray(data.agentOptions) ? data.agentOptions : []));
   if (Array.isArray(data.myWallets)) FR_MY_WALLETS.splice(0, FR_MY_WALLETS.length, ...data.myWallets);
   for (const key of Object.keys(FR_WALLET_META)) delete FR_WALLET_META[key];
   Object.assign(FR_WALLET_META, data.walletMeta || {});

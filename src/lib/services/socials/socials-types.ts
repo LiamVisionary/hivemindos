@@ -88,6 +88,7 @@ export type SocialEngagementTarget = {
   authorHandle: string;
   authorName?: string;
   authorVerified?: boolean;
+  authorAvatarUrl?: string;
   text: string;
   createdAt: string;
   discoveredAt: string;
@@ -250,6 +251,8 @@ export type SocialXDiscoveryStatus = {
   backend: "agent-reach-twitter-cli";
   checkedAt: string;
   accountHandle?: string;
+  accountDisplayName?: string;
+  accountAvatarUrl?: string;
   detail: string;
 };
 

@@ -9,7 +9,6 @@ import {
   LoaderCircle,
   MessageSquare,
   Monitor,
-  PhoneCall,
   Plus,
   Settings,
   Smartphone,
@@ -26,6 +25,7 @@ import {
 } from "@/components/ui/tooltip";
 
 import { BeeIcon } from "./bee-icon";
+import { ChatCallSplitButton } from "./chat-call-split-button";
 import { HexTile } from "./hex-tile";
 import {
   fleetAgentCanChat,
@@ -40,6 +40,7 @@ import type {
 } from "./roster";
 import { FleetTaskPreviewRow } from "./task-preview-row";
 import styles from "./fleet-tokens.module.css";
+import splitStyles from "./selection-tooltip-actions.module.css";
 
 type AgentAction = (machine: FleetMachine, agent: FleetAgent) => void;
 
@@ -216,42 +217,18 @@ function FleetAgentDetailPanel({
       })}
 
       <div className="flex items-center flex-wrap" style={{ gap: 6 }}>
-        {canChat ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={actionHandler(machine, agent, onOpenChat)}
-                className={`${styles.tooltipActionButton} inline-flex items-center uppercase font-bold`}
-                style={{
-                  gap: 6,
-                  padding: "7px 9px",
-                  borderRadius: 7,
-                  cursor: "pointer",
-                  fontFamily: "var(--f-mono)",
-                  fontSize: 9.5,
-                  letterSpacing: 0.04,
-                  border: "1px solid rgba(94,234,212,0.48)",
-                  background: "rgba(45,212,191,0.16)",
-                  color: "var(--accent-strong)",
-                }}
-              >
-                <MessageSquare size={12} aria-hidden="true" /> New Chat
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>
-              Start a fresh chat with {agent.name}
-            </TooltipContent>
-          </Tooltip>
-        ) : null}
+        <ChatCallSplitButton
+          name={agent.name}
+          chatLabel="New chat"
+          onChat={canChat && onOpenChat ? actionHandler(machine, agent, onOpenChat) : undefined}
+          onCall={onCallAgent ? actionHandler(machine, agent, onCallAgent) : undefined}
+          singleClassName={splitStyles.chatSingle}
+          splitClassName={splitStyles.chatCallSplit}
+          chatClassName={splitStyles.chatSegment}
+          callClassName={splitStyles.callSegment}
+        />
 
         {[
-          {
-            id: "call",
-            label: "Call",
-            Icon: PhoneCall,
-            onClick: actionHandler(machine, agent, onCallAgent),
-          },
           {
             id: "wallet",
             label: "Wallet & limits",

@@ -126,7 +126,13 @@ create table sessions (id text primary key, source text, started_at real, ended_
 create table messages (id integer primary key autoincrement, session_id text, role text, content text, tool_name text, timestamp real);
 insert into sessions values ('20260808_211500_recovered', 'hivemindos', ${nowSeconds}, null, null, 'Recovery', 1, 0);
 insert into messages (session_id, role, content, timestamp) values ('20260808_211500_recovered', 'user', 'recover exact collector turn', ${nowSeconds});
+insert into sessions values ('20260808_191500_historical', 'hivemindos', ${nowSeconds - 7200}, null, null, 'Historical recovery', 1, 0);
+insert into messages (session_id, role, content, timestamp) values ('20260808_191500_historical', 'user', 'recover historical collector turn', ${nowSeconds - 7200});
 `]);
+execFileSync("sqlite3", [join(hermesHome, "state.db"), Array.from({ length: 25 }, (_, index) => `
+insert into sessions values ('20260808_distractor_${index}', 'hivemindos', ${nowSeconds - 3600 + index}, null, null, 'Distractor ${index}', 1, 0);
+insert into messages (session_id, role, content, timestamp) values ('20260808_distractor_${index}', 'user', 'unrelated later turn ${index}', ${nowSeconds - 3600 + index});
+`).join("\n")]);
 
 const port = await freePort();
 const baseUrl = `http://127.0.0.1:${port}`;
@@ -164,6 +170,19 @@ try {
   assert.equal(recovered.recovered, true);
   assert.equal(recovered.session.sessionId, "20260808_211500_recovered");
   assert.equal(recovered.safeToRetry, false);
+
+  const historical = await fetch(`${baseUrl}/chat/recover`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ rawUserMessage: "recover historical collector turn", sinceMs: Date.now() - 3 * 60 * 60_000 }),
+  }).then((response) => response.json());
+  assert.equal(historical.recovered, true, "an explicit turn start must not be clamped to the last ten minutes");
+  assert.equal(historical.session.sessionId, "20260808_191500_historical");
+
+  const historicalRuntimeSession = await fetch(`${baseUrl}/runtime-sessions?runtime=hermes&sinceMs=${Date.now() - 3 * 60 * 60_000}&message=${encodeURIComponent("recover historical collector turn")}`)
+    .then((response) => response.json());
+  assert.equal(historicalRuntimeSession.ok, true, "prompt-matched runtime lookup must search beyond the newest twenty sessions");
+  assert.equal(historicalRuntimeSession.session.sessionId, "20260808_191500_historical");
 
   const missing = await fetch(`${baseUrl}/chat/recover`, {
     method: "POST",

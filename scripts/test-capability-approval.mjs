@@ -13,6 +13,7 @@ const {
   requiresCapabilityApproval,
 } = await import("../src/lib/services/chat/capability-approval.ts");
 const { CAPABILITY_APPROVAL_CONTINUATION_MARKER, capabilityPlanRequiresReview } = await import("../src/lib/types/capability-approval.ts");
+const { approvedRuntimeCapabilities } = await import("../src/lib/services/chat/approved-runtime-capabilities.ts");
 const { compactChatMessagesForStorage, parseStoredChatMessages } = await import("../src/features/dashboard/dashboard-storage.ts");
 
 const ready = (id, title, summary = `${title} is ready`) => ({
@@ -153,11 +154,11 @@ const readyMultiCapabilitySearch = async (_options, queries) => queries.map(() =
     ready("skill:shared:muapi-generative-media", "muapi-generative-media", "Generate and QA video through the general MUAPI model catalog."),
     ready("skill:shared:muapi-seedance-video", "muapi-seedance-video", "Generate Seedance text-to-video and image-to-video shots through MUAPI."),
     {
-      ...ready("connected-app:m5-media-gateway", "Media gateway", "Connected media workbench. App kind: media."),
+      ...ready("connected-app:m5-media-gateway", "Media gateway", "ComfyUI proxy and media API for video production."),
       kind: "connected-app",
       tags: ["connected", "media", "mcp"],
       aliases: ["media", "video", "render", "generation"],
-      machineName: "M5 MacBook Pro NYC",
+      machineName: "Media Workstation NYC",
       score: 85,
     },
   ],
@@ -218,13 +219,40 @@ assert.equal(readyVideoItem?.candidates.some((candidate) => candidate.id === "sk
 assert.equal(readyVideoItem?.candidates.some((candidate) => candidate.id === "skill:shared:video-render-qa"), false, "render QA remains a companion rather than a generation alternative");
 assert.equal(readyVideoItem?.candidates.some((candidate) => candidate.id === "skill:shared:video-generator-prompting"), false, "prompt guidance remains a companion rather than a generation alternative");
 const fleetMediaCandidate = readyVideoItem?.candidates.find((candidate) => candidate.id === "connected-app:m5-media-gateway");
-assert.equal(fleetMediaCandidate?.machineName, "M5 MacBook Pro NYC", "the connected generative-media MCP identifies its fleet machine");
+assert.equal(fleetMediaCandidate?.machineName, "Media Workstation NYC", "the connected generative-media MCP identifies its fleet machine");
+const manualMuapiPlan = {
+  ...readyMultiCapabilityPlan,
+  items: readyMultiCapabilityPlan.items.map((item) => item.intent === "video-generation"
+    ? { ...item, selectedCapabilityId: "skill:shared:muapi-seedance-video" }
+    : item),
+};
+const manualMultiCapabilityContinuation = capabilityApprovalContinuationPrompt(manualMuapiPlan);
+assert.match(manualMultiCapabilityContinuation, /Video generation: muapi-seedance-video[\s\S]+Execution contract: load and use this exact selected capability/i, "a manually selected MUAPI video route is binding before fallback");
+assert.match(manualMultiCapabilityContinuation, /fallback is allowed only after a real attempt/i, "the exact multi-capability video continuation requires a real provider attempt before fallback");
+assert.match(manualMultiCapabilityContinuation, /workflow at its locator, not a promise of a same-named native tool/i, "a shared skill cannot be rejected merely because the runtime has no same-named tool route");
+assert.match(manualMultiCapabilityContinuation, /HIVEMINDOS_CAPABILITY_ID='skill:shared:muapi-seedance-video'/, "an executable manual capability carries an invocation receipt contract");
+const manualRuntimeCapabilities = approvedRuntimeCapabilities(manualMultiCapabilityContinuation);
+assert.equal(
+  manualRuntimeCapabilities.find((capability) => capability.id === "skill:shared:muapi-seedance-video")?.executionReceiptRequired,
+  true,
+  "the collector receives a structured required-execution contract for the manually selected video capability",
+);
+assert.equal(
+  manualRuntimeCapabilities.find((capability) => capability.intent === "interface-design")?.executionReceiptRequired,
+  false,
+  "procedural design guidance does not pretend to have a singular provider invocation receipt",
+);
 const automaticMultiCapabilityContinuation = capabilityApprovalContinuationPrompt(automaticMultiCapabilityPlan);
 assert.match(automaticMultiCapabilityContinuation, /model-select the best ready option/i, "automatic plans delegate ambiguous provider choice to the worker model");
 assert.match(automaticMultiCapabilityContinuation, /candidate order is discovery-only and is not a recommendation/i, "automatic plans do not convert search order into provider policy");
 assert.match(automaticMultiCapabilityContinuation, /muapi-generative-media/i, "the worker receives the general MUAPI option");
 assert.match(automaticMultiCapabilityContinuation, /muapi-seedance-video/i, "the worker receives the focused Seedance option");
-assert.match(automaticMultiCapabilityContinuation, /Media gateway[\s\S]+M5 MacBook Pro NYC/i, "the worker receives the fleet media option and machine context");
+assert.match(automaticMultiCapabilityContinuation, /Media gateway[\s\S]+Media Workstation NYC/i, "the worker receives the fleet media option and machine context");
+assert.equal(
+  approvedRuntimeCapabilities(automaticMultiCapabilityContinuation).some((capability) => capability.executionReceiptRequired),
+  false,
+  "automatic model choice provisions options without requiring every alternative to execute",
+);
 const restoredReadyMultiCapabilityPlan = parseStoredChatMessages({
   "hivemindos.chatMessages.v1": JSON.stringify(compactChatMessagesForStorage({
     "hermes::shoe-video-site": [{ role: "assistant", content: "", capabilityApproval: readyMultiCapabilityPlan }],
@@ -240,9 +268,51 @@ assert.equal(
   restoredReadyMultiCapabilityPlan["hermes::shoe-video-site"][0].capabilityApproval?.items
     .find((item) => item.intent === "video-generation")?.candidates
     .find((candidate) => candidate.id === "connected-app:m5-media-gateway")?.machineName,
-  "M5 MacBook Pro NYC",
+  "Media Workstation NYC",
   "the fleet machine label survives capability-card persistence",
 );
+
+// Regression (2026-08-12): the live fleet roster used broad `media` aliases,
+// so a prompt-writing guide and an audio-only bridge displaced actual video
+// generators before the bounded chooser was rendered.
+const crowdedFleetVideoPlan = await buildCapabilityApprovalPlan({
+  task: "Generate a video of a cool pair of shoes",
+  agentId: "hermes",
+  chatStorageKey: "hermes::crowded-fleet-video",
+  origin: "http://localhost:5021",
+  connectedApps: [],
+  permissionMode: "manual",
+  search: async (options, queries) => queries.map(() => ({
+    items: options.kinds?.length === 1 && options.kinds[0] === "skill" ? [
+      { ...setup("media/hivemindos/minimax-h3-video-prompting", "minimax-h3-video-prompting"), summary: "Write and compile prompts specifically for audiovisual video generation. Prompt authoring requires no model call.", score: 500 },
+      { ...ready("skill:shared:muapi-generative-media", "muapi-generative-media", "Generate images and videos through a general media model catalog."), score: 70 },
+      { ...ready("skill:shared:muapi-seedance-video", "muapi-seedance-video", "Generate text-to-video and image-to-video shots through an API."), score: 60 },
+    ] : [
+      { ...setup("media/hivemindos/minimax-h3-video-prompting", "minimax-h3-video-prompting"), summary: "Write and compile prompts specifically for audiovisual video generation. Prompt authoring requires no model call.", score: 500 },
+      { ...ready("connected-app:media-studio", "Media Studio", "Creative workspace. App capabilities: video, image-to-video. MCP video generation configured."), kind: "connected-app", machineName: "Hivenet App Host 203.0.113.42", score: 320 },
+      { ...ready("connected-app:content-studio", "Hivemind Content Studio", "A unified AI media studio for image, video, cinema, lip sync, and durable production runs."), kind: "connected-app", machineName: "Media Workstation NYC", score: 310 },
+      { ...ready("connected-app:unified-media", "Unified Media Studio", "Creative workspace on the fleet."), kind: "connected-app", aliases: ["creative", "media"], score: 300 },
+      { ...ready("connected-app:media-gateway", "Media gateway", "ComfyUI proxy, media API, and mobile workbench for a content studio."), kind: "connected-app", machineName: "Media Workstation NYC", score: 290 },
+      { ...ready("connected-app:tts-audio", "tts-audio-suite-candidate-bridge", "Audio speech and voice API. App kind: media."), kind: "connected-app", aliases: ["media", "video", "render", "generation"], score: 280 },
+      { ...ready("mcp-catalog:palmier-pro", "Palmier Pro MCP", "MCP video generation and editing runtime."), kind: "tool-schema", score: 200 },
+      { ...ready("hive-action:hosted-media.generate", "Generate hosted media", "Generate hosted video media with governed credits."), kind: "tool-schema", score: 190 },
+    ],
+    totals: {},
+  })),
+  now: 1_700_000_000_072,
+});
+const crowdedFleetVideo = crowdedFleetVideoPlan.items.find((item) => item.intent === "video-generation");
+assert.equal(crowdedFleetVideo?.candidates[0]?.availability, "ready", "a generic request defaults to an executable ready route, never a setup-only guide");
+assert.doesNotMatch(crowdedFleetVideo?.selectedCapabilityId ?? "", /prompt/i, "a prompt guide cannot be selected as the video generator");
+assert.equal(crowdedFleetVideo?.candidates.some((candidate) => /prompting/i.test(candidate.id)), false, "prompt-only skills are not generation alternatives");
+assert.equal(crowdedFleetVideo?.candidates.some((candidate) => candidate.id === "connected-app:tts-audio"), false, "a broad media label cannot turn an audio-only app into a video generator");
+assert.equal(crowdedFleetVideo?.candidates.some((candidate) => candidate.id === "connected-app:unified-media"), false, "a generic creative workspace needs video execution evidence");
+assert.ok(crowdedFleetVideo?.candidates.some((candidate) => candidate.id === "connected-app:media-studio"), "an app with declared video/MCP capability remains available");
+assert.ok(crowdedFleetVideo?.candidates.some((candidate) => candidate.id === "connected-app:content-studio"), "a fleet studio with explicit video production evidence remains available");
+assert.ok(crowdedFleetVideo?.candidates.some((candidate) => candidate.id === "connected-app:media-gateway"), "a fleet ComfyUI media execution gateway remains available");
+assert.ok(crowdedFleetVideo?.candidates.some((candidate) => candidate.id === "skill:shared:muapi-generative-media"), "source diversity keeps a lower-scored general generator visible");
+assert.ok(crowdedFleetVideo?.candidates.some((candidate) => candidate.id === "skill:shared:muapi-seedance-video"), "source diversity keeps a lower-scored focused generator visible");
+assert.doesNotMatch(crowdedFleetVideo?.candidates.find((candidate) => candidate.id === "connected-app:media-studio")?.machineName ?? "", /\b\d{1,3}(?:\.\d{1,3}){3}\b/, "capability cards do not expose raw Tailnet IPs in machine labels");
 
 const flappyContinuation = capabilityApprovalContinuationPrompt(flappyPlan);
 assert.doesNotMatch(flappyContinuation, /hivemindos-feature-development/i, "a standalone game continuation cannot load the HivemindOS repo-development skill");
@@ -301,6 +371,10 @@ const continuation = capabilityApprovalContinuationPrompt(redesigned);
 assert.match(continuation, /Remove the Image generation step entirely/);
 assert.match(continuation, /Look through GitHub for a better accessible implementation/);
 assert.match(continuation, /existing spend, secret, deploy, and destructive-action gates still apply/);
+assert.match(continuation, /manually selected capability is the required first implementation route/i, "manual selection is a binding first route rather than a soft recommendation");
+assert.match(continuation, /fallback is allowed only after a real attempt/i, "fallback requires an actual selected-capability attempt");
+assert.match(continuation, /missing convenience helper as capability failure/i, "a missing wrapper cannot justify skipping a directly usable provider capability");
+assert.match(continuation, /preserve the actual failure evidence/i, "the worker must retain an evidenced reason before substituting");
 
 assert.equal(requiresCapabilityApproval("Build a dashboard"), true);
 assert.equal(requiresCapabilityApproval(`Build a dashboard\n${CAPABILITY_APPROVAL_CONTINUATION_MARKER}`), false, "approved continuation cannot loop back into preflight");
