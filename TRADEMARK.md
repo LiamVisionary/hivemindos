@@ -1,9 +1,11 @@
 # HivemindOS Trademark And Brand Policy
 
-HivemindOS source code and documentation are open source under the MIT License.
-That license does not grant trademark rights or permission to imply that a fork,
-hosted service, token, reward ledger, marketplace, or modified build is official
-HivemindOS.
+This archived HivemindOS Community Edition source code and documentation are
+open source under the MIT License. HivemindOS product development after the
+`community-v0.6.1-final` boundary is proprietary to Rizzma Inc. Neither the MIT
+License nor access to this archive grants trademark rights or permission to
+imply that a fork, hosted service, token, reward ledger, marketplace, or
+modified build is official HivemindOS.
 
 This policy is meant to keep forks, integrations, commercial services, and
 community projects honest about what is official and what is independent.
@@ -20,6 +22,8 @@ The following are HivemindOS marks:
 - HivemindOS domain names, social handles, marketplace badges, and official
   service names
 - Any confusingly similar name, logo, icon, badge, or product identity
+
+These marks are owned by Rizzma Inc.
 
 ## Allowed Uses
 
@@ -90,8 +94,8 @@ services.
 
 ## Permission
 
-For permission to use HivemindOS marks outside this policy, contact the project
-owner through the official repository.
+For permission to use HivemindOS marks outside this policy, contact Rizzma Inc.
+through the official HivemindOS channels.
 
 This policy does not limit fair use, nominative use, or other rights you may
 have under applicable law.

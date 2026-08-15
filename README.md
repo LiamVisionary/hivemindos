@@ -1,3 +1,12 @@
+> [!IMPORTANT]
+> **Archived final MIT Community Edition.** This repository is preserved at
+> [`community-v0.6.1-final`](https://github.com/LiamVisionary/hivemindos/releases/tag/community-v0.6.1-final)
+> and will not receive the proprietary HivemindOS product source developed by
+> Rizzma Inc. Stable public integration contracts continue in the
+> [`hivemindos-sdk`](https://github.com/LiamVisionary/hivemindos-sdk) repository.
+> Existing MIT rights to this history remain unchanged. See
+> [COMMUNITY_ARCHIVE.md](COMMUNITY_ARCHIVE.md) for the exact boundary.
+
 <div align="center">
   <img width="220" height="220" alt="HivemindOS" src="public/icon-512.png" />
 

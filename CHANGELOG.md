@@ -5,6 +5,15 @@ be added here first, then marked `Committed` or `Pushed` after the git action.
 
 ## Unreleased
 
+- 2026-08-14 22:48 EDT (-0400) - Freeze the final MIT Community Edition
+  - Status: Committed.
+  - User-facing release note: This repository is now the read-only final MIT Community Edition of HivemindOS. Rizzma Inc. will continue current product development privately, while stable public compatibility contracts remain available from `LiamVisionary/hivemindos-sdk` under MIT.
+  - Source boundary: This public history and final archive commit remain MIT-licensed at `community-v0.6.1-final`. No proprietary mainline source is included, and no historical license grant is revoked or rewritten.
+  - Areas changed: Archive notice, explicit source boundary, Rizzma Inc. copyright and trademark notices, final tag/release metadata, repository metadata, and this changelog.
+  - Verification: The archive commit is based directly on public `v0.6.1` (`cea9a251`) in a clean isolated clone; the documentation diff passes whitespace validation. Final tag, release, push, and GitHub archive-state verification remain pending until publication.
+  - Recovery: The owner can unarchive the repository and add a new transparent MIT commit. The immutable final tag and all earlier MIT history remain recoverable and must not be rewritten.
+  - Intended commit message: `docs: freeze final MIT Community Edition`
+
 - 2026-08-13 22:34 EDT (-0400) - Provision approved capabilities into the selected agent runtime
   - Status: Pushed.
   - User-facing release note: A capability discovered and approved in chat is now made executable in the selected Hermes agent's own runtime before work begins. HivemindOS installs selected shared workflows locally and installs its fresh-discovery remote adapter for connected apps or app endpoints on other Hive machines. It reports provisioning in the process stream, supplies runtime-local instructions, and rejects a completed generated-media result when the selected capability was never actually invoked. A real provisioning or provider failure still permits a plainly disclosed fallback.
