@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Troubleshooting Cookbook | HivemindOS Docs</title>
-  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <title>Troubleshooting | HivemindOS Docs</title>
+  <meta name="description" content="Plain-language fixes for common HivemindOS setup, connection, agent, brain, env, and wallet problems.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -30,15 +30,15 @@
       </a>
       <div class="topLinks">
         
-          <a href="/hivemindos/for-users/">For Users</a>
+          <a href="/hivemindos/for-users/">User Guide</a>
         
-          <a href="/hivemindos/for-investors/">For Investors</a>
+          <a href="/hivemindos/for-users/features/">Features</a>
+        
+          <a href="/hivemindos/for-users/whole-brain/">Hive Superbrain</a>
         
           <a href="/hivemindos/for-users/trading/">Trading</a>
         
-          <a href="/hivemindos/for-users/architecture/">Architecture</a>
-        
-          <a href="/hivemindos/preview.html">Preview</a>
+          <a aria-current="page" href="/hivemindos/for-users/troubleshooting-cookbook.html">Help</a>
         
       </div>
       <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
@@ -72,7 +72,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/">Overview</a>
+                <a class="navLink" href="/hivemindos/">HivemindOS Overview</a>
               
             
               
@@ -80,7 +80,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/">For Users</a>
+                <a class="navLink" href="/hivemindos/for-users/">User Guide</a>
               
             
               
@@ -88,7 +88,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-investors/">For Investors</a>
+                <a class="navLink" href="/hivemindos/for-users/features/">Find A Feature</a>
               
             
               
@@ -96,7 +96,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/diagrams.html">Diagrams And Maps</a>
+                <a class="navLink" href="/hivemindos/for-users/native-app.html">Desktop App</a>
               
             
               
@@ -104,7 +104,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/native-app.html">Native App</a>
+                <a class="navLink" href="/hivemindos/for-users/browser-extension.html">Browser Extension</a>
               
             
               
@@ -112,28 +112,20 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/slash-commands.html">Slash Commands</a>
+                <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/troubleshooting-cookbook.html">Troubleshooting</a>
               
             
           </section>
         
           <section class="navSection">
-            <h2>For Users · Product</h2>
+            <h2>Everyday Work</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/product/">Product Home</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/product/design-philosophy.html">Design Philosophy</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
               
             
               
@@ -141,92 +133,15 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/product/ui-rules.html">UI Rules</a>
+                <a class="navLink" href="/hivemindos/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
               
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>For Users · Core Systems</h2>
             
               
               
               
 
               
-                <details class="navGroup">
-                  <summary>Features</summary>
-                  <div class="navChildren">
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/">Overview</a>
-                    
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/sre-investigations.html">SRE Incident Investigations</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Local Document Reader</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/hivemind-office.html">Hivemind Office Companion</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Local Web Research</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/calling.html">Calling</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/socials.html">Socials</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/x-command-bot.html">X Command Bot</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/work-and-scheduler.html">Work And Scheduler</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/loop-engineering.html">Loop Engineering</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/agent-evaluations.html">Agent Evaluations</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/harness-experiments.html">Harness Experiments</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/agent-challenges.html">Agent Challenges</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/zero-human-companies.html">Zero Human Companies</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/founder-mode.html">Founder Mode, Labs, And Proof Packs</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/brain-vault-and-skills.html">Brain, Vault, And Skills</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/inbox-triage.html">Inbox Triage</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/hivemind-sync.html">Hivemind Sync</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/hive-fusion.html">Hive Fusion</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/shared-brain-benchmarks.html">Shared Brain Benchmarks</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/wallets-honey-and-x402.html">Wallets, Honey, And x402</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/hive-compute.html">Hive Compute</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/app-builder.html">App Builder And Hosting</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/hivemindos-machines.html">HivemindOS Machines</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/evo-optimization.html">Evo Optimization</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/env-files-notifications-maintenance.html">Env, Notifications, Maintenance</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/integrations-and-work-history.html">Integrations And Work History</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/miroshark-and-openclaw.html">MiroShark And OpenClaw</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/computer-interaction.html">Computer Interaction</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/features/page-agent.html">Page Agent (Experimental)</a>
-                    
-                  </div>
-                </details>
+                <a class="navLink" href="/hivemindos/for-users/features/work-and-scheduler.html">Work And Automations</a>
               
             
               
@@ -241,22 +156,132 @@
                       <a class="navLink" href="/hivemindos/for-users/whole-brain/">Overview</a>
                     
                     
-                      <a class="navLink" href="/hivemindos/for-users/whole-brain/vault-map.html">Vault Map</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/whole-brain/brain-services.html">Brain Services</a>
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/brain-services.html">Memory And Knowledge</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-skills.html">Shared Skills</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-env.html">Shared Env</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/whole-brain/sync-and-health.html">Sync And Health</a>
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/sync-and-health.html">Sync And Repair</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/whole-brain/architecture-sync.html">Architecture Sync</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/whole-brain/code-map.html">Code Map</a>
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/workspaces.html">Separate Workspaces</a>
                     
                   </div>
                 </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/hivemind-sync.html">Hivemind Sync</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/zero-human-companies.html">Zero Human Companies</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/integrations-and-work-history.html">Integrations And History</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Build And Automate</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/app-builder.html">App Builder And Hosting</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Web Research</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/hive-fusion.html">Hive Fusion</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/packaged-skills/">Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/calling.html">Calling</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/socials.html">Socials</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/bookings.html">Bookings</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/hivemind-analytics.html">Analytics</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Money And Compute</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/wallets-honey-and-x402.html">Wallets And Spending Controls</a>
               
             
               
@@ -265,39 +290,34 @@
 
               
                 <details class="navGroup">
-                  <summary>Packaged Skills</summary>
+                  <summary>Trading</summary>
                   <div class="navChildren">
                     
-                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/">Overview</a>
+                      <a class="navLink" href="/hivemindos/for-users/trading/">Overview</a>
                     
                     
-                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/hive-skills.html">Hive Skills</a>
+                      <a class="navLink" href="/hivemindos/for-users/trading/crypto.html">Crypto</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/third-party-skills.html">Third-party Skills</a>
+                      <a class="navLink" href="/hivemindos/for-users/trading/stocks.html">Stocks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/prediction-markets.html">Prediction Markets</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/agent-access.html">Ways To Trade</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/governance.html">Safety And Limits</a>
                     
                   </div>
                 </details>
               
             
-          </section>
-        
-          <section class="navSection">
-            <h2>For Users · Trading</h2>
-            
               
               
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/trading/">Trading Home</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/trading/crypto.html">Crypto Trading</a>
+                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Managed Cloud Agents</a>
               
             
               
@@ -305,7 +325,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/trading/concentrated-liquidity.html">Concentrated Liquidity</a>
+                <a class="navLink" href="/hivemindos/for-users/features/hive-compute.html">Hive Compute</a>
               
             
               
@@ -313,106 +333,13 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/trading/hyperliquid.html">Hyperliquid Trading</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/trading/stocks.html">Stock Trading</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/trading/agent-access.html">Ways To Trade</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/trading/governance.html">Safety And Limits</a>
+                <a class="navLink" href="/hivemindos/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
               
             
           </section>
         
           <section class="navSection">
-            <h2>For Users · Architecture</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/architecture/">Architecture Home</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/architecture/api-and-storage.html">API And Storage</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/architecture/syncing-and-tailscale.html">Syncing And Tailscale</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/architecture/tailscale-fleet-telemetry.html">Fleet Telemetry</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/architecture/generated-media-signing.html">Generated Media Signing</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/targeted-file-transfers.html">Targeted File Transfers</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/tailnet-generation-skills.html">Tailnet Generation Skills</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/macos-code-signing.html">macOS Code Signing</a>
-              
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>For Users · Integrations</h2>
+            <h2>Connections</h2>
             
               
               
@@ -420,6 +347,14 @@
 
               
                 <a class="navLink" href="/hivemindos/for-users/integrations/">Integrations Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
               
             
               
@@ -443,40 +378,28 @@
               
 
               
-                <details class="navGroup">
-                  <summary>MiroShark</summary>
-                  <div class="navChildren">
-                    
-                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/">Overview</a>
-                    
-                    
-                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/companion.html">Companion</a>
-                    
-                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/todo.html">Todo</a>
-                    
-                  </div>
-                </details>
+                <a class="navLink" href="/hivemindos/for-users/integrations/usepod.html">UsePod</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/">MiroShark</a>
               
             
           </section>
         
           <section class="navSection">
-            <h2>For Users · Runtimes</h2>
+            <h2>Advanced And Reference</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/runtimes/">Runtime Guides</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-users/runtimes/hermes/local-setup.html">Hermes Local Setup</a>
+                <a class="navLink" href="/hivemindos/for-users/runtimes/">Advanced Guides</a>
               
             
               
@@ -484,7 +407,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/v01-control-plane.html">AEON v0.1 Control Plane</a>
+                <a class="navLink" href="/hivemindos/for-users/architecture/">How HivemindOS Works</a>
               
             
               
@@ -492,7 +415,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/zero-human-companies.html">AEON For Zero Human Companies</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet-machine-permissions.html">Fleet Machine Permissions</a>
               
             
               
@@ -500,20 +423,47 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/github-actions-brain-access.html">AEON GitHub Actions Brain Access</a>
+                <a class="navLink" href="/hivemindos/for-users/features/agent-evaluations.html">Agent Evaluations</a>
               
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>For Users · Reference</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/bankr/bankr-platform-reference.html">Bankr Platform Reference</a>
+                <a class="navLink" href="/hivemindos/for-users/features/loop-engineering.html">Loop Engineering</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/capability-approvals.html">Capability Approvals</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/slash-commands.html">Slash Command Reference</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/diagrams.html">Diagrams And Maps</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/bankr/bankr-platform-reference.html">Bankr Provider Reference</a>
               
             
           </section>
@@ -550,47 +500,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-investors/treasury-reserve-and-seasonal-programs.html">Treasury Reserve And Seasonal Programs</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-investors/hive-staking-and-community-tiers.html">HIVE Staking And Community Tiers</a>
-              
-            
-              
-              
-              
-
-              
                 <a class="navLink" href="/hivemindos/for-investors/paid-features/">Paid Features</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-investors/paid-features/app-builder-hosting.html">App Builder And Hosting</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-investors/paid-features/hivemind-cloud-agent-calls.html">Hivemind Cloud Agent Calls</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/hivemindos/for-investors/paid-features/hive-compute-marketplace.html">Hive Compute Marketplace</a>
               
             
           </section>
@@ -609,171 +519,121 @@
             </button>
           </div>
         </div>
-        <h1 id="troubleshooting-cookbook">Troubleshooting Cookbook</h1>
+        <h1 id="troubleshooting-hivemindos">Troubleshooting HivemindOS</h1>
 
-<p>HivemindOS is a private agent-fleet control room. Most failures are not mysterious
-product states; they are one of a few local-first surfaces needing attention:
-dashboard auth, collectors, Link/Tailscale, the shared brain, shared env, local
-model servers, or wallet/payment gates.</p>
+<p>Start with the warning where it appears. HivemindOS setup and repair actions open in place, so you should not need to abandon a conversation or task just to fix a missing connection.</p>
 
-<p>The dashboard exposes the machine-readable cookbook through
-<code class="language-plaintext highlighter-rouge">/api/system/troubleshooting</code>. The entries are intentionally short, secret-free,
-and written as operator fixes rather than stack traces.</p>
+<p>If the warning has no action, open <strong>More → Diagnostics</strong>, run the relevant check, and use the sections below.</p>
 
-<h2 id="common-fixes">Common Fixes</h2>
+<h2 id="the-dashboard-will-not-unlock">The Dashboard Will Not Unlock</h2>
 
-<h3 id="dashboard-auth">Dashboard Auth</h3>
+<p>You may see the unlock screen repeatedly or a message that dashboard authentication is required.</p>
 
-<p>Symptoms:</p>
+<ol>
+  <li>Make sure you are opening the normal HivemindOS desktop app or the expected local dashboard address.</li>
+  <li>In the desktop app, reopen <strong>Security</strong> and check whether the operating-system unlock option is ready.</li>
+  <li>In a browser, use the device token from your original setup. Never paste it into chat, a screenshot, or a support post.</li>
+  <li>If the token is lost, use the local dashboard-auth recovery tool on that machine to copy or rotate it, then restart HivemindOS.</li>
+</ol>
 
-<ul>
-  <li>the dashboard unlock screen repeats</li>
-  <li>API routes return <code class="language-plaintext highlighter-rouge">Dashboard authentication is required</code></li>
-  <li>Face ID, Touch ID, or the device passkey is not offered</li>
-</ul>
+<p>Rotating the token signs out other browser sessions. It does not delete agents, projects, or the shared brain.</p>
 
-<p>Checks:</p>
+<h2 id="machine-or-agent-is-offline">Machine Or Agent Is Offline</h2>
 
-<ul>
-  <li>run <code class="language-plaintext highlighter-rouge">dashboard-auth status</code></li>
-  <li>confirm <code class="language-plaintext highlighter-rouge">.env.local</code> contains dashboard auth keys</li>
-  <li>in the macOS desktop app, confirm Touch ID is enrolled in System Settings and available to applications</li>
-  <li>for passkeys, use HTTPS or localhost and confirm the browser exposes a built-in authenticator for the current dashboard hostname</li>
-</ul>
+<p>Fleet may show a machine but say its HivemindOS connection or agent is not ready.</p>
 
-<p>Fixes:</p>
+<ol>
+  <li>Confirm that the target computer is awake and connected to the internet or your private machine network.</li>
+  <li>Open its Fleet card and use <strong>Set up</strong>, <strong>Repair</strong>, or <strong>Update</strong> if shown.</li>
+  <li>Wait for both the machine connection and the agent to report ready. A computer can be online while its agent runtime is still stopped or signed out.</li>
+  <li>If only one agent is affected, open that agent’s settings and finish the provider or runtime setup shown there.</li>
+</ol>
 
-<ul>
-  <li>run <code class="language-plaintext highlighter-rouge">dashboard-auth copy-token</code> to recover the device token</li>
-  <li>run <code class="language-plaintext highlighter-rouge">dashboard-auth reset-token</code> if the token is lost</li>
-  <li>restart the dashboard after rotating auth values</li>
-  <li>in the macOS desktop app, reopen <strong>Security</strong> to confirm Touch ID is shown as ready; no browser passkey enrollment is required there</li>
-  <li>in a browser, unlock with the token, then open <strong>Security</strong> to add or remove a device passkey</li>
-</ul>
+<p>Do not expose a local dashboard or helper directly to the public internet to make the warning disappear.</p>
 
-<h3 id="collector-unreachable">Collector Unreachable</h3>
+<h2 id="chat-cannot-start-or-continue">Chat Cannot Start Or Continue</h2>
 
-<p>Symptoms:</p>
+<p>Common causes are a signed-out runtime, missing provider setup, unavailable model, offline machine, or a folder the agent cannot reach.</p>
 
-<ul>
-  <li>Fleet shows a machine without a ready collector</li>
-  <li>remote chat, files, or env sync fail</li>
-</ul>
+<ol>
+  <li>Check the selected agent and machine at the top of Chat.</li>
+  <li>Use the setup card shown in the conversation if a provider or runtime is missing.</li>
+  <li>Choose another available model if the selected one is unavailable.</li>
+  <li>Reattach the folder or file if it moved, was renamed, or belongs to another machine.</li>
+  <li>For an older conversation, confirm that its original agent and workspace still exist.</li>
+</ol>
 
-<p>Checks:</p>
+<p>HivemindOS should show a real failure rather than silently switching to a differently billed provider or an unrelated project.</p>
+
+<h2 id="shared-brain-or-shared-env-is-out-of-date">Shared Brain Or Shared Env Is Out Of Date</h2>
+
+<p>First decide what is missing:</p>
 
 <ul>
-  <li>inspect Fleet collector state</li>
-  <li>check the collector URL through Hivemind Link or the Tailnet path</li>
-  <li>review the machine monitor service logs on the target machine</li>
+  <li>A note, memory, skill, or task is <strong>brain data</strong> and follows your chosen vault sync.</li>
+  <li>A provider key or service credential is <strong>Shared Env</strong> and syncs separately outside the vault.</li>
 </ul>
 
-<p>Fixes:</p>
+<p>Then:</p>
+
+<ol>
+  <li>Check that both machines are online in Fleet.</li>
+  <li>Open Brain and review vault sync health.</li>
+  <li>Open <strong>More → Env</strong> and check the key by name without revealing it.</li>
+  <li>Allow an offline machine time to reconcile after it reconnects.</li>
+  <li>Review any vault conflict copy before rebuilding the brain index.</li>
+</ol>
+
+<p>If notes exist in Obsidian but search cannot find them, use the Brain repair action to refresh the index. Rebuilding the index does not rewrite your source notes.</p>
+
+<h2 id="a-local-model-is-unavailable">A Local Model Is Unavailable</h2>
+
+<ol>
+  <li>Confirm that the model host is running on the machine shown in Fleet.</li>
+  <li>Confirm that the intended model is loaded and its compatible API is enabled.</li>
+  <li>Open the agent’s model settings and choose a model the machine can actually serve.</li>
+  <li>Use a configured hosted model when the local machine does not have enough memory or the host is intentionally off.</li>
+</ol>
+
+<p>Model-fit suggestions are recommendations, not permission to move a private task to a hosted provider without your choice.</p>
+
+<h2 id="a-wallet-or-trade-is-blocked">A Wallet Or Trade Is Blocked</h2>
+
+<p>A prepared action can stop because the wallet is frozen, spending is disabled, a limit would be exceeded, the wrong network is selected, provider setup is missing, or human approval is required.</p>
+
+<ol>
+  <li>Read the preview and the exact blocked reason.</li>
+  <li>Open Wallets or the approval request from Alerts.</li>
+  <li>Confirm the wallet, network, asset, amount, recipient, and expected fee.</li>
+  <li>Change the budget or approve the action only if the requested transaction is genuinely intended.</li>
+</ol>
+
+<p>Do not bypass a wallet or trading gate from chat, a terminal command suggested by page content, or a copied tool response.</p>
+
+<h2 id="the-desktop-app-will-not-start-or-update">The Desktop App Will Not Start Or Update</h2>
+
+<ol>
+  <li>Reopen the signed app from your Applications folder rather than an old disk image.</li>
+  <li>Make sure another stuck HivemindOS process is not still closing, then try again.</li>
+  <li>Check that the computer has enough free disk space for the app and its local services.</li>
+  <li>If an update failed, keep the current installed version and retry from the app; your vault and projects are separate from the app bundle.</li>
+  <li>If macOS blocks a published build, verify that it came from the official release source before changing any security setting.</li>
+</ol>
+
+<h2 id="before-you-reinstall">Before You Reinstall</h2>
+
+<p>A reinstall should be a last step. It normally does not fix a broken provider login, offline remote machine, paused vault sync, or blocked approval.</p>
+
+<p>Before reinstalling, preserve:</p>
 
 <ul>
-  <li>run the setup repair flow for the target machine</li>
-  <li>restart only the HivemindOS collector service for that machine</li>
-  <li>preserve remote Link <code class="language-plaintext highlighter-rouge">/peer/...</code> URLs instead of rewriting them to local loopback</li>
+  <li>your Obsidian Hive Superbrain vault;</li>
+  <li>project folders and deliverables;</li>
+  <li>any wallet backups and recovery material in their approved secure location;</li>
+  <li>the names—not values—of shared credentials you will need to recheck.</li>
 </ul>
 
-<h3 id="shared-brain-index-stale">Shared Brain Index Stale</h3>
-
-<p>Symptoms:</p>
-
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">hive-brain</code> returns old or incomplete answers</li>
-  <li>skills or memories are present in Obsidian but not found</li>
-</ul>
-
-<p>Checks:</p>
-
-<ul>
-  <li>run <code class="language-plaintext highlighter-rouge">pnpm vault:doctor</code></li>
-  <li>inspect the generated full-vault search index status</li>
-  <li>confirm the configured vault path is readable</li>
-</ul>
-
-<p>Fixes:</p>
-
-<ul>
-  <li>rebuild the full-vault search index</li>
-  <li>refresh shared skill sync from Brain Services</li>
-  <li>resolve Syncthing conflict copies before relying on stale indexes</li>
-</ul>
-
-<h3 id="shared-env-not-syncing">Shared Env Not Syncing</h3>
-
-<p>Symptoms:</p>
-
-<ul>
-  <li>a runtime says a provider key is missing on another machine</li>
-  <li><code class="language-plaintext highlighter-rouge">hive-env-check KEY</code> succeeds locally but remote agents fail</li>
-</ul>
-
-<p>Checks:</p>
-
-<ul>
-  <li>run <code class="language-plaintext highlighter-rouge">hive-env-check KEY</code></li>
-  <li>check Fleet for env-sync-ready collectors</li>
-  <li>inspect whether peer collectors are online</li>
-</ul>
-
-<p>Fixes:</p>
-
-<ul>
-  <li>run <code class="language-plaintext highlighter-rouge">hive-env-add --reconcile</code></li>
-  <li>let queued sync retry when peer collectors return</li>
-  <li>avoid pinning raw Tailnet IPs in <code class="language-plaintext highlighter-rouge">HIVE_ENV_TAILNET_TARGETS</code></li>
-</ul>
-
-<h3 id="local-model-server-off">Local Model Server Off</h3>
-
-<p>Symptoms:</p>
-
-<ul>
-  <li>local OpenAI-compatible chat fails quickly</li>
-  <li>LM Studio or Ollama shows a loaded model but <code class="language-plaintext highlighter-rouge">/v1/models</code> is unreachable</li>
-</ul>
-
-<p>Checks:</p>
-
-<ul>
-  <li>verify the model server’s OpenAI-compatible API is enabled</li>
-  <li>check <code class="language-plaintext highlighter-rouge">LOCAL_OPENAI_BASE_URL</code> or the selected agent provider profile</li>
-</ul>
-
-<p>Fixes:</p>
-
-<ul>
-  <li>start the LM Studio or Ollama server</li>
-  <li>select a reachable hosted fallback</li>
-  <li>use Fleet model-fit recommendations to move local inference to the right machine</li>
-</ul>
-
-<h3 id="wallet-action-blocked">Wallet Action Blocked</h3>
-
-<p>Symptoms:</p>
-
-<ul>
-  <li>wallet or x402 action prepares but does not execute</li>
-  <li>an agent reports missing rail readiness</li>
-</ul>
-
-<p>Checks:</p>
-
-<ul>
-  <li>review the wallet approval queue</li>
-  <li>check provider readiness by key name only</li>
-  <li>confirm spend budget and kill-switch state</li>
-</ul>
-
-<p>Fixes:</p>
-
-<ul>
-  <li>approve the prepared action from Wallets</li>
-  <li>configure the missing provider rail</li>
-  <li>do not bypass spend gates from chat or tool output</li>
-</ul>
+<p>Never delete the vault, runtime homes, or <code class="language-plaintext highlighter-rouge">~/.hivemindos</code> as a generic repair step. If Diagnostics identifies a specific corrupted item, follow that scoped recovery instruction.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
