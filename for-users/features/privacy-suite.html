@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Hivemind Office Companion | HivemindOS Docs</title>
+  <title>Privacy Suite | HivemindOS Docs</title>
   <meta name="description" content="Local-first agent fleet control room documentation.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -519,241 +519,210 @@
             </button>
           </div>
         </div>
-        <h1 id="hivemind-office-companion">Hivemind Office Companion</h1>
+        <h1 id="privacy-suite">Privacy Suite</h1>
 
-<p>Hivemind Office is how agents create, edit, and review Word, Excel, and PowerPoint documents. It has two halves that do different jobs:</p>
+<p>The Privacy Suite groups nine privacy-oriented alternatives in <strong>Apps &amp; Services</strong>: DuckDuckGo, Proton Drive, Brave, Firefox, Signal, LibreOffice, Organic Maps, OsmAnd, and Meetily. Eight have operational agent rails. Signal remains launch-only because no supported Signal Desktop message-control API is exposed.</p>
 
-<ul>
-  <li>A <strong>bundled authoring engine</strong> that actually writes documents. It is headless, runs on every platform HivemindOS supports, and produces candidate files that agents can build without a desktop app installed.</li>
-  <li>An optional <strong>desktop companion</strong> for visual review, PDF work, and hand-editing. It can discover an existing compatible Hivemind Office, HermesOffice, or GenOffice app on macOS or Windows.</li>
-</ul>
-
-<p>HivemindOS owns agent routing, permitted paths, file hashes, confirmations, and final writes in both cases. The authoring engine only ever produces a new candidate file; the companion only ever displays one.</p>
-
-<p>The companion is optional and is not bundled. Automatic installation is currently blocked because the reviewed HermesOffice source does not publish a signed, immutable binary artifact with a reviewed SHA-256 digest. An existing compatible app can still be detected and opened without running an installer.</p>
-
-<h2 id="the-authoring-engine">The Authoring Engine</h2>
-
-<p>The authoring engine writes these formats:</p>
+<h2 id="supported-surfaces">Supported surfaces</h2>
 
 <table>
   <thead>
     <tr>
-      <th>Extension</th>
-      <th>Create</th>
-      <th>Edit</th>
+      <th>Integration</th>
+      <th>Desktop setup and control</th>
+      <th>Agent operations</th>
+      <th>Deliberate boundary</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><code class="language-plaintext highlighter-rouge">.docx</code></td>
-      <td>Yes</td>
-      <td>Yes</td>
+      <td>DuckDuckGo</td>
+      <td>Detect, install, open, quit, and uninstall the reviewed Apple Silicon macOS app</td>
+      <td>Search in an isolated Brave or Firefox session, inspect bounded page text and result elements, then continue through observation-bound clicks</td>
+      <td>No cookie export, arbitrary JavaScript, or access to normal browser history</td>
     </tr>
     <tr>
-      <td><code class="language-plaintext highlighter-rouge">.xlsx</code></td>
-      <td>Yes</td>
-      <td>Yes</td>
+      <td>Proton Drive</td>
+      <td>Install the official CLI on supported macOS, Linux, and Windows architectures; optionally install/open/quit the reviewed macOS app; start browser login</td>
+      <td>List and inspect metadata; upload/download; create folders; rename, copy, move, trash, restore, and permanently delete explicit trash paths</td>
+      <td>The CLI keeps its session in the OS secret store; transfers skip conflicts; permanent deletion has a stronger confirmation</td>
     </tr>
     <tr>
-      <td><code class="language-plaintext highlighter-rouge">.pptx</code></td>
-      <td>Yes</td>
-      <td>Yes</td>
+      <td>Brave</td>
+      <td>Detect, install, open/quit, and uninstall the reviewed Apple Silicon macOS app</td>
+      <td>Start a dedicated agent profile; navigate an allowed domain; snapshot, click, fill, select, scroll, capture, inspect URL, and close</td>
+      <td>The user’s normal profile, cookies, passwords, extensions, and history are never opened or copied</td>
+    </tr>
+    <tr>
+      <td>Firefox</td>
+      <td>Detect, install, open/quit, and uninstall the reviewed Apple Silicon macOS app</td>
+      <td>The same deep browser operations through a Playwright-compatible Firefox runtime and isolated profile</td>
+      <td>The managed runtime is separate from the user’s normal Firefox profile</td>
+    </tr>
+    <tr>
+      <td>Signal</td>
+      <td>Detect, install, open, quit, and uninstall the reviewed Apple Silicon macOS app</td>
+      <td>Launch only</td>
+      <td>No supported chat-read or message-send automation; the user links Desktop to a registered phone</td>
+    </tr>
+    <tr>
+      <td>LibreOffice</td>
+      <td>Detect, install, open a home/vault-bounded supported document, quit, and uninstall the reviewed Apple Silicon macOS app</td>
+      <td>Inspect bounded document content and hashes; prepare a separate candidate; apply a reviewed copy or backed-up replacement; convert formats</td>
+      <td>Documents are untrusted; source replacement requires exact hashes, a review fingerprint, confirmation, and a verified backup</td>
+    </tr>
+    <tr>
+      <td>Organic Maps</td>
+      <td>Built-in research and mobile-handoff adapter; no desktop package is claimed</td>
+      <td>Search places, reverse-geocode, calculate car routes, and build documented <code class="language-plaintext highlighter-rouge">om://</code> pin/directions/navigation handoffs</td>
+      <td>Nominatim/OSRM receive only the requested query or coordinates; a desktop cannot verify phone installation</td>
+    </tr>
+    <tr>
+      <td>OsmAnd</td>
+      <td>Built-in research and web/mobile handoff adapter</td>
+      <td>Search places, reverse-geocode, calculate car routes, and build/open documented OsmAnd links</td>
+      <td>No background location history or OsmAnd account access</td>
+    </tr>
+    <tr>
+      <td>Meetily</td>
+      <td>Detect, install, open, quit, and uninstall the reviewed Apple Silicon macOS app</td>
+      <td>Index recorded meetings, read one meeting’s timestamped transcript and local summary, search across transcripts, and export a meeting as a new Markdown note</td>
+      <td>The meeting library is opened read-only; recording, model choice, and provider settings stay human-operated, and Meetily’s stored provider API keys are never queried</td>
     </tr>
   </tbody>
 </table>
 
-<p>PDF and legacy <code class="language-plaintext highlighter-rouge">.xls</code> are deliberately out of scope for authoring. They stay on the read-only document reader and the desktop companion.</p>
+<h2 id="deep-browser-sessions">Deep browser sessions</h2>
 
-<p>Two behaviors are worth knowing before you rely on it:</p>
+<p>Brave and Firefox sessions are Playwright-backed but do not attach to the person’s normal profile. Each session has its own profile under the HivemindOS data boundary and a fixed top-level domain allowlist. A page snapshot returns bounded text plus at most 200 interactive element references. Click, fill, and select must include the exact latest <code class="language-plaintext highlighter-rouge">observationId</code>; a stale page reference is rejected.</p>
 
-<ul>
-  <li><strong>Every edit is verified.</strong> The engine reports success for a small number of writes it silently drops — for example, setting text on a shape that has no text frame. Because it rewrites the file either way, a changed file hash alone cannot prove an edit landed. HivemindOS therefore reads every mutation back and compares it against what was requested. An edit that cannot be confirmed fails the request instead of handing you a candidate that only looks changed.</li>
-  <li><strong>Documents carry an engine fingerprint.</strong> The engine writes its name and a last-modified timestamp into every file it saves, as custom document properties visible in Word’s Properties pane. It offers no way to remove them, so HivemindOS reports them on each candidate rather than leaving you to find them later. Consider this before sending an authored document to a client.</li>
-</ul>
+<p>The browser rail deliberately omits cookie export, arbitrary JavaScript, file upload, and download. Top-level navigation outside the session allowlist is blocked. Page text and element labels are marked as untrusted source data. DuckDuckGo search uses this same rail with <code class="language-plaintext highlighter-rouge">duckduckgo.com</code> as the session boundary, so an agent can inspect and open results instead of merely returning a query URL.</p>
 
-<p>Spreadsheet formulas are evaluated and stored with their computed values, so Excel shows results immediately without a recalculation pass. Derived Word fields that depend on pagination — table-of-contents page numbers and page counts — cannot be computed outside Word on Windows and are left for the desktop app to refresh.</p>
+<p>Brave control uses the installed Brave executable. Firefox control prefers the Playwright-managed compatible Firefox runtime; status reports setup-required when no compatible runtime exists. Both can run headed or headless.</p>
 
-<h2 id="what-the-bridge-adds">What The Bridge Adds</h2>
+<h2 id="private-map-research">Private map research</h2>
 
-<p>The bridge supports these visual-office formats:</p>
+<p>Place search and reverse geocoding use the configured OpenStreetMap Nominatim endpoint. The public default receives a descriptive HivemindOS User-Agent, never serves autocomplete, is serialized to at most one request per second, limits result counts and response size, and uses a 15-minute memory-only cache. Location queries are not written to a HivemindOS history store.</p>
 
-<table>
-  <thead>
-    <tr>
-      <th>Extension</th>
-      <th>Use</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">.docx</code></td>
-      <td>Word-processing documents</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">.xlsx</code></td>
-      <td>Modern spreadsheets</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">.xls</code></td>
-      <td>Legacy spreadsheets</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">.csv</code></td>
-      <td>Tabular data</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">.pptx</code></td>
-      <td>Presentations</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">.pdf</code></td>
-      <td>Fixed-layout review</td>
-    </tr>
-  </tbody>
-</table>
+<p>Car-route calculation uses the configured OSRM endpoint with step output bounded to 100 instructions per route. Results include exact Organic Maps and OsmAnd handoff links. The audited public OSRM rail supports driving; bike, walk, and transit requests remain a documented app handoff rather than being mislabeled as a server-calculated route. Responses include OpenStreetMap attribution.</p>
 
-<p>The bundled <a href="local-document-reader.html">Documents And Brain Drop</a> reader remains the broader extraction path for Chat, Hive Superbrain imports, and company data rooms. Hivemind Office complements it with desktop visual review. It does not replace the reader and does not make layout, charts, formulas, media, or pagination recoverable from extracted Markdown.</p>
+<h2 id="local-meeting-library">Local meeting library</h2>
 
-<h2 id="recommended-workflow">Recommended Workflow</h2>
+<p>Meetily records, transcribes, and summarizes meetings entirely on the local machine. It is a Tauri desktop app whose API surface is Tauri commands and events, so there is no supported HTTP service for HivemindOS to drive; its archived HTTP backend is unsupported upstream and is deliberately not used. The integration therefore reads Meetily’s own local SQLite meeting library instead of pretending to remote-control the app.</p>
 
-<ol>
-  <li>Check <strong>My Apps</strong> for <strong>Hivemind Office</strong>. HivemindOS reports whether a compatible bundle is installed and open, whether its source metadata and macOS code signature can be verified, and whether the credentialless local agent gateway is healthy.</li>
-  <li>Ask the agent to inspect the original. The bridge resolves the canonical local path, rejects files outside the dashboard host’s home or configured vault boundary, enforces the 64 MiB limit, and returns a full SHA-256 digest with bounded extracted text.</li>
-  <li>Create a separate candidate file with the authoring engine. Ask the agent to author or edit into a new path; the engine copies the source rather than touching it, refuses to overwrite anything already at the candidate path, requires the candidate to keep the original extension, and verifies each edit landed before returning. The bridge separately refuses to treat the original itself as the candidate.</li>
-  <li>Open the candidate in the compatible desktop app and inspect layout, formulas, media, pagination, and other visual details that text extraction cannot prove.</li>
-  <li>Prepare the update. This writes nothing. HivemindOS returns the original and candidate hashes, destination, review fingerprint, exact required confirmation, and review checklist.</li>
-  <li>Apply the untouched review receipt. If either file, path, mode, destination, hash, or fingerprint changed, HivemindOS stops with a conflict and writes nothing.</li>
-</ol>
+<p>That library is always opened <strong>read-only</strong>. HivemindOS never writes to, migrates, or deletes meetings, transcripts, summaries, or audio, and it cannot start or stop a recording, change the transcription model, or alter Meetily’s provider configuration. Those stay human-operated inside Meetily.</p>
 
-<p>When a compatible macOS app is installed, HivemindOS also prioritizes it in document <strong>Open in</strong> discovery. The app can be launched from My Apps, and an agent can open a specific supported file through the guarded bridge.</p>
+<p>Meetily stores its own provider API keys as plaintext columns in its settings tables. The reader refuses to query those tables at all, so no Meetily credential can reach an agent response, an exported note, or the shared brain. Only the meeting, transcript, summary, and chunk tables are readable.</p>
 
-<h2 id="agent-and-mcp-tools">Agent And MCP Tools</h2>
+<p>Agents can list and title-search meetings, read one meeting’s timestamped segments plus its latest summary under an explicit character budget, and run a literal text search across transcripts. Search is literal: <code class="language-plaintext highlighter-rouge">%</code> and <code class="language-plaintext highlighter-rouge">_</code> are escaped rather than treated as wildcards. Result counts, segment counts, and transcript length are all bounded, and truncation is reported rather than hidden.</p>
 
-<p>The existing bundled HivemindOS MCP server exposes six narrow tools. No second MCP server, no engine MCP server, and no companion API key are required.</p>
+<p>Transcripts are verbatim recordings of real people, including participants who never interacted with HivemindOS. They are returned and exported as untrusted source data, and instructions found inside a transcript are never treated as commands.</p>
+
+<p>Private meeting content is treated as its own capability class rather than as an ordinary file read. A read-only research agent can already read documents in the home boundary, so without that distinction it could have reached transcripts too. Agents on the read-only authority preset are therefore denied these operations outright; agents on the standard and autonomous presets can run them, and still have to pass the exact confirmation for each call.</p>
+
+<p>Export writes a single new Markdown file inside the current user’s home boundary. It refuses to overwrite an existing file, requires an absolute <code class="language-plaintext highlighter-rouge">.md</code> destination, and labels the note as untrusted verbatim speech. Reading the library needs either a Node 22.6+ runtime or the <code class="language-plaintext highlighter-rouge">sqlite3</code> command-line tool; when neither is available the Apps card reports that plainly instead of failing silently.</p>
+
+<h2 id="libreoffice-document-control">LibreOffice document control</h2>
+
+<p>The document rail reuses the established Hivemind Office bridge. Inspection returns format, size, modification time, SHA-256, and bounded extracted text. An edit workflow must create a separate candidate file, then call prepare-update to bind the original hash, candidate hash, destination, mode, and review fingerprint. Apply rejects changed files or fingerprints. Copy mode creates a new file exclusively; replace-original mode first writes and verifies a sibling backup.</p>
+
+<p>LibreOffice conversion remains a separate headless action using a throwaway profile. It creates a uniquely named sibling file and never overwrites the source.</p>
+
+<h2 id="installation-and-provenance">Installation and provenance</h2>
+
+<p>Desktop installs use reviewed, version-pinned upstream artifacts rather than mutable shell installers. HivemindOS verifies the recorded digest before extraction, mounts DMGs read-only, checks the resulting macOS bundle with code signing and Gatekeeper, checks the expected bundle identifier, and installs into the current user’s <code class="language-plaintext highlighter-rouge">Applications</code> directory without overwriting an existing app. The Proton Drive CLI is selected by operating system and architecture, verified against Proton’s published SHA-512 digest, and installed into the HivemindOS user bin directory.</p>
+
+<p>The Apps card shows the reviewed version, upstream source, platform preflight, and whether the detected version differs from the reviewed artifact. App updates require a fresh artifact review before HivemindOS changes its installer pins. An existing app remains user-managed unless HivemindOS installed it.</p>
+
+<p>No Privacy Suite app is installed merely by shipping or opening HivemindOS. Installation, app launch, browser control, map queries, Proton login, Drive reads/transfers/mutations, document writes, and LibreOffice conversions are separate operator actions.</p>
+
+<h2 id="agent-actions-and-approvals">Agent actions and approvals</h2>
+
+<p>The canonical action registry exposes status, link building, app management, deep browser control, operational DuckDuckGo search, private map research, LibreOffice inspect/prepare/apply/convert, and Proton Drive read/transfer/mutation tools. Pure status, link construction, LibreOffice inspection, and update preparation are read-only. Network control, credentials, cloud mutations, and local writes use exact confirmations.</p>
 
 <table>
   <thead>
     <tr>
-      <th>Tool</th>
-      <th>Class</th>
-      <th>Result</th>
+      <th>Operation</th>
+      <th>Exact confirmation</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><code class="language-plaintext highlighter-rouge">hivemind_office_status</code></td>
-      <td>Read-only</td>
-      <td>Reports app discovery, provenance checks, gateway health, and the bridge contract.</td>
+      <td>Brave/Firefox control and DuckDuckGo search</td>
+      <td><code class="language-plaintext highlighter-rouge">CONFIRM_PRIVACY_BROWSER_CONTROL</code></td>
     </tr>
     <tr>
-      <td><code class="language-plaintext highlighter-rouge">hivemind_office_inspect_document</code></td>
-      <td>Read-only</td>
-      <td>Returns canonical metadata, SHA-256, and optional bounded Markdown extraction.</td>
+      <td>Place search, reverse geocoding, and route calculation</td>
+      <td><code class="language-plaintext highlighter-rouge">CONFIRM_PRIVACY_MAP_QUERY</code></td>
     </tr>
     <tr>
-      <td><code class="language-plaintext highlighter-rouge">hivemind_office_author_candidate</code></td>
-      <td>Filesystem write (new path only)</td>
-      <td>Creates or edits a DOCX, XLSX, or PPTX candidate, verifying every edit by reading it back.</td>
+      <td>Proton Drive private metadata</td>
+      <td><code class="language-plaintext highlighter-rouge">CONFIRM_PROTON_DRIVE_READ</code></td>
     </tr>
     <tr>
-      <td><code class="language-plaintext highlighter-rouge">hivemind_office_open_document</code></td>
-      <td>Desktop side effect</td>
-      <td>Opens one validated local file in an already-installed compatible app.</td>
+      <td>Proton Drive upload/download</td>
+      <td><code class="language-plaintext highlighter-rouge">CONFIRM_PROTON_DRIVE_TRANSFER</code></td>
     </tr>
     <tr>
-      <td><code class="language-plaintext highlighter-rouge">hivemind_office_prepare_update</code></td>
-      <td>Read-only</td>
-      <td>Produces a hash-bound review receipt and writes nothing.</td>
+      <td>Proton Drive create/rename/copy/move/trash/restore</td>
+      <td><code class="language-plaintext highlighter-rouge">CONFIRM_PROTON_DRIVE_MUTATION</code></td>
     </tr>
     <tr>
-      <td><code class="language-plaintext highlighter-rouge">hivemind_office_apply_update</code></td>
-      <td>High-risk filesystem write</td>
-      <td>Saves a reviewed copy or replaces the original after mode-specific confirmation.</td>
+      <td>Proton Drive permanent deletion</td>
+      <td><code class="language-plaintext highlighter-rouge">CONFIRM_PROTON_DRIVE_PERMANENT_DELETE</code></td>
     </tr>
-  </tbody>
-</table>
-
-<p>Authoring is a write, but a contained one: it creates a new candidate path and refuses to overwrite an existing file, so it never puts an original at risk. MCP descriptors mark the status, inspect, and prepare tools as read-only and mark apply-update as destructive. Opening the desktop editor is a side effect even though it does not modify the file.</p>
-
-<h2 id="save-modes-and-recovery">Save Modes And Recovery</h2>
-
-<p>Copy is the default and preferred mode.</p>
-
-<table>
-  <thead>
     <tr>
-      <th>Mode</th>
-      <th>Required confirmation</th>
-      <th>Write behavior</th>
-      <th>Recovery</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">copy</code></td>
+      <td>Save a reviewed office copy</td>
       <td><code class="language-plaintext highlighter-rouge">CONFIRM_HIVEMIND_OFFICE_SAVE_COPY</code></td>
-      <td>Creates a new file exclusively. It refuses an existing destination and leaves the original unchanged.</td>
-      <td>Delete the created copy.</td>
     </tr>
     <tr>
-      <td><code class="language-plaintext highlighter-rouge">replace-original</code></td>
+      <td>Replace an original after backup</td>
       <td><code class="language-plaintext highlighter-rouge">CONFIRM_HIVEMIND_OFFICE_REPLACE_ORIGINAL</code></td>
-      <td>Creates and verifies a timestamped sibling backup, rechecks the original hash, then atomically renames a verified candidate copy over the original.</td>
-      <td>Restore the reported backup over the replaced file.</td>
+    </tr>
+    <tr>
+      <td>LibreOffice format conversion</td>
+      <td><code class="language-plaintext highlighter-rouge">CONFIRM_LIBREOFFICE_CONVERT</code></td>
+    </tr>
+    <tr>
+      <td>List or title-search Meetily meetings</td>
+      <td><code class="language-plaintext highlighter-rouge">CONFIRM_MEETILY_LIBRARY_READ</code></td>
+    </tr>
+    <tr>
+      <td>Read or search Meetily transcript content</td>
+      <td><code class="language-plaintext highlighter-rouge">CONFIRM_MEETILY_TRANSCRIPT_READ</code></td>
+    </tr>
+    <tr>
+      <td>Export a Meetily meeting note</td>
+      <td><code class="language-plaintext highlighter-rouge">CONFIRM_MEETILY_NOTE_EXPORT</code></td>
     </tr>
   </tbody>
 </table>
 
-<p>Confirmations are never inferred from a general request to edit, open, or review a document. A replacement confirmation cannot authorize copy mode, and a copy confirmation cannot authorize replacement. The final write revalidates the complete review receipt instead of trusting stale tool state.</p>
+<p>Proton Drive output is private, untrusted account data. HivemindOS bounds returned CLI output and does not read or return the session token. Local transfer paths must resolve inside the current user’s home directory; remote paths must use Proton’s absolute forward-slash form. Uploads disable thumbnail generation, and both transfer directions use skip-on-conflict behavior. Every cloud mutation requires a stable idempotency key. Completed retries replay the local receipt; an interrupted outcome is marked unknown and blocked from automatic replay until the exact remote paths are inspected. Trash is recoverable. Permanent delete accepts only explicit <code class="language-plaintext highlighter-rouge">/trash/...</code> or <code class="language-plaintext highlighter-rouge">/photos-trash/...</code> paths.</p>
 
-<p>The bridge substantially narrows lost-update risk with content hashes and a second pre-rename check. It does not acquire an operating-system lock in every external editor, so another process can still race a replacement at the filesystem level. Keep the original closed during the final apply step and treat any conflict as a signal to inspect and prepare again.</p>
+<h2 id="security-review">Security review</h2>
 
-<h2 id="security-and-provenance">Security And Provenance</h2>
+<p>The reviewed, digest-pinned installers and bounded operational adapters are conditionally approved for their documented versions and platforms. The browser rail is approved only for isolated profiles and explicit domain allowlists. Map research is approved with the documented Nominatim rate/cache/attribution rules. Proton Drive operations are approved only with exact path review and operation-specific confirmations. LibreOffice changes are approved only through separate candidates and hash-bound review receipts.</p>
 
-<p>The integration is conditionally approved against:</p>
+<p>Signal message automation is blocked because this integration has no supported Signal Desktop automation API. Organic Maps installation detection is also intentionally unavailable from the desktop. Meetily recording control is likewise blocked, because the supported app exposes no HTTP API and its archived one is unsupported and was unauthenticated; the meeting library is approved for read-only access with credential tables excluded. None of these limitations is presented as a successful connection.</p>
 
-<p>The authoring engine is <a href="https://github.com/iOfficeAI/OfficeCLI">iOfficeAI/OfficeCLI</a>, Apache-2.0, pinned to a reviewed release whose published SHA-256 digest is recorded in HivemindOS for every supported platform. The artifact is code-signed and notarized, and HivemindOS verifies the version it runs against that pin. HivemindOS runs the engine against its own configuration folder with automatic updates disabled, so the engine cannot replace the reviewed binary it was pinned to, and never runs the engine’s own installer, agent-skill, or MCP registration commands — agent tooling stays inside HivemindOS.</p>
+<h2 id="removal-and-recovery">Removal and recovery</h2>
 
-<p>The desktop companion is reviewed separately:</p>
+<p><strong>Uninstall</strong> is offered only when a managed marker proves that HivemindOS installed the target. It removes the exact managed app bundle and/or CLI path. It preserves browser profiles, Signal messages, LibreOffice documents, Proton cloud files, credentials, account state, and manually installed applications.</p>
 
-<ul>
-  <li>Source: <a href="https://github.com/criptogus/HermesOffice">criptogus/HermesOffice</a></li>
-  <li>Reviewed commit: <code class="language-plaintext highlighter-rouge">70374e037e1afa97f42948d31df238c0b38250ae</code></li>
-  <li>Deterministic source-tree archive SHA-256: <code class="language-plaintext highlighter-rouge">aa6f1d98ea96d753928f697dd6b290b5d9d8a33b852053f6a82c5fbe7375aeae</code></li>
-  <li>Declared upstream lineage: <a href="https://github.com/genspark-ai/genoffice">genspark-ai/genoffice</a> at <code class="language-plaintext highlighter-rouge">8f523289d6c34f940cd691472ee56b2013d148c8</code></li>
-</ul>
+<p>A Meetily note export is undone by deleting the newly created Markdown file; the meeting library itself is never modified, so nothing in Meetily needs restoring. LibreOffice conversion is undone by deleting the newly created sibling output. Proton transfers do not overwrite conflicts; remove an unwanted new local or remote copy through the appropriate file manager after reviewing it.</p>
 
-<p>The reviewed open-source tree is Apache-2.0 outside its separately licensed <code class="language-plaintext highlighter-rouge">ee/</code> directory. HivemindOS did not import Enterprise-licensed code.</p>
-
-<p>The focused review found no high-, medium-, or low-severity issues in the provider/configuration/update paths selected for this bridge. That is a source-scope result, not approval of an arbitrary future binary or the repository’s mutable default branch. HivemindOS therefore:</p>
+<h2 id="upstream-contracts">Upstream contracts</h2>
 
 <ul>
-  <li>does not clone or execute mutable <code class="language-plaintext highlighter-rouge">main</code> during setup;</li>
-  <li>does not run HermesOffice’s updater, ad-hoc build scripts, or dependency installation;</li>
-  <li>does not automatically install an unsigned or unpinned binary;</li>
-  <li>does not read or persist an API key for the companion;</li>
-  <li>talks only to the credentialless loopback health endpoint at <code class="language-plaintext highlighter-rouge">127.0.0.1:8642</code> during readiness checks;</li>
-  <li>treats document text and app metadata as untrusted data, not agent instructions or authority.</li>
-</ul>
-
-<p>Do not paste a shared HivemindOS model or gateway credential into a third-party editor. Agents should use the bundled HivemindOS MCP tools so credentials remain in their established runtime boundary.</p>
-
-<h2 id="installation-status">Installation Status</h2>
-
-<p>The My Apps card intentionally shows <strong>Install blocked</strong> until a signed immutable release artifact, binary digest, dependency review, and sandbox smoke test are available. This is not a broken button: it prevents the desktop app from silently building or downloading mutable third-party code.</p>
-
-<p>This applies to the desktop companion only. The authoring engine is a separate, digest-pinned component and does not depend on the companion being installed.</p>
-
-<p>If you already installed a compatible bundle yourself, HivemindOS can report and open it. A found bundle is not automatically trusted: review the source-revision and code-signature rows before using it with consequential documents. Removing that external app disables visual opening without affecting the HivemindOS document reader, MCP server, source documents, or Shared Brain.</p>
-
-<h2 id="related-guides">Related Guides</h2>
-
-<ul>
-  <li><a href="local-document-reader.html">Documents And Brain Drop</a></li>
-  <li><a href="agent-provider-integrations.html">Apps And Agent Providers</a></li>
-  <li><a href="runtimes-and-chat.html">Agents, Runtimes, And Chat</a></li>
-  <li><a href="computer-interaction.html">Computer Interaction</a></li>
+  <li><a href="https://playwright.dev/docs/api/class-browsertype">Playwright BrowserType persistent contexts</a></li>
+  <li><a href="https://github.com/ProtonDriveApps/sdk/blob/main/cli/README.md">Proton Drive official CLI</a></li>
+  <li><a href="https://operations.osmfoundation.org/policies/nominatim/">Nominatim usage policy</a>, <a href="https://nominatim.org/release-docs/latest/api/Search/">search API</a>, and <a href="https://nominatim.org/release-docs/latest/api/Reverse/">reverse API</a></li>
+  <li><a href="https://project-osrm.org/docs/v5.24.0/api/">OSRM route API</a></li>
+  <li><a href="https://github.com/organicmaps/api-ios">Organic Maps official URL-scheme API</a></li>
+  <li><a href="https://osmand.net/docs/user/web/web-map/">OsmAnd Web URL schemes</a></li>
+  <li><a href="https://github.com/Zackriya-Solutions/meetily">Meetily source and releases</a></li>
 </ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
@@ -772,7 +741,7 @@
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/features/hivemind-office.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/features/privacy-suite.md">Improve this page ↗</a>
     </aside>
   </div>
 

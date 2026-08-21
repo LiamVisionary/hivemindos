@@ -609,31 +609,36 @@
 
 <p>Displayed size and modeled limit touches still do not prove that a real order would fill. Queue priority, hidden liquidity, manipulation, news halts, and broker-specific handling remain unknown.</p>
 
-<h2 id="walk-forward-evolution">Walk-forward evolution</h2>
+<h2 id="historical-diagnostics-and-prospective-evolution">Historical diagnostics and prospective evolution</h2>
 
 <p>Run one generation:</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>node scripts/penny-stock-paper-lab.mjs evolve <span class="nt">--run-id</span> &lt;run-id&gt;
 </code></pre></div></div>
 
-<p>Each generation changes exactly one strategy dimension. The lab selects it only on a training segment, purges the open-order/holding overlap at the boundary, and freezes it across four non-overlapping forward cohorts. Lower- and higher-volatility cohorts are reported separately.</p>
+<p>The historical walk-forward search still changes exactly one strategy dimension, selects it only on a training segment, purges the open-order/holding overlap at the boundary, and freezes it across four non-overlapping forward cohorts. Lower- and higher-volatility cohorts are reported separately. Its result is now diagnostic: it can expose a promising or fragile hypothesis, but it cannot mutate the active policy.</p>
 
-<p>A generation advances only if every gate passes, including:</p>
+<p>Every new research snapshot also preregisters a bounded family of strategy shadows and the fixed ±0.01/±0.02 selector-weight trial family. Each shadow changes only one entry, target, stop, holding-period, or expiry value. The shadows mature on all ten candidates even when the reasoner retains cash. Old runs are never backfilled as though a shadow or selector trial had existed.</p>
+
+<p>The authoritative learning cohort is built from whole after-close source sessions, not individual stock rows. One immutable block contains 32 training sessions, a 20-session purge that separates overlapping outcome windows, and a three-session frozen holdout. With ten candidates per source session this normally provides 320 training observations, 200 purged observations, and 30 holdout observations. The training floor is 252 observations, the frozen-holdout floor is 25, every included source session must have at least 95% label coverage, and at least 20 distinct symbols must appear in training. Once a block is evaluated, its fingerprint is preserved and that block is never mined again.</p>
+
+<p>A selector or strategy proposal becomes eligible only if every gate passes, including:</p>
 
 <ul>
-  <li>enough fills and positive PnL</li>
+  <li>enough independent source sessions, observations, distinct symbols, and filled standing limits</li>
   <li>superiority to cash, the active policy, a simple fixed rule, and seeded random variants</li>
-  <li>wins in most forward cohorts</li>
-  <li>positive paired-bootstrap lower bound</li>
+  <li>positive training and frozen-holdout returns, with no-fills counted as zero-return orders</li>
+  <li>positive 10,000-sample circular-block-bootstrap lower bound</li>
   <li>no worse maximum drawdown</li>
   <li>positive results in both volatility regimes</li>
-  <li>deflated Sharpe, probability-of-backtest-overfitting, shifted-signal placebo, and false-discovery-rate thresholds</li>
+  <li>deflated Sharpe, probability-of-backtest-overfitting, random-sign placebo, and false-discovery-rate thresholds</li>
   <li>a stable parameter neighborhood</li>
-  <li>positive PnL under 3x costs</li>
+  <li>positive and baseline-beating results under 1x, 2x, and 3x costs in both training and holdout</li>
+  <li>a positive conservative two-stage execution estimate: a Wilson lower bound for fill probability multiplied by a bootstrap lower bound for payoff conditional on filling</li>
   <li>genuinely new as-of evidence</li>
 </ul>
 
-<p>The run records the observed failure, causal hypothesis, one proposed change, pre-test prediction, falsification criteria, result, and retain/reject decision. Failed generations remain append-only. The lab refuses to mine the same unchanged as-of snapshot again.</p>
+<p>One authoritative controller compares the eligible selector and strategy audits, chooses at most one change, and writes a separate promotion artifact. Historical strategy acceptance, the entry-distance panel, and the outcome artifact cannot bypass this controller. The run records the observed failure, causal hypothesis, one proposed change, pre-test prediction, falsification criteria, result, and retain/reject decision. Failed generations and rejected evidence fingerprints remain append-only.</p>
 
 <p>Hourly evidence collection never calls this evolution path. More intraday observations can improve later execution and issuer-risk evidence, but they cannot create extra same-day policy generations.</p>
 
@@ -652,9 +657,9 @@
 
 <p>Material movers trigger a bounded catalyst review for new SEC filing markers and corporate actions. The audit also records volume shocks and large overnight gaps. These are catalyst hypotheses based on confirmed event timing or market patterns; the lab never converts temporal overlap into a causal claim. A material move with no defensible evidence is explicitly marked unexplained.</p>
 
-<p>Selector learning now targets the 20-session standing-limit counterfactual return rather than a buy-at-close return. Selector weights remain frozen until at least 100 twenty-session outcomes exist, at least 95% of source candidates have usable outcome histories, and at least 95% of candidates old enough to mature have complete 20-session labels. A proposed one-step weight update must improve both its training sample and a frozen 25-observation holdout. Sparse, selectively missing, mixed, or hindsight-only evidence leaves the selector unchanged.</p>
+<p>Selector learning targets the 20-session standing-limit counterfactual return rather than a buy-at-close return. Its ±0.01 and ±0.02 single-weight trials use the same immutable 32-session training, 20-session purge, and three-session frozen-holdout block as strategy learning. A younger completed outcome cannot mask a missing label from an older maturity-eligible source session. Sparse, selectively missing, mixed, hindsight-only, or already-evaluated evidence leaves the selector unchanged.</p>
 
-<p>Every new research artifact prospectively registers 10%, 20%, and 30% entry-distance variants. Later 20-session reviews score every registered distance with the same pessimistic fill model and 1x/2x/3x costs, including no-fills as zero-return orders. A Beta prior prevents a tiny fill sample from appearing certain. The last 25 observations remain a frozen holdout once 100 panels mature. This panel can nominate one distance for the existing full forward, regime, benchmark, bootstrap, DSR, PBO, placebo, FDR, neighborhood, drawdown, and cost gate stack; it cannot mutate policy directly and never backfills old runs as if the variants had been registered prospectively.</p>
+<p>Every new research artifact prospectively registers 10%, 20%, and 30% entry-distance panels alongside the wider single-parameter shadow family. Later 20-session reviews score every registered variant with the same pessimistic fill model and 1x/2x/3x costs, including no-fills as zero-return orders. Reports separate posterior and Wilson-lower-bound fill probability, mean return per filled order, and return per submitted order. The entry-distance panel can nominate a hypothesis after the immutable source-session cohort exists; it cannot mutate policy directly and never backfills old runs as if the variants had been registered prospectively.</p>
 
 <p>Weekly audits report label completeness and prospective entry-distance fill/return evidence alongside decision challenges and material movers, without mutating policy.</p>
 

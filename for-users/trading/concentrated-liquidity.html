@@ -564,6 +564,47 @@ and uncollected fees remain on-chain evidence; paper fees are scenario output. T
 ledger starts when the upgraded observer first evaluates a USD-priced position, so
 do not compare it with a control measured over a different starting window.</p>
 
+<h2 id="learn-from-history-faster">Learn from history faster</h2>
+
+<p>The research runner can replay many synchronized paper policies over cached Base
+history instead of waiting one day for each new observation. It derives gross fee
+opportunities from the pool’s real Uniswap v3 <code class="language-plaintext highlighter-rouge">Swap</code> events, tests a capital ladder,
+and compares fixed-width, recentering, and volatility-adaptive ranges against the
+same-start passive and HODL baselines.</p>
+
+<p>For a quick first pass, the runner samples 1,000 blocks from each 10,000-block window
+and discloses the fee scaling in its report. Use full resolution to confirm a finalist:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pnpm liquidity-range:research <span class="nt">--</span> <span class="se">\</span>
+  <span class="nt">--experiment-root</span> /path/to/read-only-canary <span class="se">\</span>
+  <span class="nt">--days</span> 30
+
+pnpm liquidity-range:research <span class="nt">--</span> <span class="se">\</span>
+  <span class="nt">--experiment-root</span> /path/to/read-only-canary <span class="se">\</span>
+  <span class="nt">--days</span> 30 <span class="se">\</span>
+  <span class="nt">--full-resolution</span>
+</code></pre></div></div>
+
+<p>Each run uses a chronological train/purge/holdout split and executes a paper decision
+one bar after it is made. It also repeats the baseline/treatment comparison across
+three non-overlapping walk-forward periods. The default capital ladder is $5, $50,
+$500, and $5,000, so
+fixed transaction costs can suppress a policy at tiny size without hiding whether
+the same policy has merit at a realistic notional. Results include HODL excess,
+passive spread, drawdown, time in range, turnover, regime returns, and a deterministic
+bootstrap adjusted for the number of policies tested.</p>
+
+<p>The report separates two decisions: whether adaptive management beats passive LP,
+and whether the LP allocation itself beats holding the starting inventory. A policy
+can have a useful LP-management edge during a trend while LP still trails HODL; only
+a challenger that clears both gates can become a promotion proposal.</p>
+
+<p>Historical winners are challengers, not production settings. The runner writes a
+versioned, review-only proposal with dataset and policy hashes. It never edits the
+saved monitor, reads a wallet credential, or applies a policy automatically. A sampled
+winner must survive full-resolution replay and human review before any paper-policy
+change, and live execution remains a separate authority decision.</p>
+
 <h2 id="set-up-a-shadow-monitor">Set up a shadow monitor</h2>
 
 <ol>
@@ -581,10 +622,12 @@ address, but HivemindOS labels the mismatch and makes no ownership claim.</p>
 
 <h2 id="understand-the-assumptions">Understand the assumptions</h2>
 
-<p>The range manager does not predict fees or impermanent loss. Its fee APR, gas, and
-inventory-cost inputs are your explicit scenario assumptions. A proposed rebalance
-means the scenario cleared the configured threshold; it does not mean a real trade
-would be profitable.</p>
+<p>The live shadow manager does not predict fees or impermanent loss. Its fee APR, gas,
+and inventory-cost inputs are your explicit scenario assumptions. The historical
+research runner is different: it reconstructs a gross fee opportunity from real swap
+events, but sampled runs remain estimates and neither mode predicts future order flow.
+A proposed rebalance means its scenario cleared the configured threshold; it does not
+mean a real trade would be profitable.</p>
 
 <p>If a USD position value cannot be estimated, the economics gate fails closed. The
 manager also enforces its cooldown and minimum-net-benefit threshold before changing
@@ -618,6 +661,8 @@ submission path.</li>
   <li>A “rebalance” event changes only the locally stored virtual range.</li>
   <li>Paper fee accrual uses the configured APR assumption; it is not a claim about fees
 earned by the real NFT.</li>
+  <li>Historical research is isolated from the observer, enforces a one-bar execution lag,
+and can emit only review-required policy proposals.</li>
   <li>Estimates are scenario outputs, not financial, accounting, legal, or tax advice.</li>
 </ul>
 
