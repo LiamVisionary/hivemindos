@@ -562,9 +562,26 @@
   <li><code class="language-plaintext highlighter-rouge">queen_bee</code>: inspect Queen Bee state, queue coordinator work, decompose PRDs, or operate Queen Bee flow templates and runs.</li>
   <li><code class="language-plaintext highlighter-rouge">work_event</code>: create local event triggers and publish event payloads that fan out into ordinary Work Board tasks.</li>
   <li><code class="language-plaintext highlighter-rouge">request_human_approval</code>: create a Needs You card for a human decision without granting approval to the requesting agent.</li>
+  <li><code class="language-plaintext highlighter-rouge">run_subagent</code>: run self-contained work in a fresh child session, await it, and return a bounded final handoff to the parent tool call.</li>
 </ul>
 
 <p>These tools adapt external multi-agent queue patterns into HivemindOS rather than replacing the local task model. Work still lands in the Work Board, task state still lives in the shared vault or local fallback store, and Queen Bee remains the coordinator for routing and receipts.</p>
+
+<h3 id="awaited-subagents-and-context-isolation">Awaited subagents and context isolation</h3>
+
+<p>Use <code class="language-plaintext highlighter-rouge">run_subagent</code> when the child needs substantial tool work but the parent only needs the result. The MCP server calls <code class="language-plaintext highlighter-rouge">/api/handoff</code> with <code class="language-plaintext highlighter-rouge">action: "run-subagent"</code>; that route selects an eligible remote worker, opens a fresh one-shot collector session, waits for completion, and returns the result through the original MCP call. This makes the final handoff available inside the active parent session without importing the child transcript.</p>
+
+<p>The isolation boundary is explicit:</p>
+
+<ul>
+  <li>the parent transcript is not sent to the child, so the task must be self-contained</li>
+  <li>child tool calls and intermediate messages are not returned to the parent</li>
+  <li>only the final response is inserted, with a configurable 1,000–12,000 character budget</li>
+  <li>the source agent is excluded from automatic selection when another eligible worker exists</li>
+  <li>delegated results remain hypotheses until the parent verifies their evidence or artifacts</li>
+</ul>
+
+<p>This reduces parent-context growth by construction, but it is not proof of lower total provider usage: the child still spends its own input/output tokens, and comparative savings require fresh parity-controlled baseline and treatment runs. The current collector bridge executes Hermes child profiles; parent runtimes such as Codex or Claude Code reach it through their agent-scoped HivemindOS MCP registration. Awaiting is synchronous and currently bounded by the handoff transport’s 180-second timeout; longer durable work belongs on the Work Board until a resumable job/result channel exists.</p>
 
 <h2 id="dashboard-pins">Dashboard Pins</h2>
 

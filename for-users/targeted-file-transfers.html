@@ -800,9 +800,10 @@ Content-Type: application/json
   <li><code class="language-plaintext highlighter-rouge">send-file</code>: create a plain file transfer.</li>
   <li><code class="language-plaintext highlighter-rouge">send-task</code>: start a task on the best matching agent on the target machine.</li>
   <li><code class="language-plaintext highlighter-rouge">send-file-task</code>: create the transfer and start the remote task with inbox/ack instructions.</li>
+  <li><code class="language-plaintext highlighter-rouge">run-subagent</code>: start a fresh isolated agent session, wait for it to finish, and return a bounded final response to the caller.</li>
 </ul>
 
-<p>The response includes the resolved machine, selected agent, worker class, transfer id when a file was sent, and a remote task preview when the collector chat bridge accepted the task.</p>
+<p>The response includes the resolved machine, selected agent, worker class, transfer id when a file was sent, and a remote task preview when the collector chat bridge accepted the task. <code class="language-plaintext highlighter-rouge">run-subagent</code> additionally returns a <code class="language-plaintext highlighter-rouge">subagent</code> receipt with the final response, character counts, truncation state, and explicit context-boundary flags.</p>
 
 <h2 id="hivemind-mcp">Hivemind MCP</h2>
 
@@ -816,7 +817,12 @@ Content-Type: application/json
   <li><code class="language-plaintext highlighter-rouge">handoff_file</code></li>
   <li><code class="language-plaintext highlighter-rouge">handoff_file_task</code></li>
   <li><code class="language-plaintext highlighter-rouge">handoff_task</code></li>
+  <li><code class="language-plaintext highlighter-rouge">run_subagent</code></li>
 </ul>
+
+<p><code class="language-plaintext highlighter-rouge">run_subagent</code> is the awaited form of delegation. Its task runs through a new one-shot child session; the parent transcript is not forwarded, and the child’s tool trace or intermediate conversation is not inserted into the parent. The MCP call waits for the child and returns only its final handoff, capped by <code class="language-plaintext highlighter-rouge">responseBudgetChars</code> (1,000–12,000 characters, default 6,000). An optional <code class="language-plaintext highlighter-rouge">agent</code> name or id targets a specific eligible profile. When the caller is registered as an agent-scoped MCP client, HivemindOS avoids selecting that same agent when another eligible worker is available.</p>
+
+<p>The installed collector <code class="language-plaintext highlighter-rouge">/chat</code> bridge currently executes Hermes profiles only. Codex, Claude Code, and other runtimes can use <code class="language-plaintext highlighter-rouge">run_subagent</code> as the parent through their HivemindOS MCP registration, but the selected child must currently be a chat-capable Hermes agent on a connected machine. A native runtime’s own subagent system remains separate from this cross-runtime bridge. The synchronous handoff transport currently has a 180-second ceiling, so longer durable work should remain on the Work Board until a resumable subagent job contract is added.</p>
 
 <p>Crypto/payment router tools:</p>
 
