@@ -1,0 +1,1209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c0d11">
+  <title>HivemindOS Threat Model | HivemindOS Docs</title>
+  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/hivemindos/assets/img/app-icon-1024.png">
+  <link rel="apple-touch-icon" href="/hivemindos/assets/img/app-icon-1024.png">
+  <link rel="stylesheet" href="/hivemindos/assets/css/site.css">
+</head>
+<body>
+  <a class="skipLink" href="#content">Skip to content</a>
+
+  <header class="siteHeader">
+    <nav class="topNav" aria-label="Primary">
+      <button class="mobileNavButton" type="button" aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-navigation" data-nav-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brandMark" href="/hivemindos/" aria-label="HivemindOS Docs home">
+        <img class="brandIcon" src="/hivemindos/assets/img/app-icon-1024.png" alt="" width="40" height="40" aria-hidden="true">
+        <span class="brandName">HivemindOS</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+        <span class="brandEdition">Docs</span>
+      </a>
+      <div class="topLinks">
+        
+          <a href="/hivemindos/for-users/">For Users</a>
+        
+          <a href="/hivemindos/for-investors/">For Investors</a>
+        
+          <a href="/hivemindos/for-users/trading/">Trading</a>
+        
+          <a href="/hivemindos/for-users/architecture/">Architecture</a>
+        
+          <a href="/hivemindos/preview.html">Preview</a>
+        
+      </div>
+      <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
+        <span>GitHub</span>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 .2a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.49c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.08-1.88 3.75-3.66 3.95.29.25.54.74.54 1.5l-.01 2.22c0 .21.14.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <button class="navBackdrop" type="button" aria-label="Close documentation menu" data-nav-backdrop></button>
+
+  <div class="docFrame">
+    <aside id="docs-navigation" class="docSidebar" aria-label="Documentation navigation">
+      <div class="sidebarHeader">
+        <span class="sidebarKicker">Explore the docs</span>
+        <button class="sidebarClose" type="button" aria-label="Close documentation menu" data-nav-close>Close</button>
+      </div>
+      <label class="searchShell" for="navSearch">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter pages" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <p class="searchEmpty" role="status" hidden>No matching pages.</p>
+      <nav class="sideNav">
+        
+          <section class="navSection">
+            <h2>Start Here</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/">Overview</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/">For Users</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/">For Investors</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/diagrams.html">Diagrams And Maps</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/native-app.html">Native App</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/slash-commands.html">Slash Commands</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Product</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/product/">Product Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/product/design-philosophy.html">Design Philosophy</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/product/ui-rules.html">UI Rules</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Core Systems</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Features</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/sre-investigations.html">SRE Incident Investigations</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Local Document Reader</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hivemind-office.html">Hivemind Office Companion</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Local Web Research</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/calling.html">Calling</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/socials.html">Socials</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/x-command-bot.html">X Command Bot</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/work-and-scheduler.html">Work And Scheduler</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/loop-engineering.html">Loop Engineering</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/agent-evaluations.html">Agent Evaluations</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/harness-experiments.html">Harness Experiments</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/agent-challenges.html">Agent Challenges</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/zero-human-companies.html">Zero Human Companies</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/founder-mode.html">Founder Mode, Labs, And Proof Packs</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/brain-vault-and-skills.html">Brain, Vault, And Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/inbox-triage.html">Inbox Triage</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hivemind-sync.html">Hivemind Sync</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hive-fusion.html">Hive Fusion</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/shared-brain-benchmarks.html">Shared Brain Benchmarks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/wallets-honey-and-x402.html">Wallets, Honey, And x402</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hive-compute.html">Hive Compute</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/app-builder.html">App Builder And Hosting</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hivemindos-machines.html">HivemindOS Machines</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/evo-optimization.html">Evo Optimization</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/env-files-notifications-maintenance.html">Env, Notifications, Maintenance</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/integrations-and-work-history.html">Integrations And Work History</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/miroshark-and-openclaw.html">MiroShark And OpenClaw</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/computer-interaction.html">Computer Interaction</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/page-agent.html">Page Agent (Experimental)</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Hive Superbrain</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/vault-map.html">Vault Map</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/brain-services.html">Brain Services</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-skills.html">Shared Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-env.html">Shared Env</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/sync-and-health.html">Sync And Health</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/architecture-sync.html">Architecture Sync</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/code-map.html">Code Map</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Packaged Skills</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/hive-skills.html">Hive Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/third-party-skills.html">Third-party Skills</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Trading</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/">Trading Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/crypto.html">Crypto Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/concentrated-liquidity.html">Concentrated Liquidity</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/hyperliquid.html">Hyperliquid Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/stocks.html">Stock Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/agent-access.html">Ways To Trade</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/governance.html">Safety And Limits</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Architecture</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/">Architecture Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/api-and-storage.html">API And Storage</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/syncing-and-tailscale.html">Syncing And Tailscale</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/tailscale-fleet-telemetry.html">Fleet Telemetry</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/generated-media-signing.html">Generated Media Signing</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/targeted-file-transfers.html">Targeted File Transfers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/tailnet-generation-skills.html">Tailnet Generation Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/macos-code-signing.html">macOS Code Signing</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Integrations</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/">Integrations Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>MiroShark</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/companion.html">Companion</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/todo.html">Todo</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Runtimes</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/">Runtime Guides</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/hermes/local-setup.html">Hermes Local Setup</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/v01-control-plane.html">AEON v0.1 Control Plane</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/zero-human-companies.html">AEON For Zero Human Companies</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/github-actions-brain-access.html">AEON GitHub Actions Brain Access</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Reference</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/bankr/bankr-platform-reference.html">Bankr Platform Reference</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Investors</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/">Investor Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/ecosystem-plan.html">Ecosystem Plan</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/honey-hive-treasury.html">Honey And HIVE Treasury</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/treasury-reserve-and-seasonal-programs.html">Treasury Reserve And Seasonal Programs</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/hive-staking-and-community-tiers.html">HIVE Staking And Community Tiers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/">Paid Features</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/app-builder-hosting.html">App Builder And Hosting</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/hivemind-cloud-agent-calls.html">Hivemind Cloud Agent Calls</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/hive-compute-marketplace.html">Hive Compute Marketplace</a>
+              
+            
+          </section>
+        
+      </nav>
+    </aside>
+
+    <main id="content" class="docMain" tabindex="-1">
+      <article class="docContent">
+        <div class="pageTools">
+          <p class="pageKicker">HivemindOS manual</p>
+          <div class="pageToolActions">
+            
+            <button class="copyPageButton" type="button" data-copy-page>
+              <span aria-hidden="true">⧉</span> Copy link
+            </button>
+          </div>
+        </div>
+        <h1 id="hivemindos-threat-model">HivemindOS Threat Model</h1>
+
+<p>HivemindOS is a local-first control room for trusted agent fleets. It can read
+local project files, coordinate remote collectors, write to a shared Obsidian
+brain, route work to agent runtimes, and prepare wallet or payment actions. Treat
+the dashboard like a private admin console, not like a public web app.</p>
+
+<p>This document records the product security boundary so new features can make
+consistent decisions.</p>
+
+<h2 id="trust-boundary">Trust Boundary</h2>
+
+<p>HivemindOS is designed for:</p>
+
+<ul>
+  <li>one operator or trusted team on a private machine or trusted Tailnet</li>
+  <li>local dashboard access protected by user-verified native biometrics, a device passkey, or the device token, followed by a signed session cookie</li>
+  <li>remote collectors reachable only through Hivemind Link, Tailscale, or another
+explicitly trusted private network path</li>
+  <li>agents that can be useful with powerful tools, but must still respect
+permission, budget, and provenance gates</li>
+</ul>
+
+<p>HivemindOS is not designed for unauthenticated public exposure. Do not bind
+collectors, local model servers, wallet APIs, or the dashboard to the public
+internet unless a feature has a dedicated exposure model and safety review.</p>
+
+<p>The threat model tries to prevent:</p>
+
+<ul>
+  <li>unauthenticated dashboard or API access</li>
+  <li>accidental public exposure of private collector or model-service ports</li>
+  <li>prompt-injection from notes, memories, fetched pages, connected apps, tool
+output, conversation mirrors, or compiled knowledge</li>
+  <li>secret leakage through logs, shared brain notes, health reports, telemetry, or
+agent-visible context</li>
+  <li>wallet, payment, x402, env-sync, or remote mutation actions that bypass their
+explicit gates</li>
+  <li>cross-machine confusion where a local loopback URL is treated as a remote
+collector, or a remote collector is treated as local</li>
+  <li>provenance loss for agent-created work, handoffs, memory writes, and project
+changes</li>
+</ul>
+
+<p>The threat model does not try to prevent an authenticated local operator from
+using the product’s intended powers on their own machine.</p>
+
+<h2 id="capability-classes">Capability Classes</h2>
+
+<p>Capability classes should stay explicit in code, docs, and runtime prompts.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Capability</th>
+      <th>Default boundary</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Dashboard viewing</td>
+      <td>Requires verified native biometrics, a device passkey, or the dashboard token unless explicitly running inside a signed native bootstrap</td>
+    </tr>
+    <tr>
+      <td>Fleet discovery</td>
+      <td>Read-only by default; remote mutation needs an explicit action</td>
+    </tr>
+    <tr>
+      <td>Shared brain recall</td>
+      <td>Allowed, but retrieved text is untrusted source data</td>
+    </tr>
+    <tr>
+      <td>Shared brain writes</td>
+      <td>Durable writes must use the memory, handoff, note, or vault services with redaction and provenance</td>
+    </tr>
+    <tr>
+      <td>Shared env</td>
+      <td>Presence checks may name keys; values must not be printed, logged, or written into project files</td>
+    </tr>
+    <tr>
+      <td>Runtime chat</td>
+      <td>Uses the selected runtime adapter and should preserve machine/collector identity</td>
+    </tr>
+    <tr>
+      <td>Shell/file tools</td>
+      <td>Only through the selected runtime/tooling surface and its permissions; never inferred from normal text</td>
+    </tr>
+    <tr>
+      <td>Wallet and payment actions</td>
+      <td>Prepare/quote first; spend or sign only through configured approval and rail gates</td>
+    </tr>
+    <tr>
+      <td>Remote collector changes</td>
+      <td>Require a specific target, collector URL, and action; no broad process cleanup</td>
+    </tr>
+    <tr>
+      <td>Public docs</td>
+      <td>Must not include personal machine names, paths, Tailnet details, secrets, or local run state</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>When adding a new capability, expose it through the relevant capability matrix or
+discovery surface before wiring it into chat. The user should be able to ask for
+the intent, while the product selects the configured implementation.</p>
+
+<h2 id="prompt-injection-boundary">Prompt-Injection Boundary</h2>
+
+<p>Any content that did not come directly from the current operator instruction is
+untrusted when it reaches a model. That includes:</p>
+
+<ul>
+  <li>Obsidian notes, memories, conversation mirrors, and compiled wiki pages</li>
+  <li>shared skills and packaged third-party skills</li>
+  <li>fetched URLs, web search results, GitHub/issue/PR text, docs, and API catalogs</li>
+  <li>emails, calendar entries, chat transcripts, and connected-app responses</li>
+  <li>runtime logs, shell output, browser output, and model/tool output</li>
+  <li>uploaded files, generated reports, and handoff payloads</li>
+</ul>
+
+<p>Untrusted content may be used as reference material. It must not be allowed to
+change system instructions, leak secrets, call tools, modify files, write memory,
+send messages, spend funds, or change settings merely because the untrusted
+content asks for it.</p>
+
+<p>Use <code class="language-plaintext highlighter-rouge">src/lib/services/security/untrusted-context.ts</code> when injecting retrieved
+or external material into model messages. Keep untrusted source text out of the
+system role unless a feature has a tighter parser or structured boundary that
+provides equivalent protection.</p>
+
+<h2 id="authentication-and-sessions">Authentication And Sessions</h2>
+
+<p>The dashboard uses:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">HIVEMINDOS_DASHBOARD_AUTH_SECRET</code> for signed session cookies</li>
+  <li><code class="language-plaintext highlighter-rouge">HIVEMINDOS_DASHBOARD_DEVICE_TOKEN</code> for local unlock and API bearer/header auth</li>
+  <li><code class="language-plaintext highlighter-rouge">HIVEMINDOS_NATIVE_BOOTSTRAP_TOKEN</code> only when native mode is active</li>
+  <li>macOS LocalAuthentication for automatic Touch ID verification in the desktop shell</li>
+  <li>WebAuthn platform passkeys for optional Face ID, Touch ID, Windows Hello, or equivalent device verification</li>
+</ul>
+
+<p>The macOS desktop shell checks LocalAuthentication availability without prompting. When Touch ID is available, the biometric unlock command runs the biometric-only device-owner policy and returns the existing local dashboard token to the locked webview only after success. Cancellation, timeout, missing enrollment, unavailable hardware, or a user preference for token unlock leaves the explicit token fallback intact. The LocalAuthentication boundary does not store biometric data, and the fallback means this remains the dashboard token security boundary rather than a replacement for it.</p>
+
+<p>Browser passkey enrollment requires an existing authenticated dashboard session. A successful passkey assertion creates the same time-bounded signed session as token unlock; it does not replace API device-token authentication or the recovery token. HivemindOS stores only the passkey public credential and counter, while private credential material remains with the operating system or password manager. Passkeys require HTTPS or localhost and are scoped to the dashboard hostname.</p>
+
+<p>Routes that expose local paths, wallet state, env status, runtime control, or
+fleet mutation should use <code class="language-plaintext highlighter-rouge">requireAuth</code>. Public or unauthenticated routes must
+return only information that is safe for a stranger installing the product.</p>
+
+<p>Session cookies are HMAC-signed and time-bounded. Rotating the auth secret should
+invalidate existing sessions after restart.</p>
+
+<h2 id="shared-brain-and-env">Shared Brain And Env</h2>
+
+<p>The shared Obsidian vault is a human-readable coordination surface, not a secret
+store. It may hold durable facts, memory metadata, conversation mirrors, skill
+text, work board records, secure-reference names, and operational summaries. It
+must not contain plaintext secrets.</p>
+
+<p>Shared secrets belong in <code class="language-plaintext highlighter-rouge">~/.hivemindos/.env</code> and should be accessed through
+the shared env helpers. Health reports and agent context may say that a key is
+present or missing, but must not include the value.</p>
+
+<h2 id="remote-machines">Remote Machines</h2>
+
+<p>Machine identity must preserve the difference between local and remote
+collectors. A remote collector behind Hivemind Link keeps its <code class="language-plaintext highlighter-rouge">/peer/...</code> proxy
+URL; it must not be normalized to the local collector port. Remote actions should
+include the machine identity and collector URL selected by Fleet, not a display
+name alone.</p>
+
+<h2 id="wallets-and-spending">Wallets And Spending</h2>
+
+<p>Wallet features are explicit rails. Agents can prepare actions, quotes, and
+approval packets, but spend, transfer, x402, trading, staking, or token actions
+must pass the configured provider, key, budget, and approval gates.</p>
+
+<p>Never put wallet private keys, seed phrases, shared env values, or raw signing
+payload secrets into logs, Obsidian notes, public docs, telemetry, or model
+context.</p>
+
+<h2 id="health-reports">Health Reports</h2>
+
+<p>Health and readiness reports should be useful but secret-free:</p>
+
+<ul>
+  <li>report service names, status, and sanitized paths or URLs only when needed</li>
+  <li>classify failures into controlled categories where practical</li>
+  <li>never include credential-bearing URLs, env values, raw exception payloads from
+third-party services, private Tailnet IPs, or local-only personal details in
+public docs</li>
+  <li>prefer <code class="language-plaintext highlighter-rouge">ok</code>, <code class="language-plaintext highlighter-rouge">degraded</code>, <code class="language-plaintext highlighter-rouge">down</code>, and <code class="language-plaintext highlighter-rouge">disabled</code> over ambiguous strings</li>
+</ul>
+
+<h2 id="known-gaps">Known Gaps</h2>
+
+<ul>
+  <li>HivemindOS has a dashboard device-token model with a local admin principal by
+default, not a full multi-user RBAC system. New capability surfaces should use
+the shared principal, scope, and action-authorization helpers so future
+multi-principal installs do not need parallel policy code.</li>
+  <li>Connector credentials remain server-side. Agents may see credential key names,
+connector status, and approved operation metadata, but not token values.</li>
+  <li>Some runtime tools are delegated to external agent runtimes whose permissions
+are enforced outside this repository.</li>
+  <li>Not every retrieved-context path uses the centralized untrusted-context helper
+yet. New or touched prompt-building paths should migrate toward it.</li>
+  <li>The health/readiness spine starts with local static checks. Deeper provider,
+fleet, and model-server probes should be added behind bounded timeouts and
+authenticated routes.</li>
+</ul>
+
+        <nav class="pageNav" aria-label="Previous and next pages" hidden>
+          <a class="pageNavCard pageNavPrev" data-page-prev href="#">
+            <span>Previous</span>
+            <strong></strong>
+          </a>
+          <a class="pageNavCard pageNavNext" data-page-next href="#">
+            <span>Next</span>
+            <strong></strong>
+          </a>
+        </nav>
+      </article>
+    </main>
+
+    <aside class="pageOutline" aria-label="On this page" hidden>
+      <p>On this page</p>
+      <nav data-page-outline></nav>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/THREAT_MODEL.md">Improve this page ↗</a>
+    </aside>
+  </div>
+
+  <footer class="siteFooter">
+    <div>
+      <strong>HivemindOS</strong>
+      <span>Local-first infrastructure for agent teams.</span>
+    </div>
+    <div class="footerLinks">
+      <a href="/hivemindos/for-users/">User docs</a>
+      <a href="/hivemindos/for-users/architecture/">Architecture</a>
+      <a href="https://github.com/LiamVisionary/hivemindos">GitHub</a>
+    </div>
+  </footer>
+
+  <dialog class="imageViewer" aria-label="Expanded media viewer" data-image-viewer>
+    <header class="imageViewerBar">
+      <div class="imageViewerHeading">
+        <strong data-viewer-title>Expanded image</strong>
+        <span>Scroll to pan · Esc to close</span>
+      </div>
+      <div class="imageViewerControls" aria-label="Image zoom controls">
+        <button type="button" data-viewer-fit>Fit</button>
+        <div class="imageViewerZoomGroup">
+          <button type="button" aria-label="Zoom out" data-viewer-zoom-out>−</button>
+          <output aria-live="polite" data-viewer-zoom>100%</output>
+          <button type="button" aria-label="Zoom in" data-viewer-zoom-in>+</button>
+        </div>
+        <button class="imageViewerClose" type="button" data-viewer-close>Close <span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="imageViewerViewport" tabindex="0" data-viewer-viewport>
+      <div class="imageViewerCanvas" data-viewer-canvas></div>
+    </div>
+    <p class="imageViewerCaption" data-viewer-caption hidden></p>
+  </dialog>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const normalizePath = (href) => {
+      const url = new URL(href, window.location.href);
+      const pathname = url.pathname.replace(/index\.html$/, "");
+      return pathname.endsWith("/") ? pathname : pathname.replace(/\.html$/, "");
+    };
+
+    const currentPath = normalizePath(window.location.href);
+    const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
+    const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
+
+    if (currentIndex >= 0) {
+      navLinks[currentIndex].classList.add("isActive");
+      navLinks[currentIndex].setAttribute("aria-current", "page");
+      navLinks[currentIndex].closest("details")?.setAttribute("open", "");
+
+      const pageNav = document.querySelector(".pageNav");
+      const previous = navLinks[currentIndex - 1];
+      const next = navLinks[currentIndex + 1];
+      const wireCard = (card, link) => {
+        if (!card || !link) {
+          card?.remove();
+          return;
+        }
+        card.href = link.href;
+        card.querySelector("strong").textContent = link.textContent.trim();
+      };
+
+      wireCard(document.querySelector("[data-page-prev]"), previous);
+      wireCard(document.querySelector("[data-page-next]"), next);
+      if (pageNav && (previous || next)) pageNav.hidden = false;
+    }
+
+    const navSearch = document.querySelector("#navSearch");
+    const searchEmpty = document.querySelector(".searchEmpty");
+    navSearch?.addEventListener("input", () => {
+      const query = navSearch.value.trim().toLowerCase();
+      let visibleSections = 0;
+      document.querySelectorAll(".navSection").forEach((section) => {
+        let sectionHasMatch = false;
+        section.querySelectorAll(":scope > .navLink").forEach((link) => {
+          const matches = !query || link.textContent.toLowerCase().includes(query);
+          link.hidden = !matches;
+          sectionHasMatch ||= matches;
+        });
+        section.querySelectorAll(".navGroup").forEach((group) => {
+          const summary = group.querySelector("summary")?.textContent.toLowerCase() || "";
+          const groupMatches = !query || summary.includes(query);
+          let childMatches = false;
+          group.querySelectorAll(".navLink").forEach((link) => {
+            const matches = groupMatches || link.textContent.toLowerCase().includes(query);
+            link.hidden = !matches;
+            childMatches ||= matches;
+          });
+          group.hidden = !(groupMatches || childMatches);
+          sectionHasMatch ||= groupMatches || childMatches;
+          if (query && childMatches) group.setAttribute("open", "");
+        });
+        section.hidden = !sectionHasMatch;
+        if (sectionHasMatch) visibleSections += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visibleSections > 0;
+    });
+
+    window.addEventListener("keydown", (event) => {
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.matches("input, textarea, select") || activeElement?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        navSearch?.focus();
+      }
+      if (event.key === "Escape") closeNavigation();
+    });
+
+    const navToggle = document.querySelector("[data-nav-toggle]");
+    const closeNavigation = () => {
+      document.body.classList.remove("navOpen");
+      navToggle?.setAttribute("aria-expanded", "false");
+    };
+    navToggle?.addEventListener("click", () => {
+      const isOpen = document.body.classList.toggle("navOpen");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelector("[data-nav-close]")?.addEventListener("click", closeNavigation);
+    document.querySelector("[data-nav-backdrop]")?.addEventListener("click", closeNavigation);
+    document.querySelectorAll(".sideNav a").forEach((link) => link.addEventListener("click", closeNavigation));
+
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fall through for embedded or permission-restricted browsers.
+        }
+      }
+      const copyField = document.createElement("textarea");
+      copyField.value = text;
+      copyField.setAttribute("readonly", "");
+      copyField.className = "clipboardCopyField";
+      document.body.appendChild(copyField);
+      copyField.select();
+      const copied = document.execCommand("copy");
+      copyField.remove();
+      if (!copied) throw new Error("Browser clipboard access is unavailable");
+    };
+
+    document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const original = button.innerHTML;
+      try {
+        await copyTextToClipboard(window.location.href);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+      window.setTimeout(() => { button.innerHTML = original; }, 1400);
+    });
+
+    document.querySelector("[data-copy-ai]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const label = button.querySelector("[data-copy-ai-label]");
+      const originalLabel = label.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(button.dataset.copyAiUrl, { headers: { Accept: "text/plain" } });
+        if (!response.ok) throw new Error(`Investor context request failed with ${response.status}`);
+        const investorContext = await response.text();
+        if (!investorContext.includes("HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE") || !investorContext.includes("=== BEGIN DOCUMENT ===")) {
+          throw new Error("Investor context bundle is malformed");
+        }
+        await copyTextToClipboard(investorContext);
+        label.textContent = "Investor docs copied";
+      } catch {
+        label.textContent = "Copy failed";
+      } finally {
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        window.setTimeout(() => { label.textContent = originalLabel; }, 1800);
+      }
+    });
+
+    const outline = document.querySelector(".pageOutline");
+    const outlineNav = document.querySelector("[data-page-outline]");
+    const headings = Array.from(document.querySelectorAll(".docContent h2"));
+    const usedIds = new Set();
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const baseId = heading.textContent.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
+        let id = baseId;
+        let suffix = 2;
+        while (usedIds.has(id) || document.getElementById(id)) id = `${baseId}-${suffix++}`;
+        heading.id = id;
+      }
+      usedIds.add(heading.id);
+      const link = document.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent;
+      outlineNav?.appendChild(link);
+    });
+    if (outline && headings.length > 1) outline.hidden = false;
+
+    const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.id = `mermaid-${index}`;
+      diagram.textContent = code.textContent;
+      const wrapper = code.closest(".highlighter-rouge") || code.closest("pre") || code;
+      wrapper.replaceWith(diagram);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        background: "#14161c",
+        primaryColor: "#211d16",
+        primaryTextColor: "#f3f0e9",
+        primaryBorderColor: "#e7b45c",
+        lineColor: "#a7a39a",
+        secondaryColor: "#15221f",
+        tertiaryColor: "#1b1e25",
+        fontFamily: "Geist, system-ui, sans-serif"
+      }
+    });
+
+    for (const node of document.querySelectorAll(".mermaid")) {
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch (error) {
+        node.classList.add("mermaidError");
+        node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
+      }
+    }
+
+    const imageViewer = document.querySelector("[data-image-viewer]");
+    const viewerCanvas = document.querySelector("[data-viewer-canvas]");
+    const viewerViewport = document.querySelector("[data-viewer-viewport]");
+    const viewerTitle = document.querySelector("[data-viewer-title]");
+    const viewerCaption = document.querySelector("[data-viewer-caption]");
+    const viewerZoomLabel = document.querySelector("[data-viewer-zoom]");
+    const viewerZoomOut = document.querySelector("[data-viewer-zoom-out]");
+    const viewerZoomIn = document.querySelector("[data-viewer-zoom-in]");
+    let viewerScale = 1;
+    let viewerBaseWidth = 1;
+    let viewerBaseHeight = 1;
+    let viewerMedia = null;
+    let viewerSource = null;
+    let restoreViewerMedia = null;
+
+    const setViewerScale = (nextScale) => {
+      viewerScale = Math.min(4, Math.max(0.25, nextScale));
+      if (viewerMedia) viewerMedia.style.width = `${Math.round(viewerBaseWidth * viewerScale)}px`;
+      if (viewerZoomLabel) viewerZoomLabel.textContent = `${Math.round(viewerScale * 100)}%`;
+      if (viewerZoomOut) viewerZoomOut.disabled = viewerScale <= 0.25;
+      if (viewerZoomIn) viewerZoomIn.disabled = viewerScale >= 4;
+    };
+
+    const fitViewerMedia = () => {
+      if (!viewerViewport) return;
+      const availableWidth = Math.max(160, viewerViewport.clientWidth - 64);
+      const availableHeight = Math.max(120, viewerViewport.clientHeight - 64);
+      setViewerScale(Math.min(1, availableWidth / viewerBaseWidth, availableHeight / viewerBaseHeight));
+    };
+
+    const mediaSectionTitle = (source) => {
+      const headings = Array.from(document.querySelectorAll(".docContent h2, .docContent h3"));
+      const preceding = headings.filter((heading) => heading.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.at(-1)?.textContent.trim() || "Expanded image";
+    };
+
+    const openMediaViewer = (source) => {
+      if (!imageViewer || !viewerCanvas || !viewerViewport) return;
+      restoreViewerMedia?.();
+      viewerCanvas.replaceChildren();
+      viewerSource = source;
+      viewerTitle.textContent = mediaSectionTitle(source);
+      const figureCaption = source.closest("figure")?.querySelector("figcaption")?.textContent.trim();
+      const imageAlt = source instanceof HTMLImageElement ? source.alt.trim() : "";
+      const caption = figureCaption || imageAlt;
+      viewerCaption.textContent = caption;
+      viewerCaption.hidden = !caption;
+
+      if (source instanceof HTMLImageElement) {
+        viewerMedia = source.cloneNode();
+        viewerMedia.removeAttribute("width");
+        viewerMedia.removeAttribute("height");
+        viewerMedia.className = "imageViewerMedia";
+        viewerMedia.alt = source.alt;
+        viewerBaseWidth = source.naturalWidth || source.getBoundingClientRect().width;
+        viewerBaseHeight = source.naturalHeight || source.getBoundingClientRect().height;
+        restoreViewerMedia = null;
+      } else {
+        const svg = source.querySelector("svg");
+        if (!svg) return;
+        const placeholder = document.createComment("diagram viewer placeholder");
+        const originalStyle = svg.getAttribute("style");
+        const originalClass = svg.getAttribute("class");
+        const renderedBounds = svg.getBoundingClientRect();
+        const viewBox = svg.viewBox?.baseVal;
+        viewerBaseWidth = viewBox?.width || renderedBounds.width;
+        viewerBaseHeight = viewBox?.height || renderedBounds.height;
+        svg.replaceWith(placeholder);
+        viewerMedia = svg;
+        viewerMedia.setAttribute("class", `${originalClass || ""} imageViewerMedia`.trim());
+        restoreViewerMedia = () => {
+          if (originalStyle === null) svg.removeAttribute("style");
+          else svg.setAttribute("style", originalStyle);
+          if (originalClass === null) svg.removeAttribute("class");
+          else svg.setAttribute("class", originalClass);
+          placeholder.replaceWith(svg);
+        };
+      }
+
+      viewerCanvas.appendChild(viewerMedia);
+      setViewerScale(1);
+      document.body.classList.add("mediaViewerOpen");
+      if (typeof imageViewer.showModal === "function") imageViewer.showModal();
+      else imageViewer.setAttribute("open", "");
+      requestAnimationFrame(() => {
+        viewerViewport.scrollLeft = Math.max(0, (viewerCanvas.scrollWidth - viewerViewport.clientWidth) / 2);
+        viewerViewport.scrollTop = Math.max(0, (viewerCanvas.scrollHeight - viewerViewport.clientHeight) / 2);
+        viewerViewport.focus({ preventScroll: true });
+      });
+    };
+
+    const registerZoomableMedia = (source, label) => {
+      if (source.closest("a")) return;
+      source.classList.add("zoomableMedia");
+      source.tabIndex = 0;
+      source.setAttribute("role", "button");
+      source.setAttribute("aria-label", label);
+      source.addEventListener("click", () => openMediaViewer(source));
+      source.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openMediaViewer(source);
+      });
+    };
+
+    document.querySelectorAll(".docContent img").forEach((image) => {
+      registerZoomableMedia(image, `Open image full screen${image.alt ? `: ${image.alt}` : ""}`);
+    });
+    document.querySelectorAll(".docContent .mermaid:not(.mermaidError)").forEach((diagram) => {
+      registerZoomableMedia(diagram, `Open ${mediaSectionTitle(diagram)} diagram full screen`);
+    });
+
+    viewerZoomOut?.addEventListener("click", () => setViewerScale(viewerScale - 0.25));
+    viewerZoomIn?.addEventListener("click", () => setViewerScale(viewerScale + 0.25));
+    document.querySelector("[data-viewer-fit]")?.addEventListener("click", fitViewerMedia);
+    document.querySelector("[data-viewer-close]")?.addEventListener("click", () => imageViewer?.close());
+    viewerViewport?.addEventListener("click", (event) => {
+      if (event.target === viewerViewport || event.target === viewerCanvas) imageViewer?.close();
+    });
+    imageViewer?.addEventListener("close", () => {
+      restoreViewerMedia?.();
+      restoreViewerMedia = null;
+      viewerCanvas?.replaceChildren();
+      document.body.classList.remove("mediaViewerOpen");
+      viewerSource?.focus({ preventScroll: true });
+      viewerSource = null;
+      viewerMedia = null;
+    });
+  </script>
+</body>
+</html>

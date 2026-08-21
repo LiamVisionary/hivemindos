@@ -1,0 +1,1405 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c0d11">
+  <title>Zero Human Companies | HivemindOS Docs</title>
+  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/hivemindos/assets/img/app-icon-1024.png">
+  <link rel="apple-touch-icon" href="/hivemindos/assets/img/app-icon-1024.png">
+  <link rel="stylesheet" href="/hivemindos/assets/css/site.css">
+</head>
+<body>
+  <a class="skipLink" href="#content">Skip to content</a>
+
+  <header class="siteHeader">
+    <nav class="topNav" aria-label="Primary">
+      <button class="mobileNavButton" type="button" aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-navigation" data-nav-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brandMark" href="/hivemindos/" aria-label="HivemindOS Docs home">
+        <img class="brandIcon" src="/hivemindos/assets/img/app-icon-1024.png" alt="" width="40" height="40" aria-hidden="true">
+        <span class="brandName">HivemindOS</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+        <span class="brandEdition">Docs</span>
+      </a>
+      <div class="topLinks">
+        
+          <a href="/hivemindos/for-users/">For Users</a>
+        
+          <a href="/hivemindos/for-investors/">For Investors</a>
+        
+          <a href="/hivemindos/for-users/trading/">Trading</a>
+        
+          <a href="/hivemindos/for-users/architecture/">Architecture</a>
+        
+          <a href="/hivemindos/preview.html">Preview</a>
+        
+      </div>
+      <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
+        <span>GitHub</span>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 .2a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.49c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.08-1.88 3.75-3.66 3.95.29.25.54.74.54 1.5l-.01 2.22c0 .21.14.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <button class="navBackdrop" type="button" aria-label="Close documentation menu" data-nav-backdrop></button>
+
+  <div class="docFrame">
+    <aside id="docs-navigation" class="docSidebar" aria-label="Documentation navigation">
+      <div class="sidebarHeader">
+        <span class="sidebarKicker">Explore the docs</span>
+        <button class="sidebarClose" type="button" aria-label="Close documentation menu" data-nav-close>Close</button>
+      </div>
+      <label class="searchShell" for="navSearch">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter pages" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <p class="searchEmpty" role="status" hidden>No matching pages.</p>
+      <nav class="sideNav">
+        
+          <section class="navSection">
+            <h2>Start Here</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/">Overview</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/">For Users</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/">For Investors</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/diagrams.html">Diagrams And Maps</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/native-app.html">Native App</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/slash-commands.html">Slash Commands</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Product</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/product/">Product Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/product/design-philosophy.html">Design Philosophy</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/product/ui-rules.html">UI Rules</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Core Systems</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup" open>
+                  <summary>Features</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/sre-investigations.html">SRE Incident Investigations</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Local Document Reader</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hivemind-office.html">Hivemind Office Companion</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Local Web Research</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/calling.html">Calling</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/socials.html">Socials</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/x-command-bot.html">X Command Bot</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/work-and-scheduler.html">Work And Scheduler</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/loop-engineering.html">Loop Engineering</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/agent-evaluations.html">Agent Evaluations</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/harness-experiments.html">Harness Experiments</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/agent-challenges.html">Agent Challenges</a>
+                    
+                      <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/features/zero-human-companies.html">Zero Human Companies</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/founder-mode.html">Founder Mode, Labs, And Proof Packs</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/brain-vault-and-skills.html">Brain, Vault, And Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/inbox-triage.html">Inbox Triage</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hivemind-sync.html">Hivemind Sync</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hive-fusion.html">Hive Fusion</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/shared-brain-benchmarks.html">Shared Brain Benchmarks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/wallets-honey-and-x402.html">Wallets, Honey, And x402</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hive-compute.html">Hive Compute</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/app-builder.html">App Builder And Hosting</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hivemindos-machines.html">HivemindOS Machines</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/evo-optimization.html">Evo Optimization</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/env-files-notifications-maintenance.html">Env, Notifications, Maintenance</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/integrations-and-work-history.html">Integrations And Work History</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/miroshark-and-openclaw.html">MiroShark And OpenClaw</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/computer-interaction.html">Computer Interaction</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/page-agent.html">Page Agent (Experimental)</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Hive Superbrain</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/vault-map.html">Vault Map</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/brain-services.html">Brain Services</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-skills.html">Shared Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-env.html">Shared Env</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/sync-and-health.html">Sync And Health</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/architecture-sync.html">Architecture Sync</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/code-map.html">Code Map</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Packaged Skills</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/hive-skills.html">Hive Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/third-party-skills.html">Third-party Skills</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Trading</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/">Trading Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/crypto.html">Crypto Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/concentrated-liquidity.html">Concentrated Liquidity</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/hyperliquid.html">Hyperliquid Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/stocks.html">Stock Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/agent-access.html">Ways To Trade</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/governance.html">Safety And Limits</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Architecture</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/">Architecture Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/api-and-storage.html">API And Storage</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/syncing-and-tailscale.html">Syncing And Tailscale</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/tailscale-fleet-telemetry.html">Fleet Telemetry</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/generated-media-signing.html">Generated Media Signing</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/targeted-file-transfers.html">Targeted File Transfers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/tailnet-generation-skills.html">Tailnet Generation Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/macos-code-signing.html">macOS Code Signing</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Integrations</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/">Integrations Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>MiroShark</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/companion.html">Companion</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/todo.html">Todo</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Runtimes</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/">Runtime Guides</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/hermes/local-setup.html">Hermes Local Setup</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/v01-control-plane.html">AEON v0.1 Control Plane</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/zero-human-companies.html">AEON For Zero Human Companies</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/github-actions-brain-access.html">AEON GitHub Actions Brain Access</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Reference</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/bankr/bankr-platform-reference.html">Bankr Platform Reference</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Investors</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/">Investor Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/ecosystem-plan.html">Ecosystem Plan</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/honey-hive-treasury.html">Honey And HIVE Treasury</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/treasury-reserve-and-seasonal-programs.html">Treasury Reserve And Seasonal Programs</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/hive-staking-and-community-tiers.html">HIVE Staking And Community Tiers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/">Paid Features</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/app-builder-hosting.html">App Builder And Hosting</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/hivemind-cloud-agent-calls.html">Hivemind Cloud Agent Calls</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/hive-compute-marketplace.html">Hive Compute Marketplace</a>
+              
+            
+          </section>
+        
+      </nav>
+    </aside>
+
+    <main id="content" class="docMain" tabindex="-1">
+      <article class="docContent">
+        <div class="pageTools">
+          <p class="pageKicker">HivemindOS manual</p>
+          <div class="pageToolActions">
+            
+            <button class="copyPageButton" type="button" data-copy-page>
+              <span aria-hidden="true">⧉</span> Copy link
+            </button>
+          </div>
+        </div>
+        <h1 id="zero-human-companies">Zero Human Companies</h1>
+
+<p>Zero Human Companies turn a business goal into an agent-run operating loop.</p>
+
+<p>A company has a charter, an apex goal, governance controls, a run history, and a selected autonomy engine. The default engine plans work for a HivemindOS crew through the Work Board. The optional AEON engine runs one chosen background skill in a linked AEON workspace, without requiring native company agents. The operator still owns the high-trust decisions: funding, policy, approval thresholds, public exposure, and whether a company should keep running.</p>
+
+<h2 id="what-it-does">What It Does</h2>
+
+<p>Zero Human Companies are for repeatable work that should behave more like an operating company than a one-off chat:</p>
+
+<ul>
+  <li>create or review a company charter</li>
+  <li>choose the HivemindOS crew engine or an optional AEON background skill</li>
+  <li>assign agents to roles when the company uses a native crew</li>
+  <li>set an apex goal and task backlog</li>
+  <li>launch planned work into the shared Work Board, or hand one bounded goal to AEON</li>
+  <li>route native tasks to eligible agents or reuse a saved AEON workspace and skill</li>
+  <li>track approvals, spend caps, and kill-switch state</li>
+  <li>preserve receipts, deliverables, eval gates, and learning artifacts</li>
+  <li>summarize the company’s accumulated know-how as capability capital</li>
+  <li>manage governed customer booking pages and calendar commitments through connected Cal.com, user-hosted Cal.diy, or eligible Managed Hivemind Bookings</li>
+</ul>
+
+<p>The feature is local-first. It can run with local agents, user-configured runtimes, user-owned wallets, and the shared Obsidian vault. Managed cloud, official monetization, marketplace listing, hosted capacity, or paid-agent access must be verified by HivemindOS-controlled infrastructure or by a verifiable payment rail before it grants official value.</p>
+
+<p>Company booking calls are task-scoped. <code class="language-plaintext highlighter-rouge">booking_read</code> and <code class="language-plaintext highlighter-rouge">booking_manage</code> require the active company ID, working Work Board task, assigned member agent, and a stable idempotency key; calls reserve against the company’s integration limits before reaching the provider. Creates, reschedules, cancellations, and public booking-page configuration also require their exact human confirmation. See <a href="bookings.html">Agent-Managed Bookings</a>.</p>
+
+<h2 id="agent-identity-isolation">Agent Identity Isolation</h2>
+
+<p>One operational agent identity belongs to one company at a time. A company assignment carries more than a display role: it determines the company budget, member-level daily spend cap, freeze switch, approvals, mailbox scope, work history, and company context for that company’s Work Board tasks. The same agent’s personal, product, and unrelated tasks continue under its ordinary wallet and workspace policy. Sharing one identity between companies would make task-scoped controls ambiguous.</p>
+
+<p>You can still reuse the same agent blueprint across as many companies as you need. When an agent is already assigned, choose <strong>Duplicate agent</strong> from the crew picker. The normal duplication flow creates a separate identity and wallet while letting you choose whether to copy its agent-specific environment, fork its private memory metadata, or copy chat history. Add the resulting copy to the other company; its model, runtime, skills, and personality can match the original while its operations remain isolated.</p>
+
+<p>Founder Mode and the standard crew picker only consider unassigned identities. Direct API or shared-vault edits that attempt to place one identity in several companies are rejected. If a manual edit creates a conflict anyway, the portfolio remains available for repair, shows the affected companies, and fails closed on spending until the identity is removed from all but one company.</p>
+
+<h2 id="founder-mode">Founder Mode</h2>
+
+<p>Founder Mode is the outcome-first path into a company. Describe what you want to make happen, choose a privacy posture, milestone budget, and pace, then review a generated blueprint covering the charter, goal, crew, capabilities, compute, approvals, first Lab, and proof requirements.</p>
+
+<p>Compiling is read-only. Founding requires an explicit action and creates the company plus its first private Lab, but does not launch autonomous work. The operator still decides when the crew begins. See <a href="founder-mode.html">Founder Mode, Hivemind Labs, And Proof Packs</a>.</p>
+
+<h2 id="imported-companies">Imported Companies</h2>
+
+<p>Existing projects can be imported as companies without being re-founded from scratch. The import flow starts from a repository folder, previews what HivemindOS can see, then creates or updates a company linked to that source project.</p>
+
+<p>The same flow also accepts a local <strong>data room</strong>: a folder of plans, reports, spreadsheets, presentations, exports, and other company documents. HivemindOS previews the readable files, converts them locally with the document reader bundled into the desktop app, and creates a reviewable <strong>Sources</strong> library in the company cockpit. The resulting Obsidian notes retain source names, paths, hashes, and conversion provenance so future agents can cite the material and detect unchanged re-imports.</p>
+
+<p>Data-room content stays explicitly untrusted. Importing a strategy deck, contract, or old operating manual does not turn its text into a standing directive, approve spend, launch autonomy, or grant an entitlement. The operator reviews the sources and decides what should become governed company work.</p>
+
+<p>See <a href="local-document-reader.html">Local Document Reader</a> for every supported data-room extension, extraction behavior, local conversion guarantees, and archive limits.</p>
+
+<p>The importer records the repository, Git remote, GitHub Actions workflows, scheduled workflow crons, Supabase <code class="language-plaintext highlighter-rouge">pg_cron</code> schedules, Render services, Vercel crons, cron-like files, and package scripts when those signals are present. The company cockpit then shows those systems in a <strong>Systems</strong> tab so operators can inspect the code and operating schedules that already keep the product running.</p>
+
+<p>Importing a legacy project does not make historical or off-platform revenue subject to a HivemindOS fee. Imported companies still show the Treasury revenue recorder; only a separately disclosed hosted marketplace or billing policy can attach a fee to a HivemindOS-sourced transaction.</p>
+
+<h2 id="cockpit">Cockpit</h2>
+
+<p>The Zero Human Company cockpit is the operator surface for one company.</p>
+
+<p>It shows:</p>
+
+<ul>
+  <li>the company charter, stage, and apex goal</li>
+  <li>the selected autonomy engine</li>
+  <li>assigned agents and their roles, when the company has a native crew</li>
+  <li>team settings and agent membership</li>
+  <li>approval queues and governance events</li>
+  <li>treasury controls, budgets, and spend summaries</li>
+  <li>issue-board style work lanes</li>
+  <li>native Work Board tasks or accepted AEON dispatches</li>
+  <li>learning-loop metrics and capability-capital summaries</li>
+</ul>
+
+<p>The cockpit is organized into tabs:</p>
+
+<ul>
+  <li><strong>Board</strong> — the active work block, the autonomous-execution launch control, and issue-board work lanes.</li>
+  <li><strong>Issues</strong> — open company work and items that need review.</li>
+  <li><strong>Deliverables</strong> — the company’s real outputs, with a collapsed work log for the scratch that evidenced them. The label can follow the company’s primary output.</li>
+  <li><strong>Comms</strong> — outreach threads and the crew’s mailboxes, with a company-specific label where appropriate.</li>
+  <li><strong>Sales</strong> — customer and pipeline activity.</li>
+  <li><strong>Products</strong> — the catalog for companies that sell fixed products.</li>
+  <li><strong>Systems</strong> — imported workflows and schedules for companies linked from an existing project.</li>
+  <li><strong>Sources</strong> — locally imported data-room documents with type, provenance, and direct links to their Shared Brain notes.</li>
+  <li><strong>Limits</strong> — integration request and spend guardrails, Google Cloud quotas and billing budgets, and 30-day usage charts.</li>
+  <li><strong>Frontier Lab</strong> — company-scoped token capacity, elastic task slots, earned scale gates, the reviewed OpenAI OAuth model ladder, and recent task settlements.</li>
+  <li><strong>Team</strong> — the org chart and agent membership.</li>
+  <li><strong>Analytics</strong> — company performance and operating summaries.</li>
+  <li><strong>Learning</strong> — capability-capital metrics and the eval frontier.</li>
+  <li><strong>Labs</strong> — bounded hypotheses, measured results, evidence lineage, frontiers, and a preview-first Hive Skill Fusion path for graduating verified methods into reusable shared skills.</li>
+  <li><strong>Approvals</strong> — spend and actions waiting for human sign-off.</li>
+  <li><strong>Runs</strong> — accepted dispatches, flow history, proposals, outputs, and replay requests.</li>
+  <li><strong>Ops</strong> — governance, treasury, budgets, the kill switch, and other operator controls.</li>
+</ul>
+
+<p>The cockpit is designed as a control surface, not a magic-autonomy promise. It keeps the human operator close to funding, risky actions, and governance while letting agents carry the routine execution loop.</p>
+
+<h2 id="launch-flow">Launch Flow</h2>
+
+<p>Every launch starts from the company’s apex goal and preserves a company Runs record, but execution depends on the selected engine.</p>
+
+<p>With <strong>HivemindOS crew</strong>, HivemindOS plans the goal into Work Board tasks, routes them to eligible company agents, and connects the tasks to deliverables, evaluations, approvals, and reviewed learning. The Work Board answers both “what is the task?” and “which company is learning from this work?”</p>
+
+<p>With <strong>AEON background skill</strong>, HivemindOS sends one bounded company-goal input to the selected workspace and skill. The accepted handoff appears in company Runs; detailed execution and outputs remain in AEON. No fake completed Work Board task is created.</p>
+
+<h2 id="optional-aeon-automation">Optional AEON Automation</h2>
+
+<p>AEON is an optional autonomy engine for a Zero Human Company. It is not required to create or run companies, and the default remains the HivemindOS crew path described above.</p>
+
+<p>In the create or edit flow, choose <strong>AEON background skill</strong>, then select a saved AEON workspace and one of the skills actually available in that workspace. A native HivemindOS crew becomes optional because the selected AEON workspace is the executor. The saved binding is checked against the live workspace catalog before it is accepted and again before dispatch.</p>
+
+<p>Later cycles reuse the same workspace and skill until autonomy is stopped or the company is frozen. For an AEON-backed company, “idle” means the selected workspace has no queued or active run; HivemindOS does not use native agent presence or Work Board tasks as AEON’s activity signal. Runs in one selected workspace are serialized so the company cadence does not create overlapping background jobs there. If workspace activity cannot be read, that cycle waits instead of launching another job blindly.</p>
+
+<p>The responsibility boundary remains visible:</p>
+
+<ul>
+  <li>HivemindOS owns the company definition, home-machine dispatch ownership, launch and stop controls, kill switch, and Company Runs trace.</li>
+  <li>AEON owns the background skill execution, runtime credentials and permissions, outputs, schedules, and detailed run history.</li>
+  <li>An accepted AEON dispatch is recorded in <strong>Company Runs</strong> without manufacturing a completed Work Board task. AEON outputs remain available through the selected workspace and the AEON view.</li>
+  <li>Stopping or freezing the company prevents future cycles; an AEON job already accepted may finish.</li>
+  <li>Company Work Board budgets and approval pauses do not automatically wrap an external AEON job. Configure the selected AEON workspace’s own provider limits, permissions, and skill safety boundaries for that execution.</li>
+</ul>
+
+<p>This option is useful for recurring background work already expressed as an AEON skill. Keep the HivemindOS crew engine selected when the goal should be decomposed into governed Work Board tasks and routed across multiple company agents. Follow <a href="../runtimes/aeon/zero-human-companies.html">Use AEON With Zero Human Companies</a> for the complete setup, launch, monitoring, and troubleshooting walkthrough.</p>
+
+<h2 id="runs-and-proposals">Runs And Proposals</h2>
+
+<p>The <strong>Runs</strong> tab records the company’s consequential operating branches: dispatches, flow starts, task outcomes, preview reviews, deliverable redirects, revenue events, and replay requests. A run keeps the input snapshot, status, recent events, outputs, and related proposals so operators can inspect why a company moved a branch forward.</p>
+
+<p>Proposals are the human-settlement boundary. Pricing changes, human-input blockers, customer-preview decisions, deliverable rejection redirects, revenue-share records, and replay requests are recorded as pending, applied, rejected, or superseded decisions. That gives a company a durable record of what it proposed, what the operator selected or discarded, and what changed afterward.</p>
+
+<p>Replay requests do not silently redo customer-facing or money-facing work. They create a pending replay proposal linked to the prior run, so the operator can choose when to branch the company forward again.</p>
+
+<h2 id="autonomous-execution">Autonomous Execution</h2>
+
+<p>The Board tab has one launch control whose label follows the selected engine.</p>
+
+<ul>
+  <li><strong>HivemindOS crew:</strong> launch plans the apex goal into Work Board tasks. Later cycles wait for the company’s board work to become idle and for an eligible crew member to be available.</li>
+  <li><strong>AEON background skill:</strong> launch sends the bounded goal to the selected skill. Later cycles wait for the AEON workspace to have no queued or active run. Native agents and Work Board availability are not used as AEON’s activity signal.</li>
+</ul>
+
+<p><strong>Stop autonomy</strong> halts new dispatches; work already in flight finishes. Launching also claims the company for the machine that pressed the button, so a company definition replicated across the fleet auto-dispatches only from its home machine rather than from every machine at once.</p>
+
+<p>Every company needs an explicit apex goal and an unfrozen treasury. The HivemindOS crew engine also needs at least one company agent; the AEON engine needs a current workspace and runnable skill instead. The Board shows when the goal was last dispatched and whether autonomy is running.</p>
+
+<h2 id="frontier-lab">Frontier Lab</h2>
+
+<p>Frontier Lab turns the native company execution loop into a governed intelligence utility. It is for operators who want one small crew to run more concurrent, independently reviewed work without pretending that more agent names automatically create more capability.</p>
+
+<p>Frontier Lab currently requires the native <strong>HivemindOS crew</strong> with the <strong>hierarchical</strong> process. It cannot be enabled for AEON, sequential flows, or graph flows because those execution boundaries do not yet provide the same task-scoped reservation and settlement path. This is a fail-closed product boundary: an external or unattributed run never inherits a budget merely because the dashboard shows one.</p>
+
+<h3 id="oauth-only-model-ladder">OAuth-Only Model Ladder</h3>
+
+<p>Frontier Lab uses one immutable reviewed ladder:</p>
+
+<ul>
+  <li><strong>Scout — <code class="language-plaintext highlighter-rouge">gpt-5.6-luna</code>:</strong> research, triage, planning, and routine synthesis.</li>
+  <li><strong>Builder — <code class="language-plaintext highlighter-rouge">gpt-5.6-terra</code>:</strong> implementation, operations, design, and deployment.</li>
+  <li><strong>Reviewer — <code class="language-plaintext highlighter-rouge">gpt-5.6-sol</code>:</strong> independent QA, evaluation, security, and audit gates.</li>
+</ul>
+
+<p>All three tiers use the local OpenAI OAuth provider (<code class="language-plaintext highlighter-rouge">openai-codex</code>). Enabling requires a working OpenAI OAuth session and at least two distinct configured company agent identities, so the worker cannot review its own result. Frontier Lab does not fall back to OpenRouter, Claude, or an API-key provider when OAuth is absent. Stored policy is normalized again at runtime, so a hand-edited provider or model cannot silently bypass this ladder; dispatch rechecks that the reviewer is online and independent.</p>
+
+<h3 id="token-reservations-and-settlement">Token Reservations And Settlement</h3>
+
+<p>The monthly ceiling is an internal token control budget, not a provider bill or a promise about subscription economics. Before a Frontier Lab task can claim a worker or call a model, HivemindOS atomically reserves the configured per-task amount in the company’s private intelligence ledger. Concurrent processes cannot reserve the same remaining budget twice, and reservation ids make retries idempotent.</p>
+
+<p>After execution, collector-reported worker and reviewer usage settles against the same task reservation. If a request starts but its response or usage metadata is unavailable, HivemindOS conservatively settles at least the full reservation and labels it estimated. A reservation is released only when execution stops before any inference request starts, and that release does not count as scale-gate evidence. Observed overages are preserved as facts and reduce future capacity to zero until the UTC month rolls over or the operator raises the ceiling.</p>
+
+<p>A task created under Frontier Lab carries its tier on the Work Board. Disabling Frontier Lab while such a task is still queued does not let the task escape onto its agent’s ordinary provider: it blocks before inference until the company policy is restored or the task is deliberately replaced outside Frontier Lab.</p>
+
+<h3 id="elastic-capacity-and-scale-gates">Elastic Capacity And Scale Gates</h3>
+
+<p>Elastic workers mean an online company identity may serve more than one bounded task slot. They do not clone memory, create new wallets, bypass one-company identity isolation, or manufacture capacity without at least two online, independently identifiable worker/reviewer agents. The stage, monthly budget, per-task reservation, active reservations, tasks-per-cycle limit, parallel-task limit, and per-machine concurrency all constrain the scheduler; the smallest available bound wins.</p>
+
+<p>Scale is operator-selected and evidence-gated:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Stage</th>
+      <th style="text-align: right">Maximum parallel tasks</th>
+      <th style="text-align: right">Tasks per cycle</th>
+      <th style="text-align: right">Turns per machine</th>
+      <th>Evidence required to enter</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Pilot</td>
+      <td style="text-align: right">4</td>
+      <td style="text-align: right">4</td>
+      <td style="text-align: right">1</td>
+      <td>Starting stage</td>
+    </tr>
+    <tr>
+      <td>Team</td>
+      <td style="text-align: right">12</td>
+      <td style="text-align: right">12</td>
+      <td style="text-align: right">2</td>
+      <td>3 settled tasks at 67% success</td>
+    </tr>
+    <tr>
+      <td>Frontier</td>
+      <td style="text-align: right">24</td>
+      <td style="text-align: right">24</td>
+      <td style="text-align: right">4</td>
+      <td>12 settled tasks at 80% success</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Scaling down is always available. Scaling up is never automatic: the cockpit enables a larger stage only after the company’s settled outcomes meet its gate. These are safe capacity ceilings, not a literal “100 employees” equivalence or a claim that task count alone produces frontier-quality research.</p>
+
+<h3 id="earned-scale-and-the-scale-curve">Earned Scale And The Scale Curve</h3>
+
+<p>Frontier Lab now places an <strong>Earned Scale</strong> recommendation beside those hard capacity gates. Every observed Frontier settlement records the task’s evaluated outcome score, proof eligibility, elapsed time, token use, uniqueness check, duplication or conflict signal, human-intervention signal, and independent-review disagreement when those measurements exist. Older settlements remain valid accounting records; missing telemetry stays visibly missing instead of being guessed.</p>
+
+<p>The Scale Curve compares a fixed baseline with a treatment across eight dimensions:</p>
+
+<ul>
+  <li>outcome or evaluator-rubric score</li>
+  <li>proof satisfied</li>
+  <li>latency</li>
+  <li>tokens</li>
+  <li>unique contribution</li>
+  <li>duplication or coordination conflict</li>
+  <li>human intervention</li>
+  <li>reviewer disagreement</li>
+</ul>
+
+<p>Every new settlement retains the Frontier stage that produced it. The current stage is the treatment; its immediately smaller stage is the baseline. Comparative recommendations require at least three baseline and three treatment runs with every dimension observed. Pilot therefore collects treatment telemetry but has no smaller-stage comparison; after the operator enters Team, Pilot becomes the baseline, and after entering Frontier, Team becomes the baseline. A proof rate below 90%, any proof regression, material outcome regression, or severe coordination/reviewer debt produces <strong>Reduce</strong> even when the treatment completed more tasks or ran faster. A safe but negligible change produces <strong>Hold</strong>. Only a safe positive weighted curve produces <strong>Scale</strong>. Until the evidence is complete, the cockpit says <strong>Collect evidence</strong>.</p>
+
+<p>The Scale Curve is a local experiment receipt and one additional stage guard, not a commercial authority. Pilot-to-Team expansion establishes the first comparison, but Team-to-Frontier expansion is blocked unless the measured Team treatment earns <strong>Scale</strong> against Pilot; stages cannot be skipped. The curve never auto-increases the monthly ceiling, changes the immutable OAuth ladder, bypasses the existing completion, budget, capacity, or independent-review gates, or spends tokens. The operator still chooses and saves every policy change.</p>
+
+<h3 id="outcome-aware-allocation-and-judgment-checkpoints">Outcome-Aware Allocation And Judgment Checkpoints</h3>
+
+<p>The cockpit shows the route HivemindOS uses for each kind of intelligence work. Outside Frontier Lab, scouts prefer adaptive free or local candidates when privacy and quality permit, builders are ranked by accepted outcome, quality, budget, latency, and privacy evidence, and consequential results use the strongest independently staffed reviewer. Inside Frontier Lab, the same roles stay on the immutable Luna, Terra, and Sol OAuth ladder.</p>
+
+<p>Frontier company tasks also carry three explicit judgment checkpoints:</p>
+
+<ol>
+  <li>Before the first costly or mutating action, state the outcome metric, proof, task split, budget, and rollback path.</li>
+  <li>Mid-run, pause and re-plan when evidence contradicts the plan, reviewers disagree, or half the task reservation is consumed.</li>
+  <li>Before completion or stage expansion, require independent proof and score the full Scale Curve.</li>
+</ol>
+
+<h3 id="swarm-blackboard-and-delight-miner">Swarm Blackboard And Delight Miner</h3>
+
+<p>Frontier Lab reuses <strong>Agent Challenges</strong> as its live swarm blackboard instead of creating another coordination store. The cockpit summarizes active challenges, public-within-the-hive entries, experiment lineage, frontier results, contributors, and integrity alerts. Detailed candidates, findings, run requests, results, rulings, and playbooks still live in Hivemind Labs and the normal Agent Challenge path.</p>
+
+<p>The <strong>Delight Miner</strong> looks at existing skill analytics from reviewed chat, Work Board, Company, and scheduled outcomes. Three distinct successful runs at an 80% success floor can propose a stronger reusable skill. Repeated success across days can also propose a schedule, and five strong Company uses can propose a standing company capability. These are review-gated suggestions only: the miner never installs a skill, creates a schedule, launches a company, or spends on its own.</p>
+
+<h3 id="cockpit-operation">Cockpit Operation</h3>
+
+<p>Open a company and choose <strong>Frontier Lab</strong>. The cockpit leads with <strong>Scale this goal</strong>, the Scale Curve recommendation, outcome-aware allocation and checkpoints, the Agent Challenge blackboard, and review-gated Delight Miner proposals. It also shows settled, reserved, and remaining tokens; budget-affordable configured slots (with online routing rechecked at dispatch); stage locks; the model assigned to each tier; and recent task-scoped reservation events. Choose preset ceilings and concurrency limits, enable elastic slots if desired, select an earned stage, then save. Frontier planning itself is deterministic so no unreserved planner call can escape the ledger; metered inference starts only after a task reservation. New native hierarchical dispatches immediately use the saved policy. Existing non-Frontier tasks are not retroactively reclassified.</p>
+
+<p>To compare agent behavior through the real Work Board path, run <code class="language-plaintext highlighter-rouge">hive-env-run -- pnpm benchmark:earned-scale</code>. It gives the same <code class="language-plaintext highlighter-rouge">gpt-5.6-sol</code> worker three paired isolated code repairs in each condition, runs real file edits and visible tests, sends completion proof to a separate fixed Sol reviewer identity, grades separate hidden tests, records Frontier settlement telemetry, rehearses reverse-patch rollback, preserves every workspace/receipt, and writes an append-only Harness Experiment decision. This benchmark is explicit because it spends inference and writes only to isolated benchmark repositories/vaults. <code class="language-plaintext highlighter-rouge">pnpm benchmark:earned-scale:runtime-plan</code> keeps the lighter text-only collector comparison, while <code class="language-plaintext highlighter-rouge">pnpm benchmark:earned-scale:policy</code> is the deterministic Scale Curve regression; neither substitutes for deliverable testing.</p>
+
+<h2 id="deliverables">Deliverables</h2>
+
+<p>The Deliverables tab shows what the company actually produced — the live sites it built, the pieces it published, the clips it made — as the headline output, and demotes the trackers, receipts, and scratch files that only evidence the work into a collapsed work log. What counts as a deliverable versus work log is decided per company from its charter, so a website agency’s product is a preview link while a spreadsheet is just work log.</p>
+
+<h2 id="emails">Emails</h2>
+
+<p>Companies that run outreach — a website agency, a lead-gen crew, any team that emails prospects — send and receive real email through their agents’ mailboxes. The <strong>Emails</strong> tab streams those threads onto the cockpit so the operator can see what the crew sent and what came back, without opening a separate mail client.</p>
+
+<p>The tab only appears for companies whose charter or recent work looks like outreach (agency, sales, leads, campaigns, cold email, and similar signals). It loads live when the tab is opened, so it never slows the main company list.</p>
+
+<h3 id="where-mail-comes-from">Where mail comes from</h3>
+
+<p>The Emails tab reads across every mail provider a company’s agents use and merges the results newest-first:</p>
+
+<ul>
+  <li><strong>AgentMail</strong> — hosted agent inboxes. Threads are read from the AgentMail thread API. Inboxes are matched to the company’s agents by the provisioning identifier HivemindOS stamps on each inbox, so a mailbox created on any machine in the fleet still shows up here.</li>
+  <li><strong>Cloudflare Agentic Inbox</strong> — self-hosted email-agent Workers. Received messages are read from the deployed Worker’s inbox store and filtered to the company’s mailbox addresses.</li>
+</ul>
+
+<p>Mailboxes themselves are created in Agent Settings with <strong>Create mailbox</strong>, not here — see <a href="agent-provider-integrations.html">Agent Provider Integrations</a> for provisioning and provider setup. The Emails tab is the read surface for what those mailboxes exchange. (ClawBank, despite offering a comms directory, is not a mail provider: it exposes no readable inbox.)</p>
+
+<p>Each thread card shows who is on the other end, the subject and a preview, the mailbox and provider it came through, whether it was sent or received, and how recently it was active.</p>
+
+<h3 id="two-views">Two views</h3>
+
+<p>A toggle switches between:</p>
+
+<ul>
+  <li><strong>All mail</strong> — the merged thread list across every provider (the default). Click a mailbox in the roster to focus this list on just that mailbox’s threads; a chip clears the filter.</li>
+  <li><strong>Mailboxes</strong> — a roster of the crew’s mailboxes, one card per agent mailbox, with its address, provider, and thread count.</li>
+</ul>
+
+<p>The Mailboxes view is also where problems surface. A mailbox that is blocked, or a Cloudflare inbox that was provisioned but never deployed, appears as an <strong>attention card</strong> with the reason; a company agent that has no mailbox yet appears as a “no mailbox” card. The toggle badge turns red with a count when anything needs attention.</p>
+
+<h3 id="honest-empty-states">Honest empty states</h3>
+
+<p>The tab never pretends. If no mail provider is connected, it says so and points at setup. If providers are connected but the crew has no mailboxes, or has mailboxes but no threads yet, it says exactly that. Nothing is fabricated — an empty tab always explains why it is empty.</p>
+
+<h2 id="learning-loops">Learning Loops</h2>
+
+<p>Zero Human Companies use the generic HivemindOS loop contract as their private learning layer. With the HivemindOS crew engine, each launched Work Board task can carry an optimizer loop with success criteria, evidence requirements, eval gates, experiment candidates, and frontier metadata. The loop contract is also shared by chat-started work, Scheduler, Queen Bee flows, and Evo-compatible optimization.</p>
+
+<p>The attached skills on those native Company tasks participate in HivemindOS’s app-wide skill autoresearch mechanism. Three failed or blocked executions across distinct tasks can create one Brain Review proposal with Company provenance. Nothing changes automatically: applying the proposal launches a measured Work Board optimizer task, and any winning skill diff still needs human approval before installation.</p>
+
+<p>AEON mode records the company handoff in Runs but leaves detailed execution and outputs in the selected workspace. AEON output does not automatically become a completed Work Board task or company learning receipt; bring reviewed outputs into the normal company workflow when they should contribute to deliverables or durable learning.</p>
+
+<p>Every company task requires outcome evidence before completion. Product, design, content, and customer-facing work also requires a separate eligible agent to review the result. If the evidence or reviewer is unavailable, the task stops for review instead of quietly teaching the company that weak work succeeded.</p>
+
+<p>Each dispatched company task includes a written done contract: planner assertions, evaluator pushback, agreed done criteria, and expected artifacts. Product, design, content, and customer-facing work also carries a default evaluator rubric for design, originality, craft, and functionality, so subjective quality can be reviewed consistently across models and workers. The reviewer records evidence for each score and must be a different agent from the worker that produced the result.</p>
+
+<p>An AEON dispatch is handled differently because HivemindOS does not own the detailed external run. The accepted handoff is recorded as unobserved, not passed. Bring the resulting output back into the company workflow when it should count toward deliverables, learning, or routing history.</p>
+
+<p>When a company is linked to a code project, implementation-shaped work asks for an isolated worktree workspace. Research, planning, and other non-code work stays in the normal scratch workspace.</p>
+
+<p>The same project and governance envelope applies when a task is submitted directly to Queen Bee with a <code class="language-plaintext highlighter-rouge">company:&lt;id&gt;:</code> source. HivemindOS resolves the live company before routing, restricts the task to that company’s crew, stamps the exact project id, includes the current directives/products/approval policies, and links the registered checkout when the selected machine owns it. The exact project id wins over fuzzy project-name matching, so short names embedded inside unrelated words cannot divert a task to the wrong checkout.</p>
+
+<p>The built-in Local Website Agency template adds a stricter production contract: choose and record a suitable template from the linked website-template project; customize a complete site around verified business facts; browser-check the public artifact on desktop and mobile; create a walkthrough from that exact rendered site; include the approved reusable founder-introduction clip; and order the prepared outbound packet as website, video, then purchase-or-book link. Missing founder footage is surfaced as <code class="language-plaintext highlighter-rouge">FOUNDER_INTRO_VIDEO</code> rather than silently omitted, while website publishing and customer email remain approval-gated.</p>
+
+<p>That creates a model-independent company veteran layer made of:</p>
+
+<ul>
+  <li>outcomes</li>
+  <li>deliverables</li>
+  <li>workflow assets</li>
+  <li>receipts</li>
+  <li>eval gates</li>
+  <li>experiment lineage</li>
+  <li>frontier candidates</li>
+  <li>avoided failure modes</li>
+  <li>reviewed memory candidates</li>
+</ul>
+
+<p>Future workers can change, but the company keeps its charter, receipts, workflows, evals, and reviewed memory.</p>
+
+<p>See <a href="agent-evaluations.html">Agent Evaluations</a> for the shared verdicts, trust rules, managed runtime coverage, and benchmark.</p>
+
+<h2 id="capability-capital">Capability Capital</h2>
+
+<p>Capability capital is the cockpit’s summary of what the company has learned and produced. It is not a currency balance, and its underlying metric calculation is shared with generic loop reporting rather than owned by the company UI.</p>
+
+<p>It can include:</p>
+
+<ul>
+  <li>learning assets from completed work, durable outputs, committed experiments, and anti-patterns</li>
+  <li>workflow assets from reusable task skills and committed loop branches</li>
+  <li>private eval gates and pass rate</li>
+  <li>Evo-style frontier candidates and experiment count</li>
+  <li>distillation backlog for completed work that should be reviewed before it becomes Shared Brain Memory</li>
+  <li>model-independence score from runtime diversity, eval structure, and frontier metadata</li>
+</ul>
+
+<p>This gives the operator a way to see whether the company is building reusable capability instead of only spending tokens.</p>
+
+<h2 id="budgets-and-approvals">Budgets And Approvals</h2>
+
+<p>Zero Human Companies can coordinate agent wallets, approval queues, spend caps, and kill switches. These controls govern native company work. External AEON provider usage follows the selected workspace’s own credentials, permissions, and provider limits; a company Work Board budget does not automatically cap it. The local app may cache and display company controls, but it must not be the authority for official commercial value.</p>
+
+<h3 id="api-and-integration-limits">API And Integration Limits</h3>
+
+<p>Every company has an always-available <strong>Limits</strong> tab. It lets the operator set daily or monthly request and estimated-spend limits for a connected provider, either across the provider or for one specific operation. Provider-wide and operation-specific limits stack: a call proceeds only when every applicable guardrail allows it. Removing a guardrail does not erase its historical usage.</p>
+
+<p>Company-aware HivemindOS tools reserve expected requests and cost before execution, using an idempotency key so a retry is not charged twice. A frozen company is denied before the call. Integrations with their own meter can report observed requests and cost into the same usage ledger; actual observed cost is also recorded once in the company’s Treasury spend rollup. The cockpit distinguishes observed history from a preflight reservation. External tools and AEON workspaces are not automatically intercepted, so they must use the company preflight action or enforce equivalent limits in their own runtime.</p>
+
+<p>The Limits dashboard shows today’s and this month’s request and spend totals, a 30-day requests-or-spend chart, provider saturation bars, recent activity, and the number of active guardrails. These are local/BYOK operational controls and estimates, not official managed-service entitlements or a substitute for the provider’s billing records.</p>
+
+<p>For Google Cloud, the same tab can discover accessible projects, enabled APIs, quota metrics, and billing accounts. The operator chooses the daily quota caps, monthly billing ceiling, optional per-call estimate, and free monthly allowance, and can manage the same API independently in more than one project. Applying a limit creates or updates the existing provider quota and billing budget instead of stacking duplicate provider resources. Raising an existing limit requires an explicit second confirmation. Daily quotas are hard provider-enforced caps; Google Cloud billing budgets are alerts and forecasts, not hard monthly shutdowns. Project and billing discovery also require the corresponding Google Cloud APIs and OAuth permissions to be enabled.</p>
+
+<p>For official paid access, managed credits, marketplace revenue, hosted-agent access, or enterprise quotas:</p>
+
+<ul>
+  <li>settlement must be verified server-side or through a verifiable payment rail</li>
+  <li>entitlements must come from a trusted backend or signed receipt</li>
+  <li>local state can display access, but cannot create official access by itself</li>
+  <li>provider keys, treasury keys, official pay-to routing, and pricing authority must stay out of the downloadable app</li>
+</ul>
+
+<p>Self-hosted operators may configure their own wallets, pay-to addresses, providers, quotas, and terms. Those flows should be presented as self-hosted, not as official HivemindOS-managed revenue or entitlement.</p>
+
+<h2 id="revenue-recording-and-platform-fees">Revenue Recording And Platform Fees</h2>
+
+<p>Zero Human Companies can record external revenue events without giving HivemindOS a share of revenue earned elsewhere. <strong>Revenue earned outside HivemindOS is not charged.</strong></p>
+
+<p>The Treasury tab shows recorded revenue and any hosted-policy fee attached to a HivemindOS-sourced or HivemindOS-billed transaction. Operators can record an external event by amount and source without creating a fee.</p>
+
+<p>A future marketplace-sourced or managed commercial transaction may carry a disclosed server-authoritative fee when HivemindOS supplies the buyer, billing, hosting, execution, or protection. The downloaded app and a manually recorded event cannot invent that obligation.</p>
+
+<h2 id="automated-revenue-rail-x402-offers-and-stripe">Automated Revenue Rail (x402 Offers And Stripe)</h2>
+
+<p>Beyond manual recording, revenue can land in a company’s ledger automatically from two sources:</p>
+
+<ul>
+  <li><strong>x402 product offers.</strong> A product in the company catalog can be published as a public x402 seller endpoint at <code class="language-plaintext highlighter-rouge">POST /api/paid-agents/offers/&lt;slug&gt;</code> (publish/unpublish through the company products API). Payment is the auth, the 402 challenge always serves the catalog price from the server, and each settled purchase writes a seller receipt attributed to the company. Settled receipts bridge into the company revenue ledger with the receipt id as the idempotency key, so replays and re-syncs never double-count. The local seller gateway follows the same explicit <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PAID_AGENT_SELLER_MODE=self-hosted</code> opt-in and payment configuration as the paid-agent gateway.</li>
+  <li><strong>Stripe checkout webhook.</strong> Point a Stripe webhook at <code class="language-plaintext highlighter-rouge">POST /api/company-revenue/stripe-webhook</code> and map a payment link or checkout session to a company with <code class="language-plaintext highlighter-rouge">metadata.companyId</code> (or <code class="language-plaintext highlighter-rouge">client_reference_id</code>). The route verifies the Stripe signature, honors only the settled <code class="language-plaintext highlighter-rouge">amount_total</code>, and dedupes on the checkout session id. Set <code class="language-plaintext highlighter-rouge">HIVEMINDOS_COMPANY_STRIPE_WEBHOOK_SECRET</code> (or share <code class="language-plaintext highlighter-rouge">STRIPE_WEBHOOK_SECRET</code>).</li>
+</ul>
+
+<p>Bridged revenue moves the company’s apex-goal metric automatically for currency goals, so autonomy progress tracking runs off real recorded money. The Treasury tab’s <strong>revenue rail</strong> line shows whether each source is connected and why not when it isn’t.</p>
+
+<h2 id="related-docs">Related Docs</h2>
+
+<ul>
+  <li><a href="work-and-scheduler.html">Work Board And Scheduler</a> covers task storage, dispatch, loop contracts, eval gates, deliverables, scheduler work, and work history.</li>
+  <li><a href="../runtimes/aeon/zero-human-companies.html">Use AEON With Zero Human Companies</a> covers choosing, launching, monitoring, and troubleshooting the optional AEON engine.</li>
+  <li><a href="../runtimes/aeon/v01-control-plane.html">AEON v0.1 Control Plane</a> covers linking and operating a current AEON workspace.</li>
+  <li><a href="evo-optimization.html">Evo Optimization Runtime</a> covers benchmark-driven optimizer loops and frontier-style experiments.</li>
+  <li><a href="wallets-honey-and-x402.html">Wallets, Tokens, Honey, HIVE, And x402</a> covers agent wallets, payment rails, Hivemind Cloud credits, and x402 paid requests.</li>
+  <li><a href="agent-provider-integrations.html">Agent Provider Integrations</a> covers agent mailbox provisioning (the <strong>Create mailbox</strong> flow, AgentMail and Cloudflare Agentic Inbox backends, and Agentic Inbox setup) that the Emails tab reads from.</li>
+  <li><a href="../../for-investors/">Monetization</a> covers the free-vs-paid product boundary for managed services.</li>
+</ul>
+
+        <nav class="pageNav" aria-label="Previous and next pages" hidden>
+          <a class="pageNavCard pageNavPrev" data-page-prev href="#">
+            <span>Previous</span>
+            <strong></strong>
+          </a>
+          <a class="pageNavCard pageNavNext" data-page-next href="#">
+            <span>Next</span>
+            <strong></strong>
+          </a>
+        </nav>
+      </article>
+    </main>
+
+    <aside class="pageOutline" aria-label="On this page" hidden>
+      <p>On this page</p>
+      <nav data-page-outline></nav>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/features/zero-human-companies.md">Improve this page ↗</a>
+    </aside>
+  </div>
+
+  <footer class="siteFooter">
+    <div>
+      <strong>HivemindOS</strong>
+      <span>Local-first infrastructure for agent teams.</span>
+    </div>
+    <div class="footerLinks">
+      <a href="/hivemindos/for-users/">User docs</a>
+      <a href="/hivemindos/for-users/architecture/">Architecture</a>
+      <a href="https://github.com/LiamVisionary/hivemindos">GitHub</a>
+    </div>
+  </footer>
+
+  <dialog class="imageViewer" aria-label="Expanded media viewer" data-image-viewer>
+    <header class="imageViewerBar">
+      <div class="imageViewerHeading">
+        <strong data-viewer-title>Expanded image</strong>
+        <span>Scroll to pan · Esc to close</span>
+      </div>
+      <div class="imageViewerControls" aria-label="Image zoom controls">
+        <button type="button" data-viewer-fit>Fit</button>
+        <div class="imageViewerZoomGroup">
+          <button type="button" aria-label="Zoom out" data-viewer-zoom-out>−</button>
+          <output aria-live="polite" data-viewer-zoom>100%</output>
+          <button type="button" aria-label="Zoom in" data-viewer-zoom-in>+</button>
+        </div>
+        <button class="imageViewerClose" type="button" data-viewer-close>Close <span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="imageViewerViewport" tabindex="0" data-viewer-viewport>
+      <div class="imageViewerCanvas" data-viewer-canvas></div>
+    </div>
+    <p class="imageViewerCaption" data-viewer-caption hidden></p>
+  </dialog>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const normalizePath = (href) => {
+      const url = new URL(href, window.location.href);
+      const pathname = url.pathname.replace(/index\.html$/, "");
+      return pathname.endsWith("/") ? pathname : pathname.replace(/\.html$/, "");
+    };
+
+    const currentPath = normalizePath(window.location.href);
+    const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
+    const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
+
+    if (currentIndex >= 0) {
+      navLinks[currentIndex].classList.add("isActive");
+      navLinks[currentIndex].setAttribute("aria-current", "page");
+      navLinks[currentIndex].closest("details")?.setAttribute("open", "");
+
+      const pageNav = document.querySelector(".pageNav");
+      const previous = navLinks[currentIndex - 1];
+      const next = navLinks[currentIndex + 1];
+      const wireCard = (card, link) => {
+        if (!card || !link) {
+          card?.remove();
+          return;
+        }
+        card.href = link.href;
+        card.querySelector("strong").textContent = link.textContent.trim();
+      };
+
+      wireCard(document.querySelector("[data-page-prev]"), previous);
+      wireCard(document.querySelector("[data-page-next]"), next);
+      if (pageNav && (previous || next)) pageNav.hidden = false;
+    }
+
+    const navSearch = document.querySelector("#navSearch");
+    const searchEmpty = document.querySelector(".searchEmpty");
+    navSearch?.addEventListener("input", () => {
+      const query = navSearch.value.trim().toLowerCase();
+      let visibleSections = 0;
+      document.querySelectorAll(".navSection").forEach((section) => {
+        let sectionHasMatch = false;
+        section.querySelectorAll(":scope > .navLink").forEach((link) => {
+          const matches = !query || link.textContent.toLowerCase().includes(query);
+          link.hidden = !matches;
+          sectionHasMatch ||= matches;
+        });
+        section.querySelectorAll(".navGroup").forEach((group) => {
+          const summary = group.querySelector("summary")?.textContent.toLowerCase() || "";
+          const groupMatches = !query || summary.includes(query);
+          let childMatches = false;
+          group.querySelectorAll(".navLink").forEach((link) => {
+            const matches = groupMatches || link.textContent.toLowerCase().includes(query);
+            link.hidden = !matches;
+            childMatches ||= matches;
+          });
+          group.hidden = !(groupMatches || childMatches);
+          sectionHasMatch ||= groupMatches || childMatches;
+          if (query && childMatches) group.setAttribute("open", "");
+        });
+        section.hidden = !sectionHasMatch;
+        if (sectionHasMatch) visibleSections += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visibleSections > 0;
+    });
+
+    window.addEventListener("keydown", (event) => {
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.matches("input, textarea, select") || activeElement?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        navSearch?.focus();
+      }
+      if (event.key === "Escape") closeNavigation();
+    });
+
+    const navToggle = document.querySelector("[data-nav-toggle]");
+    const closeNavigation = () => {
+      document.body.classList.remove("navOpen");
+      navToggle?.setAttribute("aria-expanded", "false");
+    };
+    navToggle?.addEventListener("click", () => {
+      const isOpen = document.body.classList.toggle("navOpen");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelector("[data-nav-close]")?.addEventListener("click", closeNavigation);
+    document.querySelector("[data-nav-backdrop]")?.addEventListener("click", closeNavigation);
+    document.querySelectorAll(".sideNav a").forEach((link) => link.addEventListener("click", closeNavigation));
+
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fall through for embedded or permission-restricted browsers.
+        }
+      }
+      const copyField = document.createElement("textarea");
+      copyField.value = text;
+      copyField.setAttribute("readonly", "");
+      copyField.className = "clipboardCopyField";
+      document.body.appendChild(copyField);
+      copyField.select();
+      const copied = document.execCommand("copy");
+      copyField.remove();
+      if (!copied) throw new Error("Browser clipboard access is unavailable");
+    };
+
+    document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const original = button.innerHTML;
+      try {
+        await copyTextToClipboard(window.location.href);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+      window.setTimeout(() => { button.innerHTML = original; }, 1400);
+    });
+
+    document.querySelector("[data-copy-ai]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const label = button.querySelector("[data-copy-ai-label]");
+      const originalLabel = label.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(button.dataset.copyAiUrl, { headers: { Accept: "text/plain" } });
+        if (!response.ok) throw new Error(`Investor context request failed with ${response.status}`);
+        const investorContext = await response.text();
+        if (!investorContext.includes("HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE") || !investorContext.includes("=== BEGIN DOCUMENT ===")) {
+          throw new Error("Investor context bundle is malformed");
+        }
+        await copyTextToClipboard(investorContext);
+        label.textContent = "Investor docs copied";
+      } catch {
+        label.textContent = "Copy failed";
+      } finally {
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        window.setTimeout(() => { label.textContent = originalLabel; }, 1800);
+      }
+    });
+
+    const outline = document.querySelector(".pageOutline");
+    const outlineNav = document.querySelector("[data-page-outline]");
+    const headings = Array.from(document.querySelectorAll(".docContent h2"));
+    const usedIds = new Set();
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const baseId = heading.textContent.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
+        let id = baseId;
+        let suffix = 2;
+        while (usedIds.has(id) || document.getElementById(id)) id = `${baseId}-${suffix++}`;
+        heading.id = id;
+      }
+      usedIds.add(heading.id);
+      const link = document.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent;
+      outlineNav?.appendChild(link);
+    });
+    if (outline && headings.length > 1) outline.hidden = false;
+
+    const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.id = `mermaid-${index}`;
+      diagram.textContent = code.textContent;
+      const wrapper = code.closest(".highlighter-rouge") || code.closest("pre") || code;
+      wrapper.replaceWith(diagram);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        background: "#14161c",
+        primaryColor: "#211d16",
+        primaryTextColor: "#f3f0e9",
+        primaryBorderColor: "#e7b45c",
+        lineColor: "#a7a39a",
+        secondaryColor: "#15221f",
+        tertiaryColor: "#1b1e25",
+        fontFamily: "Geist, system-ui, sans-serif"
+      }
+    });
+
+    for (const node of document.querySelectorAll(".mermaid")) {
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch (error) {
+        node.classList.add("mermaidError");
+        node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
+      }
+    }
+
+    const imageViewer = document.querySelector("[data-image-viewer]");
+    const viewerCanvas = document.querySelector("[data-viewer-canvas]");
+    const viewerViewport = document.querySelector("[data-viewer-viewport]");
+    const viewerTitle = document.querySelector("[data-viewer-title]");
+    const viewerCaption = document.querySelector("[data-viewer-caption]");
+    const viewerZoomLabel = document.querySelector("[data-viewer-zoom]");
+    const viewerZoomOut = document.querySelector("[data-viewer-zoom-out]");
+    const viewerZoomIn = document.querySelector("[data-viewer-zoom-in]");
+    let viewerScale = 1;
+    let viewerBaseWidth = 1;
+    let viewerBaseHeight = 1;
+    let viewerMedia = null;
+    let viewerSource = null;
+    let restoreViewerMedia = null;
+
+    const setViewerScale = (nextScale) => {
+      viewerScale = Math.min(4, Math.max(0.25, nextScale));
+      if (viewerMedia) viewerMedia.style.width = `${Math.round(viewerBaseWidth * viewerScale)}px`;
+      if (viewerZoomLabel) viewerZoomLabel.textContent = `${Math.round(viewerScale * 100)}%`;
+      if (viewerZoomOut) viewerZoomOut.disabled = viewerScale <= 0.25;
+      if (viewerZoomIn) viewerZoomIn.disabled = viewerScale >= 4;
+    };
+
+    const fitViewerMedia = () => {
+      if (!viewerViewport) return;
+      const availableWidth = Math.max(160, viewerViewport.clientWidth - 64);
+      const availableHeight = Math.max(120, viewerViewport.clientHeight - 64);
+      setViewerScale(Math.min(1, availableWidth / viewerBaseWidth, availableHeight / viewerBaseHeight));
+    };
+
+    const mediaSectionTitle = (source) => {
+      const headings = Array.from(document.querySelectorAll(".docContent h2, .docContent h3"));
+      const preceding = headings.filter((heading) => heading.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.at(-1)?.textContent.trim() || "Expanded image";
+    };
+
+    const openMediaViewer = (source) => {
+      if (!imageViewer || !viewerCanvas || !viewerViewport) return;
+      restoreViewerMedia?.();
+      viewerCanvas.replaceChildren();
+      viewerSource = source;
+      viewerTitle.textContent = mediaSectionTitle(source);
+      const figureCaption = source.closest("figure")?.querySelector("figcaption")?.textContent.trim();
+      const imageAlt = source instanceof HTMLImageElement ? source.alt.trim() : "";
+      const caption = figureCaption || imageAlt;
+      viewerCaption.textContent = caption;
+      viewerCaption.hidden = !caption;
+
+      if (source instanceof HTMLImageElement) {
+        viewerMedia = source.cloneNode();
+        viewerMedia.removeAttribute("width");
+        viewerMedia.removeAttribute("height");
+        viewerMedia.className = "imageViewerMedia";
+        viewerMedia.alt = source.alt;
+        viewerBaseWidth = source.naturalWidth || source.getBoundingClientRect().width;
+        viewerBaseHeight = source.naturalHeight || source.getBoundingClientRect().height;
+        restoreViewerMedia = null;
+      } else {
+        const svg = source.querySelector("svg");
+        if (!svg) return;
+        const placeholder = document.createComment("diagram viewer placeholder");
+        const originalStyle = svg.getAttribute("style");
+        const originalClass = svg.getAttribute("class");
+        const renderedBounds = svg.getBoundingClientRect();
+        const viewBox = svg.viewBox?.baseVal;
+        viewerBaseWidth = viewBox?.width || renderedBounds.width;
+        viewerBaseHeight = viewBox?.height || renderedBounds.height;
+        svg.replaceWith(placeholder);
+        viewerMedia = svg;
+        viewerMedia.setAttribute("class", `${originalClass || ""} imageViewerMedia`.trim());
+        restoreViewerMedia = () => {
+          if (originalStyle === null) svg.removeAttribute("style");
+          else svg.setAttribute("style", originalStyle);
+          if (originalClass === null) svg.removeAttribute("class");
+          else svg.setAttribute("class", originalClass);
+          placeholder.replaceWith(svg);
+        };
+      }
+
+      viewerCanvas.appendChild(viewerMedia);
+      setViewerScale(1);
+      document.body.classList.add("mediaViewerOpen");
+      if (typeof imageViewer.showModal === "function") imageViewer.showModal();
+      else imageViewer.setAttribute("open", "");
+      requestAnimationFrame(() => {
+        viewerViewport.scrollLeft = Math.max(0, (viewerCanvas.scrollWidth - viewerViewport.clientWidth) / 2);
+        viewerViewport.scrollTop = Math.max(0, (viewerCanvas.scrollHeight - viewerViewport.clientHeight) / 2);
+        viewerViewport.focus({ preventScroll: true });
+      });
+    };
+
+    const registerZoomableMedia = (source, label) => {
+      if (source.closest("a")) return;
+      source.classList.add("zoomableMedia");
+      source.tabIndex = 0;
+      source.setAttribute("role", "button");
+      source.setAttribute("aria-label", label);
+      source.addEventListener("click", () => openMediaViewer(source));
+      source.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openMediaViewer(source);
+      });
+    };
+
+    document.querySelectorAll(".docContent img").forEach((image) => {
+      registerZoomableMedia(image, `Open image full screen${image.alt ? `: ${image.alt}` : ""}`);
+    });
+    document.querySelectorAll(".docContent .mermaid:not(.mermaidError)").forEach((diagram) => {
+      registerZoomableMedia(diagram, `Open ${mediaSectionTitle(diagram)} diagram full screen`);
+    });
+
+    viewerZoomOut?.addEventListener("click", () => setViewerScale(viewerScale - 0.25));
+    viewerZoomIn?.addEventListener("click", () => setViewerScale(viewerScale + 0.25));
+    document.querySelector("[data-viewer-fit]")?.addEventListener("click", fitViewerMedia);
+    document.querySelector("[data-viewer-close]")?.addEventListener("click", () => imageViewer?.close());
+    viewerViewport?.addEventListener("click", (event) => {
+      if (event.target === viewerViewport || event.target === viewerCanvas) imageViewer?.close();
+    });
+    imageViewer?.addEventListener("close", () => {
+      restoreViewerMedia?.();
+      restoreViewerMedia = null;
+      viewerCanvas?.replaceChildren();
+      document.body.classList.remove("mediaViewerOpen");
+      viewerSource?.focus({ preventScroll: true });
+      viewerSource = null;
+      viewerMedia = null;
+    });
+  </script>
+</body>
+</html>

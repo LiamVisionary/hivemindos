@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HivemindOS Docs Preview</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --ink: #172033;
+      --muted: #64748b;
+      --line: #dbe3ef;
+      --accent: #0b8bdc;
+      --accent-soft: #e6f4fd;
+      --code: #111827;
+      --code-bg: #f1f5f9;
+      --shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .previewShell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      border-right: 1px solid var(--line);
+      background: #ffffff;
+      padding: 24px 20px;
+    }
+
+    .brand {
+      display: grid;
+      gap: 4px;
+      margin-bottom: 22px;
+    }
+
+    .brand strong {
+      font-size: 1.05rem;
+    }
+
+    .brand span {
+      color: var(--muted);
+      font-size: 0.86rem;
+    }
+
+    .navGroup {
+      margin: 18px 0;
+    }
+
+    .navGroup h2 {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .navList {
+      display: grid;
+      gap: 4px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .navButton {
+      width: 100%;
+      display: block;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--ink);
+      cursor: pointer;
+      font: inherit;
+      padding: 8px 10px;
+      text-align: left;
+    }
+
+    .navButton:hover,
+    .navButton.active {
+      background: var(--accent-soft);
+      color: #075c96;
+      text-decoration: none;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 28px;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 auto 18px;
+      max-width: 980px;
+    }
+
+    .toolbarText {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .toolbarActions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .toolbarActions button,
+    .toolbarActions a {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--ink);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      padding: 0 12px;
+      font: inherit;
+      font-size: 0.9rem;
+    }
+
+    .toolbarActions button.active {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: #075c96;
+    }
+
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .content {
+      padding: 34px;
+    }
+
+    .content h1,
+    .content h2,
+    .content h3 {
+      line-height: 1.2;
+      margin-top: 1.45em;
+      margin-bottom: 0.55em;
+    }
+
+    .content h1 {
+      margin-top: 0;
+      padding-bottom: 0.35em;
+      border-bottom: 1px solid var(--line);
+      font-size: 2rem;
+    }
+
+    .content h2 {
+      font-size: 1.45rem;
+    }
+
+    .content h3 {
+      font-size: 1.12rem;
+    }
+
+    .content p,
+    .content ul,
+    .content ol,
+    .content table,
+    .content pre,
+    .content blockquote {
+      margin-top: 0;
+      margin-bottom: 1rem;
+    }
+
+    .content code {
+      border-radius: 5px;
+      background: var(--code-bg);
+      color: var(--code);
+      padding: 0.12em 0.32em;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.92em;
+    }
+
+    .content pre {
+      overflow: auto;
+      border-radius: 9px;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 16px;
+    }
+
+    .content pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+    }
+
+    .content table {
+      width: 100%;
+      border-collapse: collapse;
+      display: block;
+      overflow-x: auto;
+    }
+
+    .content th,
+    .content td {
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .content th {
+      background: #f8fafc;
+      font-weight: 700;
+    }
+
+    .content blockquote {
+      margin-left: 0;
+      border-left: 4px solid var(--line);
+      color: var(--muted);
+      padding-left: 16px;
+    }
+
+    .renderedFrame {
+      width: 100%;
+      min-height: calc(100vh - 120px);
+      border: 0;
+      background: #fff;
+    }
+
+    .notice {
+      border: 1px solid #facc15;
+      border-radius: 8px;
+      background: #fefce8;
+      color: #713f12;
+      padding: 12px 14px;
+    }
+
+    .noticeAction {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      margin-top: 10px;
+      border-radius: 8px;
+      background: #0b8bdc;
+      color: #ffffff;
+      padding: 0 12px;
+      font-weight: 700;
+    }
+
+    @media (max-width: 860px) {
+      .previewShell {
+        display: block;
+      }
+
+      .sidebar {
+        position: static;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .main {
+        padding: 18px;
+      }
+
+      .content {
+        padding: 24px 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="previewShell">
+    <aside class="sidebar">
+      <div class="brand">
+        <strong>HivemindOS Docs Preview</strong>
+        <span>GitHub Pages-style docs navigator</span>
+      </div>
+      <nav id="nav" aria-label="Docs preview navigation"></nav>
+    </aside>
+    <main class="main">
+      <div class="toolbar">
+        <div class="toolbarText" id="currentPath">Loading docs preview...</div>
+        <div class="toolbarActions">
+          <button type="button" id="sourceMode" class="active">Local Markdown</button>
+          <button type="button" id="pagesMode">Pages URL</button>
+          <a id="openRaw" href="index.md">Open source</a>
+        </div>
+      </div>
+      <section class="page" id="page">
+        <article class="content" id="content"></article>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const docs = [
+      {
+        group: "Start Here",
+        pages: [
+          ["Home", "index.md"],
+          ["Architecture", "architecture/index.md"],
+          ["Feature Guide", "features/index.md"],
+          ["API And Storage", "architecture/api-and-storage.md"],
+        ],
+      },
+      {
+        group: "Architecture",
+        pages: [
+          ["Syncing And Tailscale", "architecture/syncing-and-tailscale.md"],
+          ["Fleet Telemetry", "architecture/tailscale-fleet-telemetry.md"],
+        ],
+      },
+      {
+        group: "Features",
+        pages: [
+          ["Fleet", "features/fleet.md"],
+          ["Runtimes And Chat", "features/runtimes-and-chat.md"],
+          ["Work And Scheduler", "features/work-and-scheduler.md"],
+          ["Brain, Vault, And Skills", "features/brain-vault-and-skills.md"],
+          ["Env, Files, Notifications, Maintenance", "features/env-files-notifications-maintenance.md"],
+          ["MiroShark And Runtime Gateways", "features/miroshark-and-openclaw.md"],
+          ["Wallets, Honey, And x402", "features/wallets-honey-and-x402.md"],
+          ["Integrations And Work History", "features/integrations-and-work-history.md"],
+        ],
+      },
+      {
+        group: "Integrations",
+        pages: [
+          ["Integrations", "integrations/index.md"],
+          ["MiroShark", "integrations/miroshark/index.md"],
+          ["MiroShark Companion", "integrations/miroshark/companion.md"],
+          ["MiroShark TODO", "integrations/miroshark/todo.md"],
+        ],
+      },
+      {
+        group: "Monetization",
+        pages: [
+          ["Monetization", "monetization/index.md"],
+          ["Ecosystem Plan", "monetization/ecosystem-plan.md"],
+          ["Honey, HIVE, And Treasury", "monetization/honey-hive-treasury.md"],
+          ["HIVE Staking And Community Tiers", "monetization/hive-staking-and-community-tiers.md"],
+          ["Paid Features", "monetization/paid-features/index.md"],
+          ["Cloud Agent Calls", "monetization/paid-features/hivemind-cloud-agent-calls.md"],
+        ],
+      },
+      {
+        group: "Runtimes And Product",
+        pages: [
+          ["Runtimes", "runtimes/index.md"],
+          ["Hermes Local Setup", "runtimes/hermes/local-setup.md"],
+          ["Product And UI", "product/index.md"],
+          ["Design Philosophy", "product/design-philosophy.md"],
+          ["UI Rules", "product/ui-rules.md"],
+        ],
+      },
+    ];
+
+    const nav = document.getElementById("nav");
+    const content = document.getElementById("content");
+    const page = document.getElementById("page");
+    const currentPath = document.getElementById("currentPath");
+    const openRaw = document.getElementById("openRaw");
+    const sourceMode = document.getElementById("sourceMode");
+    const pagesMode = document.getElementById("pagesMode");
+    let mode = location.hostname.includes("github.io") ? "pages" : "source";
+
+    function pageToHtmlPath(path) {
+      if (path.endsWith("/index.md")) return path.replace(/index\.md$/, "");
+      return path.replace(/\.md$/, ".html");
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;",
+      })[char]);
+    }
+
+    function inlineMarkdown(value) {
+      return escapeHtml(value)
+        .replace(/`([^`]+)`/g, "<code>$1</code>")
+        .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+        .replace(/\*([^*]+)\*/g, "<em>$1</em>")
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, label, href) => {
+          const safeHref = escapeHtml(href);
+          return `<a href="${safeHref}" data-doc-link="${safeHref}">${label}</a>`;
+        });
+    }
+
+    function renderMarkdown(markdown) {
+      const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+      const html = [];
+      let paragraph = [];
+      let list = [];
+      let table = [];
+      let inCode = false;
+      let code = [];
+
+      function flushParagraph() {
+        if (!paragraph.length) return;
+        html.push(`<p>${inlineMarkdown(paragraph.join(" "))}</p>`);
+        paragraph = [];
+      }
+
+      function flushList() {
+        if (!list.length) return;
+        html.push(`<ul>${list.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`);
+        list = [];
+      }
+
+      function flushTable() {
+        if (!table.length) return;
+        const rows = table.filter((row) => !/^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(row));
+        if (!rows.length) {
+          table = [];
+          return;
+        }
+        const renderedRows = rows.map((row, index) => {
+          const cells = row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => inlineMarkdown(cell.trim()));
+          const tag = index === 0 ? "th" : "td";
+          return `<tr>${cells.map((cell) => `<${tag}>${cell}</${tag}>`).join("")}</tr>`;
+        }).join("");
+        html.push(`<table>${renderedRows}</table>`);
+        table = [];
+      }
+
+      for (const line of lines) {
+        if (line.startsWith("```")) {
+          flushParagraph();
+          flushList();
+          flushTable();
+          if (inCode) {
+            html.push(`<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`);
+            code = [];
+            inCode = false;
+          } else {
+            inCode = true;
+          }
+          continue;
+        }
+
+        if (inCode) {
+          code.push(line);
+          continue;
+        }
+
+        if (!line.trim()) {
+          flushParagraph();
+          flushList();
+          flushTable();
+          continue;
+        }
+
+        if (/^\s*\|/.test(line) && line.includes("|")) {
+          flushParagraph();
+          flushList();
+          table.push(line);
+          continue;
+        }
+
+        const heading = line.match(/^(#{1,4})\s+(.+)$/);
+        if (heading) {
+          flushParagraph();
+          flushList();
+          flushTable();
+          const level = heading[1].length;
+          html.push(`<h${level}>${inlineMarkdown(heading[2])}</h${level}>`);
+          continue;
+        }
+
+        const bullet = line.match(/^\s*[-*]\s+(.+)$/);
+        if (bullet) {
+          flushParagraph();
+          flushTable();
+          list.push(bullet[1]);
+          continue;
+        }
+
+        if (line.startsWith(">")) {
+          flushParagraph();
+          flushList();
+          flushTable();
+          html.push(`<blockquote>${inlineMarkdown(line.replace(/^>\s?/, ""))}</blockquote>`);
+          continue;
+        }
+
+        paragraph.push(line.trim());
+      }
+
+      flushParagraph();
+      flushList();
+      flushTable();
+      return html.join("\n");
+    }
+
+    function selectNav(path) {
+      document.querySelectorAll(".navButton").forEach((button) => {
+        button.classList.toggle("active", button.dataset.path === path);
+      });
+    }
+
+    async function loadSource(path) {
+      page.innerHTML = '<article class="content" id="content"></article>';
+      const target = document.getElementById("content");
+      if (location.protocol === "file:") {
+        const targetUrl = `http://127.0.0.1:5022/preview.html#${path}`;
+        target.innerHTML = `<div class="notice"><strong>Open the HTTP preview.</strong><br>This page was opened from <code>file://</code>, so the browser cannot load neighboring Markdown files. The docs preview is served at <code>${targetUrl}</code>.<br><a class="noticeAction" href="${targetUrl}">Open HTTP preview</a></div>`;
+        return;
+      }
+      try {
+        const response = await fetch(path, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const markdown = await response.text();
+        target.innerHTML = renderMarkdown(markdown);
+      } catch (error) {
+        target.innerHTML = `<div class="notice"><strong>Could not load Markdown source.</strong><br>Serve the docs folder over HTTP for local preview, for example <code>python3 -m http.server 5022 --bind 127.0.0.1 --directory docs</code>, then open <code>http://127.0.0.1:5022/preview.html</code>.</div>`;
+      }
+    }
+
+    function loadPages(path) {
+      const htmlPath = pageToHtmlPath(path);
+      page.innerHTML = `<iframe class="renderedFrame" title="GitHub Pages rendered preview" src="${htmlPath}"></iframe>`;
+    }
+
+    function load(path) {
+      const cleanPath = path || "index.md";
+      selectNav(cleanPath);
+      currentPath.textContent = mode === "pages"
+        ? `Pages URL preview: ${pageToHtmlPath(cleanPath)}`
+        : `Local Markdown preview: ${cleanPath}`;
+      openRaw.href = cleanPath;
+      sourceMode.classList.toggle("active", mode === "source");
+      pagesMode.classList.toggle("active", mode === "pages");
+      location.hash = cleanPath;
+      if (mode === "pages") {
+        loadPages(cleanPath);
+      } else {
+        loadSource(cleanPath);
+      }
+    }
+
+    function buildNav() {
+      nav.innerHTML = docs.map((group) => `
+        <section class="navGroup">
+          <h2>${group.group}</h2>
+          <ul class="navList">
+            ${group.pages.map(([label, path]) => `<li><button type="button" class="navButton" data-path="${path}">${label}</button></li>`).join("")}
+          </ul>
+        </section>
+      `).join("");
+      nav.addEventListener("click", (event) => {
+        const button = event.target.closest(".navButton");
+        if (!button) return;
+        load(button.dataset.path);
+      });
+    }
+
+    document.body.addEventListener("click", (event) => {
+      const link = event.target.closest("[data-doc-link]");
+      if (!link) return;
+      const href = link.getAttribute("data-doc-link");
+      if (!href || href.startsWith("http") || href.startsWith("#")) return;
+      const current = location.hash.slice(1) || "index.md";
+      const base = current.includes("/") ? current.split("/").slice(0, -1).join("/") : "";
+      const resolved = new URL(href.split("#")[0], `${location.origin}${location.pathname.replace(/preview\.html$/, "")}${base ? `${base}/` : ""}`).pathname
+        .replace(location.pathname.replace(/preview\.html$/, ""), "")
+        .replace(/^\//, "");
+      if (resolved.endsWith(".md")) {
+        event.preventDefault();
+        load(resolved);
+      }
+    });
+
+    sourceMode.addEventListener("click", () => {
+      mode = "source";
+      load(location.hash.slice(1) || "index.md");
+    });
+    pagesMode.addEventListener("click", () => {
+      mode = "pages";
+      load(location.hash.slice(1) || "index.md");
+    });
+
+    buildNav();
+    load(location.hash.slice(1) || "index.md");
+  </script>
+</body>
+</html>

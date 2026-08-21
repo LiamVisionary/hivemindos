@@ -1,0 +1,1650 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c0d11">
+  <title>Shared Brain Memory Benchmarks | HivemindOS Docs</title>
+  <meta name="description" content="Measured recall quality, latency, scale, full-vault search, contradiction control, pattern mining, and token reduction in HivemindOS.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/hivemindos/assets/img/app-icon-1024.png">
+  <link rel="apple-touch-icon" href="/hivemindos/assets/img/app-icon-1024.png">
+  <link rel="stylesheet" href="/hivemindos/assets/css/site.css">
+</head>
+<body>
+  <a class="skipLink" href="#content">Skip to content</a>
+
+  <header class="siteHeader">
+    <nav class="topNav" aria-label="Primary">
+      <button class="mobileNavButton" type="button" aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-navigation" data-nav-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brandMark" href="/hivemindos/" aria-label="HivemindOS Docs home">
+        <img class="brandIcon" src="/hivemindos/assets/img/app-icon-1024.png" alt="" width="40" height="40" aria-hidden="true">
+        <span class="brandName">HivemindOS</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+        <span class="brandEdition">Docs</span>
+      </a>
+      <div class="topLinks">
+        
+          <a href="/hivemindos/for-users/">For Users</a>
+        
+          <a href="/hivemindos/for-investors/">For Investors</a>
+        
+          <a href="/hivemindos/for-users/trading/">Trading</a>
+        
+          <a href="/hivemindos/for-users/architecture/">Architecture</a>
+        
+          <a href="/hivemindos/preview.html">Preview</a>
+        
+      </div>
+      <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
+        <span>GitHub</span>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 .2a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.49c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.08-1.88 3.75-3.66 3.95.29.25.54.74.54 1.5l-.01 2.22c0 .21.14.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <button class="navBackdrop" type="button" aria-label="Close documentation menu" data-nav-backdrop></button>
+
+  <div class="docFrame">
+    <aside id="docs-navigation" class="docSidebar" aria-label="Documentation navigation">
+      <div class="sidebarHeader">
+        <span class="sidebarKicker">Explore the docs</span>
+        <button class="sidebarClose" type="button" aria-label="Close documentation menu" data-nav-close>Close</button>
+      </div>
+      <label class="searchShell" for="navSearch">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter pages" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <p class="searchEmpty" role="status" hidden>No matching pages.</p>
+      <nav class="sideNav">
+        
+          <section class="navSection">
+            <h2>Start Here</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/">Overview</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/">For Users</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/">For Investors</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/diagrams.html">Diagrams And Maps</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/native-app.html">Native App</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/slash-commands.html">Slash Commands</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Product</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/product/">Product Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/product/design-philosophy.html">Design Philosophy</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/product/ui-rules.html">UI Rules</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Core Systems</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup" open>
+                  <summary>Features</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/sre-investigations.html">SRE Incident Investigations</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Local Document Reader</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hivemind-office.html">Hivemind Office Companion</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Local Web Research</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/calling.html">Calling</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/socials.html">Socials</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/x-command-bot.html">X Command Bot</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/work-and-scheduler.html">Work And Scheduler</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/loop-engineering.html">Loop Engineering</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/agent-evaluations.html">Agent Evaluations</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/harness-experiments.html">Harness Experiments</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/agent-challenges.html">Agent Challenges</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/zero-human-companies.html">Zero Human Companies</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/founder-mode.html">Founder Mode, Labs, And Proof Packs</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/brain-vault-and-skills.html">Brain, Vault, And Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/inbox-triage.html">Inbox Triage</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hivemind-sync.html">Hivemind Sync</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hive-fusion.html">Hive Fusion</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
+                    
+                      <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/features/shared-brain-benchmarks.html">Shared Brain Benchmarks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/wallets-honey-and-x402.html">Wallets, Honey, And x402</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hive-compute.html">Hive Compute</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/app-builder.html">App Builder And Hosting</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hivemindos-machines.html">HivemindOS Machines</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/evo-optimization.html">Evo Optimization</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/env-files-notifications-maintenance.html">Env, Notifications, Maintenance</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/integrations-and-work-history.html">Integrations And Work History</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/miroshark-and-openclaw.html">MiroShark And OpenClaw</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/computer-interaction.html">Computer Interaction</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/page-agent.html">Page Agent (Experimental)</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Hive Superbrain</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/vault-map.html">Vault Map</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/brain-services.html">Brain Services</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-skills.html">Shared Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-env.html">Shared Env</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/sync-and-health.html">Sync And Health</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/architecture-sync.html">Architecture Sync</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/code-map.html">Code Map</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Packaged Skills</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/hive-skills.html">Hive Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/third-party-skills.html">Third-party Skills</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Trading</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/">Trading Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/crypto.html">Crypto Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/concentrated-liquidity.html">Concentrated Liquidity</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/hyperliquid.html">Hyperliquid Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/stocks.html">Stock Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/agent-access.html">Ways To Trade</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/governance.html">Safety And Limits</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Architecture</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/">Architecture Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/api-and-storage.html">API And Storage</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/syncing-and-tailscale.html">Syncing And Tailscale</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/tailscale-fleet-telemetry.html">Fleet Telemetry</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/generated-media-signing.html">Generated Media Signing</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/targeted-file-transfers.html">Targeted File Transfers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/tailnet-generation-skills.html">Tailnet Generation Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/macos-code-signing.html">macOS Code Signing</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Integrations</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/">Integrations Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>MiroShark</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/companion.html">Companion</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/todo.html">Todo</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Runtimes</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/">Runtime Guides</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/hermes/local-setup.html">Hermes Local Setup</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/v01-control-plane.html">AEON v0.1 Control Plane</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/zero-human-companies.html">AEON For Zero Human Companies</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/github-actions-brain-access.html">AEON GitHub Actions Brain Access</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Reference</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/bankr/bankr-platform-reference.html">Bankr Platform Reference</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Investors</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/">Investor Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/ecosystem-plan.html">Ecosystem Plan</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/honey-hive-treasury.html">Honey And HIVE Treasury</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/treasury-reserve-and-seasonal-programs.html">Treasury Reserve And Seasonal Programs</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/hive-staking-and-community-tiers.html">HIVE Staking And Community Tiers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/">Paid Features</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/app-builder-hosting.html">App Builder And Hosting</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/hivemind-cloud-agent-calls.html">Hivemind Cloud Agent Calls</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/hive-compute-marketplace.html">Hive Compute Marketplace</a>
+              
+            
+          </section>
+        
+      </nav>
+    </aside>
+
+    <main id="content" class="docMain" tabindex="-1">
+      <article class="docContent">
+        <div class="pageTools">
+          <p class="pageKicker">HivemindOS manual</p>
+          <div class="pageToolActions">
+            
+            <button class="copyPageButton" type="button" data-copy-page>
+              <span aria-hidden="true">⧉</span> Copy link
+            </button>
+          </div>
+        </div>
+        <h1 id="shared-brain-memory-benchmarks">Shared Brain Memory Benchmarks</h1>
+
+<p>HivemindOS is built to remember the useful parts of work without turning every run receipt, old decision, or vault note into prompt baggage. These benchmarks measure whether that design produces relevant recall, fast local retrieval, cleaner current truth, and smaller model context.</p>
+
+<section class="atlasHero">
+  <strong>Benchmark snapshot: July 10, 2026</strong>
+  <p>A 1,000-query live memory matrix reached 90% Top-1 and 98% Top-3 recall. Across the full LoCoMo and LongMemEval retrieval suites, HivemindOS placed the annotated evidence session in the Top-50 for 2,032 of 2,036 eligible questions (99.80%). Full GPT-5.4 Mini answer-and-judge runs scored 76.62% on LoCoMo, 53.40% on LongMemEval, 41.12% on BEAM 1M, and 37.04% on BEAM 10M at Top-50.</p>
+</section>
+
+<h2 id="results-at-a-glance">Results At A Glance</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>What was measured</th>
+      <th style="text-align: right">Result</th>
+      <th>Evidence class</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Live-memory recall</td>
+      <td style="text-align: right"><strong>90% Top-1, 98% Top-3, 0.94 MRR</strong></td>
+      <td>1,000 read-only queries over an evolving real vault corpus</td>
+    </tr>
+    <tr>
+      <td>Exact current-memory recall</td>
+      <td style="text-align: right"><strong>100% Top-1</strong></td>
+      <td>206 exact automatic/current queries inside the 1,000-query matrix</td>
+    </tr>
+    <tr>
+      <td>Temporal recall</td>
+      <td style="text-align: right"><strong>96% Top-1, 100% Top-3</strong></td>
+      <td>Current, historical, and as-of evolution-chain queries</td>
+    </tr>
+    <tr>
+      <td>Unsupported-question abstention</td>
+      <td style="text-align: right"><strong>10/10</strong></td>
+      <td>Unrelated compound questions returned no memory context</td>
+    </tr>
+    <tr>
+      <td>Operational-receipt isolation</td>
+      <td style="text-align: right"><strong>40/40</strong></td>
+      <td>Receipts stayed hidden by default and remained explicitly retrievable</td>
+    </tr>
+    <tr>
+      <td>Authenticated local API</td>
+      <td style="text-align: right"><strong>6.75ms p50, 12.12ms p95, 125.97 requests/s</strong></td>
+      <td>400 sequential measured requests after warmup; 8/8 behavior checks passed</td>
+    </tr>
+    <tr>
+      <td>Indexed typed memory at 1,500 records</td>
+      <td style="text-align: right"><strong>27.16ms p50, 33.63ms p95</strong></td>
+      <td>200-query synthetic scale corpus; Top-1/Top-3/MRR 1.00/1.00/1.00</td>
+    </tr>
+    <tr>
+      <td>Live full-vault direct search</td>
+      <td style="text-align: right"><strong>15.39× median speedup</strong></td>
+      <td>745.04ms old path versus 48.42ms indexed; same Top-1 in 8/8 cases</td>
+    </tr>
+    <tr>
+      <td>Live provider token reduction</td>
+      <td style="text-align: right"><strong>87.5%–99.2% fewer total tokens</strong></td>
+      <td>Two OpenRouter runs using provider-reported usage</td>
+    </tr>
+    <tr>
+      <td>Pattern-mining proposal quality</td>
+      <td style="text-align: right"><strong>1.00 precision, 1.00 recall</strong></td>
+      <td>47-event labeled adversarial fixture; automatic promotion remains disabled</td>
+    </tr>
+    <tr>
+      <td>Current-truth health after migration</td>
+      <td style="text-align: right"><strong>0 canonical conflicts, 0 duplicate-pressure groups</strong></td>
+      <td>Live report-only health over 101 active canonical heads</td>
+    </tr>
+    <tr>
+      <td>LoCoMo annotated-evidence recall</td>
+      <td style="text-align: right"><strong>99.93% Top-50, 93.95% Top-10</strong></td>
+      <td>Full 1,540-question public suite; 1,536 questions include evidence-session labels</td>
+    </tr>
+    <tr>
+      <td>LongMemEval annotated-evidence recall</td>
+      <td style="text-align: right"><strong>99.4% Top-50, 97.6% Top-10</strong></td>
+      <td>All 500 public questions</td>
+    </tr>
+    <tr>
+      <td>BEAM 1M / 10M retrieval coverage</td>
+      <td style="text-align: right"><strong>900/900 non-empty recalls</strong></td>
+      <td>Full 700-question 1M and 200-question 10M suites; coverage is not answer correctness</td>
+    </tr>
+    <tr>
+      <td>LoCoMo / LongMemEval answer score</td>
+      <td style="text-align: right"><strong>76.62% / 53.40%</strong></td>
+      <td>Full GPT-5.4 Mini OAuth answer-and-judge runs at Top-50</td>
+    </tr>
+    <tr>
+      <td>BEAM 1M / 10M rubric score</td>
+      <td style="text-align: right"><strong>41.12% / 37.04%</strong></td>
+      <td>Full GPT-5.4 Mini OAuth runs; 44.29% / 43.00% pass rate at the 0.5 threshold</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Top-1 means the expected memory ranked first. Top-3 means it appeared in the first three results. Mean reciprocal rank, or MRR, rewards putting the correct memory as high as possible.</p>
+
+<h2 id="public-long-conversation-suites">Public Long-Conversation Suites</h2>
+
+<p>HivemindOS also runs the public LoCoMo, LongMemEval, and BEAM suites through the product’s conversation archive, full-vault index, and final recall ranking. These are complete Top-50 retrieval runs, not hand-selected pilots.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Public suite</th>
+      <th style="text-align: right">Full questions</th>
+      <th>Retrieval-quality result</th>
+      <th style="text-align: right">Local p50 / p95</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>LoCoMo</td>
+      <td style="text-align: right">1,540</td>
+      <td><strong>99.93% Top-50 evidence-session recall</strong>; 93.95% Top-10</td>
+      <td style="text-align: right">6.4ms / 14.72ms</td>
+    </tr>
+    <tr>
+      <td>LongMemEval</td>
+      <td style="text-align: right">500</td>
+      <td><strong>99.4% Top-50 evidence-session recall</strong>; 97.6% Top-10</td>
+      <td style="text-align: right">101.8ms / 285.76ms</td>
+    </tr>
+    <tr>
+      <td>BEAM 1M</td>
+      <td style="text-align: right">700</td>
+      <td><strong>700/700 returned context</strong>; 10 median hits</td>
+      <td style="text-align: right">121.9ms / 583.2ms</td>
+    </tr>
+    <tr>
+      <td>BEAM 10M</td>
+      <td style="text-align: right">200</td>
+      <td><strong>200/200 returned context</strong>; 50 median hits</td>
+      <td style="text-align: right">1,053.5ms / 3,829.7ms</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Evidence-session recall asks whether the annotated source conversation appeared among the retrieved memories. It is a retrieval metric, not final-answer accuracy. BEAM does not publish equivalent evidence-session labels in this adapter, so its table rows report non-empty retrieval coverage and hit count without implying that every result is relevant.</p>
+
+<p>The combined annotated-evidence check contains 2,036 eligible LoCoMo and LongMemEval questions. HivemindOS retrieved the labeled source session for 1,931 questions at Top-10 (94.84%) and 2,032 at Top-50 (99.80%).</p>
+
+<h3 id="judge-scored-answers">Judge-Scored Answers</h3>
+
+<p>The answer phase used <code class="language-plaintext highlighter-rouge">gpt-5.4-mini</code> for both the answering model and judge through ChatGPT OAuth, with the same Top-50 recalled context produced by HivemindOS. Every question in all four suites completed.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Public suite</th>
+      <th style="text-align: right">Questions</th>
+      <th style="text-align: right">Answer-quality result</th>
+      <th style="text-align: right">Pass rate</th>
+      <th style="text-align: right">Answer p50</th>
+      <th style="text-align: right">Judge p50</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>LoCoMo</td>
+      <td style="text-align: right">1,540</td>
+      <td style="text-align: right"><strong>76.62%</strong> binary judge score</td>
+      <td style="text-align: right">76.62%</td>
+      <td style="text-align: right">3.45s</td>
+      <td style="text-align: right">2.02s</td>
+    </tr>
+    <tr>
+      <td>LongMemEval</td>
+      <td style="text-align: right">500</td>
+      <td style="text-align: right"><strong>53.40%</strong> binary judge score</td>
+      <td style="text-align: right">53.40%</td>
+      <td style="text-align: right">3.93s</td>
+      <td style="text-align: right">3.03s</td>
+    </tr>
+    <tr>
+      <td>BEAM 1M</td>
+      <td style="text-align: right">700</td>
+      <td style="text-align: right"><strong>41.12%</strong> average rubric score</td>
+      <td style="text-align: right">44.29%</td>
+      <td style="text-align: right">4.78s</td>
+      <td style="text-align: right">7.10s</td>
+    </tr>
+    <tr>
+      <td>BEAM 10M</td>
+      <td style="text-align: right">200</td>
+      <td style="text-align: right"><strong>37.04%</strong> average rubric score</td>
+      <td style="text-align: right">43.00%</td>
+      <td style="text-align: right">6.63s</td>
+      <td style="text-align: right">4.64s</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>LoCoMo and LongMemEval use binary judge outcomes, so score and pass rate match. BEAM averages compliance across each question’s rubric nuggets; its pass rate counts questions scoring at least 0.5. The adapter reports BEAM rubric compliance but does not yet publish the separate event-ordering Kendall tau-b metric.</p>
+
+<p>The category results show where the current system is strongest and where it still needs work:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Suite</th>
+      <th>Strongest measured categories</th>
+      <th>Lowest measured categories</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>LoCoMo</td>
+      <td>Temporal 82.55%; single-hop 76.10%; multi-hop 75.18%</td>
+      <td>Open-domain 65.62%</td>
+    </tr>
+    <tr>
+      <td>LongMemEval</td>
+      <td>Knowledge update 74.36%; single-session user 72.86%; preference 66.67%</td>
+      <td>Multi-session 31.58%</td>
+    </tr>
+    <tr>
+      <td>BEAM 1M</td>
+      <td>Abstention 62.14%; preference following 60.00%; information extraction 52.85%</td>
+      <td>Temporal reasoning 22.98%; knowledge update 25.71%; summarization 27.82%</td>
+    </tr>
+    <tr>
+      <td>BEAM 10M</td>
+      <td>Information extraction 62.50%; preference following 58.75%; contradiction resolution 45.62%</td>
+      <td>Temporal reasoning 11.25%; abstention 20.00%; multi-session reasoning 22.00%</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>These model-judge results are a reproducible HivemindOS snapshot, not a direct competitor comparison. Scores produced with a different answering model, judge, prompt revision, or retrieval cutoff—including GPT-5/Top-200 configurations—are not apples-to-apples. ChatGPT OAuth did not expose token-usage counters, so the benchmark publishes latency and completion counts but does not estimate tokens or model cost.</p>
+
+<p>The long-conversation run also validated the cache optimization that made BEAM 10M fit within the normal Node heap. Re-running 2,440 LoCoMo, BEAM 1M, and BEAM 10M questions preserved the same ranked context after excluding regenerated file timestamps, while median retrieval improved:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Suite</th>
+      <th style="text-align: right">Before</th>
+      <th style="text-align: right">Current</th>
+      <th style="text-align: right">p50 speedup</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>LoCoMo</td>
+      <td style="text-align: right">18.4ms</td>
+      <td style="text-align: right">6.4ms</td>
+      <td style="text-align: right"><strong>2.88×</strong></td>
+    </tr>
+    <tr>
+      <td>BEAM 1M</td>
+      <td style="text-align: right">250.5ms</td>
+      <td style="text-align: right">121.9ms</td>
+      <td style="text-align: right"><strong>2.06×</strong></td>
+    </tr>
+    <tr>
+      <td>BEAM 10M</td>
+      <td style="text-align: right">2,564.5ms</td>
+      <td style="text-align: right">1,053.5ms</td>
+      <td style="text-align: right"><strong>2.43×</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The public machine-readable result, including the full category breakdown and run metadata, is <a href="/hivemindos/assets/benchmarks/standard-memory-2026-07-10.json">available as JSON</a>.</p>
+
+<p>Methodology is pinned to <a href="https://github.com/mem0ai/memory-benchmarks"><code class="language-plaintext highlighter-rouge">mem0ai/memory-benchmarks</code></a>, <a href="https://github.com/snap-research/locomo"><code class="language-plaintext highlighter-rouge">snap-research/locomo</code></a>, <a href="https://github.com/xiaowu0162/LongMemEval"><code class="language-plaintext highlighter-rouge">xiaowu0162/LongMemEval</code></a>, and <a href="https://github.com/mohammadtavakoli78/BEAM"><code class="language-plaintext highlighter-rouge">mohammadtavakoli78/BEAM</code></a>. HivemindOS currently exposes at most 50 recalled memories, so this page does not compare its Top-50 results against another system’s Top-200 score.</p>
+
+<h2 id="recall-quality-across-messy-questions">Recall Quality Across Messy Questions</h2>
+
+<p>The live matrix did not only search exact titles. It generated sparse questions, added conversational noise, introduced typos, expressed natural intent, and applied type, project, and tag filters.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Query form</th>
+      <th style="text-align: right">Top-1</th>
+      <th style="text-align: right">Top-3</th>
+      <th style="text-align: right">Cases</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Exact title, automatic time mode</td>
+      <td style="text-align: right">100%</td>
+      <td style="text-align: right">100%</td>
+      <td style="text-align: right">103</td>
+    </tr>
+    <tr>
+      <td>Exact title, current mode</td>
+      <td style="text-align: right">100%</td>
+      <td style="text-align: right">100%</td>
+      <td style="text-align: right">103</td>
+    </tr>
+    <tr>
+      <td>Sparse title terms</td>
+      <td style="text-align: right">83%</td>
+      <td style="text-align: right">99%</td>
+      <td style="text-align: right">103</td>
+    </tr>
+    <tr>
+      <td>Noisy natural question</td>
+      <td style="text-align: right">86%</td>
+      <td style="text-align: right">99%</td>
+      <td style="text-align: right">103</td>
+    </tr>
+    <tr>
+      <td>Typo query</td>
+      <td style="text-align: right">81%</td>
+      <td style="text-align: right">91%</td>
+      <td style="text-align: right">103</td>
+    </tr>
+    <tr>
+      <td>Natural memory-type intent</td>
+      <td style="text-align: right">83%</td>
+      <td style="text-align: right">99%</td>
+      <td style="text-align: right">103</td>
+    </tr>
+    <tr>
+      <td>Type-filtered</td>
+      <td style="text-align: right">94%</td>
+      <td style="text-align: right">99%</td>
+      <td style="text-align: right">103</td>
+    </tr>
+    <tr>
+      <td>Project-filtered</td>
+      <td style="text-align: right">93%</td>
+      <td style="text-align: right">99%</td>
+      <td style="text-align: right">103</td>
+    </tr>
+    <tr>
+      <td>Tag-filtered</td>
+      <td style="text-align: right">92%</td>
+      <td style="text-align: right">98%</td>
+      <td style="text-align: right">102</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Across the generated retrieval portion, the aggregate was 90% Top-1, 98% Top-3, and 0.94 MRR. The main measured weakness is typo handling: it remains strong enough for 91% Top-3, but its 81% Top-1 result leaves clear room for improvement.</p>
+
+<p>The same run added three behavior groups outside those generated variants:</p>
+
+<ul>
+  <li>Unsupported compound questions abstained in 10/10 cases instead of injecting weakly related memory.</li>
+  <li>Operational routing passed 40/40 checks: legacy receipts stayed out of normal durable recall and remained available when explicitly requested.</li>
+  <li>Current, historical, and as-of chain queries reached 96% Top-1 and 100% Top-3.</li>
+</ul>
+
+<p>The 1,000 calls completed at 86.38 sequential queries per second. Generated retrieval latency measured 12.27ms p50 and 16.28ms p95 during this run.</p>
+
+<h2 id="real-api-performance">Real API Performance</h2>
+
+<p>The API benchmark goes through the authenticated dashboard HTTP route instead of calling the scorer directly. Its isolated temporary vault covers entity recall, aliases, current canonical heads, historical memory, retrieval-usage signals, explicit operational lookup, default operational isolation, and unsupported-query abstention.</p>
+
+<p>Across 50 measured repetitions of eight cases—400 requests total after two warmup passes—the route achieved:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>API metric</th>
+      <th style="text-align: right">Result</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Behavior checks</td>
+      <td style="text-align: right">8/8</td>
+    </tr>
+    <tr>
+      <td>Ranked Top-1 checks</td>
+      <td style="text-align: right">6/6</td>
+    </tr>
+    <tr>
+      <td>Median latency</td>
+      <td style="text-align: right">6.75ms</td>
+    </tr>
+    <tr>
+      <td>p95 latency</td>
+      <td style="text-align: right">12.12ms</td>
+    </tr>
+    <tr>
+      <td>Sequential throughput</td>
+      <td style="text-align: right">125.97 requests/s</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>This is a same-machine product-path benchmark, not a hosted-service latency promise. Hardware, vault shape, filesystem load, sync activity, and development versus production builds can change absolute timing.</p>
+
+<h2 id="typed-memory-at-scale">Typed Memory At Scale</h2>
+
+<p>The reproducible scale benchmark creates isolated indexes at 100, 500, and 1,500 memories. Each size receives 200 exact, natural, sparse, and noisy queries with local embeddings disabled, so the result measures the local lexical and typed-memory path.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: right">Memories</th>
+      <th style="text-align: right">Top-1 / Top-3 / MRR</th>
+      <th style="text-align: right">p50</th>
+      <th style="text-align: right">p95</th>
+      <th style="text-align: right">Sequential queries/s</th>
+      <th style="text-align: right">First cold recall</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: right">100</td>
+      <td style="text-align: right">1.00 / 1.00 / 1.00</td>
+      <td style="text-align: right">1.86ms</td>
+      <td style="text-align: right">2.76ms</td>
+      <td style="text-align: right">506.98</td>
+      <td style="text-align: right">25.02ms</td>
+    </tr>
+    <tr>
+      <td style="text-align: right">500</td>
+      <td style="text-align: right">1.00 / 1.00 / 1.00</td>
+      <td style="text-align: right">9.08ms</td>
+      <td style="text-align: right">10.91ms</td>
+      <td style="text-align: right">108.07</td>
+      <td style="text-align: right">30.63ms</td>
+    </tr>
+    <tr>
+      <td style="text-align: right">1,500</td>
+      <td style="text-align: right">1.00 / 1.00 / 1.00</td>
+      <td style="text-align: right">27.16ms</td>
+      <td style="text-align: right">33.63ms</td>
+      <td style="text-align: right">35.52</td>
+      <td style="text-align: right">78.71ms</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The synthetic corpus is intentionally controlled. Its perfect relevance shows that growing the index did not displace uniquely identifiable memories; it does not replace the noisier live-corpus benchmark above.</p>
+
+<h2 id="searching-the-whole-vault">Searching The Whole Vault</h2>
+
+<p>Typed Agent Memory is the fast path for durable facts, preferences, instructions, decisions, and learnings. When that distilled layer is not enough, HivemindOS can search normal vault markdown through a generated lexical index and load only the ranked source notes.</p>
+
+<p>The live eight-case benchmark covered project decisions, operations policy, control-plane documentation, shared skills, brain-service notes, secure references, imported sources, and intake notes.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Full-vault path</th>
+      <th style="text-align: right">Top-1 / Top-3 / MRR</th>
+      <th style="text-align: right">Median latency</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Previous file-search path</td>
+      <td style="text-align: right">1.00 / 1.00 / 1.00</td>
+      <td style="text-align: right">745.04ms</td>
+    </tr>
+    <tr>
+      <td>Direct lexical index</td>
+      <td style="text-align: right">1.00 / 1.00 / 1.00</td>
+      <td style="text-align: right">48.42ms</td>
+    </tr>
+    <tr>
+      <td>Final tiered runtime</td>
+      <td style="text-align: right">1.00 / 1.00 / 1.00</td>
+      <td style="text-align: right">300.33ms</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The direct indexed stage was 15.39× faster without changing the expected first result in any case. The final runtime is deliberately heavier because it performs the product’s routing, candidate loading, and final ranking rather than returning raw index rows.</p>
+
+<p>A separate large reference-vault test indexed 25,995 eligible notes from a 28,549-file vault in about 9.2 seconds and produced a 70.6 MB local JSONL index. In that five-query snapshot, median direct search improved from 2,285ms to 118ms, or 19.4×, with identical Top-1 results.</p>
+
+<h2 id="less-prompt-baggage">Less Prompt Baggage</h2>
+
+<p>Memory only saves money when agents retrieve focused context instead of repeatedly loading broad files and histories. The live token benchmark sent the same task to the same model with a broad baseline context pack and a targeted Hive context pack.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Live provider scenario</th>
+      <th style="text-align: right">Baseline total tokens</th>
+      <th style="text-align: right">Hive total tokens</th>
+      <th style="text-align: right">Total reduction</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Focused shared-brain recall</td>
+      <td style="text-align: right">43,754</td>
+      <td style="text-align: right">370</td>
+      <td style="text-align: right"><strong>99.2%</strong></td>
+    </tr>
+    <tr>
+      <td>Complex dashboard chatbot build</td>
+      <td style="text-align: right">42,571</td>
+      <td style="text-align: right">5,307</td>
+      <td style="text-align: right"><strong>87.5%</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>These are provider-reported usage counters from live OpenRouter calls using <code class="language-plaintext highlighter-rouge">openai/gpt-4.1-mini</code>. The broad baseline was intentionally truncated at 180,000 sent characters in both scenarios; the targeted Hive packs were not truncated. These tests measure context and token use, not a provider invoice or a statistically powered final-answer-quality comparison. The complete prompts, outputs, and methodology are documented in <a href="token-and-cost-savings.html">Token And Cost Savings</a>.</p>
+
+<p>The current deterministic local context-budget benchmark adds four scenarios—brain recall, software build, chatbot build, and workflow reuse. It estimated 2,906,702 baseline context tokens versus 22,764 targeted Hive context tokens, a 99.2% reduction. That is a reproducible text-budget estimate, not provider billing.</p>
+
+<h2 id="cleaner-current-truth">Cleaner Current Truth</h2>
+
+<p>Two architecture changes address different sources of memory pollution:</p>
+
+<ol>
+  <li>Routine receipts, retries, and completions go to a bounded operational journal rather than durable Agent Memory.</li>
+  <li>Durable records use canonical memory keys, while reviewed evolution preserves previous versions as history under one current head.</li>
+</ol>
+
+<p>The live migration corpus made the effect measurable:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Health signal</th>
+      <th style="text-align: right">Before separation and reviewed cleanup</th>
+      <th style="text-align: right">Current</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Near-duplicate groups</td>
+      <td style="text-align: right">5</td>
+      <td style="text-align: right">0</td>
+    </tr>
+    <tr>
+      <td>Largest duplicate cluster</td>
+      <td style="text-align: right">44 receipts</td>
+      <td style="text-align: right">0</td>
+    </tr>
+    <tr>
+      <td>Canonical conflict groups</td>
+      <td style="text-align: right">3</td>
+      <td style="text-align: right">0</td>
+    </tr>
+    <tr>
+      <td>Active records affected by canonical conflicts</td>
+      <td style="text-align: right">9</td>
+      <td style="text-align: right">0</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The current report-only health snapshot contains 101 active canonical heads and 21 superseded historical records. Forty-seven legacy operational records remain preserved for explicit access, but they no longer enter default durable recall. This before/after result combines architectural separation with reviewed consolidation; it should not be presented as an automatic cleanup percentage for every vault.</p>
+
+<h2 id="pattern-mining-with-a-gate">Pattern Mining, With A Gate</h2>
+
+<p>Pattern mining is useful only if repeated noise does not become permanent advice. The labeled 47-event fixture includes three positives—a recurring provider failure, a reusable content workflow, and a stable weekly routine—plus adversarial negatives such as retries of one task, test/E2E activity, insufficient support, unknown outcomes, and unrelated one-offs.</p>
+
+<p>The miner returned exactly the three labeled proposals:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Pattern metric</th>
+      <th style="text-align: right">Result</th>
+      <th style="text-align: right">Enablement gate</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Precision</td>
+      <td style="text-align: right">1.00</td>
+      <td style="text-align: right">0.90</td>
+    </tr>
+    <tr>
+      <td>Recall</td>
+      <td style="text-align: right">1.00</td>
+      <td style="text-align: right">0.80</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>This passes the fixture gate, but it is not production precision. Pattern mining remains a dry run by default, and explicit enqueueing creates review proposals rather than memories, skills, or scheduled jobs. Broad autonomous promotion stays disabled until real reviewed events provide enough evidence.</p>
+
+<h2 id="marketing-safe-claims">Marketing-Safe Claims</h2>
+
+<p>These statements match the measured evidence:</p>
+
+<blockquote>
+  <p>In a 1,000-query live memory benchmark, HivemindOS ranked the expected memory first 90% of the time and in the top three 98% of the time. Exact current-title recall was 100%.</p>
+</blockquote>
+
+<blockquote>
+  <p>The indexed local memory path stayed under 30ms median at 1,500 synthetic memories while preserving perfect Top-1 across 200 exact, natural, sparse, and noisy queries.</p>
+</blockquote>
+
+<blockquote>
+  <p>Targeted Hive context reduced provider-reported total tokens by 87.5% on a complex build task and 99.2% on a focused memory-recall task.</p>
+</blockquote>
+
+<blockquote>
+  <p>In an eight-case live full-vault benchmark, the direct lexical index was 15.39× faster than the previous search path with the same expected first result in every case.</p>
+</blockquote>
+
+<blockquote>
+  <p>Operational receipts stayed out of default durable recall in 40/40 checks, while reviewed migration moved canonical conflicts and duplicate pressure to zero in the measured live corpus.</p>
+</blockquote>
+
+<blockquote>
+  <p>Across 2,036 annotated LoCoMo and LongMemEval questions, HivemindOS retrieved the labeled evidence session in the Top-50 99.80% of the time and in the Top-10 94.84% of the time.</p>
+</blockquote>
+
+<blockquote>
+  <p>Full local retrieval completed without an empty result for all 900 BEAM 1M and 10M questions; median retrieval was 121.9ms at 1M and 1.05s at 10M.</p>
+</blockquote>
+
+<blockquote>
+  <p>With GPT-5.4 Mini answering and judging the complete Top-50 runs through ChatGPT OAuth, HivemindOS scored 76.62% on LoCoMo and 53.40% on LongMemEval.</p>
+</blockquote>
+
+<blockquote>
+  <p>On the complete BEAM runs, HivemindOS averaged 41.12% rubric compliance at 1M context and 37.04% at 10M context, with 44.29% and 43.00% of questions meeting the 0.5 pass threshold.</p>
+</blockquote>
+
+<p>Do not turn these results into an unmeasured competitor comparison, a hosted latency SLA, a universal token-savings guarantee, or a claim that pattern proposals are production-perfect. The benchmarks deliberately publish their corpus, route, sample size, and limitations so the claims can stay useful as the product evolves.</p>
+
+<h2 id="reproduce-the-benchmarks">Reproduce The Benchmarks</h2>
+
+<p>The local and fixture benchmarks do not require a paid model:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pnpm benchmark:agent-memory-live-recall <span class="nt">--</span> <span class="nt">--vault</span> &lt;vault&gt; <span class="nt">--calls</span> 1000
+pnpm benchmark:agent-memory-scale <span class="nt">--</span> <span class="nt">--calls</span> 200
+pnpm benchmark:agent-memory-upgrade <span class="nt">--</span> <span class="nt">--base-url</span> &lt;dashboard-url&gt; <span class="nt">--iterations</span> 50 <span class="nt">--warmup</span> 2
+pnpm benchmark:shared-brain-search <span class="nt">--</span> <span class="nt">--vault</span> &lt;vault&gt; <span class="nt">--limit</span> 8
+pnpm benchmark:agent-memory-pattern-mining
+pnpm benchmark:context-savings
+</code></pre></div></div>
+
+<p>The authenticated API benchmark expects a running HivemindOS dashboard. The full-vault and live-memory benchmarks are read only. The scale, API behavior, and pattern benchmarks use isolated synthetic fixtures.</p>
+
+<p>The standard public suites use the development-only harness documented under <code class="language-plaintext highlighter-rouge">benchmarks/memory/</code>. Datasets, temporary vaults, model clients, OAuth bridges, checkpoints, and raw outputs remain outside the production application and are not shipped to users.</p>
+
+<p>The live token benchmark calls the selected provider and may incur provider charges:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./scripts/hive-env-run <span class="nt">--</span> pnpm benchmark:e2e-token-savings <span class="nt">--</span> <span class="nt">--scenario</span> brain-recall
+./scripts/hive-env-run <span class="nt">--</span> pnpm benchmark:e2e-token-savings <span class="nt">--</span> <span class="nt">--scenario</span> chatbot-build
+</code></pre></div></div>
+
+<p>For the underlying memory architecture, see <a href="brain-vault-and-skills.html">Brain, Vault, And Skills</a> and <a href="../whole-brain/brain-services.html">Brain Services</a>.</p>
+
+        <nav class="pageNav" aria-label="Previous and next pages" hidden>
+          <a class="pageNavCard pageNavPrev" data-page-prev href="#">
+            <span>Previous</span>
+            <strong></strong>
+          </a>
+          <a class="pageNavCard pageNavNext" data-page-next href="#">
+            <span>Next</span>
+            <strong></strong>
+          </a>
+        </nav>
+      </article>
+    </main>
+
+    <aside class="pageOutline" aria-label="On this page" hidden>
+      <p>On this page</p>
+      <nav data-page-outline></nav>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/features/shared-brain-benchmarks.md">Improve this page ↗</a>
+    </aside>
+  </div>
+
+  <footer class="siteFooter">
+    <div>
+      <strong>HivemindOS</strong>
+      <span>Local-first infrastructure for agent teams.</span>
+    </div>
+    <div class="footerLinks">
+      <a href="/hivemindos/for-users/">User docs</a>
+      <a href="/hivemindos/for-users/architecture/">Architecture</a>
+      <a href="https://github.com/LiamVisionary/hivemindos">GitHub</a>
+    </div>
+  </footer>
+
+  <dialog class="imageViewer" aria-label="Expanded media viewer" data-image-viewer>
+    <header class="imageViewerBar">
+      <div class="imageViewerHeading">
+        <strong data-viewer-title>Expanded image</strong>
+        <span>Scroll to pan · Esc to close</span>
+      </div>
+      <div class="imageViewerControls" aria-label="Image zoom controls">
+        <button type="button" data-viewer-fit>Fit</button>
+        <div class="imageViewerZoomGroup">
+          <button type="button" aria-label="Zoom out" data-viewer-zoom-out>−</button>
+          <output aria-live="polite" data-viewer-zoom>100%</output>
+          <button type="button" aria-label="Zoom in" data-viewer-zoom-in>+</button>
+        </div>
+        <button class="imageViewerClose" type="button" data-viewer-close>Close <span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="imageViewerViewport" tabindex="0" data-viewer-viewport>
+      <div class="imageViewerCanvas" data-viewer-canvas></div>
+    </div>
+    <p class="imageViewerCaption" data-viewer-caption hidden></p>
+  </dialog>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const normalizePath = (href) => {
+      const url = new URL(href, window.location.href);
+      const pathname = url.pathname.replace(/index\.html$/, "");
+      return pathname.endsWith("/") ? pathname : pathname.replace(/\.html$/, "");
+    };
+
+    const currentPath = normalizePath(window.location.href);
+    const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
+    const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
+
+    if (currentIndex >= 0) {
+      navLinks[currentIndex].classList.add("isActive");
+      navLinks[currentIndex].setAttribute("aria-current", "page");
+      navLinks[currentIndex].closest("details")?.setAttribute("open", "");
+
+      const pageNav = document.querySelector(".pageNav");
+      const previous = navLinks[currentIndex - 1];
+      const next = navLinks[currentIndex + 1];
+      const wireCard = (card, link) => {
+        if (!card || !link) {
+          card?.remove();
+          return;
+        }
+        card.href = link.href;
+        card.querySelector("strong").textContent = link.textContent.trim();
+      };
+
+      wireCard(document.querySelector("[data-page-prev]"), previous);
+      wireCard(document.querySelector("[data-page-next]"), next);
+      if (pageNav && (previous || next)) pageNav.hidden = false;
+    }
+
+    const navSearch = document.querySelector("#navSearch");
+    const searchEmpty = document.querySelector(".searchEmpty");
+    navSearch?.addEventListener("input", () => {
+      const query = navSearch.value.trim().toLowerCase();
+      let visibleSections = 0;
+      document.querySelectorAll(".navSection").forEach((section) => {
+        let sectionHasMatch = false;
+        section.querySelectorAll(":scope > .navLink").forEach((link) => {
+          const matches = !query || link.textContent.toLowerCase().includes(query);
+          link.hidden = !matches;
+          sectionHasMatch ||= matches;
+        });
+        section.querySelectorAll(".navGroup").forEach((group) => {
+          const summary = group.querySelector("summary")?.textContent.toLowerCase() || "";
+          const groupMatches = !query || summary.includes(query);
+          let childMatches = false;
+          group.querySelectorAll(".navLink").forEach((link) => {
+            const matches = groupMatches || link.textContent.toLowerCase().includes(query);
+            link.hidden = !matches;
+            childMatches ||= matches;
+          });
+          group.hidden = !(groupMatches || childMatches);
+          sectionHasMatch ||= groupMatches || childMatches;
+          if (query && childMatches) group.setAttribute("open", "");
+        });
+        section.hidden = !sectionHasMatch;
+        if (sectionHasMatch) visibleSections += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visibleSections > 0;
+    });
+
+    window.addEventListener("keydown", (event) => {
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.matches("input, textarea, select") || activeElement?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        navSearch?.focus();
+      }
+      if (event.key === "Escape") closeNavigation();
+    });
+
+    const navToggle = document.querySelector("[data-nav-toggle]");
+    const closeNavigation = () => {
+      document.body.classList.remove("navOpen");
+      navToggle?.setAttribute("aria-expanded", "false");
+    };
+    navToggle?.addEventListener("click", () => {
+      const isOpen = document.body.classList.toggle("navOpen");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelector("[data-nav-close]")?.addEventListener("click", closeNavigation);
+    document.querySelector("[data-nav-backdrop]")?.addEventListener("click", closeNavigation);
+    document.querySelectorAll(".sideNav a").forEach((link) => link.addEventListener("click", closeNavigation));
+
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fall through for embedded or permission-restricted browsers.
+        }
+      }
+      const copyField = document.createElement("textarea");
+      copyField.value = text;
+      copyField.setAttribute("readonly", "");
+      copyField.className = "clipboardCopyField";
+      document.body.appendChild(copyField);
+      copyField.select();
+      const copied = document.execCommand("copy");
+      copyField.remove();
+      if (!copied) throw new Error("Browser clipboard access is unavailable");
+    };
+
+    document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const original = button.innerHTML;
+      try {
+        await copyTextToClipboard(window.location.href);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+      window.setTimeout(() => { button.innerHTML = original; }, 1400);
+    });
+
+    document.querySelector("[data-copy-ai]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const label = button.querySelector("[data-copy-ai-label]");
+      const originalLabel = label.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(button.dataset.copyAiUrl, { headers: { Accept: "text/plain" } });
+        if (!response.ok) throw new Error(`Investor context request failed with ${response.status}`);
+        const investorContext = await response.text();
+        if (!investorContext.includes("HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE") || !investorContext.includes("=== BEGIN DOCUMENT ===")) {
+          throw new Error("Investor context bundle is malformed");
+        }
+        await copyTextToClipboard(investorContext);
+        label.textContent = "Investor docs copied";
+      } catch {
+        label.textContent = "Copy failed";
+      } finally {
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        window.setTimeout(() => { label.textContent = originalLabel; }, 1800);
+      }
+    });
+
+    const outline = document.querySelector(".pageOutline");
+    const outlineNav = document.querySelector("[data-page-outline]");
+    const headings = Array.from(document.querySelectorAll(".docContent h2"));
+    const usedIds = new Set();
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const baseId = heading.textContent.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
+        let id = baseId;
+        let suffix = 2;
+        while (usedIds.has(id) || document.getElementById(id)) id = `${baseId}-${suffix++}`;
+        heading.id = id;
+      }
+      usedIds.add(heading.id);
+      const link = document.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent;
+      outlineNav?.appendChild(link);
+    });
+    if (outline && headings.length > 1) outline.hidden = false;
+
+    const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.id = `mermaid-${index}`;
+      diagram.textContent = code.textContent;
+      const wrapper = code.closest(".highlighter-rouge") || code.closest("pre") || code;
+      wrapper.replaceWith(diagram);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        background: "#14161c",
+        primaryColor: "#211d16",
+        primaryTextColor: "#f3f0e9",
+        primaryBorderColor: "#e7b45c",
+        lineColor: "#a7a39a",
+        secondaryColor: "#15221f",
+        tertiaryColor: "#1b1e25",
+        fontFamily: "Geist, system-ui, sans-serif"
+      }
+    });
+
+    for (const node of document.querySelectorAll(".mermaid")) {
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch (error) {
+        node.classList.add("mermaidError");
+        node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
+      }
+    }
+
+    const imageViewer = document.querySelector("[data-image-viewer]");
+    const viewerCanvas = document.querySelector("[data-viewer-canvas]");
+    const viewerViewport = document.querySelector("[data-viewer-viewport]");
+    const viewerTitle = document.querySelector("[data-viewer-title]");
+    const viewerCaption = document.querySelector("[data-viewer-caption]");
+    const viewerZoomLabel = document.querySelector("[data-viewer-zoom]");
+    const viewerZoomOut = document.querySelector("[data-viewer-zoom-out]");
+    const viewerZoomIn = document.querySelector("[data-viewer-zoom-in]");
+    let viewerScale = 1;
+    let viewerBaseWidth = 1;
+    let viewerBaseHeight = 1;
+    let viewerMedia = null;
+    let viewerSource = null;
+    let restoreViewerMedia = null;
+
+    const setViewerScale = (nextScale) => {
+      viewerScale = Math.min(4, Math.max(0.25, nextScale));
+      if (viewerMedia) viewerMedia.style.width = `${Math.round(viewerBaseWidth * viewerScale)}px`;
+      if (viewerZoomLabel) viewerZoomLabel.textContent = `${Math.round(viewerScale * 100)}%`;
+      if (viewerZoomOut) viewerZoomOut.disabled = viewerScale <= 0.25;
+      if (viewerZoomIn) viewerZoomIn.disabled = viewerScale >= 4;
+    };
+
+    const fitViewerMedia = () => {
+      if (!viewerViewport) return;
+      const availableWidth = Math.max(160, viewerViewport.clientWidth - 64);
+      const availableHeight = Math.max(120, viewerViewport.clientHeight - 64);
+      setViewerScale(Math.min(1, availableWidth / viewerBaseWidth, availableHeight / viewerBaseHeight));
+    };
+
+    const mediaSectionTitle = (source) => {
+      const headings = Array.from(document.querySelectorAll(".docContent h2, .docContent h3"));
+      const preceding = headings.filter((heading) => heading.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.at(-1)?.textContent.trim() || "Expanded image";
+    };
+
+    const openMediaViewer = (source) => {
+      if (!imageViewer || !viewerCanvas || !viewerViewport) return;
+      restoreViewerMedia?.();
+      viewerCanvas.replaceChildren();
+      viewerSource = source;
+      viewerTitle.textContent = mediaSectionTitle(source);
+      const figureCaption = source.closest("figure")?.querySelector("figcaption")?.textContent.trim();
+      const imageAlt = source instanceof HTMLImageElement ? source.alt.trim() : "";
+      const caption = figureCaption || imageAlt;
+      viewerCaption.textContent = caption;
+      viewerCaption.hidden = !caption;
+
+      if (source instanceof HTMLImageElement) {
+        viewerMedia = source.cloneNode();
+        viewerMedia.removeAttribute("width");
+        viewerMedia.removeAttribute("height");
+        viewerMedia.className = "imageViewerMedia";
+        viewerMedia.alt = source.alt;
+        viewerBaseWidth = source.naturalWidth || source.getBoundingClientRect().width;
+        viewerBaseHeight = source.naturalHeight || source.getBoundingClientRect().height;
+        restoreViewerMedia = null;
+      } else {
+        const svg = source.querySelector("svg");
+        if (!svg) return;
+        const placeholder = document.createComment("diagram viewer placeholder");
+        const originalStyle = svg.getAttribute("style");
+        const originalClass = svg.getAttribute("class");
+        const renderedBounds = svg.getBoundingClientRect();
+        const viewBox = svg.viewBox?.baseVal;
+        viewerBaseWidth = viewBox?.width || renderedBounds.width;
+        viewerBaseHeight = viewBox?.height || renderedBounds.height;
+        svg.replaceWith(placeholder);
+        viewerMedia = svg;
+        viewerMedia.setAttribute("class", `${originalClass || ""} imageViewerMedia`.trim());
+        restoreViewerMedia = () => {
+          if (originalStyle === null) svg.removeAttribute("style");
+          else svg.setAttribute("style", originalStyle);
+          if (originalClass === null) svg.removeAttribute("class");
+          else svg.setAttribute("class", originalClass);
+          placeholder.replaceWith(svg);
+        };
+      }
+
+      viewerCanvas.appendChild(viewerMedia);
+      setViewerScale(1);
+      document.body.classList.add("mediaViewerOpen");
+      if (typeof imageViewer.showModal === "function") imageViewer.showModal();
+      else imageViewer.setAttribute("open", "");
+      requestAnimationFrame(() => {
+        viewerViewport.scrollLeft = Math.max(0, (viewerCanvas.scrollWidth - viewerViewport.clientWidth) / 2);
+        viewerViewport.scrollTop = Math.max(0, (viewerCanvas.scrollHeight - viewerViewport.clientHeight) / 2);
+        viewerViewport.focus({ preventScroll: true });
+      });
+    };
+
+    const registerZoomableMedia = (source, label) => {
+      if (source.closest("a")) return;
+      source.classList.add("zoomableMedia");
+      source.tabIndex = 0;
+      source.setAttribute("role", "button");
+      source.setAttribute("aria-label", label);
+      source.addEventListener("click", () => openMediaViewer(source));
+      source.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openMediaViewer(source);
+      });
+    };
+
+    document.querySelectorAll(".docContent img").forEach((image) => {
+      registerZoomableMedia(image, `Open image full screen${image.alt ? `: ${image.alt}` : ""}`);
+    });
+    document.querySelectorAll(".docContent .mermaid:not(.mermaidError)").forEach((diagram) => {
+      registerZoomableMedia(diagram, `Open ${mediaSectionTitle(diagram)} diagram full screen`);
+    });
+
+    viewerZoomOut?.addEventListener("click", () => setViewerScale(viewerScale - 0.25));
+    viewerZoomIn?.addEventListener("click", () => setViewerScale(viewerScale + 0.25));
+    document.querySelector("[data-viewer-fit]")?.addEventListener("click", fitViewerMedia);
+    document.querySelector("[data-viewer-close]")?.addEventListener("click", () => imageViewer?.close());
+    viewerViewport?.addEventListener("click", (event) => {
+      if (event.target === viewerViewport || event.target === viewerCanvas) imageViewer?.close();
+    });
+    imageViewer?.addEventListener("close", () => {
+      restoreViewerMedia?.();
+      restoreViewerMedia = null;
+      viewerCanvas?.replaceChildren();
+      document.body.classList.remove("mediaViewerOpen");
+      viewerSource?.focus({ preventScroll: true });
+      viewerSource = null;
+      viewerMedia = null;
+    });
+  </script>
+</body>
+</html>

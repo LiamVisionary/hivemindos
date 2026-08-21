@@ -1,0 +1,1371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c0d11">
+  <title>Hivemind Sync Handoff Transfers | HivemindOS Docs</title>
+  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/hivemindos/assets/img/app-icon-1024.png">
+  <link rel="apple-touch-icon" href="/hivemindos/assets/img/app-icon-1024.png">
+  <link rel="stylesheet" href="/hivemindos/assets/css/site.css">
+</head>
+<body>
+  <a class="skipLink" href="#content">Skip to content</a>
+
+  <header class="siteHeader">
+    <nav class="topNav" aria-label="Primary">
+      <button class="mobileNavButton" type="button" aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-navigation" data-nav-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brandMark" href="/hivemindos/" aria-label="HivemindOS Docs home">
+        <img class="brandIcon" src="/hivemindos/assets/img/app-icon-1024.png" alt="" width="40" height="40" aria-hidden="true">
+        <span class="brandName">HivemindOS</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+        <span class="brandEdition">Docs</span>
+      </a>
+      <div class="topLinks">
+        
+          <a href="/hivemindos/for-users/">For Users</a>
+        
+          <a href="/hivemindos/for-investors/">For Investors</a>
+        
+          <a href="/hivemindos/for-users/trading/">Trading</a>
+        
+          <a href="/hivemindos/for-users/architecture/">Architecture</a>
+        
+          <a href="/hivemindos/preview.html">Preview</a>
+        
+      </div>
+      <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
+        <span>GitHub</span>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 .2a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.49c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.08-1.88 3.75-3.66 3.95.29.25.54.74.54 1.5l-.01 2.22c0 .21.14.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <button class="navBackdrop" type="button" aria-label="Close documentation menu" data-nav-backdrop></button>
+
+  <div class="docFrame">
+    <aside id="docs-navigation" class="docSidebar" aria-label="Documentation navigation">
+      <div class="sidebarHeader">
+        <span class="sidebarKicker">Explore the docs</span>
+        <button class="sidebarClose" type="button" aria-label="Close documentation menu" data-nav-close>Close</button>
+      </div>
+      <label class="searchShell" for="navSearch">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter pages" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <p class="searchEmpty" role="status" hidden>No matching pages.</p>
+      <nav class="sideNav">
+        
+          <section class="navSection">
+            <h2>Start Here</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/">Overview</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/">For Users</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/">For Investors</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/diagrams.html">Diagrams And Maps</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/native-app.html">Native App</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/slash-commands.html">Slash Commands</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Product</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/product/">Product Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/product/design-philosophy.html">Design Philosophy</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/product/ui-rules.html">UI Rules</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Core Systems</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Features</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/sre-investigations.html">SRE Incident Investigations</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Local Document Reader</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hivemind-office.html">Hivemind Office Companion</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Local Web Research</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/calling.html">Calling</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/socials.html">Socials</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/x-command-bot.html">X Command Bot</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/work-and-scheduler.html">Work And Scheduler</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/loop-engineering.html">Loop Engineering</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/agent-evaluations.html">Agent Evaluations</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/harness-experiments.html">Harness Experiments</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/agent-challenges.html">Agent Challenges</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/zero-human-companies.html">Zero Human Companies</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/founder-mode.html">Founder Mode, Labs, And Proof Packs</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/brain-vault-and-skills.html">Brain, Vault, And Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/inbox-triage.html">Inbox Triage</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hivemind-sync.html">Hivemind Sync</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hive-fusion.html">Hive Fusion</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/shared-brain-benchmarks.html">Shared Brain Benchmarks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/wallets-honey-and-x402.html">Wallets, Honey, And x402</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hive-compute.html">Hive Compute</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/app-builder.html">App Builder And Hosting</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/hivemindos-machines.html">HivemindOS Machines</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/evo-optimization.html">Evo Optimization</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/env-files-notifications-maintenance.html">Env, Notifications, Maintenance</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/integrations-and-work-history.html">Integrations And Work History</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/miroshark-and-openclaw.html">MiroShark And OpenClaw</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/computer-interaction.html">Computer Interaction</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/features/page-agent.html">Page Agent (Experimental)</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Hive Superbrain</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/vault-map.html">Vault Map</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/brain-services.html">Brain Services</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-skills.html">Shared Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-env.html">Shared Env</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/sync-and-health.html">Sync And Health</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/architecture-sync.html">Architecture Sync</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/code-map.html">Code Map</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Packaged Skills</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/hive-skills.html">Hive Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/packaged-skills/third-party-skills.html">Third-party Skills</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Trading</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/">Trading Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/crypto.html">Crypto Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/concentrated-liquidity.html">Concentrated Liquidity</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/hyperliquid.html">Hyperliquid Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/stocks.html">Stock Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/agent-access.html">Ways To Trade</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/trading/governance.html">Safety And Limits</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Architecture</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/">Architecture Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/api-and-storage.html">API And Storage</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/syncing-and-tailscale.html">Syncing And Tailscale</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/tailscale-fleet-telemetry.html">Fleet Telemetry</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/generated-media-signing.html">Generated Media Signing</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/targeted-file-transfers.html">Targeted File Transfers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/tailnet-generation-skills.html">Tailnet Generation Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/macos-code-signing.html">macOS Code Signing</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Integrations</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/">Integrations Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>MiroShark</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/companion.html">Companion</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/todo.html">Todo</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Runtimes</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/">Runtime Guides</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/hermes/local-setup.html">Hermes Local Setup</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/v01-control-plane.html">AEON v0.1 Control Plane</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/zero-human-companies.html">AEON For Zero Human Companies</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/aeon/github-actions-brain-access.html">AEON GitHub Actions Brain Access</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Users · Reference</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/bankr/bankr-platform-reference.html">Bankr Platform Reference</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Investors</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/">Investor Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/ecosystem-plan.html">Ecosystem Plan</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/honey-hive-treasury.html">Honey And HIVE Treasury</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/treasury-reserve-and-seasonal-programs.html">Treasury Reserve And Seasonal Programs</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/hive-staking-and-community-tiers.html">HIVE Staking And Community Tiers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/">Paid Features</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/app-builder-hosting.html">App Builder And Hosting</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/hivemind-cloud-agent-calls.html">Hivemind Cloud Agent Calls</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/hive-compute-marketplace.html">Hive Compute Marketplace</a>
+              
+            
+          </section>
+        
+      </nav>
+    </aside>
+
+    <main id="content" class="docMain" tabindex="-1">
+      <article class="docContent">
+        <div class="pageTools">
+          <p class="pageKicker">HivemindOS manual</p>
+          <div class="pageToolActions">
+            
+            <button class="copyPageButton" type="button" data-copy-page>
+              <span aria-hidden="true">⧉</span> Copy link
+            </button>
+          </div>
+        </div>
+        <h1 id="hivemind-sync-handoff-transfers">Hivemind Sync Handoff Transfers</h1>
+
+<p>Hivemind Sync handoff transfers let one machine, runtime, or agent leave files for another agent without broadcasting the work item to every process watching the shared vault.</p>
+
+<p>Use this for artifacts that should move through the shared Obsidian brain: screenshots, generated media, reports, source bundles, QA captures, and handoff attachments. Do not use it for secrets. Transfer manifests and payloads live in the synced vault and may be replicated to every paired vault device at rest.</p>
+
+<h2 id="what-this-solves">What This Solves</h2>
+
+<p>The shared vault is intentionally visible to trusted HivemindOS machines. That makes it good for shared context, but a raw <code class="language-plaintext highlighter-rouge">attachments/</code> drop folder gets ambiguous fast:</p>
+
+<ul>
+  <li>every agent has to inspect the same files</li>
+  <li>there is no machine/runtime/agent routing</li>
+  <li>receivers cannot tell whether they already collected a file</li>
+  <li>senders cannot attach integrity metadata or a note consistently</li>
+</ul>
+
+<p><code class="language-plaintext highlighter-rouge">hive-transfer</code> fixes that by creating a small Hivemind Sync envelope with explicit routing metadata, payload checksums, and receiver acknowledgements.</p>
+
+<p>For normal agent use, prefer the higher-level <code class="language-plaintext highlighter-rouge">hive-handoff</code> command or <code class="language-plaintext highlighter-rouge">/api/handoff</code>. They resolve fuzzy machine names such as <code class="language-plaintext highlighter-rouge">ubuntu</code>, select the best matching receiving agent for a task using the dashboard’s bee-role worker-class logic, and then use <code class="language-plaintext highlighter-rouge">hive-transfer</code> underneath for file payloads.</p>
+
+<h2 id="storage-layout">Storage Layout</h2>
+
+<p>Handoff transfers live under the configured vault path, defaulting to:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>~/Documents/Obsidian/hivemindos-vault/.hivemindos-transfers/
+</code></pre></div></div>
+
+<p>Each transfer is one directory:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>.hivemindos-transfers/&lt;transfer-id&gt;/
+  manifest.json
+  payload/&lt;files&gt;
+  acks/&lt;machineId&gt;--&lt;runtime&gt;--&lt;agentId&gt;.json
+</code></pre></div></div>
+
+<p>The <code class="language-plaintext highlighter-rouge">manifest.json</code> uses schema <code class="language-plaintext highlighter-rouge">hivemind.transfer.v1</code> and records:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">id</code>: generated <code class="language-plaintext highlighter-rouge">hive-transfer-...</code> id</li>
+  <li><code class="language-plaintext highlighter-rouge">status</code>: currently <code class="language-plaintext highlighter-rouge">pending</code></li>
+  <li><code class="language-plaintext highlighter-rouge">createdAt</code>: ISO timestamp</li>
+  <li><code class="language-plaintext highlighter-rouge">note</code>: optional sender context</li>
+  <li><code class="language-plaintext highlighter-rouge">from</code>: optional sender machine/runtime/agent identity</li>
+  <li><code class="language-plaintext highlighter-rouge">to</code>: target machine/runtime/agent identity</li>
+  <li><code class="language-plaintext highlighter-rouge">payloads</code>: copied files with media type, size, SHA-256, and relative vault path</li>
+</ul>
+
+<p>Example manifest shape:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"hive-transfer-2026-05-26T17-00-00-000Z-a1b2c3d4e5f6"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"schema"</span><span class="p">:</span><span class="w"> </span><span class="s2">"hivemind.transfer.v1"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"pending"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"createdAt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-05-26T17:00:00.000Z"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"note"</span><span class="p">:</span><span class="w"> </span><span class="s2">"source screenshot for preview QA"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"from"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"machineId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"hivemind-machine-sender"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"host"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ubuntu-vps-1"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"runtime"</span><span class="p">:</span><span class="w"> </span><span class="s2">"hermes"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"agentId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"qa-agent"</span><span class="w">
+  </span><span class="p">},</span><span class="w">
+  </span><span class="nl">"to"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"machineId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"hivemind-machine-receiver"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"host"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Workstation.local"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"runtime"</span><span class="p">:</span><span class="w"> </span><span class="s2">"hermes"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"agentId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"renderer"</span><span class="w">
+  </span><span class="p">},</span><span class="w">
+  </span><span class="nl">"payloads"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+    </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"screenshot.png"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"mediaType"</span><span class="p">:</span><span class="w"> </span><span class="s2">"image/png"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"bytes"</span><span class="p">:</span><span class="w"> </span><span class="mi">123456</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"sha256"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"path"</span><span class="p">:</span><span class="w"> </span><span class="s2">".hivemindos-transfers/&lt;transfer-id&gt;/payload/screenshot.png"</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h2 id="targeting-rules">Targeting Rules</h2>
+
+<p>A receiver only sees a pending transfer when its inbox query matches the manifest <code class="language-plaintext highlighter-rouge">to</code> fields.</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">to.machineId</code> targets a durable HivemindOS machine id.</li>
+  <li><code class="language-plaintext highlighter-rouge">to.host</code> can target a hostname when a machine id is not available.</li>
+  <li><code class="language-plaintext highlighter-rouge">to.runtime</code> optionally narrows visibility to a runtime such as <code class="language-plaintext highlighter-rouge">hermes</code>, <code class="language-plaintext highlighter-rouge">openclaw</code>, or <code class="language-plaintext highlighter-rouge">aeon</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">to.agentId</code> optionally narrows visibility to one agent inside that runtime.</li>
+</ul>
+
+<p>Important behavior:</p>
+
+<ul>
+  <li>Wrong machine: hidden.</li>
+  <li>Wrong explicit runtime: hidden.</li>
+  <li>Wrong explicit agent: hidden.</li>
+  <li>Runtime-level inbox: if a receiver polls with <code class="language-plaintext highlighter-rouge">--runtime hermes</code> and no <code class="language-plaintext highlighter-rouge">--agent</code>, it can see transfers for that runtime on that machine, including agent-specific transfers, so a runtime supervisor can route internally.</li>
+  <li>Agent-level inbox: if a receiver polls with both <code class="language-plaintext highlighter-rouge">--runtime</code> and <code class="language-plaintext highlighter-rouge">--agent</code>, it sees runtime-wide transfers plus transfers for that exact agent.</li>
+</ul>
+
+<p>Prefer <code class="language-plaintext highlighter-rouge">machineId</code> for durable targeting because hostnames can collide or change. Use <code class="language-plaintext highlighter-rouge">host</code> only when bootstrapping before the receiver has advertised a stable machine id.</p>
+
+<h2 id="cli-usage">CLI Usage</h2>
+
+<p>Setup installs <code class="language-plaintext highlighter-rouge">hive-transfer</code> next to the shared env helpers in <code class="language-plaintext highlighter-rouge">~/.local/bin</code>.</p>
+
+<h3 id="friendly-handoff-command">Friendly handoff command</h3>
+
+<p>Use this when an agent or human knows the destination by name but not exact machine ids:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-handoff send <span class="nt">--to</span> ubuntu ./screenshot.png
+</code></pre></div></div>
+
+<p>That creates a plain file handoff to the best matching connected Ubuntu-like machine. If the user also gives work for a receiving agent, include <code class="language-plaintext highlighter-rouge">--task</code>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-handoff send <span class="nt">--to</span> ubuntu <span class="se">\</span>
+  <span class="nt">--task</span> <span class="s2">"edit this image and save a web-ready version"</span> <span class="se">\</span>
+  ./screenshot.png
+</code></pre></div></div>
+
+<p>For task-only delegation:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-handoff task <span class="nt">--to</span> ubuntu <span class="s2">"summarize the local project state"</span>
+</code></pre></div></div>
+
+<p>Agents should ask a follow-up question before using a task handoff if the user has not said what the receiving agent should do. Plain file handoff does not need that question.</p>
+
+<p>The dashboard chat command mirrors task-only delegation:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/handoff-task ubuntu summarize the local project state
+</code></pre></div></div>
+
+<p>Use <code class="language-plaintext highlighter-rouge">hive-handoff plan --to ubuntu --task "..."</code> to resolve the machine and selected agent without side effects.</p>
+
+<h3 id="send-files">Send files</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-transfer send <span class="se">\</span>
+  <span class="nt">--toMachine</span> hivemind-machine-receiver <span class="se">\</span>
+  <span class="nt">--toRuntime</span> hermes <span class="se">\</span>
+  <span class="nt">--toAgent</span> renderer <span class="se">\</span>
+  <span class="nt">--fromMachine</span> hivemind-machine-sender <span class="se">\</span>
+  <span class="nt">--fromRuntime</span> hermes <span class="se">\</span>
+  <span class="nt">--fromAgent</span> qa-agent <span class="se">\</span>
+  <span class="nt">--note</span> <span class="s2">"source screenshot for preview QA"</span> <span class="se">\</span>
+  ./screenshot.png ./report.md
+</code></pre></div></div>
+
+<p>You can target by host instead of machine id:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-transfer send <span class="se">\</span>
+  <span class="nt">--toHost</span> Workstation.local <span class="se">\</span>
+  <span class="nt">--toRuntime</span> hermes <span class="se">\</span>
+  <span class="nt">--toAgent</span> renderer <span class="se">\</span>
+  ./artifact.zip
+</code></pre></div></div>
+
+<p>Use <code class="language-plaintext highlighter-rouge">--syncPath</code> to override the vault path for tests or non-default vaults:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-transfer send <span class="nt">--syncPath</span> /path/to/vault <span class="nt">--toMachine</span> hivemind-machine-receiver ./file.png
+</code></pre></div></div>
+
+<h3 id="check-the-inbox">Check the inbox</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-transfer inbox <span class="se">\</span>
+  <span class="nt">--machine</span> hivemind-machine-receiver <span class="se">\</span>
+  <span class="nt">--runtime</span> hermes <span class="se">\</span>
+  <span class="nt">--agent</span> renderer
+</code></pre></div></div>
+
+<p>The command returns JSON with matching transfers and absolute payload paths after Syncthing or the selected vault sync provider has replicated the files locally.</p>
+
+<p>Runtime supervisor example:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-transfer inbox <span class="se">\</span>
+  <span class="nt">--machine</span> hivemind-machine-receiver <span class="se">\</span>
+  <span class="nt">--runtime</span> hermes
+</code></pre></div></div>
+
+<p>Include already acknowledged transfers for debugging:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-transfer inbox <span class="nt">--machine</span> hivemind-machine-receiver <span class="nt">--runtime</span> hermes <span class="nt">--agent</span> renderer <span class="nt">--all</span>
+</code></pre></div></div>
+
+<h3 id="acknowledge-collection">Acknowledge collection</h3>
+
+<p>After the receiver has read or copied the payload, it should acknowledge the transfer:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-transfer ack hive-transfer-2026-05-26T17-00-00-000Z-a1b2c3d4e5f6 <span class="se">\</span>
+  <span class="nt">--machine</span> hivemind-machine-receiver <span class="se">\</span>
+  <span class="nt">--runtime</span> hermes <span class="se">\</span>
+  <span class="nt">--agent</span> renderer
+</code></pre></div></div>
+
+<p>Acknowledgement writes an <code class="language-plaintext highlighter-rouge">acks/*.json</code> file in the transfer directory. Future inbox checks for the same receiver hide that transfer unless <code class="language-plaintext highlighter-rouge">--all</code> is used.</p>
+
+<h2 id="collector-http-api">Collector HTTP API</h2>
+
+<p>The telemetry collector exposes the same semantics when it advertises this health capability:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"capabilities"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"fileTransfers"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<h3 id="list-inbox">List inbox</h3>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">GET /transfers?machineId=hivemind-machine-receiver&amp;runtime=hermes&amp;agentId=renderer
+</span></code></pre></div></div>
+
+<p>Supported query parameters:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">machineId</code></li>
+  <li><code class="language-plaintext highlighter-rouge">host</code></li>
+  <li><code class="language-plaintext highlighter-rouge">runtime</code></li>
+  <li><code class="language-plaintext highlighter-rouge">agentId</code></li>
+  <li><code class="language-plaintext highlighter-rouge">all=true</code> to include already acknowledged transfers</li>
+</ul>
+
+<h3 id="create-transfer">Create transfer</h3>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST /transfers
+Content-Type: application/json
+
+{
+  "files": ["/absolute/path/to/screenshot.png"],
+  "note": "source screenshot for preview QA",
+  "from": {
+    "machineId": "hivemind-machine-sender",
+    "runtime": "hermes",
+    "agentId": "qa-agent"
+  },
+  "to": {
+    "machineId": "hivemind-machine-receiver",
+    "runtime": "hermes",
+    "agentId": "renderer"
+  }
+}
+</span></code></pre></div></div>
+
+<h3 id="acknowledge-transfer">Acknowledge transfer</h3>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST /transfers/ack
+Content-Type: application/json
+
+{
+  "id": "hive-transfer-2026-05-26T17-00-00-000Z-a1b2c3d4e5f6",
+  "machineId": "hivemind-machine-receiver",
+  "runtime": "hermes",
+  "agentId": "renderer"
+}
+</span></code></pre></div></div>
+
+<p>Keep collectors private to Tailscale or Hivemind Link. Do not expose these endpoints on the public internet.</p>
+
+<h2 id="handoff-planner-api">Handoff Planner API</h2>
+
+<p>The dashboard exposes a higher-level planner at <code class="language-plaintext highlighter-rouge">/api/handoff</code>.</p>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST /api/handoff
+Content-Type: application/json
+
+{
+  "action": "send-file-task",
+  "target": "ubuntu",
+  "files": ["/absolute/path/to/screenshot.png"],
+  "task": "edit this image and save a web-ready version",
+  "note": "source asset from Mac"
+}
+</span></code></pre></div></div>
+
+<p>Actions:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">plan</code>: resolve the target and selected agent without side effects.</li>
+  <li><code class="language-plaintext highlighter-rouge">send-file</code>: create a plain file transfer.</li>
+  <li><code class="language-plaintext highlighter-rouge">send-task</code>: start a task on the best matching agent on the target machine.</li>
+  <li><code class="language-plaintext highlighter-rouge">send-file-task</code>: create the transfer and start the remote task with inbox/ack instructions.</li>
+</ul>
+
+<p>The response includes the resolved machine, selected agent, worker class, transfer id when a file was sent, and a remote task preview when the collector chat bridge accepted the task.</p>
+
+<h2 id="hivemind-mcp">Hivemind MCP</h2>
+
+<p>Setup also installs <code class="language-plaintext highlighter-rouge">hivemind-mcp</code>, a small stdio MCP server for runtimes that prefer tools over shell commands. It exposes:</p>
+
+<p>Fleet handoff tools:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">list_hivemind_machines</code></li>
+  <li><code class="language-plaintext highlighter-rouge">plan_handoff</code></li>
+  <li><code class="language-plaintext highlighter-rouge">handoff_file</code></li>
+  <li><code class="language-plaintext highlighter-rouge">handoff_file_task</code></li>
+  <li><code class="language-plaintext highlighter-rouge">handoff_task</code></li>
+</ul>
+
+<p>Crypto/payment router tools:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">crypto_capabilities</code></li>
+  <li><code class="language-plaintext highlighter-rouge">select_crypto_rail</code></li>
+  <li><code class="language-plaintext highlighter-rouge">prepare_crypto_action</code></li>
+</ul>
+
+<p>The MCP server calls the same dashboard APIs as the UI. Handoff tools call <code class="language-plaintext highlighter-rouge">/api/handoff</code>; crypto tools call <code class="language-plaintext highlighter-rouge">/api/crypto/capabilities</code>, which selects or prepares Bankr, x402, Veil Cash, MoneyClaw, and UsePod rails without executing spending itself.</p>
+
+<p><code class="language-plaintext highlighter-rouge">hivemind-mcp</code> is a local proxy, not a standalone background wallet service. HivemindOS must be running on a discovered dashboard API port, and the caller needs the dashboard device token when auth is required. An agent can use these MCP tools from Codex, Claude, Hermes, or another runtime without the user actively chatting in the dashboard, as long as the dashboard API is reachable. If HivemindOS is offline, only independently installed provider CLIs or skills are available.</p>
+
+<h2 id="how-receivers-know-a-file-is-waiting">How Receivers Know A File Is Waiting</h2>
+
+<p>Receiving agents use polling, not push notifications:</p>
+
+<ol>
+  <li>The sender creates a transfer envelope in the shared vault, either via CLI or <code class="language-plaintext highlighter-rouge">POST /transfers</code>.</li>
+  <li>Syncthing or the selected vault sync owner replicates the directory to the receiver’s local vault.</li>
+  <li>The receiving runtime or dashboard periodically calls <code class="language-plaintext highlighter-rouge">hive-transfer inbox</code> or <code class="language-plaintext highlighter-rouge">GET /transfers</code> with its own machine/runtime/agent identity.</li>
+  <li>Matching transfers appear in the inbox response with local payload paths.</li>
+  <li>After processing, the receiver calls <code class="language-plaintext highlighter-rouge">hive-transfer ack</code> or <code class="language-plaintext highlighter-rouge">POST /transfers/ack</code>.</li>
+</ol>
+
+<p>This model keeps delivery local and robust. If the receiver is offline, the transfer waits in the vault until sync and polling resume.</p>
+
+<h2 id="verification-checklist">Verification Checklist</h2>
+
+<p>When changing this feature or diagnosing a delivery issue, verify all of the following before declaring success:</p>
+
+<ol>
+  <li><code class="language-plaintext highlighter-rouge">npm run test:hive-transfer</code> passes.</li>
+  <li><code class="language-plaintext highlighter-rouge">pnpm test:e2e:handoff</code> passes when <code class="language-plaintext highlighter-rouge">HIVE_E2E_REAL_FLEET=1</code> and a real target machine such as <code class="language-plaintext highlighter-rouge">ubuntu</code> is connected.</li>
+  <li><code class="language-plaintext highlighter-rouge">node --check scripts/hive-transfer.mjs</code>, <code class="language-plaintext highlighter-rouge">node --check scripts/hive-handoff</code>, and <code class="language-plaintext highlighter-rouge">node --check scripts/hivemind-mcp</code> pass.</li>
+  <li><code class="language-plaintext highlighter-rouge">node --check scripts/agent-telemetry-collector.mjs</code> passes if collector code changed.</li>
+  <li>Collector <code class="language-plaintext highlighter-rouge">/health</code> reports <code class="language-plaintext highlighter-rouge">capabilities.fileTransfers: true</code> on machines expected to serve HTTP inboxes.</li>
+  <li>A wrong-machine, wrong-runtime, or wrong-agent inbox returns zero transfers.</li>
+  <li>The intended receiver’s inbox returns the transfer.</li>
+  <li>The receiver can read the payload file from its local vault path.</li>
+  <li>The receiver can acknowledge the transfer and the normal inbox hides it afterward.</li>
+  <li>For cross-machine claims, verify the transfer directory exists on the receiving machine, not just on the sender.</li>
+</ol>
+
+<h2 id="troubleshooting">Troubleshooting</h2>
+
+<h3 id="the-receiver-sees-no-transfer">The receiver sees no transfer</h3>
+
+<ul>
+  <li>Confirm the sender and receiver use the same vault path or paired vault folder.</li>
+  <li>Confirm Syncthing or the external sync provider replicated <code class="language-plaintext highlighter-rouge">.hivemindos-transfers/&lt;id&gt;/</code> to the receiver.</li>
+  <li>Check the manifest <code class="language-plaintext highlighter-rouge">to</code> fields against the receiver’s actual <code class="language-plaintext highlighter-rouge">machineId</code>, <code class="language-plaintext highlighter-rouge">host</code>, <code class="language-plaintext highlighter-rouge">runtime</code>, and <code class="language-plaintext highlighter-rouge">agentId</code>.</li>
+  <li>Prefer <code class="language-plaintext highlighter-rouge">machineId</code>. If only <code class="language-plaintext highlighter-rouge">host</code> is set, make sure the hostname exactly matches what the receiver reports.</li>
+  <li>Confirm the collector on that machine advertises <code class="language-plaintext highlighter-rouge">fileTransfers</code> before relying on HTTP polling.</li>
+</ul>
+
+<h3 id="sync-looks-connected-but-files-do-not-move">Sync looks connected but files do not move</h3>
+
+<p>Syncthing can show a peer as connected while the folder state is <code class="language-plaintext highlighter-rouge">notSharing</code>. That means the peer is reachable but has not accepted/configured that folder for the other device. Add the missing device to the <code class="language-plaintext highlighter-rouge">hivemindos-vault</code> folder on the peer, restart or rescan Syncthing, then test with a small note and a real transfer.</p>
+
+<h3 id="the-wrong-agent-can-see-a-transfer">The wrong agent can see a transfer</h3>
+
+<p>Check whether it is polling at runtime-supervisor scope. A runtime-level inbox intentionally sees transfers for that runtime so it can route internally. To restrict visibility to one worker, include <code class="language-plaintext highlighter-rouge">to.agentId</code> in the manifest and have worker agents poll with <code class="language-plaintext highlighter-rouge">--agent &lt;agent-id&gt;</code>.</p>
+
+<h3 id="payload-integrity-is-uncertain">Payload integrity is uncertain</h3>
+
+<p>Use the payload <code class="language-plaintext highlighter-rouge">sha256</code> and <code class="language-plaintext highlighter-rouge">bytes</code> fields from the manifest to verify the local file after replication. A receiver should not acknowledge until it has confirmed the local payload is present and usable.</p>
+
+<h2 id="safety-boundaries">Safety Boundaries</h2>
+
+<ul>
+  <li>Do not send API keys, passwords, private keys, wallet seeds, or other secrets through <code class="language-plaintext highlighter-rouge">hive-transfer</code>.</li>
+  <li>Do not write secrets into transfer notes or filenames.</li>
+  <li>Use <code class="language-plaintext highlighter-rouge">hive-env-add</code>, <code class="language-plaintext highlighter-rouge">hive-env-remove</code>, <code class="language-plaintext highlighter-rouge">hive-env-delete</code>, <code class="language-plaintext highlighter-rouge">hive-env-check</code>, and <code class="language-plaintext highlighter-rouge">hive-env-run</code> for shared environment variables.</li>
+  <li>Treat the transfer directory as vault data: any trusted device paired to the vault sync may receive the bytes at rest.</li>
+</ul>
+
+        <nav class="pageNav" aria-label="Previous and next pages" hidden>
+          <a class="pageNavCard pageNavPrev" data-page-prev href="#">
+            <span>Previous</span>
+            <strong></strong>
+          </a>
+          <a class="pageNavCard pageNavNext" data-page-next href="#">
+            <span>Next</span>
+            <strong></strong>
+          </a>
+        </nav>
+      </article>
+    </main>
+
+    <aside class="pageOutline" aria-label="On this page" hidden>
+      <p>On this page</p>
+      <nav data-page-outline></nav>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/targeted-file-transfers.md">Improve this page ↗</a>
+    </aside>
+  </div>
+
+  <footer class="siteFooter">
+    <div>
+      <strong>HivemindOS</strong>
+      <span>Local-first infrastructure for agent teams.</span>
+    </div>
+    <div class="footerLinks">
+      <a href="/hivemindos/for-users/">User docs</a>
+      <a href="/hivemindos/for-users/architecture/">Architecture</a>
+      <a href="https://github.com/LiamVisionary/hivemindos">GitHub</a>
+    </div>
+  </footer>
+
+  <dialog class="imageViewer" aria-label="Expanded media viewer" data-image-viewer>
+    <header class="imageViewerBar">
+      <div class="imageViewerHeading">
+        <strong data-viewer-title>Expanded image</strong>
+        <span>Scroll to pan · Esc to close</span>
+      </div>
+      <div class="imageViewerControls" aria-label="Image zoom controls">
+        <button type="button" data-viewer-fit>Fit</button>
+        <div class="imageViewerZoomGroup">
+          <button type="button" aria-label="Zoom out" data-viewer-zoom-out>−</button>
+          <output aria-live="polite" data-viewer-zoom>100%</output>
+          <button type="button" aria-label="Zoom in" data-viewer-zoom-in>+</button>
+        </div>
+        <button class="imageViewerClose" type="button" data-viewer-close>Close <span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="imageViewerViewport" tabindex="0" data-viewer-viewport>
+      <div class="imageViewerCanvas" data-viewer-canvas></div>
+    </div>
+    <p class="imageViewerCaption" data-viewer-caption hidden></p>
+  </dialog>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const normalizePath = (href) => {
+      const url = new URL(href, window.location.href);
+      const pathname = url.pathname.replace(/index\.html$/, "");
+      return pathname.endsWith("/") ? pathname : pathname.replace(/\.html$/, "");
+    };
+
+    const currentPath = normalizePath(window.location.href);
+    const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
+    const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
+
+    if (currentIndex >= 0) {
+      navLinks[currentIndex].classList.add("isActive");
+      navLinks[currentIndex].setAttribute("aria-current", "page");
+      navLinks[currentIndex].closest("details")?.setAttribute("open", "");
+
+      const pageNav = document.querySelector(".pageNav");
+      const previous = navLinks[currentIndex - 1];
+      const next = navLinks[currentIndex + 1];
+      const wireCard = (card, link) => {
+        if (!card || !link) {
+          card?.remove();
+          return;
+        }
+        card.href = link.href;
+        card.querySelector("strong").textContent = link.textContent.trim();
+      };
+
+      wireCard(document.querySelector("[data-page-prev]"), previous);
+      wireCard(document.querySelector("[data-page-next]"), next);
+      if (pageNav && (previous || next)) pageNav.hidden = false;
+    }
+
+    const navSearch = document.querySelector("#navSearch");
+    const searchEmpty = document.querySelector(".searchEmpty");
+    navSearch?.addEventListener("input", () => {
+      const query = navSearch.value.trim().toLowerCase();
+      let visibleSections = 0;
+      document.querySelectorAll(".navSection").forEach((section) => {
+        let sectionHasMatch = false;
+        section.querySelectorAll(":scope > .navLink").forEach((link) => {
+          const matches = !query || link.textContent.toLowerCase().includes(query);
+          link.hidden = !matches;
+          sectionHasMatch ||= matches;
+        });
+        section.querySelectorAll(".navGroup").forEach((group) => {
+          const summary = group.querySelector("summary")?.textContent.toLowerCase() || "";
+          const groupMatches = !query || summary.includes(query);
+          let childMatches = false;
+          group.querySelectorAll(".navLink").forEach((link) => {
+            const matches = groupMatches || link.textContent.toLowerCase().includes(query);
+            link.hidden = !matches;
+            childMatches ||= matches;
+          });
+          group.hidden = !(groupMatches || childMatches);
+          sectionHasMatch ||= groupMatches || childMatches;
+          if (query && childMatches) group.setAttribute("open", "");
+        });
+        section.hidden = !sectionHasMatch;
+        if (sectionHasMatch) visibleSections += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visibleSections > 0;
+    });
+
+    window.addEventListener("keydown", (event) => {
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.matches("input, textarea, select") || activeElement?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        navSearch?.focus();
+      }
+      if (event.key === "Escape") closeNavigation();
+    });
+
+    const navToggle = document.querySelector("[data-nav-toggle]");
+    const closeNavigation = () => {
+      document.body.classList.remove("navOpen");
+      navToggle?.setAttribute("aria-expanded", "false");
+    };
+    navToggle?.addEventListener("click", () => {
+      const isOpen = document.body.classList.toggle("navOpen");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelector("[data-nav-close]")?.addEventListener("click", closeNavigation);
+    document.querySelector("[data-nav-backdrop]")?.addEventListener("click", closeNavigation);
+    document.querySelectorAll(".sideNav a").forEach((link) => link.addEventListener("click", closeNavigation));
+
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fall through for embedded or permission-restricted browsers.
+        }
+      }
+      const copyField = document.createElement("textarea");
+      copyField.value = text;
+      copyField.setAttribute("readonly", "");
+      copyField.className = "clipboardCopyField";
+      document.body.appendChild(copyField);
+      copyField.select();
+      const copied = document.execCommand("copy");
+      copyField.remove();
+      if (!copied) throw new Error("Browser clipboard access is unavailable");
+    };
+
+    document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const original = button.innerHTML;
+      try {
+        await copyTextToClipboard(window.location.href);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+      window.setTimeout(() => { button.innerHTML = original; }, 1400);
+    });
+
+    document.querySelector("[data-copy-ai]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const label = button.querySelector("[data-copy-ai-label]");
+      const originalLabel = label.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(button.dataset.copyAiUrl, { headers: { Accept: "text/plain" } });
+        if (!response.ok) throw new Error(`Investor context request failed with ${response.status}`);
+        const investorContext = await response.text();
+        if (!investorContext.includes("HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE") || !investorContext.includes("=== BEGIN DOCUMENT ===")) {
+          throw new Error("Investor context bundle is malformed");
+        }
+        await copyTextToClipboard(investorContext);
+        label.textContent = "Investor docs copied";
+      } catch {
+        label.textContent = "Copy failed";
+      } finally {
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        window.setTimeout(() => { label.textContent = originalLabel; }, 1800);
+      }
+    });
+
+    const outline = document.querySelector(".pageOutline");
+    const outlineNav = document.querySelector("[data-page-outline]");
+    const headings = Array.from(document.querySelectorAll(".docContent h2"));
+    const usedIds = new Set();
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const baseId = heading.textContent.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
+        let id = baseId;
+        let suffix = 2;
+        while (usedIds.has(id) || document.getElementById(id)) id = `${baseId}-${suffix++}`;
+        heading.id = id;
+      }
+      usedIds.add(heading.id);
+      const link = document.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent;
+      outlineNav?.appendChild(link);
+    });
+    if (outline && headings.length > 1) outline.hidden = false;
+
+    const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.id = `mermaid-${index}`;
+      diagram.textContent = code.textContent;
+      const wrapper = code.closest(".highlighter-rouge") || code.closest("pre") || code;
+      wrapper.replaceWith(diagram);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        background: "#14161c",
+        primaryColor: "#211d16",
+        primaryTextColor: "#f3f0e9",
+        primaryBorderColor: "#e7b45c",
+        lineColor: "#a7a39a",
+        secondaryColor: "#15221f",
+        tertiaryColor: "#1b1e25",
+        fontFamily: "Geist, system-ui, sans-serif"
+      }
+    });
+
+    for (const node of document.querySelectorAll(".mermaid")) {
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch (error) {
+        node.classList.add("mermaidError");
+        node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
+      }
+    }
+
+    const imageViewer = document.querySelector("[data-image-viewer]");
+    const viewerCanvas = document.querySelector("[data-viewer-canvas]");
+    const viewerViewport = document.querySelector("[data-viewer-viewport]");
+    const viewerTitle = document.querySelector("[data-viewer-title]");
+    const viewerCaption = document.querySelector("[data-viewer-caption]");
+    const viewerZoomLabel = document.querySelector("[data-viewer-zoom]");
+    const viewerZoomOut = document.querySelector("[data-viewer-zoom-out]");
+    const viewerZoomIn = document.querySelector("[data-viewer-zoom-in]");
+    let viewerScale = 1;
+    let viewerBaseWidth = 1;
+    let viewerBaseHeight = 1;
+    let viewerMedia = null;
+    let viewerSource = null;
+    let restoreViewerMedia = null;
+
+    const setViewerScale = (nextScale) => {
+      viewerScale = Math.min(4, Math.max(0.25, nextScale));
+      if (viewerMedia) viewerMedia.style.width = `${Math.round(viewerBaseWidth * viewerScale)}px`;
+      if (viewerZoomLabel) viewerZoomLabel.textContent = `${Math.round(viewerScale * 100)}%`;
+      if (viewerZoomOut) viewerZoomOut.disabled = viewerScale <= 0.25;
+      if (viewerZoomIn) viewerZoomIn.disabled = viewerScale >= 4;
+    };
+
+    const fitViewerMedia = () => {
+      if (!viewerViewport) return;
+      const availableWidth = Math.max(160, viewerViewport.clientWidth - 64);
+      const availableHeight = Math.max(120, viewerViewport.clientHeight - 64);
+      setViewerScale(Math.min(1, availableWidth / viewerBaseWidth, availableHeight / viewerBaseHeight));
+    };
+
+    const mediaSectionTitle = (source) => {
+      const headings = Array.from(document.querySelectorAll(".docContent h2, .docContent h3"));
+      const preceding = headings.filter((heading) => heading.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.at(-1)?.textContent.trim() || "Expanded image";
+    };
+
+    const openMediaViewer = (source) => {
+      if (!imageViewer || !viewerCanvas || !viewerViewport) return;
+      restoreViewerMedia?.();
+      viewerCanvas.replaceChildren();
+      viewerSource = source;
+      viewerTitle.textContent = mediaSectionTitle(source);
+      const figureCaption = source.closest("figure")?.querySelector("figcaption")?.textContent.trim();
+      const imageAlt = source instanceof HTMLImageElement ? source.alt.trim() : "";
+      const caption = figureCaption || imageAlt;
+      viewerCaption.textContent = caption;
+      viewerCaption.hidden = !caption;
+
+      if (source instanceof HTMLImageElement) {
+        viewerMedia = source.cloneNode();
+        viewerMedia.removeAttribute("width");
+        viewerMedia.removeAttribute("height");
+        viewerMedia.className = "imageViewerMedia";
+        viewerMedia.alt = source.alt;
+        viewerBaseWidth = source.naturalWidth || source.getBoundingClientRect().width;
+        viewerBaseHeight = source.naturalHeight || source.getBoundingClientRect().height;
+        restoreViewerMedia = null;
+      } else {
+        const svg = source.querySelector("svg");
+        if (!svg) return;
+        const placeholder = document.createComment("diagram viewer placeholder");
+        const originalStyle = svg.getAttribute("style");
+        const originalClass = svg.getAttribute("class");
+        const renderedBounds = svg.getBoundingClientRect();
+        const viewBox = svg.viewBox?.baseVal;
+        viewerBaseWidth = viewBox?.width || renderedBounds.width;
+        viewerBaseHeight = viewBox?.height || renderedBounds.height;
+        svg.replaceWith(placeholder);
+        viewerMedia = svg;
+        viewerMedia.setAttribute("class", `${originalClass || ""} imageViewerMedia`.trim());
+        restoreViewerMedia = () => {
+          if (originalStyle === null) svg.removeAttribute("style");
+          else svg.setAttribute("style", originalStyle);
+          if (originalClass === null) svg.removeAttribute("class");
+          else svg.setAttribute("class", originalClass);
+          placeholder.replaceWith(svg);
+        };
+      }
+
+      viewerCanvas.appendChild(viewerMedia);
+      setViewerScale(1);
+      document.body.classList.add("mediaViewerOpen");
+      if (typeof imageViewer.showModal === "function") imageViewer.showModal();
+      else imageViewer.setAttribute("open", "");
+      requestAnimationFrame(() => {
+        viewerViewport.scrollLeft = Math.max(0, (viewerCanvas.scrollWidth - viewerViewport.clientWidth) / 2);
+        viewerViewport.scrollTop = Math.max(0, (viewerCanvas.scrollHeight - viewerViewport.clientHeight) / 2);
+        viewerViewport.focus({ preventScroll: true });
+      });
+    };
+
+    const registerZoomableMedia = (source, label) => {
+      if (source.closest("a")) return;
+      source.classList.add("zoomableMedia");
+      source.tabIndex = 0;
+      source.setAttribute("role", "button");
+      source.setAttribute("aria-label", label);
+      source.addEventListener("click", () => openMediaViewer(source));
+      source.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openMediaViewer(source);
+      });
+    };
+
+    document.querySelectorAll(".docContent img").forEach((image) => {
+      registerZoomableMedia(image, `Open image full screen${image.alt ? `: ${image.alt}` : ""}`);
+    });
+    document.querySelectorAll(".docContent .mermaid:not(.mermaidError)").forEach((diagram) => {
+      registerZoomableMedia(diagram, `Open ${mediaSectionTitle(diagram)} diagram full screen`);
+    });
+
+    viewerZoomOut?.addEventListener("click", () => setViewerScale(viewerScale - 0.25));
+    viewerZoomIn?.addEventListener("click", () => setViewerScale(viewerScale + 0.25));
+    document.querySelector("[data-viewer-fit]")?.addEventListener("click", fitViewerMedia);
+    document.querySelector("[data-viewer-close]")?.addEventListener("click", () => imageViewer?.close());
+    viewerViewport?.addEventListener("click", (event) => {
+      if (event.target === viewerViewport || event.target === viewerCanvas) imageViewer?.close();
+    });
+    imageViewer?.addEventListener("close", () => {
+      restoreViewerMedia?.();
+      restoreViewerMedia = null;
+      viewerCanvas?.replaceChildren();
+      document.body.classList.remove("mediaViewerOpen");
+      viewerSource?.focus({ preventScroll: true });
+      viewerSource = null;
+      viewerMedia = null;
+    });
+  </script>
+</body>
+</html>
