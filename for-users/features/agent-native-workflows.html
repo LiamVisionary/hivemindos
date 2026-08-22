@@ -562,14 +562,19 @@
   <li><code class="language-plaintext highlighter-rouge">queen_bee</code>: inspect Queen Bee state, queue coordinator work, decompose PRDs, or operate Queen Bee flow templates and runs.</li>
   <li><code class="language-plaintext highlighter-rouge">work_event</code>: create local event triggers and publish event payloads that fan out into ordinary Work Board tasks.</li>
   <li><code class="language-plaintext highlighter-rouge">request_human_approval</code>: create a Needs You card for a human decision without granting approval to the requesting agent.</li>
-  <li><code class="language-plaintext highlighter-rouge">run_subagent</code>: run self-contained work in a fresh child session, await it, and return a bounded final handoff to the parent tool call.</li>
+  <li><code class="language-plaintext highlighter-rouge">spawn_subagent</code>: start self-contained work in a fresh child session and return a job id immediately.</li>
+  <li><code class="language-plaintext highlighter-rouge">check_subagent</code>: inspect child status without blocking parent work.</li>
+  <li><code class="language-plaintext highlighter-rouge">await_subagent</code>: wait only when the parent needs the bounded child handoff.</li>
+  <li><code class="language-plaintext highlighter-rouge">run_subagent</code>: compatibility shortcut for spawn followed by await, with standard MCP Tasks support.</li>
 </ul>
 
 <p>These tools adapt external multi-agent queue patterns into HivemindOS rather than replacing the local task model. Work still lands in the Work Board, task state still lives in the shared vault or local fallback store, and Queen Bee remains the coordinator for routing and receipts.</p>
 
 <h3 id="awaited-subagents-and-context-isolation">Awaited subagents and context isolation</h3>
 
-<p>Use <code class="language-plaintext highlighter-rouge">run_subagent</code> when the child needs substantial tool work but the parent only needs the result. The MCP server calls <code class="language-plaintext highlighter-rouge">/api/handoff</code> with <code class="language-plaintext highlighter-rouge">action: "run-subagent"</code>; that route selects an eligible remote worker, opens a fresh one-shot collector session, waits for completion, and returns the result through the original MCP call. This makes the final handoff available inside the active parent session without importing the child transcript.</p>
+<p>Use <code class="language-plaintext highlighter-rouge">spawn_subagent</code> when the child needs substantial tool work but the parent has useful work it can continue. The route selects an eligible worker, starts a private collector job, and returns its job id without waiting. The parent can check it without blocking and call <code class="language-plaintext highlighter-rouge">await_subagent</code> only at the dependency point. <code class="language-plaintext highlighter-rouge">run_subagent</code> keeps the compact spawn-and-wait form.</p>
+
+<p>With MCP <code class="language-plaintext highlighter-rouge">2025-11-25</code>, <code class="language-plaintext highlighter-rouge">run_subagent</code> supports task-augmented tool calls. The initial tool call returns an MCP task immediately, the server continues handling other parent requests, completion emits a task-status notification, and <code class="language-plaintext highlighter-rouge">tasks/result</code> supplies the normal tool result. Explicit spawn/check/await tools provide the same lifecycle to older MCP clients and runtimes with different orchestration conventions.</p>
 
 <p>The isolation boundary is explicit:</p>
 
@@ -581,7 +586,9 @@
   <li>delegated results remain hypotheses until the parent verifies their evidence or artifacts</li>
 </ul>
 
-<p>This reduces parent-context growth by construction, but it is not proof of lower total provider usage: the child still spends its own input/output tokens, and comparative savings require fresh parity-controlled baseline and treatment runs. The current collector bridge executes Hermes child profiles; parent runtimes such as Codex or Claude Code reach it through their agent-scoped HivemindOS MCP registration. Awaiting is synchronous and currently bounded by the handoff transport’s 180-second timeout; longer durable work belongs on the Work Board until a resumable job/result channel exists.</p>
+<p>This reduces parent-context growth by construction, but it is not proof of lower total provider usage: the child still spends its own input/output tokens, and comparative savings require fresh parity-controlled baseline and treatment runs.</p>
+
+<p>Parent runtimes are not coupled to the child runtime: any MCP-capable agent can coordinate the lifecycle. Installed one-shot child adapters cover Hermes, Codex, Claude Code, OpenCode, OpenHands, Aider, jcode, Claw, OpenClaw, and HivemindOS/OpenAI-compatible profiles. A runtime must be authenticated and expose an actual one-shot command or loopback chat endpoint; workflow/evaluation controllers are not silently substituted with another runtime. Private job records survive ordinary polling, expire after their configured lifetime, and become an actionable failed state if their collector restarts mid-run. The standard task wait is capped at 20 minutes; longer durable work belongs on the Work Board.</p>
 
 <h2 id="dashboard-pins">Dashboard Pins</h2>
 
