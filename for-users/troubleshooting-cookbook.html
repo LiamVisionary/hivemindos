@@ -555,6 +555,11 @@
 
 <p>Common causes are a signed-out runtime, missing provider setup, unavailable model, offline machine, or a folder the agent cannot reach.</p>
 
+<p>If Chat briefly says capability planning or a local service is unavailable, keep
+the app open. The desktop app now restarts its background dashboard service,
+restores the current view, and holds the capability check while recovery runs.
+Closing and reopening the app should not be part of normal recovery.</p>
+
 <ol>
   <li>Check the selected agent and machine at the top of Chat.</li>
   <li>Use the setup card shown in the conversation if a provider or runtime is missing.</li>
@@ -564,6 +569,15 @@
 </ol>
 
 <p>HivemindOS should show a real failure rather than silently switching to a differently billed provider or an unrelated project.</p>
+
+<p>If the same local-service error survives automatic recovery, choose
+<strong>HivemindOS → Send Logs…</strong> from the system menu. The confirmation explains
+exactly what is sent, and a successful upload returns an opaque support ID you
+can share. Despite the menu label, no raw log lines are uploaded. The report is
+limited to the app/build version, coarse operating-system and architecture,
+background-service state, recovery counters, and counts from a fixed set of
+failure categories. It excludes prompts, file paths, account details, secrets,
+and network addresses.</p>
 
 <h2 id="shared-brain-or-shared-env-is-out-of-date">Shared Brain Or Shared Env Is Out Of Date</h2>
 
