@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Managed Cloud Agents | HivemindOS Docs</title>
-  <meta name="description" content="Run a dedicated HivemindOS agent with a persistent cloud workspace while your own computers are off.">
+  <title>Hivemind Bots | HivemindOS Docs</title>
+  <meta name="description" content="Run an always-on HivemindOS agent with a persistent computer, hosted routines, approvals, and human takeover.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -220,6 +220,14 @@
               
 
               
+                <a class="navLink" href="/hivemindos/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Web Research</a>
               
             
@@ -317,7 +325,7 @@
               
 
               
-                <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/features/managed-cloud-agents.html">Managed Cloud Agents</a>
+                <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
               
             
               
@@ -519,16 +527,16 @@
             </button>
           </div>
         </div>
-        <h1 id="managed-cloud-agents">Managed Cloud Agents</h1>
+        <h1 id="hivemind-bots">Hivemind Bots</h1>
 
-<p>A Managed Cloud Agent is a dedicated agent that can keep working when your laptop and other personal machines are off. It has a persistent workspace, managed model access, browser chat, health controls, and a stable identity inside HivemindOS.</p>
+<p>A Hivemind Bot is a first-party always-on HivemindOS agent. It combines the existing managed cloud workspace with a persistent browser computer, hosted schedules and event routines, independent action review, exact approvals, human takeover, managed model access, and cloud-safe integrations.</p>
 
 <p>Use a cloud agent when the work genuinely needs to be always on. For normal interactive work or private local files, an agent on your own machine is usually simpler and cheaper.</p>
 
 <h2 id="create-a-cloud-agent">Create A Cloud Agent</h2>
 
 <ol>
-  <li>Open <strong>More → Cloud Agents</strong>.</li>
+  <li>Open <strong>More → Hivemind Bots</strong>.</li>
   <li>Choose <strong>Deploy agent</strong> and review the currently available size, storage, running price, stopped price, and setup cost.</li>
   <li>Give the agent a name and fund only the amount you intend to use.</li>
   <li>Wait for deployment to report healthy before starting work.</li>
@@ -536,6 +544,43 @@
 </ol>
 
 <p>Deployment can take a few minutes. HivemindOS shows the real service state instead of presenting the agent as ready while its workspace or runtime is still starting.</p>
+
+<h2 id="the-persistent-computer">The Persistent Computer</h2>
+
+<p>Each running Bot has a browser profile on its retained managed volume. Cookies, approved sessions, and normal browser state survive a stop and later start. The Bot sees the browser through a dedicated computer tool; it does not need a personal laptop to remain online.</p>
+
+<p>The <strong>Computer</strong> tab provides a current screenshot, URL bar, takeover controls, an exact-action approval card, and an ephemeral secret handoff:</p>
+
+<ol>
+  <li>Load the screen in view-only mode.</li>
+  <li>Choose <strong>Take over</strong> to pause agent input and acquire a short renewable lease.</li>
+  <li>Click the screenshot, type into the focused field, press Enter, scroll, or navigate.</li>
+  <li>For a password or other sensitive field, choose the field from the latest observation and use <strong>Enter without saving</strong>.</li>
+  <li>Release takeover so the Bot can resume.</li>
+</ol>
+
+<p>Takeover is exclusive and expires after one minute unless the open panel renews it. The lease credential remains in that panel’s memory. A secret value is relayed only to the selected field and immediately cleared from the form; it is not added to computer policy, hosted routine receipts, or audit metadata. Screenshots necessarily contain whatever is visibly rendered in the browser and should be treated like a live screen share.</p>
+
+<h2 id="computer-policy-and-approvals">Computer Policy And Approvals</h2>
+
+<p>The <strong>Policy</strong> tab can allow or deny domains, require approval for consequential actions or every interaction, and enable an independent model review for actions not already decided by deterministic rules.</p>
+
+<p>Denied domains always win. Sensitive fields and actions that appear capable of sending, publishing, purchasing, transferring, deleting, installing, uploading, changing an account, or accepting terms pause instead of silently executing. Approval binds to one exact action fingerprint; changing the action requires a new approval. Pending approvals also appear in <strong>Alerts</strong>.</p>
+
+<p>Computer policy is one layer, not the financial authority. An exact approval can authorize one browser interaction at a checkout, but it does not enforce the company budget, validate a recipient or amount, or unlock the local signing wallet while the owner machine is offline. Keep provider-side caps, wallet limits, ad-account limits, and payment confirmations enabled. Unattended hosted spending requires a separately connected, narrowly scoped provider or a reviewed hosted smart-wallet or custody rail; deploying a Bot does not enable one.</p>
+
+<h2 id="hosted-routines">Hosted Routines</h2>
+
+<p>The <strong>Routines</strong> tab creates two kinds of always-on work:</p>
+
+<ul>
+  <li><strong>Schedule:</strong> a five-field cron expression evaluated in the selected IANA timezone.</li>
+  <li><strong>Event:</strong> a named event such as <code class="language-plaintext highlighter-rouge">company.lead.created</code>, published with a stable event id so retries are deduplicated.</li>
+</ul>
+
+<p>Every routine has a bounded prompt, runtime limit, stale-event window, pause control, manual <strong>Run now</strong> action, and recent run receipts. The routine prompt is stored so the schedule can run while your devices are offline; do not paste credential values into it. Only event keys, a payload hash, timestamps, status, and a generic output preview are stored in the routine ledger; raw event payloads and model responses are not kept there. A failed routine appears in the Bot panel and creates a deduplicated in-app Alert.</p>
+
+<p>Routines tell the Bot to respect its computer policy, pending approvals, human takeover, provider limits, and secret handoffs. Test a routine manually before scheduling it, make external writes idempotent, and use stable event ids when a sender retries.</p>
 
 <h2 id="what-persists">What Persists</h2>
 
@@ -547,7 +592,15 @@
   <li><strong>Delete permanently</strong> removes the compute and persistent workspace. Review and export anything important first; deletion cannot be undone.</li>
 </ul>
 
-<p>Running out of managed credit stops compute rather than allowing an unbounded balance. Check current usage and funding in the Cloud Agents view.</p>
+<p>Running out of managed credit stops compute rather than allowing an unbounded balance. Check current usage and funding in the Hivemind Bots view.</p>
+
+<h2 id="run-a-zero-human-company-with-a-bot">Run A Zero Human Company With A Bot</h2>
+
+<p>Create or edit a company and choose <strong>Hivemind Bot · first-party</strong> as its autonomy engine, then select one managed Bot. The binding contains only the managed Bot id; portable company templates never include that account-specific binding.</p>
+
+<p>Launching the company sends a bounded operating brief containing the company shape, apex goal, directives, product catalog, budgets, approval policies, and saved autonomy cadence. It does not add personal profile fields, setup-key values, or recognized credential values. HivemindOS waits for the first managed response and records an observed Company Run, company memory entry, and governance receipt. It also creates one company-bound hosted routine in a paused state, records that server-created binding, and only then enables the saved cadence. Existing and manually configured companies default to 30 minutes; governed watcher templates may start at 60 minutes. Later hosted receipts remain on the Bot. <strong>Stop autonomy</strong>, <strong>Freeze</strong>, changing engines, and company deletion disable future hosted cycles before claiming the local state changed; a cycle already in flight is allowed to finish.</p>
+
+<p>The first-party Bot path is different from <strong>Grok Bot · external handoff</strong>. HivemindOS can create, control, inspect, and record Hivemind Bot work. It can only produce a privacy-reviewed template and runbook for Grok Bot until xAI provides a documented Bot-control API.</p>
 
 <h2 id="pricing-and-funding">Pricing And Funding</h2>
 
@@ -613,6 +666,10 @@
 <p>A running Managed Cloud Agent can own app projects in its retained workspace. This is useful when the agent must continue building or operating away from your computer. Local and fleet agents use the same App Builder project model, so choose the host based on where the source should live and whether it must remain available continuously.</p>
 
 <p>Publishing is a separate decision from choosing a cloud build machine. Review the <a href="app-builder.html">App Builder and hosting guide</a> before creating a public preview or site.</p>
+
+<h2 id="smaller-screens-and-remote-access">Smaller Screens And Remote Access</h2>
+
+<p>The Bot panel collapses to one column on narrow screens, including the computer, approval, routine, and policy controls. It uses the same authenticated HivemindOS API rather than exposing the browser sidecar directly. Remote access still depends on the supported HivemindOS dashboard and network setup; do not publish the local dashboard or managed runtime endpoints to the open internet.</p>
 
 <h2 id="before-you-delete-one">Before You Delete One</h2>
 

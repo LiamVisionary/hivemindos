@@ -220,6 +220,14 @@
               
 
               
+                <a class="navLink" href="/hivemindos/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Web Research</a>
               
             
@@ -317,7 +325,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Managed Cloud Agents</a>
+                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
               
             
               
@@ -855,7 +863,8 @@ runtime payload key</li>
   <li><code class="language-plaintext highlighter-rouge">HIVE_COMPUTE_CONFIDENTIAL_SIDECAR_URL</code></li>
   <li><code class="language-plaintext highlighter-rouge">HIVE_COMPUTE_CONFIDENTIAL_SIDECAR_TOKEN</code></li>
   <li><code class="language-plaintext highlighter-rouge">HIVE_COMPUTE_CONFIDENTIAL_SIDECAR_SIGNING_PUBLIC_KEY</code></li>
-  <li>Node.js</li>
+  <li>the Node runtime included with the downloaded HivemindOS app (source
+checkouts need Node.js 20 or newer)</li>
   <li>Ollama or an OpenAI-compatible local server such as LM Studio</li>
   <li>the local worker module under <code class="language-plaintext highlighter-rouge">~/.hivemindos/modules/hive-compute-worker</code></li>
 </ul>
@@ -864,11 +873,15 @@ runtime payload key</li>
 hosting</strong>, then press <strong>Go live</strong> in the app. The setup action installs the
 managed worker module, installs dependencies, benchmarks the selected models,
 writes their model map and per-model asks, and opens an MPP payment session when
-that rail is available. <strong>Benchmark models</strong> reruns the synthetic benchmark
+that rail is available. The downloaded app copies the worker dependency from
+its own signed bundle and launches it with its own Node runtime, so hosting does
+not depend on a separately installed <code class="language-plaintext highlighter-rouge">npm</code>, the user’s shell PATH, or a registry
+download. A missing or stale managed dependency is repaired automatically when
+hosting starts. <strong>Benchmark models</strong> reruns the synthetic benchmark
 without starting the worker. Selecting <strong>Custom</strong> pricing exposes exact model asks right below the pricing toggle for
 hosts who choose Custom pricing. Advanced diagnostics keeps the manual command,
 model backend details, TEE evidence, and MPP session controls available without
-making them part of the normal path. The manual equivalent is:</p>
+making them part of the normal path. For a source checkout, the manual equivalent is:</p>
 
 <div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">cd</span> ~/.hivemindos/modules/hive-compute-worker
 hive-env-run <span class="nt">--</span> npm start

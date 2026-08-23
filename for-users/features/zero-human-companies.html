@@ -220,6 +220,14 @@
               
 
               
+                <a class="navLink" href="/hivemindos/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Web Research</a>
               
             
@@ -317,7 +325,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Managed Cloud Agents</a>
+                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
               
             
               
@@ -523,7 +531,7 @@
 
 <p>Zero Human Companies turn a business goal into an agent-run operating loop.</p>
 
-<p>A company has a charter, an apex goal, governance controls, a run history, and a selected autonomy engine. The default engine plans work for a HivemindOS crew through the Work Board. The optional AEON engine runs one chosen background skill in a linked AEON workspace, without requiring native company agents. The operator still owns the high-trust decisions: funding, policy, approval thresholds, public exposure, and whether a company should keep running.</p>
+<p>A company has a charter, an apex goal, governance controls, a run history, and a selected autonomy engine. The default engine plans work for a HivemindOS crew through the Work Board. The optional AEON engine runs one chosen background skill in a linked AEON workspace, without requiring native company agents. Grok Bot is available as an external handoff target for an always-on Grok computer; HivemindOS prepares the governed company shape but does not pretend to launch or observe the external Bot. The operator still owns the high-trust decisions: funding, policy, approval thresholds, public exposure, and whether a company should keep running.</p>
 
 <h2 id="start-a-company">Start A Company</h2>
 
@@ -531,7 +539,7 @@
   <li>Open <strong>More → Companies</strong> and choose <strong>Create company</strong>.</li>
   <li>Describe the outcome the company exists to achieve.</li>
   <li>Review its charter, main goal, team, capabilities, budget, and approval rules.</li>
-  <li>Choose the normal HivemindOS crew unless you already have a specific AEON background skill you want to operate.</li>
+  <li>Choose the normal HivemindOS crew unless you already have a specific AEON background skill or want to prepare an external Grok Bot handoff.</li>
   <li>Create the company, inspect its cockpit, and launch only when the first plan and limits are ready.</li>
 </ol>
 
@@ -543,7 +551,7 @@
 
 <ul>
   <li>create or review a company charter</li>
-  <li>choose the HivemindOS crew engine or an optional AEON background skill</li>
+  <li>choose the HivemindOS crew engine, an optional AEON background skill, or a Grok Bot external handoff</li>
   <li>assign agents to roles when the company uses a native crew</li>
   <li>set an apex goal and task backlog</li>
   <li>launch planned work into the shared Work Board, or hand one bounded goal to AEON</li>
@@ -571,6 +579,30 @@
 <p>Founder Mode is the outcome-first path into a company. Describe what you want to make happen, choose a privacy posture, milestone budget, and pace, then review a generated blueprint covering the charter, goal, crew, capabilities, compute, approvals, first Lab, and proof requirements.</p>
 
 <p>Compiling is read-only. Founding requires an explicit action and creates the company plus its first private Lab, but does not launch autonomous work. The operator still decides when the crew begins. See <a href="founder-mode.html">Founder Mode, Hivemind Labs, And Proof Packs</a>.</p>
+
+<h3 id="curated-company-templates">Curated Company Templates</h3>
+
+<p>Founder Mode includes governed starter shapes for common businesses. Alongside the generalized local website agency, the catalog includes a local branded-product mailer, property visual lead generation, demand-validated information products, and five narrow always-on operating desks:</p>
+
+<ul>
+  <li><strong>Community Night Desk</strong> answers only from approved community sources, skips uncertainty, and produces one morning brief.</li>
+  <li><strong>Launch Signal Radar</strong> verifies time-sensitive changes against originating sources and suppresses stale or speculative alerts.</li>
+  <li><strong>App QA Patrol</strong> exercises declared flows and viewports, preserves reproducible evidence, and may draft a fix without merging or deploying it.</li>
+  <li><strong>Competitive Intelligence Watch</strong> produces source-linked research packets without crossing into client delivery.</li>
+  <li><strong>Content Repurposing Desk</strong> learns structure from approved references, checks phrase overlap, and emits channel-native drafts without publishing them.</li>
+</ul>
+
+<p>These templates carry the reusable operating lessons rather than any source operator’s personal data, business claims, pricing, or credentials. Every always-on desk starts as one accountable watcher with one job and one output, public or read-only access where possible, an hourly default cadence, review of the first three runs, and provider-side request or spend caps before frequency increases. Broader crews come later only after the solo loop has measured evidence and one accountable supervisor.</p>
+
+<p>A template accelerates setup; it does not validate demand, create a supplier relationship, make a legal agreement, connect an account, or approve an outward action. Product prices are editable starting points. Payment, fulfillment, direct-mail, data-provider, community, source-feed, and test-account access are configured after founding with scoped accounts and provider-side limits. Persistent browser sessions are operational convenience, not separate security boundaries.</p>
+
+<h3 id="share-a-company-shape">Share A Company Shape</h3>
+
+<p>Open a company and choose <strong>Share template</strong> to prepare a portable JSON file. You can copy it, download it, or pass it to the system share sheet. A recipient imports the file from <strong>Founder Mode → Import shared template</strong>, reviews the compiled blueprint, and explicitly founds a new company. Role shapes are matched to the recipient’s available agents; source agent identities never cross the boundary.</p>
+
+<p>The export is constructed from an allowlist. It can include the generalized sector, goal, charter, offer definitions, role-only crew shape, operating directives, approval gates, backpressure setting, budget tier, packaged-skill names, and environment-variable names with generic setup prompts. It excludes the source company name and ticker, people and agent identities, company/project/machine/account IDs, local paths, connected accounts, customers and prospects, conversations and work history, current metrics, revenue and spend, attachments, active payment links, credential values, and environment values. Any source-side approval bypass is restored to <strong>Ask</strong> in the portable shape.</p>
+
+<p>The review screen reports high-confidence redactions for names and identifiers, secret-like strings, email addresses, phone numbers, street addresses, network addresses, and local paths. Review remains required before sharing: a free-form charter, product description, or directive can contain business context that only its operator recognizes as private.</p>
 
 <h2 id="imported-companies">Imported Companies</h2>
 
@@ -636,6 +668,10 @@
 
 <p>With <strong>AEON background skill</strong>, HivemindOS sends one bounded company-goal input to the selected workspace and skill. The accepted handoff appears in company Runs; detailed execution and outputs remain in AEON. No fake completed Work Board task is created.</p>
 
+<p>With <strong>Hivemind Bot · first-party</strong>, HivemindOS sends a privacy-bounded company operating brief to one selected always-on managed agent. The first observed response is recorded in Company Runs rather than manufactured as Work Board tasks. A server-created company routine then owns the company’s saved cadence; it is bound while paused before being enabled, and future receipts remain available in the Bot view even while personal devices are offline. The default remains 30 minutes for existing and manually configured companies, while the watcher templates start hourly. <strong>Stop</strong>, <strong>Freeze</strong>, engine changes, and company deletion disable future runs before the local control reports success. The Bot can use its persistent computer, promoted cloud tools, exact approvals, and human takeover. The company budget is operating context, not payment authority: a browser checkout does not inherit the local wallet spend gate, and local signing remains unavailable while the owner machine is offline. Unattended hosted spending requires a separately governed provider or wallet rail.</p>
+
+<p>With <strong>Grok Bot external handoff</strong>, HivemindOS prepares the privacy-reviewed company template and an approval-bounded runbook. The operator creates or updates the Bot and its routines in Grok. Direct launch is unavailable, and HivemindOS does not create a run record that implies the external Bot started.</p>
+
 <h2 id="optional-aeon-automation">Optional AEON Automation</h2>
 
 <p>AEON is an optional autonomy engine for a Zero Human Company. It is not required to create or run companies, and the default remains the HivemindOS crew path described above.</p>
@@ -649,12 +685,20 @@
 <ul>
   <li>HivemindOS owns the company definition, home-machine dispatch ownership, launch and stop controls, kill switch, and Company Runs trace.</li>
   <li>AEON owns the background skill execution, runtime credentials and permissions, outputs, schedules, and detailed run history.</li>
-  <li>An accepted AEON dispatch is recorded in <strong>Company Runs</strong> without manufacturing a completed Work Board task. AEON outputs remain available through the selected workspace and the AEON view.</li>
+  <li>An accepted AEON dispatch is recorded in <strong>Company Runs</strong> without manufacturing a completed Work Board task. AEON outputs remain available through the selected workspace and the Autopilot view.</li>
   <li>Stopping or freezing the company prevents future cycles; an AEON job already accepted may finish.</li>
   <li>Company Work Board budgets and approval pauses do not automatically wrap an external AEON job. Configure the selected AEON workspace’s own provider limits, permissions, and skill safety boundaries for that execution.</li>
 </ul>
 
 <p>This option is useful for recurring background work already expressed as an AEON skill. Keep the HivemindOS crew engine selected when the goal should be decomposed into governed Work Board tasks and routed across multiple company agents. Follow <a href="../runtimes/aeon/zero-human-companies.html">Use AEON With Zero Human Companies</a> for the complete setup, launch, monitoring, and troubleshooting walkthrough.</p>
+
+<h2 id="optional-grok-bot-handoff">Optional Grok Bot Handoff</h2>
+
+<p><a href="https://docs.x.ai/grok-bot/overview">Grok Bot</a> provides a persistent cloud computer, browser and computer tools, reusable skills, and scheduled routines. This can fit company workflows that need an always-on computer, but it is an external execution boundary rather than a native HivemindOS worker.</p>
+
+<p>When <strong>Grok Bot · external handoff</strong> is selected, <strong>Prepare Grok Bot handoff</strong> opens the same privacy review used for sharing. The portable file adds a conservative operating runbook: review the first three runs before consequential actions, use scoped service accounts, test one end-to-end record, set hard request and spend caps in provider accounts, reconcile payment and fulfillment outcomes, define stale-data and idempotent-retry behavior, and schedule only a workflow that already passed a real one-time run.</p>
+
+<p>HivemindOS cannot currently create, start, stop, or inspect a Grok Bot through a documented Bot-control API, so the cockpit does not show a false native launch state. Grok’s <a href="https://docs.x.ai/grok-bot/approvals-security-and-privacy">security and privacy documentation</a> also states that Bots on one account share the same computer, files, browser sessions, and logins. Separate Bots on one account therefore are not separate security boundaries. Use scoped company accounts where possible, keep unrelated companies out of the same login surface, and enforce financial limits at the payment, data, fulfillment, or advertising provider; HivemindOS budgets do not automatically constrain external Bot activity.</p>
 
 <h2 id="runs-and-proposals">Runs And Proposals</h2>
 
@@ -671,11 +715,15 @@
 <ul>
   <li><strong>HivemindOS crew:</strong> launch plans the apex goal into Work Board tasks. Later cycles wait for the company’s board work to become idle and for an eligible crew member to be available.</li>
   <li><strong>AEON background skill:</strong> launch sends the bounded goal to the selected skill. Later cycles wait for the AEON workspace to have no queued or active run. Native agents and Work Board availability are not used as AEON’s activity signal.</li>
+  <li><strong>Hivemind Bot:</strong> launch runs one observed company cycle and binds one hosted routine at the company’s saved cadence to the selected always-on Bot. The local driver no longer owns later cadence, so a personal machine and native crew may remain offline.</li>
+  <li><strong>Grok Bot external handoff:</strong> there is no direct launch. Prepare and review the portable handoff, then create or update the Bot and routine in Grok.</li>
 </ul>
 
 <p><strong>Stop autonomy</strong> halts new dispatches; work already in flight finishes. Launching also claims the company for the machine that pressed the button, so a company definition replicated across the fleet auto-dispatches only from its home machine rather than from every machine at once.</p>
 
-<p>Every company needs an explicit apex goal and an unfrozen treasury. The HivemindOS crew engine also needs at least one company agent; the AEON engine needs a current workspace and runnable skill instead. The Board shows when the goal was last dispatched and whether autonomy is running.</p>
+<p>Every company needs an explicit apex goal and an unfrozen treasury. The HivemindOS crew engine also needs at least one company agent; the AEON engine needs a current workspace and runnable skill; the Hivemind Bot engine needs a running Bot with managed credit. Grok Bot handoff does not start HivemindOS autonomy. The Board shows when a native, AEON, or first-party Bot goal was last dispatched and whether that autonomy is running.</p>
+
+<p>Cadence is part of the company shape and survives privacy-safe template sharing. Native and AEON redispatch treat it as a minimum interval, while a first-party Hivemind Bot receives the equivalent hosted cron. Existing companies default to 30 minutes. The always-on watcher templates use 60 minutes so a copied high-frequency patrol does not silently double its routine and provider usage; only shorten the interval after accepted outcomes and provider-side caps justify it.</p>
 
 <h2 id="advanced-company-operations">Advanced Company Operations</h2>
 
@@ -685,7 +733,7 @@
 
 <p>Frontier Lab turns the native company execution loop into a governed intelligence utility. It is for operators who want one small crew to run more concurrent, independently reviewed work without pretending that more agent names automatically create more capability.</p>
 
-<p>Frontier Lab currently requires the native <strong>HivemindOS crew</strong> with the <strong>hierarchical</strong> process. It cannot be enabled for AEON, sequential flows, or graph flows because those execution boundaries do not yet provide the same task-scoped reservation and settlement path. This is a fail-closed product boundary: an external or unattributed run never inherits a budget merely because the dashboard shows one.</p>
+<p>Frontier Lab currently requires the native <strong>HivemindOS crew</strong> with the <strong>hierarchical</strong> process. It cannot be enabled for AEON, Hivemind Bot, sequential flows, or graph flows because those execution boundaries do not yet provide the same task-scoped reservation and settlement path. This is a fail-closed product boundary: an external or unattributed run never inherits a budget merely because the dashboard shows one.</p>
 
 <h3 id="oauth-only-model-ladder">OAuth-Only Model Ladder</h3>
 

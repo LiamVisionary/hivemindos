@@ -220,6 +220,14 @@
               
 
               
+                <a class="navLink" href="/hivemindos/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Web Research</a>
               
             
@@ -317,7 +325,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Managed Cloud Agents</a>
+                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
               
             
               
@@ -610,7 +618,7 @@ USDG, ETH gas, and on-chain Stock Token liquidity; it is not a brokerage-account
 
 <p>X’s official API MCP is included as <code class="language-plaintext highlighter-rouge">xapi</code>. The X API server is hosted at <code class="language-plaintext highlighter-rouge">https://api.x.com/mcp</code>, but user-account access runs through the local <code class="language-plaintext highlighter-rouge">xurl</code> bridge because X requires the user to provide their own OAuth 2.0 developer app. In Integrations → MCP Servers, users can save <code class="language-plaintext highlighter-rouge">X_MCP_CLIENT_ID</code> and <code class="language-plaintext highlighter-rouge">X_MCP_CLIENT_SECRET</code> into shared env, start the browser sign-in, and sync the <code class="language-plaintext highlighter-rouge">xapi</code> MCP entry into installed agent runtimes. Runtime configs launch HivemindOS’s local bridge wrapper and do not contain X secrets or OAuth tokens.</p>
 
-<p>Users who do not want to bring their own X developer app can use the managed X API path instead. That path signs in through HivemindOS-hosted infrastructure, keeps X OAuth token custody server-side, and debits hosted HivemindOS credits for vetted X API and X MCP calls after they succeed. The hosted <code class="language-plaintext highlighter-rouge">/api/x/pricing</code> policy is authoritative; the current default policy uses upstream X API unit cost plus 25% markup with a <code class="language-plaintext highlighter-rouge">$0.001</code> minimum debit. A default X MCP tool call is <code class="language-plaintext highlighter-rouge">$0.005</code> upstream and <code class="language-plaintext highlighter-rouge">$0.00625</code> retail. The downloaded app cannot choose official X pricing, redirect revenue, or mint credits locally.</p>
+<p>Users who do not want to bring their own X developer app can use the managed X API path instead. That path signs in through HivemindOS-hosted infrastructure, keeps X OAuth token custody server-side, and deducts vetted X API and X MCP calls automatically from the same HivemindOS account balance used by HivemindOS Models. Consumer requests always use that account. The app keeps the account’s server-issued credit token encrypted under the operating-system user’s home directory; operator tokens are not bundled into customer installs. The hosted <code class="language-plaintext highlighter-rouge">/api/x/pricing</code> policy is authoritative; the current default policy uses upstream X API unit cost plus 25% markup with a <code class="language-plaintext highlighter-rouge">$0.001</code> minimum debit. A default X MCP tool call is <code class="language-plaintext highlighter-rouge">$0.005</code> upstream and <code class="language-plaintext highlighter-rouge">$0.00625</code> retail. The downloaded app cannot choose official X pricing, redirect revenue, or mint credits locally.</p>
 
 <p>The X sign-in cache is owned by <code class="language-plaintext highlighter-rouge">xurl</code> under the user’s home directory. HivemindOS reports whether that cache exists, but it does not read or copy token bodies. Agents should treat X tools as acting with the signed-in account’s scopes; write-capable tools such as bookmark changes and Article publishing need explicit user confirmation.</p>
 

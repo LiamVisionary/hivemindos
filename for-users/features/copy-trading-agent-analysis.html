@@ -220,6 +220,14 @@
               
 
               
+                <a class="navLink" href="/hivemindos/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Web Research</a>
               
             
@@ -317,7 +325,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Managed Cloud Agents</a>
+                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
               
             
               
@@ -584,6 +592,38 @@
 <p>Failing a gate means <strong>not eligible yet</strong>; it never rewrites the original configuration. Passing all gates means <strong>eligible for paper promotion</strong>, not automatically promoted and never automatically live. Any later real-money use requires a separate explicit user decision and a new safety review.</p>
 
 <p>EVO can improve the analyst prompt, evidence policy, calibration, and close policy in later experiments, while the source copy-trader, wallet signing rail, trade caps, and dry-run/live setting remain protected boundaries. This is walk-forward, evaluation-driven adaptation—not model-weight retraining and not a guarantee of profits. The continuous daemon can keep collecting paper evidence, but market regimes can change and no finite test proves future consistent profitability.</p>
+
+<h2 id="fast-historical-strategy-lab">Fast historical strategy lab</h2>
+
+<p>Completed paper outcomes can also be replayed immediately through the local strategy lab. The lab reconstructs what was knowable when each copied fill happened—the recorded analyst decision and confidence plus that fill’s market, liquidity, and security snapshot. The later 24-hour return stays sealed in the evaluator until both policies have made their decision. The replay never substitutes today’s token value, calls market data, searches the web, or places an order.</p>
+
+<p>The lab sorts the available completed trades chronologically, uses the earlier records to propose and choose a bounded candidate, purges a separator slice, and tests the candidate once on the latest untouched holdout. A candidate is a declarative policy that may change exactly one allowlisted close gate; it cannot contain code, prompts, token lists, tool calls, or arbitrary trading instructions. Both arms receive the same trade IDs, decision-time evidence, outcome snapshots, and modeled returns. An instant virtual clock removes waiting without changing the information available at each decision.</p>
+
+<p>Use the local command when you want a quick paper-only comparison:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>node scripts/copy-trading-strategy-lab.mjs <span class="nt">--holdout</span> 8 <span class="nt">--purge</span> 1 <span class="nt">--candidate-limit</span> 4 <span class="nt">--agent-proposals</span> <span class="nt">--record-harness</span>
+</code></pre></div></div>
+
+<p>The command writes a frozen dataset, candidate policies, manifest, and human-readable report under the private HivemindOS data directory. The optional harness receipt records three baseline and three treatment integrity runs so fixture parity and the no-live boundary remain auditable.</p>
+
+<p>A handful of trades is exploratory and cannot qualify a candidate. The lab requires at least 50 untouched holdout trades, a positive paired 95% interval, positive absolute return, no worse drawdown, and complete replay parity before it can label a result paper-review-eligible. Even then, it can only be reviewed for a fresh forward paper generation. It never edits the running configuration, promotes itself, or enables live trading.</p>
+
+<h2 id="current-agent-versus-hybrid-forward-paper-test">Current agent versus hybrid forward paper test</h2>
+
+<p>From an existing agent-analyzed copy, choose <strong>Create current-agent vs hybrid paper test</strong> to add one new comparison row. The left side is a fresh duplicate of the current agent logic. The right side is the hybrid challenger. Both inherit the same target, sizing, limits, polling interval, source-chain cursor, starting paper cash, and a frozen snapshot of the existing agent’s calibration/prompt history. That history informs both rails equally but is excluded from the new row’s displayed review counts and forward score. Neither rail inherits positions, simulated fills, forward reviews, or P&amp;L. The experiment metadata forces both sides to remain dry-run even if a stale client requests live mode.</p>
+
+<p>For each copied target transaction, the hybrid waits for and reuses the left rail’s exact GPT review, calibrated confidence, threshold, and recorded security evidence. It does not make a second model call. This holds the worker and decision evidence constant so the row measures the exit-policy difference instead of model sampling variance.</p>
+
+<p>The current-agent rail is unchanged. The hybrid performs the same full-position close whenever the existing current-agent gate passes. Otherwise it may trim 50% of only the newly copied fill when either:</p>
+
+<ul>
+  <li>Sol recommended a close below the normal calibrated threshold but at or above the hybrid’s frozen <code class="language-plaintext highlighter-rouge">0.659</code> exception floor; or</li>
+  <li>the matching Sol review failed open.</li>
+</ul>
+
+<p>That exception remains closed unless security coverage is complete and the recorded evidence has a risk score of at least 20 or at least one risk flag. A trim books its own proceeds, execution cost, proportional cost basis, and realized P&amp;L while leaving the remainder open and marked to market. Later counterfactual outcomes combine the actual trim receipt with the remaining amount’s horizon value.</p>
+
+<p>This is a forward paper experiment, not proof that the hybrid is better. The row starts at zero and makes its difference visible immediately, but promotion still requires the same frozen, sufficiently large held-out evidence gates described above.</p>
 
 <h2 id="requirements-and-privacy">Requirements and privacy</h2>
 

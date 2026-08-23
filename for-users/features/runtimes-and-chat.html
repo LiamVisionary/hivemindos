@@ -220,6 +220,14 @@
               
 
               
+                <a class="navLink" href="/hivemindos/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Web Research</a>
               
             
@@ -317,7 +325,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Managed Cloud Agents</a>
+                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
               
             
               
@@ -670,10 +678,11 @@ generation may still use their documented API credentials.</p>
 
 <h3 id="local-model-runtimes">Local Model Runtimes</h3>
 
-<p>Agent Settings offers two first-class local model paths:</p>
+<p>Agent Settings offers several first-class local model paths:</p>
 
 <ul>
   <li><strong>LM Studio</strong> is the download-and-control path. HivemindOS can install or start the local server, download catalog models, explicitly load or unload them, test them, and discover models shared through LM Link.</li>
+  <li><strong>FreeToken</strong> is the large Mixture-of-Experts serving path. HivemindOS automatically discovers its OpenAI-compatible server on loopback port <code class="language-plaintext highlighter-rouge">1919</code> (or through a HivemindOS fleet collector), labels its models as FreeToken, routes selected chat requests to the owning server, and uses the normal Local smoke test. FreeToken <code class="language-plaintext highlighter-rouge">0.1.2</code> currently requires a Linux x86_64 host with an NVIDIA GPU, driver r580 or newer, and CUDA 13; a Mac can use a supported fleet machine. Installation remains a manual, user-owned step because the current native CUDA/Python dependency chain is not locked tightly enough for HivemindOS to run it automatically. After installing the reviewed <code class="language-plaintext highlighter-rouge">0.1.2</code> release, start it with <code class="language-plaintext highlighter-rouge">ft serve --model &lt;path-or-hf-id&gt;</code> and refresh Local models.</li>
   <li><strong>HivemindOS Local Model Advisor</strong> appears inside the same LM Studio panel. It reads the machine’s CPU, GPU, and memory locally, evaluates a complete pinned 9,810-model snapshot, and ranks Good and Perfect llama.cpp fits across all 7,738 GGUF candidates. It hands an exact Hugging Face GGUF repository to the existing <code class="language-plaintext highlighter-rouge">lms get</code> flow for the 1,564 entries with a catalogued or direct route; for other ranked candidates, it asks LM Studio to search the model name at the selected quantization with its GGUF filter. The completed model therefore appears in the normal LM Studio inventory and uses the existing load, unload, test, OpenAI-compatible server, and LM Link controls; the advisor does not create a second model store or server.</li>
   <li><strong>SIE</strong> is the shared-GPU path. Point the SIE provider at its gateway (default <code class="language-plaintext highlighter-rouge">http://127.0.0.1:8080</code>) and HivemindOS shows every configured generation, embedding, reranking, extraction, vision, and audio model; lifecycle state; load failures; worker health; queue depth; GPU count; loaded models; and per-worker VRAM usage. Generation models can be selected for chat. Generation and embedding models can be warmed from the panel.</li>
 </ul>

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Settings, Files, Alerts, And Diagnostics | HivemindOS Docs</title>
+  <title>Settings, Files, Alerts, And Checks &amp; Repairs | HivemindOS Docs</title>
   <meta name="description" content="Manage shared setup, approved files, agent alerts, and system health from HivemindOS.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -220,6 +220,14 @@
               
 
               
+                <a class="navLink" href="/hivemindos/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Web Research</a>
               
             
@@ -317,7 +325,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Managed Cloud Agents</a>
+                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
               
             
               
@@ -519,13 +527,13 @@
             </button>
           </div>
         </div>
-        <h1 id="settings-files-alerts-and-diagnostics">Settings, Files, Alerts, And Diagnostics</h1>
+        <h1 id="settings-files-alerts-and-checks--repairs">Settings, Files, Alerts, And Checks &amp; Repairs</h1>
 
 <p>The <strong>More</strong> menu contains the utility views that keep HivemindOS dependable after the first setup. You can manage shared credentials, inspect approved files, respond to agent alerts, and check the health of your machines without reading logs or internal service routes.</p>
 
-<h2 id="env-shared-setup-for-your-hive">Env: Shared Setup For Your Hive</h2>
+<h2 id="saved-keys-shared-setup-for-your-hive">Saved Keys: Shared Setup For Your Hive</h2>
 
-<p>Use <strong>More → Env</strong> to add, update, import, or remove environment values used by agents and connected services.</p>
+<p>Use <strong>More → Saved keys</strong> to add, update, import, or remove environment values used by agents and connected services.</p>
 
 <ul>
   <li>Choose <strong>shared</strong> when permitted agents on trusted machines should inherit the value.</li>
@@ -560,20 +568,20 @@
 
 <p>Opening an alert takes you to the relevant task or setup when possible. Marking an alert read only clears its unread state; it does not approve the requested action or resolve the underlying problem.</p>
 
-<h2 id="diagnostics-health-checks-and-safe-repairs">Diagnostics: Health Checks And Safe Repairs</h2>
+<h2 id="checks--repairs-health-checks-and-safe-fixes">Checks &amp; Repairs: Health Checks And Safe Fixes</h2>
 
-<p>Use <strong>More → Diagnostics</strong> when Fleet or Chat says something is not ready. Diagnostics checks the dashboard, this machine’s HivemindOS helper, the shared vault, shared setup, agent readiness, Work, and other required local components.</p>
+<p>Use <strong>More → Checks &amp; repairs</strong> when Fleet or Chat says something is not ready. It checks the dashboard, this machine’s HivemindOS helper, the shared vault, shared setup, agent readiness, Work, and other required local components.</p>
 
 <p>Repairs are narrow and explain what they will change. A repair may recreate missing HivemindOS state, restart a local helper, reconnect the vault, or point you to a dependency that needs attention. It should not erase projects, the vault, agent conversations, or wallet data.</p>
 
-<p>Use <strong>Telemetry</strong> only when you need a deeper view of CPU, memory, disk, network, or nearby process pressure across the fleet. Most users can rely on the plain health state shown in Fleet and Diagnostics.</p>
+<p>Use <strong>Computer health</strong> only when you need a deeper view of CPU, memory, disk, network, or nearby process pressure across the fleet. Most users can rely on the plain health state shown in Fleet and Checks &amp; repairs.</p>
 
 <h2 id="a-safe-order-for-fixing-problems">A Safe Order For Fixing Problems</h2>
 
 <ol>
   <li>Open the warning where it appears and use its in-place setup or repair action.</li>
   <li>Check <strong>Fleet</strong> to confirm the target machine and agent are online.</li>
-  <li>Open <strong>Diagnostics</strong> and run the relevant check.</li>
+  <li>Open <strong>Checks &amp; repairs</strong> and run the relevant check.</li>
   <li>Review <strong>Alerts</strong> for an approval or authentication request.</li>
   <li>Use the <a href="../troubleshooting-cookbook.html">Troubleshooting guide</a> if the problem remains.</li>
 </ol>
