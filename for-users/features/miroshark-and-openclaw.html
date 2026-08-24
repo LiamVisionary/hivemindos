@@ -550,7 +550,8 @@
   <li>List templates and run metadata.</li>
   <li>Start scenario simulations.</li>
   <li>Accept <code class="language-plaintext highlighter-rouge">/swarm-sim &lt;scenario&gt;</code> launches from dashboard chat through the same <code class="language-plaintext highlighter-rouge">/api/miroshark/swarm</code> route used by the Swarm view.</li>
-  <li>Run hosted x402 simulations from Swarm or native chat when a selected wallet can pay the expected <strong>$1.20 USDC</strong> HivemindOS proxy requirement. Official builds pay the HivemindOS-hosted proxy first; that backend pays MiroShark’s upstream x402 requirement up to <strong>$1.00</strong> and keeps the expected <strong>$0.20</strong> HivemindOS cut only after the upstream run succeeds. This <strong>$1.20 USDC</strong> charge is all-in for the HivemindOS MiroShark proxy path; the local generic x402 platform-fee transfer is not added on top.</li>
+  <li>Run hosted simulations from Swarm or native chat for <strong>$1.20 per run</strong>, paid from the user’s shared HivemindOS balance or directly from a selected crypto wallet through x402. The app remembers the payment choice while keeping the final price and confirmation visible before each run. If the run does not start, the user is not charged.</li>
+  <li>Keep local and self-hosted MiroShark available for free. Choosing a hosted run is the only action that creates the <strong>$1.20</strong> cloud charge.</li>
   <li>Fetch run status, summaries, reports, transcripts, exports, telemetry, market events, observability events, LLM calls, and intelligence where the companion exposes them.</li>
   <li>Send simulation output back into agent or Kanban workflows.</li>
   <li>Load archived runs from the shared vault.</li>

@@ -3,7 +3,7 @@ format_version: 1
 content_format: Markdown with embedded HTML
 scope: Every public Markdown page under docs/for-investors
 document_count: 11
-generated_at: 2026-08-24T01:51:28+00:00
+generated_at: 2026-08-24T07:47:48+00:00
 usage: Treat each BEGIN/END DOCUMENT block as one source document. Preserve source_path attribution when citing or summarizing claims.
 
 
@@ -42,8 +42,11 @@ The easiest paid moments are concrete:
 - publish an app at a stable URL
 - keep one agent running after personal machines turn off
 - use a managed model or API without creating another provider account
+- run a hosted MiroShark simulation from the shared HivemindOS balance or direct x402 while keeping local simulation free
 
 These purchases can remain pay-as-you-go. They establish willingness to pay without forcing a subscription before recurring value exists.
+
+The current MiroShark hosted simulation is $1.20 per accepted run. That is the complete customer price, and a run that does not start is not charged.
 
 ## Stage Three: Hivemind Cloud Subscription
 
@@ -686,8 +689,11 @@ The Pro, Team, and Enterprise numbers are launch hypotheses under validation, no
 | Medium managed agent | $0.060/hour running; $0.0050/hour stopped |
 | Large managed agent | $0.110/hour running; $0.0100/hour stopped |
 | Managed models and APIs | Published upstream cost plus service markup |
+| MiroShark hosted simulation | $1.20 from HivemindOS credits or direct x402; local runs remain free |
 
 These products are expansion usage inside Hivemind Cloud. They are not separate investor pillars.
+
+MiroShark's hosted price is the complete customer price, with no extra local fee. A run that does not start is not charged.
 
 ## Current Agent Economy Revenue Rails
 

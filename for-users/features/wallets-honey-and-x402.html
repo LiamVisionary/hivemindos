@@ -826,7 +826,7 @@
   <li><code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_FEE_POLICY_URL=https://hivemindos-paid-agent-gateway.hivemindos.workers.dev/api/platform-fees/config</code></li>
 </ul>
 
-<p>That hosted policy returns source-specific rates, minimums, caps, supported rails, and recipients. Ordinary wallet transfers and externally sourced company revenue carry <strong>no HivemindOS platform fee</strong>. Current default rates are 0.20% for DEX swaps, 0.10% for supported live stock/tokenized-stock execution, and 0.50% for ordinary paid x402 or private-payment execution, with a $0.01 minimum and $10 maximum where a fee applies. The fee is quoted before confirmation and collected as a separate stablecoin transfer only after the main action succeeds. Paper trades, read-only checks, rejected actions, and no-payment x402 calls do not charge a platform fee. HivemindOS-hosted MiroShark proxy runs also exclude the separate local fee because their retail price already includes the hosted-service spread.</p>
+<p>That hosted policy returns source-specific rates, minimums, caps, supported rails, and recipients. Ordinary wallet transfers and externally sourced company revenue carry <strong>no HivemindOS platform fee</strong>. Current default rates are 0.20% for DEX swaps, 0.10% for supported live stock/tokenized-stock execution, and 0.50% for ordinary paid x402 or private-payment execution, with a $0.01 minimum and $10 maximum where a fee applies. The fee is quoted before confirmation and collected as a separate stablecoin transfer only after the main action succeeds. Paper trades, read-only checks, rejected actions, and no-payment x402 calls do not charge a platform fee. A hosted MiroShark run can use the same HivemindOS balance as Models and Mini apps instead of requiring a crypto wallet; its displayed $1.20 price is complete, and local MiroShark remains free.</p>
 
 <p>Zero Human Company revenue events are recorded through <code class="language-plaintext highlighter-rouge">/api/company-revenue</code> and shown in the company Treasury tab. Revenue earned outside HivemindOS is not charged. A future marketplace-sourced or HivemindOS-billed sale may include a disclosed fee from the hosted settlement policy, but local revenue recording itself does not create a company claim.</p>
 
@@ -862,9 +862,9 @@
       <td style="text-align: right"><code class="language-plaintext highlighter-rouge">$0.50</code></td>
     </tr>
     <tr>
-      <td>HivemindOS-hosted MiroShark x402 simulation</td>
+      <td>HivemindOS-hosted MiroShark simulation (HivemindOS balance or direct x402)</td>
       <td style="text-align: right"><code class="language-plaintext highlighter-rouge">$1.20</code></td>
-      <td style="text-align: right">No extra local platform fee; <code class="language-plaintext highlighter-rouge">$0.20</code> proxy spread is included</td>
+      <td style="text-align: right">No extra local platform fee</td>
     </tr>
     <tr>
       <td>Externally sourced Zero Human Company revenue</td>
