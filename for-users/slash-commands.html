@@ -540,6 +540,23 @@
 
 <p>When a dashboard command and runtime command share the same name, the dashboard command handles it first in the HivemindOS chat surface. Use the runtime’s native CLI/TUI when you need the runtime-specific behavior for a colliding command such as <code class="language-plaintext highlighter-rouge">/sessions</code> or <code class="language-plaintext highlighter-rouge">/usage</code>.</p>
 
+<h2 id="aeon-operator">AEON Operator</h2>
+
+<p><code class="language-plaintext highlighter-rouge">/aeon [request]</code> turns the current chat into an AEON operator session. It can set up an instance, inspect or edit skills, change schedules, diagnose missed runs, turn the current conversation into a scheduled automation, and edit <code class="language-plaintext highlighter-rouge">STRATEGY.md</code>, <code class="language-plaintext highlighter-rouge">soul/SOUL.md</code>, or <code class="language-plaintext highlighter-rouge">soul/STYLE.md</code>.</p>
+
+<p>The command targets the linked AEON workspace. In a company CEO chat, it targets the workspace already selected as that Zero Human Company’s AEON backbone, so the same skill, schedule, agent engine, model, Strategy, and Soul remain in force on later company cycles. It will not silently create a second workspace or change the saved company binding.</p>
+
+<p>Examples:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>/aeon
+/aeon move the digest to 7am Manila time
+/aeon turn this chat into a weekday automation
+/aeon tighten STRATEGY.md around qualified pipeline
+/aeon make the writing voice less formal
+</code></pre></div></div>
+
+<p>The visible chat keeps the short command. Behind it, HivemindOS gives the selected tool-capable agent the linked workspace and current AEON operating contract. Repository creation, credentials, real dispatches, commits, and pushes still follow the active chat’s confirmation policy.</p>
+
 <h2 id="dashboard-commands">Dashboard Commands</h2>
 
 <table>
@@ -636,6 +653,12 @@
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">/aeon [request]</code></td>
+      <td> </td>
+      <td>Autopilot</td>
+      <td>Set up or operate a linked AEON workspace; company-scoped chat uses the company’s AEON backbone.</td>
+    </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">/title [name]</code></td>
       <td> </td>
@@ -1018,9 +1041,10 @@
 <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>src/features/chat/dashboard-slash-commands.ts
 </code></pre></div></div>
 
-<p>Hermes command metadata used by the dashboard composer lives in:</p>
+<p>Shared command metadata used by the dashboard and Queen chat composers lives in:</p>
 
-<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>src/features/chat/chat-composer.tsx
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>src/features/chat/hermes-slash-commands.ts
+src/features/chat/aeon-slash-command.ts
 </code></pre></div></div>
 
 <p>Update this page whenever slash command names, aliases, scope, or behavior changes.</p>

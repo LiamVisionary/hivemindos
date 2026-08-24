@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>AEON v0.1 Control Plane | HivemindOS Docs</title>
+  <title>Current AEON Control Plane | HivemindOS Docs</title>
   <meta name="description" content="Local-first agent fleet control room documentation.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -527,9 +527,9 @@
             </button>
           </div>
         </div>
-        <h1 id="aeon-v01-control-plane">AEON v0.1 Control Plane</h1>
+        <h1 id="current-aeon-control-plane">Current AEON Control Plane</h1>
 
-<p>HivemindOS can operate a current AEON checkout from the Autopilot view without asking you to edit configuration files by hand. Link or clone an AEON v0.1 repository, open the agent, and use the Control tab for runtime-wide configuration.</p>
+<p>HivemindOS can operate a current AEON checkout from the Autopilot view or directly from chat. Link or clone the official <code class="language-plaintext highlighter-rouge">aeonfun/aeon</code> repository, open the agent, and use the Control tab for runtime-wide configuration—or type <code class="language-plaintext highlighter-rouge">/aeon</code> in Chat.</p>
 
 <p>AEON is optional. HivemindOS still works with native crews and other runtimes when no AEON workspace is configured. When you do use AEON, its own workspace and command-line control plane remain the authority for AEON skills, configuration, schedules, runs, logs, and outputs. That authority applies to the linked AEON workspace—not to unrelated HivemindOS features.</p>
 
@@ -591,7 +591,7 @@
 <h2 id="control-tab">Control Tab</h2>
 
 <ul>
-  <li>choose AEON’s default model, Claude or Grok harness, and gateway provider</li>
+  <li>choose AEON’s default agent engine, model, and connection. The current choices are Claude, Grok, Codex, Pi, Vibe, and Kimi; each shows only its compatible models</li>
   <li>browse first-party and community skill packs</li>
   <li>add featured MCP servers and remove configured servers</li>
   <li>read, write, or generate the Strategy document</li>
@@ -600,13 +600,14 @@
   <li>review self-healing health records and native OKF knowledge-bundle readiness</li>
   <li>register Telegram delivery using AEON’s credential-safe flow</li>
   <li>inspect the exact credential names declared by skills without exposing values</li>
+  <li>verify whether the linked workspace matches the audited upstream source and supports <code class="language-plaintext highlighter-rouge">/aeon</code>, multiple agent engines, privileged-action auditing, failure cutoffs, preview runs, conditional automations, event validation, and workspace self-updates</li>
 </ul>
 
 <p>Community packs and MCP servers extend what the workspace can execute. Review their source, requested credentials, and external side effects before installing or enabling them.</p>
 
 <h2 id="settings-sync-and-memory">Settings, Sync, And Memory</h2>
 
-<p>The <strong>Settings</strong> tab shows whether the current workspace has its configuration, v0.1 CLI, and skill catalog. It also shows repository changes and whether the local checkout is ahead of or behind its remote.</p>
+<p>The <strong>Settings</strong> tab shows whether the current workspace has its configuration, CLI, and skill catalog. It also shows repository changes and whether the local checkout is ahead of or behind its remote.</p>
 
 <p>From Settings you can:</p>
 
@@ -637,6 +638,8 @@
 
 <p>See <a href="zero-human-companies.html">Use AEON With Zero Human Companies</a> for the complete operator walkthrough and <a href="../../features/zero-human-companies.html">Zero Human Companies</a> for the full company cockpit.</p>
 
+<p>When you open <strong>Talk to CEO</strong> for an AEON-backed company, <code class="language-plaintext highlighter-rouge">/aeon</code> resolves the company’s saved AEON profile and skill before the operator turn. Edits to its schedules, skills, Strategy, Soul, agent engine, model, or credential readiness therefore affect the same workspace used by the next autonomous company cycle. The command does not silently change the company binding.</p>
+
 <h2 id="workspace-requirements">Workspace requirements</h2>
 
 <p>A compatible workspace contains:</p>
@@ -648,7 +651,7 @@
   <li>a <code class="language-plaintext highlighter-rouge">skills/</code> directory</li>
 </ul>
 
-<p>HivemindOS no longer creates an empty AEON-shaped folder. Initialize clones the official AEON repository, while Link validates the selected checkout. A workspace from before AEON v0.1 is reported as legacy and must be updated or re-cloned.</p>
+<p>HivemindOS no longer creates an empty AEON-shaped folder. Initialize clones the official <code class="language-plaintext highlighter-rouge">aeonfun/aeon</code> repository, while Link validates the selected checkout. An older incompatible workspace is reported as legacy and must be updated or re-cloned.</p>
 
 <h2 id="artifacts-and-evidence">Artifacts and evidence</h2>
 

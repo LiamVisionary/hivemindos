@@ -560,11 +560,14 @@
   <li>preserve receipts, deliverables, eval gates, and learning artifacts</li>
   <li>summarize the company’s accumulated know-how as capability capital</li>
   <li>manage governed customer booking pages and calendar commitments through connected Cal.com, user-hosted Cal.diy, or eligible Managed Hivemind Bookings</li>
+  <li>read company-bound customers and deals from Twenty, with confirmation-gated, idempotent record changes</li>
 </ul>
 
 <p>The feature is local-first. It can run with local agents, user-configured runtimes, user-owned wallets, and the shared Obsidian vault. Managed cloud, official monetization, marketplace listing, hosted capacity, or paid-agent access must be verified by HivemindOS-controlled infrastructure or by a verifiable payment rail before it grants official value.</p>
 
 <p>Company booking calls are task-scoped. <code class="language-plaintext highlighter-rouge">booking_read</code> and <code class="language-plaintext highlighter-rouge">booking_manage</code> require the active company ID, working Work Board task, assigned member agent, and a stable idempotency key; calls reserve against the company’s integration limits before reaching the provider. Creates, reschedules, cancellations, and public booking-page configuration also require their exact human confirmation. See <a href="bookings.html">Agent-Managed Bookings</a>.</p>
+
+<p>Twenty CRM calls use the same company boundary. Assign the connected workspace from the company’s <strong>Connections</strong> tab. Reads are bounded; creates, updates, and deletes require an active assigned task, a stable idempotency key, and the matching human confirmation. See <a href="../integrations/twenty.html">Twenty CRM</a>.</p>
 
 <h2 id="agent-identity-isolation">Agent Identity Isolation</h2>
 
@@ -985,7 +988,7 @@
 <ul>
   <li><a href="work-and-scheduler.html">Work And Automations</a> covers task storage, dispatch, loop contracts, eval gates, deliverables, recurring work, and work history.</li>
   <li><a href="../runtimes/aeon/zero-human-companies.html">Use AEON With Zero Human Companies</a> covers choosing, launching, monitoring, and troubleshooting the optional AEON engine.</li>
-  <li><a href="../runtimes/aeon/v01-control-plane.html">AEON v0.1 Control Plane</a> covers linking and operating a current AEON workspace.</li>
+  <li><a href="../runtimes/aeon/v01-control-plane.html">Current AEON Control Plane</a> covers linking and operating a current AEON workspace from Autopilot or <code class="language-plaintext highlighter-rouge">/aeon</code> chat.</li>
   <li><a href="evo-optimization.html">Evo Optimization Runtime</a> covers benchmark-driven optimizer loops and frontier-style experiments.</li>
   <li><a href="wallets-honey-and-x402.html">Wallets And Spending Controls</a> covers agent wallets, payment rails, Hivemind Cloud credits, and x402 paid requests.</li>
   <li><a href="agent-provider-integrations.html">Apps And Agent Providers</a> covers agent mailbox provisioning (the <strong>Create mailbox</strong> flow, AgentMail and Cloudflare Agentic Inbox backends, and Agentic Inbox setup) that the Emails tab reads from.</li>

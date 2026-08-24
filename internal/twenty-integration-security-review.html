@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Integrations | HivemindOS Docs</title>
-  <meta name="description" content="Connect apps, accounts, and compatible agent services to HivemindOS.">
+  <title>Twenty integration security review | HivemindOS Docs</title>
+  <meta name="description" content="Local-first agent fleet control room documentation.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -354,7 +354,7 @@
               
 
               
-                <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/integrations/">Integrations Home</a>
+                <a class="navLink" href="/hivemindos/for-users/integrations/">Integrations Home</a>
               
             
               
@@ -527,59 +527,55 @@
             </button>
           </div>
         </div>
-        <h1 id="integrations">Integrations</h1>
+        <h1 id="twenty-integration-security-review">Twenty integration security review</h1>
 
-<p>Integrations let your agents work with services you already use. A connection can be shared across the hive when appropriate, while each service’s permissions and HivemindOS approval rules still apply.</p>
+<p>Verdict: <strong>Conditionally approved</strong> for the HivemindOS API connector implemented from the pinned Twenty source at commit <code class="language-plaintext highlighter-rouge">26e8937118c04b8879fb83dee67a2d5d0ca00bce</code>. This verdict covers adapting the audited MIT REST client subtree and calling Twenty’s published HTTP APIs. It does not approve installing, embedding, modifying, or redistributing the Twenty server.</p>
 
-<p>Open <strong>More → Integrations</strong> in the app to see what is connected, what needs setup, and which actions each connection makes available. When a task discovers a missing connection, HivemindOS can open that setup in place so you do not lose your work.</p>
-
-<h2 id="common-connections">Common Connections</h2>
+<h2 id="reviewed-boundary">Reviewed boundary</h2>
 
 <ul>
-  <li>GitHub for repositories, issues, pull requests, and code workflows.</li>
-  <li>Google, Notion, Slack, and Linear for documents, communication, and project work.</li>
-  <li>Microsoft Azure for approved cloud-resource visibility and management paths.</li>
-  <li>Agent and tool providers that expose compatible app or MCP connections.</li>
-  <li>Messaging and social accounts for approved outbound work.</li>
-  <li>Twenty for company-bound customer records and approval-gated deal updates.</li>
+  <li>Source: <code class="language-plaintext highlighter-rouge">https://github.com/twentyhq/twenty</code></li>
+  <li>Commit: <code class="language-plaintext highlighter-rouge">26e8937118c04b8879fb83dee67a2d5d0ca00bce</code></li>
+  <li>Commit date: <code class="language-plaintext highlighter-rouge">2026-08-23T16:08:30+02:00</code></li>
+  <li>Selected source: <code class="language-plaintext highlighter-rouge">packages/twenty-client-sdk/src/rest</code></li>
+  <li>Selected license: MIT, copyright Twenty.com PBC</li>
+  <li>HivemindOS runtime mode: server-held API key or public-client OAuth with PKCE; optional signed webhook receipt ingestion</li>
+  <li>Explicitly excluded: Twenty server, Docker images, enterprise code, generated metadata clients, SDK dependencies, install scripts, telemetry, and background services</li>
 </ul>
 
-<p>Adding a connection does not give every agent unlimited authority. The selected agent, its permissions, the current task, capability approvals, and the provider’s own access rules still decide what can happen.</p>
+<p>The repository’s top-level license is primarily AGPL-3.0 and identifies narrower MIT packages. Its application exception permits proprietary applications to use published HTTP APIs, webhooks, application manifests, functions, components, and SDKs without making the proprietary application subject to the AGPL. HivemindOS stays inside that API-facing boundary and ships no Twenty server code.</p>
 
-<div class="docGrid">
-  <section class="docCard">
-    <h3>Apps And Agent Providers</h3>
-    <p>Understand shared app connections, provider discovery, required setup, and how capabilities become available to agents.</p>
-    <a href="../features/agent-provider-integrations.html">Open provider integrations</a>
-  </section>
-  <section class="docCard">
-    <h3>Twenty CRM</h3>
-    <p>Bring customers and opportunities into a company while keeping every record change behind task authority and human confirmation.</p>
-    <a href="twenty.html">Open Twenty CRM</a>
-  </section>
-  <section class="docCard">
-    <h3>GitLawb Code Proof</h3>
-    <p>Add signed provenance to code work while keeping private task and project context inside your hive.</p>
-    <a href="gitlawb.html">Open GitLawb</a>
-  </section>
-  <section class="docCard">
-    <h3>Microsoft Azure</h3>
-    <p>Connect Azure with a read-only starting point and expand access only when the work requires it.</p>
-    <a href="microsoft-azure.html">Open Microsoft Azure</a>
-  </section>
-  <section class="docCard">
-    <h3>MiroShark</h3>
-    <p>Connect simulation and rehearsal workflows for work that benefits from multiple agent perspectives.</p>
-    <a href="miroshark/">Open MiroShark</a>
-  </section>
-  <section class="docCard">
-    <h3>UsePod</h3>
-    <p>Set up prepaid hosted runtime capacity for heavier workloads that need a dedicated execution lane.</p>
-    <a href="usepod.html">Open UsePod</a>
-  </section>
-</div>
+<h2 id="evidence">Evidence</h2>
 
-<p>Never paste a secret into documentation, chat, or a screenshot. When a provider asks for a credential, use the setup field shown by HivemindOS. <a href="../whole-brain/shared-env.html">Hive Superbrain Shared Env</a> explains how approved setup can be reused without putting plaintext values in the vault.</p>
+<p>Focused heuristic audit of <code class="language-plaintext highlighter-rouge">packages/twenty-client-sdk/src/rest</code> returned zero high, medium, or low findings. Manual inspection confirmed that the selected client builds bounded HTTP requests, supplies a bearer token, serializes JSON, parses responses, and throws typed errors. HivemindOS removed the donor’s environment discovery, application-host communication, token mutation, absolute request URLs, and SDK dependencies.</p>
+
+<p>Recorded SHA-256 values:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">packages/twenty-client-sdk/LICENSE</code>: <code class="language-plaintext highlighter-rouge">f2c3d261cefa7be3fe81790e777f72c83083b832e653c493db0cc960e81f2b0f</code></li>
+  <li><code class="language-plaintext highlighter-rouge">packages/twenty-client-sdk/package.json</code>: <code class="language-plaintext highlighter-rouge">3be8512acf4950049ae2f8c6a11024e648ec985d2f6cf1fb934fbb117bb4850d</code></li>
+  <li><code class="language-plaintext highlighter-rouge">packages/twenty-client-sdk/src/rest/index.ts</code>: <code class="language-plaintext highlighter-rouge">85abe47b1c86a7a45ee3e77549d5f3d8147711e796f9b97bf73c42d3d8c49c00</code></li>
+  <li><code class="language-plaintext highlighter-rouge">packages/twenty-client-sdk/src/rest/__tests__/RestApiClient.test.ts</code>: <code class="language-plaintext highlighter-rouge">f256eadce6d2af78b20d2dfc07b1d55bacdbb23ef8fe022eb3440c29ff9f607a</code></li>
+</ul>
+
+<p>The whole repository heuristic scan was not used as an install approval. It reported install-oriented and generated-code findings outside the selected subtree, including a mutable <code class="language-plaintext highlighter-rouge">curl | bash</code> development Docker step. Because no Twenty package, image, binary, lifecycle hook, or service is installed, a dynamic sandbox install was intentionally skipped.</p>
+
+<h2 id="hardening-applied">Hardening applied</h2>
+
+<ul>
+  <li>Only relative <code class="language-plaintext highlighter-rouge">/rest/</code> paths can receive the bearer credential.</li>
+  <li>HTTPS is required except for an explicitly local self-hosted workspace.</li>
+  <li>Redirects are refused, requests time out, and responses are size-bounded.</li>
+  <li>OAuth uses discovery, dynamic public-client registration, a one-use random state, PKCE, a short-lived private pending-flow file, and server-side token storage.</li>
+  <li>Disconnect removes access, refresh, client-registration, workspace, and webhook credentials.</li>
+  <li>Webhooks require a timestamped HMAC, a five-minute replay window, an exact payload signature, and a bounded body.</li>
+  <li>Webhook receipts omit the full customer record.</li>
+  <li>CRM writes require exact action confirmation, an idempotency ledger, bounded JSON, reserved-field rejection, and company task/agent/limit checks for runtime agents.</li>
+</ul>
+
+<h2 id="residual-risk-and-re-audit-triggers">Residual risk and re-audit triggers</h2>
+
+<p>This review does not establish the security of a user’s Twenty deployment, its plugins, its workspace role configuration, or future upstream changes. Re-audit before changing the pinned donor commit, adding an SDK dependency, installing a Twenty image/service, widening the API path allowlist, accepting redirects, or copying code from outside the selected MIT subtree.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -597,7 +593,7 @@
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/integrations/index.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/internal/twenty-integration-security-review.md">Improve this page ↗</a>
     </aside>
   </div>
 
