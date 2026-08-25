@@ -221,15 +221,23 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/files-connections.html">Files And Connections</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/usage-audit.html">Usage And Audit</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
                     
@@ -876,7 +884,7 @@ Content-Type: application/json
 
 <p>Clients that negotiate MCP <code class="language-plaintext highlighter-rouge">2025-11-25</code> can task-augment <code class="language-plaintext highlighter-rouge">run_subagent</code>. HivemindOS then returns an MCP task immediately, keeps serving the parent session, emits <code class="language-plaintext highlighter-rouge">notifications/tasks/status</code> when the tool call settles, and returns the original tool result through <code class="language-plaintext highlighter-rouge">tasks/result</code>. Clients must still poll <code class="language-plaintext highlighter-rouge">tasks/get</code> rather than relying only on notifications. Older MCP clients use the explicit spawn/check/await tools and get the same collector job contract.</p>
 
-<p>The bridge is runtime-neutral. A parent can be Codex, Claude Code, Hermes, OpenClaw, or any other MCP-capable runtime. Child execution is registered for Hermes, Codex, Claude Code, OpenCode, OpenHands, Aider, jcode, Claw, OpenClaw, and HivemindOS/OpenAI-compatible profiles; the selected runtime must be installed, authenticated, and expose a one-shot command or loopback chat endpoint on its machine. Workflow controllers such as Aeon or Evo can act as parents, but they are not falsely presented as free-form child executors unless their profile provides a compatible one-shot endpoint. The standard task path waits for up to 20 minutes; longer durable work belongs on the Work Board.</p>
+<p>The bridge is runtime-neutral. A parent can be Codex, Claude Code, Hermes, OpenClaw, or any other MCP-capable runtime. Child execution is registered for HivemindOS, Hermes, Codex, Claude Code, OpenCode, OpenHands, Aider, Claw, and OpenClaw; the selected runtime must be ready on its machine. Workflow controllers such as Aeon or Evo can act as parents, but they are not presented as free-form child executors unless their profile provides one. The standard task path waits for up to 20 minutes; longer durable work belongs on the Work Board.</p>
 
 <p>Crypto/payment router tools:</p>
 

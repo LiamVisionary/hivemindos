@@ -221,15 +221,23 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/files-connections.html">Files And Connections</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/usage-audit.html">Usage And Audit</a>
                     
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
                     
@@ -630,6 +638,38 @@ Content type: application/json
       <td>Read the account’s HivemindOS credit balance.</td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">projects:read</code></td>
+      <td>List and read projects visible to the key.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">projects:write</code></td>
+      <td>Create, update, and archive projects.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">usage:read</code></td>
+      <td>Read project request and charged-credit summaries.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">audit:read</code></td>
+      <td>Read project request audit events.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">files:read</code></td>
+      <td>List and download project files.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">files:write</code></td>
+      <td>Upload and delete project files.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">connections:read</code></td>
+      <td>Read protected connection metadata.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">connections:write</code></td>
+      <td>Create, rotate, disable, and delete protected connections.</td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">databases:read</code></td>
       <td>Read database status, structure, records, transfers, and archives.</td>
     </tr>
@@ -737,6 +777,18 @@ Content type: application/json
       <td><code class="language-plaintext highlighter-rouge">services.list</code></td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /capabilities</code></td>
+      <td><code class="language-plaintext highlighter-rouge">services:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">capabilities.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /capabilities/{serviceId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">services:read</code> and service access</td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">capabilities.list</code></td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">POST /services/{serviceId}/invoke</code></td>
       <td><code class="language-plaintext highlighter-rouge">services:invoke</code> and service access</td>
       <td style="text-align: center">Yes</td>
@@ -747,6 +799,117 @@ Content type: application/json
       <td><code class="language-plaintext highlighter-rouge">credits:read</code></td>
       <td style="text-align: center">No</td>
       <td><code class="language-plaintext highlighter-rouge">credits.balance.read</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="projects-usage-files-and-connections">Projects, usage, files, and connections</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Method and path</th>
+      <th>Scope</th>
+      <th style="text-align: center">Idem</th>
+      <th>Limit operation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /projects</code></td>
+      <td><code class="language-plaintext highlighter-rouge">projects:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">projects.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /projects</code></td>
+      <td><code class="language-plaintext highlighter-rouge">projects:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">projects.create</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /projects/{projectId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">projects:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">projects.read</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">PATCH /projects/{projectId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">projects:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">projects.update</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DELETE /projects/{projectId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">projects:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">projects.archive</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /usage</code></td>
+      <td><code class="language-plaintext highlighter-rouge">usage:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">usage.read</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /audit-events</code></td>
+      <td><code class="language-plaintext highlighter-rouge">audit:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">auditEvents.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /files</code></td>
+      <td><code class="language-plaintext highlighter-rouge">files:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">files.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /files</code></td>
+      <td><code class="language-plaintext highlighter-rouge">files:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">files.create</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /files/{fileId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">files:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">files.read</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DELETE /files/{fileId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">files:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">files.delete</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /connections</code></td>
+      <td><code class="language-plaintext highlighter-rouge">connections:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">connections.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /connections</code></td>
+      <td><code class="language-plaintext highlighter-rouge">connections:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">connections.create</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /connections/{connectionId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">connections:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">connections.read</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">PATCH /connections/{connectionId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">connections:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">connections.update</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DELETE /connections/{connectionId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">connections:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">connections.delete</code></td>
     </tr>
   </tbody>
 </table>
@@ -885,6 +1048,18 @@ Content type: application/json
       <td><code class="language-plaintext highlighter-rouge">wallets.transactions.create</code></td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /wallets/{walletId}/transactions</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets.transactions.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /wallets/{walletId}/transactions/{transactionId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets.transactions.read</code></td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">POST /wallets/{walletId}/signatures/quote</code></td>
       <td><code class="language-plaintext highlighter-rouge">wallets:sign</code></td>
       <td style="text-align: center">Yes</td>
@@ -907,6 +1082,18 @@ Content type: application/json
       <td><code class="language-plaintext highlighter-rouge">trading:execute</code></td>
       <td style="text-align: center">Yes</td>
       <td><code class="language-plaintext highlighter-rouge">trading.orders.create</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /trading/orders</code></td>
+      <td><code class="language-plaintext highlighter-rouge">trading:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">trading.orders.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /trading/orders/{orderId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">trading:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">trading.orders.read</code></td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">GET /trading/positions</code></td>
@@ -962,6 +1149,12 @@ Content type: application/json
       <td><code class="language-plaintext highlighter-rouge">approvals.list</code></td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /approvals/service-actions</code></td>
+      <td><code class="language-plaintext highlighter-rouge">approvals:write</code> and service access</td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">approvals.create</code></td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">POST /approvals/{approvalId}</code></td>
       <td><code class="language-plaintext highlighter-rouge">approvals:write</code></td>
       <td style="text-align: center">Yes</td>
@@ -992,10 +1185,34 @@ Content type: application/json
       <td><code class="language-plaintext highlighter-rouge">webhooks.create</code></td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">PATCH /webhooks/{webhookId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">webhooks:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">webhooks.update</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /webhooks/{webhookId}/rotate-secret</code></td>
+      <td><code class="language-plaintext highlighter-rouge">webhooks:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">webhooks.rotate</code></td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">DELETE /webhooks/{webhookId}</code></td>
       <td><code class="language-plaintext highlighter-rouge">webhooks:write</code></td>
       <td style="text-align: center">Yes</td>
       <td><code class="language-plaintext highlighter-rouge">webhooks.disable</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /webhook-deliveries</code></td>
+      <td><code class="language-plaintext highlighter-rouge">webhooks:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">webhookDeliveries.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /webhook-deliveries/{deliveryId}/replay</code></td>
+      <td><code class="language-plaintext highlighter-rouge">webhooks:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">webhookDeliveries.replay</code></td>
     </tr>
   </tbody>
 </table>
@@ -1005,8 +1222,25 @@ Content type: application/json
 <p>The wildcard selector <code class="language-plaintext highlighter-rouge">*</code> matches every authenticated operation. The complete static set is:</p>
 
 <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>services.list
+capabilities.list
 services.invoke
 credits.balance.read
+projects.list
+projects.create
+projects.read
+projects.update
+projects.archive
+usage.read
+auditEvents.list
+files.list
+files.create
+files.read
+files.delete
+connections.list
+connections.create
+connections.read
+connections.update
+connections.delete
 apiKeys.list
 apiKeys.create
 apiKeys.revoke
@@ -1027,28 +1261,39 @@ wallets.balances.read
 wallets.policy.update
 wallets.transactions.quote
 wallets.transactions.create
+wallets.transactions.list
+wallets.transactions.read
 wallets.signatures.quote
 wallets.signatures.create
 trading.quotes.create
 trading.orders.create
+trading.orders.list
+trading.orders.read
 trading.positions.list
 runs.list
 runs.create
 runs.read
 runs.cancel
 approvals.list
+approvals.create
 approvals.decide
 artifacts.list
 artifacts.content.read
 webhooks.list
 webhooks.create
+webhooks.update
+webhooks.rotate
 webhooks.disable
+webhookDeliveries.list
+webhookDeliveries.replay
 </code></pre></div></div>
 
 <p>For every service id, two exact selectors are also valid:</p>
 
 <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>services.invoke.&lt;serviceId&gt;
 runs.create.&lt;serviceId&gt;
+services.invoke.&lt;serviceId&gt;.&lt;operationId&gt;
+runs.create.&lt;serviceId&gt;.&lt;operationId&gt;
 </code></pre></div></div>
 
 <p>The SDK exports the expanded list as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_OPERATION_IDS</code> and exports the four operations that accept <code class="language-plaintext highlighter-rouge">creditsPerDay</code> as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_CREDIT_METERED_OPERATION_IDS</code>.</p>
@@ -1076,12 +1321,32 @@ runs.create.&lt;serviceId&gt;
       <td>A database transfer part.</td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">Content-Type: &lt;media-type&gt;</code></td>
+      <td>A managed file upload.</td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">Content-Length</code></td>
-      <td>A database transfer part.</td>
+      <td>A database transfer part or file upload.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">Idempotency-Key</code></td>
       <td>Every endpoint marked <code class="language-plaintext highlighter-rouge">Yes</code> above.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Project</code></td>
+      <td>Select an active project with an account-level key.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-File-Name</code></td>
+      <td>Required customer-visible file name for a file upload.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-Content-Sha256</code></td>
+      <td>Optional expected file checksum.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-File-Purpose</code></td>
+      <td>Optional project-defined file purpose.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Credit-Token</code></td>
@@ -1111,6 +1376,14 @@ runs.create.&lt;serviceId&gt;
     <tr>
       <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Limit-Operation</code></td>
       <td>Exact operation id reported with HTTP 429.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Credits-Charged</code></td>
+      <td>Authoritative managed-service charge when the operation reports one.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Upstream-Request-Id</code></td>
+      <td>Safe managed-service request correlation id when available.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">X-Content-Sha256</code></td>

@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Agent-Analyzed Copy Trading | HivemindOS Docs</title>
-  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <title>Projects, Isolation, And Service Accounts | HivemindOS Docs</title>
+  <meta name="description" content="Isolate products and environments with HivemindOS projects and permanently project-bound API keys.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -212,7 +212,7 @@
               
 
               
-                <details class="navGroup">
+                <details class="navGroup" open>
                   <summary>Platform API</summary>
                   <div class="navChildren">
                     
@@ -221,7 +221,7 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
+                      <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
@@ -565,7 +565,7 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">HivemindOS manual</p>
+          <p class="pageKicker">Platform API</p>
           <div class="pageToolActions">
             
             <button class="copyPageButton" type="button" data-copy-page>
@@ -573,127 +573,93 @@
             </button>
           </div>
         </div>
-        <h1 id="agent-analyzed-copy-trading">Agent-Analyzed Copy Trading</h1>
+        <h1 id="projects-isolation-and-service-accounts">Projects, Isolation, And Service Accounts</h1>
 
-<p>Agent-analyzed copy trading lets you compare an ordinary copy-trader with an isolated, research-assisted twin. The original configuration keeps its settings and positions. The twin watches the same wallet, uses the same sizing and safety limits, and records its own cash, positions, decisions, and results.</p>
+<p>A project is the security and data boundary for one product, customer tenant, or deployment environment. Wallets, quotes, approvals, runs, artifacts, files, connections, idempotency records, webhooks, managed database data, usage, and audit events stay inside the selected project.</p>
 
-<h2 id="local-or-always-on">Local or always on</h2>
+<h2 id="create-a-project">Create a project</h2>
 
-<p>The Copy trading workspace now includes an always-on option above the local controls. Choose <strong>HivemindOS wallet</strong> to create a separate hosted Base wallet from your signed-in HivemindOS account, or connect an existing Bankr wallet. The always-on monitor keeps watching and executing when the desktop app is closed. It uses the same target detection, risk caps, verified execution ledger, price, and performance reporting for either wallet choice.</p>
+<p>Use an account-level key with <code class="language-plaintext highlighter-rouge">projects:write</code>:</p>
 
-<p>Before confirmation, HivemindOS shows the one-time hosted-wallet setup price from your account alongside the copy-trading price. The wallet starts paused until you fund its displayed address with Base USDC. After funding, resume the monitor; the first $1 covers a rolling 30-day usage period and is credited toward the 0.5% fee on verified live copied notional. Failed, skipped, paper, and unverified trades do not incur the percentage fee. Canceling stops the monitor and revokes its dedicated trading access.</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">created</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">projects</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
+  <span class="p">{</span>
+    <span class="na">name</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Acme production</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">description</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Managed backend for the Acme application</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">project-acme-production</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
 
-<h2 id="one-budget-across-both-copies">One budget across both copies</h2>
-
-<p>The ordinary and agent-analyzed copies divide one configured trade amount and one daily copy limit when both are running. The default pair assigns half to each side, so a $10 copy becomes two $5 entries instead of two $10 entries. If either side is stopped, the running side receives the full configured amount and daily limit again. Existing ordinary/agent pairs receive the same shared-budget behavior automatically.</p>
-
-<p>Each side keeps its own positions and results, so the comparison remains clear. A verified source signal that is more than 90 seconds old is not copied. If a live submission cannot be confirmed, that copy pauses before any later trade can run; check the wallet, then stop and start the copy to continue.</p>
-
-<h2 id="matching-paper-and-live-timing">Matching paper and live timing</h2>
-
-<p>On Base, every running copy receives the same newly sealed block as soon as it arrives. Paper copies, ordinary live copies, and agent-analyzed live copies do not use different detection delays, so a paper comparison cannot gain or lose time solely because it is simulated. If the immediate update is interrupted, a backup check runs within three seconds and feeds the same path.</p>
-
-<p>Paper results still model network, venue, slippage, and liquidity-impact costs rather than claiming the exact price a future wallet will receive. Real execution can vary with market movement and available liquidity, but the source-trade detection clock is shared across paper and live modes.</p>
-
-<h2 id="what-happens-after-a-copied-buy">What happens after a copied buy</h2>
-
-<p>The twin still mirrors the buy first, just as the original does. As soon as the token is known, it begins preparing current market, liquidity, contract or mint security, and prior target-wallet performance evidence while the fill completes.</p>
-
-<p>Immediately after the fill, a fast safety gate checks objective evidence. A confirmed honeypot, inability to sell, non-transferable token, malicious creator, extreme sell tax, or critically thin liquidity can close the twin’s position without waiting for a model. Upgrade, freeze, mint, metadata, holder-concentration, new-pool, and other caution signals are not treated as proof on their own.</p>
-
-<p>All other trades go to GPT-5.6 Sol as the expert adjudicator. Sol receives the prepared evidence packet, current market data, prior target-wallet outcomes, and the fast-gate findings, then uses web search for current exploits, scam reports, project information, material news, and credible warnings.</p>
-
-<p>The result is one of three decisions:</p>
-
-<ul>
-  <li><strong>Keep</strong> leaves the position open.</li>
-  <li><strong>Close</strong> exits only the twin’s copied position when the empirically calibrated confidence meets that trade’s threshold.</li>
-  <li><strong>Uncertain</strong> leaves the position open because the evidence was not strong enough.</li>
-</ul>
-
-<p>Sol’s stated confidence is calibrated only against completed earlier evaluation batches for the same twin. The current 50-trade batch cannot teach or grade itself. Wallet statistics, prior review examples, and retrospective lessons are filtered at the same batch boundary. With little history or missing security evidence, the close threshold becomes more conservative. If the model, network, or research step fails, the position stays open and the failure is recorded. An analysis failure never triggers a sale.</p>
-
-<p>Model research is serialized outside the signal-detection loop. A slow or timed-out review therefore does not delay the twin’s next wallet poll. Cooldowns use the target chain’s block or slot ordering rather than local wall time, so model latency cannot by itself make the original and twin choose different copied signals.</p>
-
-<h2 id="reading-the-comparison">Reading the comparison</h2>
-
-<p>Each twin still shows the original return, agent-analyzed return, and current difference in percentage points from the moment the pair started. That live snapshot is useful, but it is not evidence that the policy should be promoted.</p>
-
-<p>The card separately shows:</p>
-
-<ul>
-  <li><strong>Learning evidence</strong> progress toward 200 matured trade outcomes.</li>
-  <li>The held-out <strong>95% edge</strong> interval when enough data exists.</li>
-  <li>The held-out <strong>absolute 95% return</strong> interval and profit factor, so losing less than a losing original is not called success.</li>
-  <li>Agent-analyzed and original maximum drawdown.</li>
-  <li>Modeled execution costs, reviewed/kept/closed counts, and analysis failures.</li>
-  <li><strong>Outcome retrospectives</strong> that state what happened, which evidence tags were present, and what a later batch may test.</li>
-</ul>
-
-<p>Open <strong>Show data</strong> to read the latest calibrated confidence, raw model confidence, close threshold, decision path, review summary, and source links.</p>
-
-<p>Start in dry-run. A live pair divides the configured amount across two real buys before analysis and the agent side may perform a real closing sale afterward. The total copied buy amount stays within the shared limit, while the extra transaction can still use additional gas and research. Creating a twin from a live source leaves the twin stopped until you explicitly start it.</p>
-
-<h2 id="how-evo-uses-the-results">How EVO uses the results</h2>
-
-<p>Every reviewed fill records both paths at fixed 5-minute, 30-minute, 4-hour, and 24-hour horizons: what the original hold would have returned and what the evolved decision returned. It also records the target wallet’s eventual sell as a variable target-exit horizon. Both paths include modeled network, venue, slippage, and liquidity-impact costs. Each paper buy retains its exact acquired amount. If a review closes an accumulated position, every still-open lot is closed at the same actual receipt price, while the review retains the whole-position proceeds, cost basis, execution cost, and profit or loss. If the daemon is unavailable long enough to miss a fixed horizon’s bounded observation window, that horizon is marked missed instead of substituting a later price.</p>
-
-<p>At 24 hours and at the target exit, the system writes a deterministic retrospective with the hold return, evolved return, paired edge, outcome classification, evidence tags, and a bounded lesson. Notes are local operational research state. Only aggregate lessons from earlier frozen batches enter later prompts; a note never edits the current policy or model weights by itself.</p>
-
-<p>The policy is frozen under an explicit version and evaluated in chronological 50-trade batches. Calibration for a batch can use only matured earlier batches. EVO does not mark a policy eligible until it has all of the following:</p>
-
-<ul>
-  <li>At least 200 cost-aware outcomes matured through 24 hours.</li>
-  <li>A complete unseen 50-trade validation batch.</li>
-  <li>A paired bootstrap whose 95% lower confidence bound is above zero.</li>
-  <li>An absolute-return bootstrap whose 95% lower confidence bound is above zero.</li>
-  <li>A held-out profit factor of at least 1.2.</li>
-  <li>Maximum drawdown no worse than the original path.</li>
-  <li>Agent-analyzed maximum drawdown no greater than 25%.</li>
-  <li>No more than 5% failed-open Sol reviews in the held-out batch.</li>
-</ul>
-
-<p>Failing a gate means <strong>not eligible yet</strong>; it never rewrites the original configuration. Passing all gates means <strong>eligible for paper promotion</strong>, not automatically promoted and never automatically live. Any later real-money use requires a separate explicit user decision and a new safety review.</p>
-
-<p>EVO can improve the analyst prompt, evidence policy, calibration, and close policy in later experiments, while the source copy-trader, wallet signing rail, trade caps, and dry-run/live setting remain protected boundaries. This is walk-forward, evaluation-driven adaptation—not model-weight retraining and not a guarantee of profits. The continuous daemon can keep collecting paper evidence, but market regimes can change and no finite test proves future consistent profitability.</p>
-
-<h2 id="fast-historical-strategy-lab">Fast historical strategy lab</h2>
-
-<p>Completed paper outcomes can also be replayed immediately through the local strategy lab. The lab reconstructs what was knowable when each copied fill happened—the recorded analyst decision and confidence plus that fill’s market, liquidity, and security snapshot. The later 24-hour return stays sealed in the evaluator until both policies have made their decision. The replay never substitutes today’s token value, calls market data, searches the web, or places an order.</p>
-
-<p>The lab sorts the available completed trades chronologically, uses the earlier records to propose and choose a bounded candidate, purges a separator slice, and tests the candidate once on the latest untouched holdout. A candidate is a declarative policy that may change exactly one allowlisted close gate; it cannot contain code, prompts, token lists, tool calls, or arbitrary trading instructions. Both arms receive the same trade IDs, decision-time evidence, outcome snapshots, and modeled returns. An instant virtual clock removes waiting without changing the information available at each decision.</p>
-
-<p>Use the local command when you want a quick paper-only comparison:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>node scripts/copy-trading-strategy-lab.mjs <span class="nt">--holdout</span> 8 <span class="nt">--purge</span> 1 <span class="nt">--candidate-limit</span> 4 <span class="nt">--agent-proposals</span> <span class="nt">--record-harness</span>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">created</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">created</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+<span class="kd">const</span> <span class="nx">projectId</span> <span class="o">=</span> <span class="nx">created</span><span class="p">.</span><span class="nx">project</span><span class="p">.</span><span class="nx">id</span><span class="p">;</span>
 </code></pre></div></div>
 
-<p>The command writes a frozen dataset, candidate policies, manifest, and human-readable report under the private HivemindOS data directory. The optional harness receipt records three baseline and three treatment integrity runs so fixture parity and the no-live boundary remain auditable.</p>
+<p>Projects can be listed, read, renamed, and archived. Archiving prevents new requests from selecting the project. It does not silently move its resources to another project.</p>
 
-<p>A handful of trades is exploratory and cannot qualify a candidate. The lab requires at least 50 untouched holdout trades, a positive paired 95% interval, positive absolute return, no worse drawdown, and complete replay parity before it can label a result paper-review-eligible. Even then, it can only be reviewed for a fresh forward paper generation. It never edits the running configuration, promotes itself, or enables live trading.</p>
+<h2 id="bind-a-key-permanently">Bind a key permanently</h2>
 
-<h2 id="current-agent-versus-hybrid-forward-paper-test">Current agent versus hybrid forward paper test</h2>
+<p>Create a child key with <code class="language-plaintext highlighter-rouge">projectId</code>. The project binding cannot be removed or changed, and every descendant inherits it.</p>
 
-<p>From an existing agent-analyzed copy, choose <strong>Create current-agent vs hybrid paper test</strong> to add one new comparison row. The left side is a fresh duplicate of the current agent logic. The right side is the hybrid challenger. Both inherit the same target, sizing, limits, polling interval, source-chain cursor, starting paper cash, and a frozen snapshot of the existing agent’s calibration/prompt history. That history informs both rails equally but is excluded from the new row’s displayed review counts and forward score. Neither rail inherits positions, simulated fills, forward reviews, or P&amp;L. The experiment metadata forces both sides to remain dry-run even if a stale client requests live mode.</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">worker</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">apiKeys</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
+  <span class="p">{</span>
+    <span class="na">label</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Acme research worker</span><span class="dl">"</span><span class="p">,</span>
+    <span class="nx">projectId</span><span class="p">,</span>
+    <span class="na">scopes</span><span class="p">:</span> <span class="p">[</span>
+      <span class="dl">"</span><span class="s2">services:read</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">services:invoke</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">runs:read</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">runs:write</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">artifacts:read</span><span class="dl">"</span><span class="p">,</span>
+    <span class="p">],</span>
+    <span class="na">allowedServices</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">],</span>
+    <span class="na">allowedOperations</span><span class="p">:</span> <span class="p">[</span>
+      <span class="dl">"</span><span class="s2">capabilities.list</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">runs.create.hive-research.analyses.create</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">runs.read</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">artifacts.list</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">artifacts.content.read</span><span class="dl">"</span><span class="p">,</span>
+    <span class="p">],</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">key-acme-research-worker-v1</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
 
-<p>For each copied target transaction, the hybrid waits for and reuses the left rail’s exact GPT review, calibrated confidence, threshold, and recorded security evidence. It does not make a second model call. This holds the worker and decision evidence constant so the row measures the exit-policy difference instead of model sampling variance.</p>
+<p>This is the recommended service-account pattern: one project-bound key per workload, with exact scopes, services, operations, expiry, and limits.</p>
 
-<p>The current-agent rail is unchanged. The hybrid performs the same full-position close whenever the existing current-agent gate passes. Otherwise it may trim 50% of only the newly copied fill when either:</p>
+<h2 id="select-a-project-with-an-account-key">Select a project with an account key</h2>
+
+<p>An account-level key can select an active project for one request:</p>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">X-HivemindOS-Project: project_...
+</span></code></pre></div></div>
+
+<p>The TypeScript client sends that header automatically when constructed with <code class="language-plaintext highlighter-rouge">projectId</code>:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">acme</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">HivemindOSClient</span><span class="p">({</span>
+  <span class="na">apiKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_ACCOUNT_API_KEY</span><span class="o">!</span><span class="p">,</span>
+  <span class="na">projectId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">project_...</span><span class="dl">"</span><span class="p">,</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<p>A project-bound key rejects a different project header. Use separate client instances for separate projects and never accept an unvalidated project id directly from an end-user request.</p>
+
+<h2 id="isolation-rules">Isolation rules</h2>
 
 <ul>
-  <li>Sol recommended a close below the normal calibrated threshold but at or above the hybrid’s frozen <code class="language-plaintext highlighter-rouge">0.659</code> exception floor; or</li>
-  <li>the matching Sol review failed open.</li>
+  <li>Resource ids are meaningful only inside their account and project.</li>
+  <li>An id from one project returns not found from another project.</li>
+  <li>Idempotency keys are isolated by project and API key.</li>
+  <li>Webhooks receive only events from their project and allowed services.</li>
+  <li>Usage and audit queries report only the selected project.</li>
+  <li>Managed databases receive the same project boundary as every other resource.</li>
+  <li>A project-bound key cannot create another project or an account-level child key.</li>
 </ul>
 
-<p>That exception remains closed unless security coverage is complete and the recorded evidence has a risk score of at least 20 or at least one risk flag. A trim books its own proceeds, execution cost, proportional cost basis, and realized P&amp;L while leaving the remainder open and marked to market. Later counterfactual outcomes combine the actual trim receipt with the remaining amount’s horizon value.</p>
+<h2 id="environment-pattern">Environment pattern</h2>
 
-<p>This is a forward paper experiment, not proof that the hybrid is better. The row starts at zero and makes its difference visible immediately, but promotion still requires the same frozen, sufficiently large held-out evidence gates described above.</p>
+<p>Create separate projects for development, staging, and production. Use separate API keys and webhook destinations for each. Do not reuse a production project for tests: project isolation protects data, but it cannot tell whether a valid production key was used accidentally.</p>
 
-<h2 id="requirements-and-privacy">Requirements and privacy</h2>
-
-<p>The analyst prefers an existing ChatGPT OAuth connection and falls back to <code class="language-plaintext highlighter-rouge">OPENAI_API_KEY</code> from the shared HivemindOS environment when API-key mode is selected. OAuth tokens and API keys stay in runtime credential storage and are never written into a copy-trading configuration or review. OpenAI’s <a href="https://developers.openai.com/api/docs/models/gpt-5.6-sol">GPT-5.6 Sol model</a> supports Responses API web search and structured outputs.</p>
-
-<p>Token security reads use public GoPlus endpoints and fail open when evidence is unavailable; unavailable data alone never forces a sale. Web pages are treated as untrusted evidence. Their instructions are ignored, and only bounded review summaries, public source links, compact evidence flags, and evaluation outcomes are retained in copy-trading state.</p>
+<p>Next: <a href="authentication.html#choose-operation-access">restrict exact operations</a>, <a href="limits.html">set per-endpoint limits</a>, or <a href="usage-audit.html">inspect usage and audit events</a>.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -711,7 +677,7 @@
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/features/copy-trading-agent-analysis.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/projects-security.md">Improve this page ↗</a>
     </aside>
   </div>
 

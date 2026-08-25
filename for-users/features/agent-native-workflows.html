@@ -221,15 +221,23 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/files-connections.html">Files And Connections</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/usage-audit.html">Usage And Audit</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
                     
@@ -634,7 +642,7 @@
 
 <p>This reduces parent-context growth by construction, but it is not proof of lower total provider usage: the child still spends its own input/output tokens, and comparative savings require fresh parity-controlled baseline and treatment runs.</p>
 
-<p>Parent runtimes are not coupled to the child runtime: any MCP-capable agent can coordinate the lifecycle. Installed one-shot child adapters cover Hermes, Codex, Claude Code, OpenCode, OpenHands, Aider, jcode, Claw, OpenClaw, and HivemindOS/OpenAI-compatible profiles. A runtime must be authenticated and expose an actual one-shot command or loopback chat endpoint; workflow/evaluation controllers are not silently substituted with another runtime. Private job records survive ordinary polling, expire after their configured lifetime, and become an actionable failed state if their collector restarts mid-run. The standard task wait is capped at 20 minutes; longer durable work belongs on the Work Board.</p>
+<p>Parent runtimes are not coupled to the child runtime: any MCP-capable agent can coordinate the lifecycle. Installed one-shot child adapters cover HivemindOS, Hermes, Codex, Claude Code, OpenCode, OpenHands, Aider, Claw, and OpenClaw. The selected runtime must be ready on its machine; HivemindOS does not silently substitute an unrelated runtime. Private job records survive ordinary polling, expire after their configured lifetime, and become an actionable failed state if their machine restarts mid-run. The standard task wait is capped at 20 minutes; longer durable work belongs on the Work Board.</p>
 
 <h3 id="cross-session-publishing">Cross-session publishing</h3>
 

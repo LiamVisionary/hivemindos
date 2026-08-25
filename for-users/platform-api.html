@@ -221,15 +221,23 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/files-connections.html">Files And Connections</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/usage-audit.html">Usage And Audit</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
                     
@@ -602,7 +610,7 @@
   <li>A restricted integration key that can reach only selected services and has separate limits for individual operations.</li>
 </ul>
 
-<p>The authenticated service catalog is the source of truth for what is available to an account now. Each service entry includes its status, supported operations, required scope, and operation id for limits.</p>
+<p>The authenticated service catalog and capability registry are the source of truth. Each service entry includes its status and capability URL. Each capability has a stable operation id, exact access selector, request method, path template, approval mode, and run support.</p>
 
 <h2 id="quickstart">Quickstart</h2>
 
@@ -632,9 +640,16 @@
     <span class="dl">"</span><span class="s2">api_keys:manage</span><span class="dl">"</span><span class="p">,</span>
   <span class="p">],</span>
   <span class="na">allowedServices</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">hivemind-database</span><span class="dl">"</span><span class="p">],</span>
+  <span class="na">allowedOperations</span><span class="p">:</span> <span class="p">[</span>
+    <span class="dl">"</span><span class="s2">services.list</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">capabilities.list</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">databases.account.read</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">databases.query</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">],</span>
   <span class="na">limits</span><span class="p">:</span> <span class="p">{</span>
     <span class="dl">"</span><span class="s2">*</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span> <span class="na">requestsPerHour</span><span class="p">:</span> <span class="mi">1</span><span class="nx">_000</span><span class="p">,</span> <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">10</span> <span class="p">},</span>
-    <span class="dl">"</span><span class="s2">services.invoke.hive-research</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
       <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">60</span><span class="p">,</span>
       <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
     <span class="p">},</span>
@@ -657,14 +672,15 @@
 
 <span class="kd">const</span> <span class="nx">hive</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">HivemindOSClient</span><span class="p">({</span>
   <span class="na">apiKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_API_KEY</span><span class="o">!</span><span class="p">,</span>
+  <span class="na">projectId</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_PROJECT_ID</span><span class="p">,</span>
 <span class="p">});</span>
 
 <span class="kd">const</span> <span class="nx">catalog</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">list</span><span class="p">();</span>
 <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">catalog</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">catalog</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
 
-<span class="kd">const</span> <span class="nx">research</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invoke</span><span class="p">(</span>
+<span class="kd">const</span> <span class="nx">research</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
   <span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span>
-  <span class="dl">"</span><span class="s2">/v1/research</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">analyses.create</span><span class="dl">"</span><span class="p">,</span>
   <span class="p">{</span> <span class="na">question</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Summarize the strongest evidence for this thesis.</span><span class="dl">"</span> <span class="p">},</span>
   <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">research-thesis-001</span><span class="dl">"</span> <span class="p">},</span>
 <span class="p">);</span>
@@ -709,11 +725,15 @@
 
 <ul>
   <li><a href="platform-api/authentication.html">Authentication and API keys</a></li>
+  <li><a href="platform-api/projects-security.html">Projects, isolation, and service accounts</a></li>
   <li><a href="platform-api/services.html">Service access and catalog</a></li>
+  <li><a href="platform-api/capabilities-agents.html">Capabilities, agents, workflows, and mini apps</a></li>
   <li><a href="platform-api/limits.html">Per-endpoint limits</a></li>
+  <li><a href="platform-api/files-connections.html">Files, connections, and integrations</a></li>
   <li><a href="platform-api/databases.html">Managed databases</a></li>
   <li><a href="platform-api/wallets-trading.html">Wallets, approvals, and trading</a></li>
   <li><a href="platform-api/runs-webhooks.html">Runs, artifacts, webhooks, and errors</a></li>
+  <li><a href="platform-api/usage-audit.html">Usage and audit events</a></li>
   <li><a href="platform-api/reference.html">Endpoint and scope reference</a></li>
 </ul>
 

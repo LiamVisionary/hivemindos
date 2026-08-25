@@ -221,15 +221,23 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
+                    
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/files-connections.html">Files And Connections</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/usage-audit.html">Usage And Audit</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
                     
@@ -567,9 +575,9 @@
         </div>
         <h1 id="service-access-and-catalog">Service Access And Catalog</h1>
 
-<p>Use the service catalog before starting work. It is filtered to the caller’s API-key boundary and reports the live status of each visible managed service.</p>
+<p>Use the service catalog before starting work. It is filtered to the caller’s API-key boundary. Pass <code class="language-plaintext highlighter-rouge">probe: true</code> when you need a fresh health check from every visible cloud service.</p>
 
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">response</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">list</span><span class="p">();</span>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">response</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">list</span><span class="p">({</span> <span class="na">probe</span><span class="p">:</span> <span class="kc">true</span> <span class="p">});</span>
 <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">response</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">response</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
 
 <span class="k">for</span> <span class="p">(</span><span class="kd">const</span> <span class="nx">service</span> <span class="k">of</span> <span class="nx">response</span><span class="p">.</span><span class="nx">services</span><span class="p">)</span> <span class="p">{</span>
@@ -605,7 +613,15 @@
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">operations</code></td>
-      <td>The Platform API call, required scope, method, path, and limit operation id.</td>
+      <td>Dedicated Platform routes or the managed-service invocation facade.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">operationCount</code></td>
+      <td>Number of registered exact capabilities.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">capabilitiesUrl</code></td>
+      <td>Filtered capability registry for the service.</td>
     </tr>
   </tbody>
 </table>
@@ -703,12 +719,12 @@
     <tr>
       <td>Finance</td>
       <td><code class="language-plaintext highlighter-rouge">hive-bridge</code></td>
-      <td>Move supported assets through managed bridge flows.</td>
+      <td>Quote supported bridge routes and track route status.</td>
     </tr>
     <tr>
       <td>Finance</td>
       <td><code class="language-plaintext highlighter-rouge">testnet-faucet</code></td>
-      <td>Fund supported testnet development flows.</td>
+      <td>Discover the planned unified-credit testnet funding surface. It reports <code class="language-plaintext highlighter-rouge">coming-soon</code> until claim fulfillment uses the Platform account-credit authority.</td>
     </tr>
     <tr>
       <td>Finance</td>
@@ -736,6 +752,11 @@
       <td>Send and manage outbound email workflows.</td>
     </tr>
     <tr>
+      <td>Integration</td>
+      <td><code class="language-plaintext highlighter-rouge">integration-broker</code></td>
+      <td>Connect calendars and remote tool servers while HivemindOS protects their credentials.</td>
+    </tr>
+    <tr>
       <td>Media</td>
       <td><code class="language-plaintext highlighter-rouge">x-studio</code></td>
       <td>Create, review, and package social content workflows.</td>
@@ -751,9 +772,19 @@
       <td>Generate and manage production-ready media.</td>
     </tr>
     <tr>
+      <td>Media</td>
+      <td><code class="language-plaintext highlighter-rouge">photo-keyworder</code></td>
+      <td>Analyze photos and create searchable metadata.</td>
+    </tr>
+    <tr>
       <td>Platform</td>
       <td><code class="language-plaintext highlighter-rouge">app-hosting</code></td>
       <td>Publish static sites and managed dynamic apps.</td>
+    </tr>
+    <tr>
+      <td>Platform</td>
+      <td><code class="language-plaintext highlighter-rouge">hive-compute</code></td>
+      <td>Discover the planned unified-credit compute surface. It reports <code class="language-plaintext highlighter-rouge">coming-soon</code> until marketplace settlement uses the Platform account-credit authority.</td>
     </tr>
     <tr>
       <td>Platform</td>
@@ -775,12 +806,22 @@
 <div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST /v1/services/{serviceId}/invoke
 </span></code></pre></div></div>
 
+<p>Prefer a stable operation id from <code class="language-plaintext highlighter-rouge">GET /capabilities/{serviceId}</code>:</p>
+
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
-  </span><span class="nl">"path"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/v1/research"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"method"</span><span class="p">:</span><span class="w"> </span><span class="s2">"POST"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"operationId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"analyses.create"</span><span class="p">,</span><span class="w">
   </span><span class="nl">"input"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
     </span><span class="nl">"question"</span><span class="p">:</span><span class="w"> </span><span class="s2">"What evidence would falsify this thesis?"</span><span class="w">
   </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>Path parameters and query values stay separate from the input body:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"operationId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"analyses.get"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"pathParameters"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nl">"analysisId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"analysis_123"</span><span class="w"> </span><span class="p">},</span><span class="w">
+  </span><span class="nl">"query"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nl">"includeSources"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
@@ -799,7 +840,7 @@
 </span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
-<p>Use the managed service’s documented path and input contract. The Platform API rejects account, payment, credential, administrative, and other private service routes even when the underlying service has them.</p>
+<p>Legacy reviewed paths remain supported for compatibility, but registered operations are safer: they validate the method and path template, work with exact API-key access, and remain discoverable. The Platform API rejects account, payment, credential, administrative, and other private service routes.</p>
 
 <p>Managed databases, wallets, and trading use dedicated Platform endpoints instead of the generic invocation route. Those endpoints provide narrower scopes and safer request contracts.</p>
 
@@ -810,18 +851,20 @@
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">run</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">runs</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
   <span class="p">{</span>
     <span class="na">serviceId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span>
-    <span class="na">path</span><span class="p">:</span> <span class="dl">"</span><span class="s2">/v1/research</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">operationId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">analyses.create</span><span class="dl">"</span><span class="p">,</span>
     <span class="na">input</span><span class="p">:</span> <span class="p">{</span> <span class="na">question</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Map the strongest counterarguments.</span><span class="dl">"</span> <span class="p">},</span>
   <span class="p">},</span>
   <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">research-run-counterarguments-001</span><span class="dl">"</span> <span class="p">},</span>
 <span class="p">);</span>
 </code></pre></div></div>
 
-<p>Direct invocation and durable runs have separate limit selectors:</p>
+<p>Direct invocation and durable runs have separate aggregate and exact limit selectors:</p>
 
 <ul>
   <li><code class="language-plaintext highlighter-rouge">services.invoke</code> and <code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;</code></li>
   <li><code class="language-plaintext highlighter-rouge">runs.create</code> and <code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;</code></li>
+  <li><code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;.&lt;operationId&gt;</code></li>
+  <li><code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;.&lt;operationId&gt;</code></li>
 </ul>
 
 <p>This lets one key allow a service but cap direct calls and background runs differently.</p>
@@ -830,9 +873,9 @@
 
 <p>Managed agents are persistent cloud services, not remote-control desktop sessions.</p>
 
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">created</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invoke</span><span class="p">(</span>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">created</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
   <span class="dl">"</span><span class="s2">managed-agents</span><span class="dl">"</span><span class="p">,</span>
-  <span class="dl">"</span><span class="s2">/v1/agents</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">agents.create</span><span class="dl">"</span><span class="p">,</span>
   <span class="p">{</span> <span class="na">name</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Support operator</span><span class="dl">"</span><span class="p">,</span> <span class="na">planId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">small</span><span class="dl">"</span><span class="p">,</span> <span class="na">modelTier</span><span class="p">:</span> <span class="dl">"</span><span class="s2">fast</span><span class="dl">"</span> <span class="p">},</span>
   <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">support-agent-v1</span><span class="dl">"</span> <span class="p">},</span>
 <span class="p">);</span>
@@ -840,9 +883,9 @@
 
 <p>The managed-agent facade permits the account overview and tenant-owned <code class="language-plaintext highlighter-rouge">/v1/agents...</code> operations. Managed workflows are restricted to an agent’s <code class="language-plaintext highlighter-rouge">/v1/agents/{agentId}/routines...</code> operations.</p>
 
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">routine</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invoke</span><span class="p">(</span>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">routine</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
   <span class="dl">"</span><span class="s2">managed-workflows</span><span class="dl">"</span><span class="p">,</span>
-  <span class="s2">`/v1/agents/</span><span class="p">${</span><span class="nx">agentId</span><span class="p">}</span><span class="s2">/routines`</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">routines.create</span><span class="dl">"</span><span class="p">,</span>
   <span class="p">{</span>
     <span class="na">name</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Daily inbox review</span><span class="dl">"</span><span class="p">,</span>
     <span class="na">triggerKind</span><span class="p">:</span> <span class="dl">"</span><span class="s2">cron</span><span class="dl">"</span><span class="p">,</span>
@@ -850,7 +893,7 @@
     <span class="na">timezone</span><span class="p">:</span> <span class="dl">"</span><span class="s2">America/New_York</span><span class="dl">"</span><span class="p">,</span>
     <span class="na">prompt</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Review new support requests and prepare a prioritized brief.</span><span class="dl">"</span><span class="p">,</span>
   <span class="p">},</span>
-  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">support-daily-review-v1</span><span class="dl">"</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">pathParameters</span><span class="p">:</span> <span class="p">{</span> <span class="nx">agentId</span> <span class="p">},</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">support-daily-review-v1</span><span class="dl">"</span> <span class="p">},</span>
 <span class="p">);</span>
 </code></pre></div></div>
 

@@ -221,15 +221,23 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/files-connections.html">Files And Connections</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
                     
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/usage-audit.html">Usage And Audit</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
                     
@@ -576,8 +584,7 @@
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">created</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">runs</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
   <span class="p">{</span>
     <span class="na">serviceId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span>
-    <span class="na">path</span><span class="p">:</span> <span class="dl">"</span><span class="s2">/v1/research</span><span class="dl">"</span><span class="p">,</span>
-    <span class="na">method</span><span class="p">:</span> <span class="dl">"</span><span class="s2">POST</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">operationId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">analyses.create</span><span class="dl">"</span><span class="p">,</span>
     <span class="na">input</span><span class="p">:</span> <span class="p">{</span> <span class="na">question</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Create an evidence map for this decision.</span><span class="dl">"</span> <span class="p">},</span>
   <span class="p">},</span>
   <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">evidence-map-run-001</span><span class="dl">"</span> <span class="p">},</span>
@@ -590,19 +597,19 @@
 <p>A run records:</p>
 
 <ul>
-  <li>the managed <code class="language-plaintext highlighter-rouge">serviceId</code> and operation path;</li>
+  <li>the managed <code class="language-plaintext highlighter-rouge">serviceId</code> and stable operation id;</li>
   <li><code class="language-plaintext highlighter-rouge">status</code>, <code class="language-plaintext highlighter-rouge">progress</code>, <code class="language-plaintext highlighter-rouge">output</code>, and a customer-safe <code class="language-plaintext highlighter-rouge">error</code>;</li>
   <li>maximum and charged HivemindOS credits when the run owns that accounting; and</li>
   <li>creation and update times.</li>
 </ul>
 
-<p>The current facade waits for the managed service to finish and returns the completed run. The durable record still matters for later reads, artifacts, idempotent recovery, and signed events. Read runs with <code class="language-plaintext highlighter-rouge">runs.list()</code> or <code class="language-plaintext highlighter-rouge">runs.get(id)</code>. Only a run that is still <code class="language-plaintext highlighter-rouge">queued</code> can be cancelled.</p>
+<p>Run creation returns HTTP 202 with status <code class="language-plaintext highlighter-rouge">queued</code>. HivemindOS starts the work outside the request, then records <code class="language-plaintext highlighter-rouge">running</code>, <code class="language-plaintext highlighter-rouge">succeeded</code>, or <code class="language-plaintext highlighter-rouge">failed</code>. Read runs with <code class="language-plaintext highlighter-rouge">runs.list()</code> or <code class="language-plaintext highlighter-rouge">runs.get(id)</code>. Only a run that is still <code class="language-plaintext highlighter-rouge">queued</code> can be cancelled.</p>
 
 <p>Run listings and reads are filtered through the caller’s service boundary. A key cannot read a run for a service it is not allowed to use.</p>
 
 <h2 id="result-artifacts">Result artifacts</h2>
 
-<p>Successful JSON run results up to 512 KB are also saved as authenticated <code class="language-plaintext highlighter-rouge">result.json</code> artifacts.</p>
+<p>Successful JSON run results are also saved as authenticated <code class="language-plaintext highlighter-rouge">result.json</code> artifacts. Durable artifact storage accepts results up to 25 MB; a deployment without managed artifact storage retains smaller results only.</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">listed</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">artifacts</span><span class="p">.</span><span class="nx">list</span><span class="p">(</span><span class="nx">runId</span><span class="p">);</span>
 <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">listed</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">listed</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
@@ -646,6 +653,20 @@
 
 <p>Use <code class="language-plaintext highlighter-rouge">"*"</code> to receive all events permitted by the webhook’s service boundary. A webhook inherits the creating key’s resolved service allowlist. Revoking or expiring that key or an ancestor stops new delivery. A key may list or disable only webhooks created by itself or its descendants.</p>
 
+<p>Each delivery has its own receipt. Failed deliveries retry with increasing delays, up to eight attempts, and can be replayed after the destination is fixed:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">failed</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">webhooks</span><span class="p">.</span><span class="nx">deliveries</span><span class="p">({</span> <span class="na">status</span><span class="p">:</span> <span class="dl">"</span><span class="s2">failed</span><span class="dl">"</span><span class="p">,</span> <span class="na">limit</span><span class="p">:</span> <span class="mi">50</span> <span class="p">});</span>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">failed</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">failed</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+
+<span class="k">for</span> <span class="p">(</span><span class="kd">const</span> <span class="nx">delivery</span> <span class="k">of</span> <span class="nx">failed</span><span class="p">.</span><span class="nx">deliveries</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">webhooks</span><span class="p">.</span><span class="nx">replayDelivery</span><span class="p">(</span><span class="nx">delivery</span><span class="p">.</span><span class="nx">id</span><span class="p">,</span> <span class="p">{</span>
+    <span class="na">idempotencyKey</span><span class="p">:</span> <span class="s2">`replay-</span><span class="p">${</span><span class="nx">delivery</span><span class="p">.</span><span class="nx">id</span><span class="p">}</span><span class="s2">`</span><span class="p">,</span>
+  <span class="p">});</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<p>Use <code class="language-plaintext highlighter-rouge">webhooks.update()</code> to change the URL, event set, status, or narrower service boundary. Use <code class="language-plaintext highlighter-rouge">webhooks.rotateSecret()</code> to issue a new signing secret; the full new value is returned once.</p>
+
 <p>The signing secret begins with <code class="language-plaintext highlighter-rouge">hmos_whsec_</code> and is returned when the webhook is created or the same creation request is replayed. It is not included in later webhook listings.</p>
 
 <p>Webhook URLs must use public HTTPS without embedded credentials or a custom port. Redirects are not followed.</p>
@@ -655,6 +676,7 @@
 <p>Each delivery includes:</p>
 
 <div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">X-HivemindOS-Event: run.succeeded
+X-HivemindOS-Delivery: delivery_...
 X-HivemindOS-Signature: t=1787551200,v1=&lt;hex-hmac&gt;
 Content-Type: application/json
 </span></code></pre></div></div>

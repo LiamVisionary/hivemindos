@@ -221,15 +221,23 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
+                    
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/files-connections.html">Files And Connections</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/usage-audit.html">Usage And Audit</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
                     
@@ -591,6 +599,9 @@
         <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">30</span><span class="p">,</span>
         <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
       <span class="p">},</span>
+      <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
+        <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">250</span><span class="p">,</span>
+      <span class="p">},</span>
       <span class="dl">"</span><span class="s2">wallets.transactions.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
         <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
         <span class="na">creditsPerDay</span><span class="p">:</span> <span class="mi">25</span><span class="p">,</span>
@@ -630,6 +641,10 @@
       <td>Direct invocation of one managed service.</td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;.&lt;operationId&gt;</code></td>
+      <td>One exact registered capability invoked directly.</td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">runs.create</code></td>
       <td>Every durable run creation.</td>
     </tr>
@@ -637,10 +652,14 @@
       <td><code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;</code></td>
       <td>Run creation for one managed service.</td>
     </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;.&lt;operationId&gt;</code></td>
+      <td>One exact registered capability created as a run.</td>
+    </tr>
   </tbody>
 </table>
 
-<p>For a direct research invocation, the API checks <code class="language-plaintext highlighter-rouge">*</code>, <code class="language-plaintext highlighter-rouge">services.invoke</code>, and <code class="language-plaintext highlighter-rouge">services.invoke.hive-research</code>. Every matching limit applies. The request is rejected as soon as any one of them is exhausted.</p>
+<p>For <code class="language-plaintext highlighter-rouge">hive-research</code> operation <code class="language-plaintext highlighter-rouge">analyses.create</code>, the API checks <code class="language-plaintext highlighter-rouge">*</code>, <code class="language-plaintext highlighter-rouge">services.invoke</code>, <code class="language-plaintext highlighter-rouge">services.invoke.hive-research</code>, and <code class="language-plaintext highlighter-rouge">services.invoke.hive-research.analyses.create</code>. Every matching limit applies. The request is rejected as soon as any one of them is exhausted.</p>
 
 <p>The complete set of accepted operation ids is exported as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_OPERATION_IDS</code> by the TypeScript SDK and appears in the <a href="reference.html">endpoint reference</a>.</p>
 
@@ -734,9 +753,9 @@ X-HivemindOS-Limit-Operation: services.invoke.hive-research
 
 <p>Pause that workload for at least <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code>. Queueing work in your own backend is usually better than making every caller retry independently. A different operation may still have capacity, but do not route around a deliberate key-wide or ancestor limit.</p>
 
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invoke</span><span class="p">(</span>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
   <span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span>
-  <span class="dl">"</span><span class="s2">/v1/research</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">analyses.create</span><span class="dl">"</span><span class="p">,</span>
   <span class="p">{</span> <span class="na">question</span><span class="p">:</span> <span class="dl">"</span><span class="s2">...</span><span class="dl">"</span> <span class="p">},</span>
   <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="nx">jobId</span> <span class="p">},</span>
 <span class="p">);</span>
