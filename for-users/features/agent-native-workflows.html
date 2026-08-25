@@ -636,13 +636,13 @@
 
 <p>Parent runtimes are not coupled to the child runtime: any MCP-capable agent can coordinate the lifecycle. Installed one-shot child adapters cover Hermes, Codex, Claude Code, OpenCode, OpenHands, Aider, jcode, Claw, OpenClaw, and HivemindOS/OpenAI-compatible profiles. A runtime must be authenticated and expose an actual one-shot command or loopback chat endpoint; workflow/evaluation controllers are not silently substituted with another runtime. Private job records survive ordinary polling, expire after their configured lifetime, and become an actionable failed state if their collector restarts mid-run. The standard task wait is capped at 20 minutes; longer durable work belongs on the Work Board.</p>
 
-<h3 id="cross-session-publish-barriers">Cross-session publish barriers</h3>
+<h3 id="cross-session-publishing">Cross-session publishing</h3>
 
-<p>An explicit request to commit, merge, land, publish, or push work across all sessions creates a passive coordination barrier before shared Git state changes. The coordinating agent uses read-only task/thread discovery, status snapshots, and direct Git inspection to find relevant sibling work in the same project. It does not message sibling conversations or create replacement subagents for work already owned by another task.</p>
+<p>An explicit request to commit, merge, land, publish, or push work across all sessions starts immediately from the repository’s current Git state. HivemindOS snapshots the shared checkout, attached worktrees, local branches, and unpublished commits without contacting, inspecting, or waiting on other conversations.</p>
 
-<p>The coordinator verifies each relevant task’s repository, worktree, branch, activity, Git status, and unpublished commits without waking, resuming, steering, or interrupting it. Active, unreachable, uncertain, or dirty shared-checkout work keeps the barrier closed. The coordinator can continue read-only preparation and passively wait when requested, but it reports unresolved work only in the publishing conversation.</p>
+<p>The publisher preserves captured changes through normal commits and branches, runs proportionate checks, scans the publish set for secrets, merges safe local branches, and pushes without force. Conversation activity does not block the operation, and unrelated repositories remain outside its scope.</p>
 
-<p>The operation proceeds only when every relevant task is inactive or complete and direct Git inspection shows its work is safely included or irrelevant. Contacting another task requires a separate explicit request from the user. Ordinary single-task commit or push requests do not trigger cross-session discovery.</p>
+<p>After the first push, HivemindOS makes one immediate second Git pass to catch changes that arrived during publishing. It does not enter a task-wait loop. Any state that cannot be included without destructive conflict resolution is reported in the publishing conversation.</p>
 
 <h2 id="dashboard-pins">Dashboard Pins</h2>
 
