@@ -3,7 +3,7 @@ format_version: 1
 content_format: Markdown with embedded HTML
 scope: Every public Markdown page under docs/for-investors
 document_count: 11
-generated_at: 2026-08-25T09:51:22+00:00
+generated_at: 2026-08-25T16:01:28+00:00
 usage: Treat each BEGIN/END DOCUMENT block as one source document. Preserve source_path attribution when citing or summarizing claims.
 
 
