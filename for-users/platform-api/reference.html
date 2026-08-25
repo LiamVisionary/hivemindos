@@ -1,0 +1,1539 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c0d11">
+  <title>Platform API Reference | HivemindOS Docs</title>
+  <meta name="description" content="HivemindOS Platform API endpoints, scopes, idempotency requirements, operation ids, headers, and SDK constants.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/hivemindos/assets/img/app-icon-1024.png">
+  <link rel="apple-touch-icon" href="/hivemindos/assets/img/app-icon-1024.png">
+  <link rel="stylesheet" href="/hivemindos/assets/css/site.css">
+</head>
+<body>
+  <a class="skipLink" href="#content">Skip to content</a>
+
+  <header class="siteHeader">
+    <nav class="topNav" aria-label="Primary">
+      <button class="mobileNavButton" type="button" aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-navigation" data-nav-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brandMark" href="/hivemindos/" aria-label="HivemindOS Docs home">
+        <img class="brandIcon" src="/hivemindos/assets/img/app-icon-1024.png" alt="" width="40" height="40" aria-hidden="true">
+        <span class="brandName">HivemindOS</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+        <span class="brandEdition">Docs</span>
+      </a>
+      <div class="topLinks">
+        
+          <a href="/hivemindos/for-users/">User Guide</a>
+        
+          <a href="/hivemindos/for-users/features/">Features</a>
+        
+          <a href="/hivemindos/for-users/whole-brain/">Hive Superbrain</a>
+        
+          <a href="/hivemindos/for-users/trading/">Trading</a>
+        
+          <a href="/hivemindos/for-users/troubleshooting-cookbook.html">Help</a>
+        
+      </div>
+      <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
+        <span>GitHub</span>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 .2a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.49c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.08-1.88 3.75-3.66 3.95.29.25.54.74.54 1.5l-.01 2.22c0 .21.14.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <button class="navBackdrop" type="button" aria-label="Close documentation menu" data-nav-backdrop></button>
+
+  <div class="docFrame">
+    <aside id="docs-navigation" class="docSidebar" aria-label="Documentation navigation">
+      <div class="sidebarHeader">
+        <span class="sidebarKicker">Explore the docs</span>
+        <button class="sidebarClose" type="button" aria-label="Close documentation menu" data-nav-close>Close</button>
+      </div>
+      <label class="searchShell" for="navSearch">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter pages" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <p class="searchEmpty" role="status" hidden>No matching pages.</p>
+      <nav class="sideNav">
+        
+          <section class="navSection">
+            <h2>Start Here</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/">HivemindOS Overview</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/">User Guide</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/">Find A Feature</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/native-app.html">Desktop App</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/browser-extension.html">Browser Extension</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/troubleshooting-cookbook.html">Troubleshooting</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Everyday Work</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/work-and-scheduler.html">Work And Automations</a>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Hive Superbrain</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/brain-services.html">Memory And Knowledge</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-skills.html">Shared Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-env.html">Shared Env</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/sync-and-health.html">Sync And Repair</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/workspaces.html">Separate Workspaces</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/hivemind-sync.html">Hivemind Sync</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/zero-human-companies.html">Zero Human Companies</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/integrations-and-work-history.html">Integrations And History</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Build And Automate</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/app-builder.html">App Builder And Hosting</a>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup" open>
+                  <summary>Platform API</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Web Research</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/hive-fusion.html">Hive Fusion</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/packaged-skills/">Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/calling.html">Calling</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/socials.html">Socials</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/bookings.html">Bookings</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/hivemind-analytics.html">Analytics</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Money And Compute</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/wallets-honey-and-x402.html">Wallets And Spending Controls</a>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Trading</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/crypto.html">Crypto</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/stocks.html">Stocks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/prediction-markets.html">Prediction Markets</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/agent-access.html">Ways To Trade</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/governance.html">Safety And Limits</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/hive-compute.html">Hive Compute</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Connections</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/">Integrations Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/usepod.html">UsePod</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/">MiroShark</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Advanced And Reference</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/">Advanced Guides</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/">How HivemindOS Works</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/fleet-machine-permissions.html">Fleet Machine Permissions</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/agent-evaluations.html">Agent Evaluations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/loop-engineering.html">Loop Engineering</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/capability-approvals.html">Capability Approvals</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/slash-commands.html">Slash Command Reference</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/diagrams.html">Diagrams And Maps</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/bankr/bankr-platform-reference.html">Bankr Provider Reference</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Investors</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/">Investor Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/ecosystem-plan.html">Ecosystem Plan</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/honey-hive-treasury.html">Honey And HIVE Treasury</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/">Paid Features</a>
+              
+            
+          </section>
+        
+      </nav>
+    </aside>
+
+    <main id="content" class="docMain" tabindex="-1">
+      <article class="docContent">
+        <div class="pageTools">
+          <p class="pageKicker">Platform API</p>
+          <div class="pageToolActions">
+            
+            <button class="copyPageButton" type="button" data-copy-page>
+              <span aria-hidden="true">⧉</span> Copy link
+            </button>
+          </div>
+        </div>
+        <h1 id="platform-api-reference">Platform API Reference</h1>
+
+<p>This page is the human-readable route map. The <a href="https://api.hivemindos.app/openapi.json">OpenAPI 3.1 document</a> is authoritative for schemas and can generate clients, validators, and API explorers.</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Base URL: https://api.hivemindos.app/v1
+Authentication: Authorization: Bearer hmos_live_...
+Content type: application/json
+</code></pre></div></div>
+
+<p>Database archive parts and downloads use <code class="language-plaintext highlighter-rouge">application/zip</code> instead of JSON.</p>
+
+<h2 id="public-endpoints">Public endpoints</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Method</th>
+      <th>URL</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/health</code></td>
+      <td>Service and API-version health.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/openapi.json</code></td>
+      <td>OpenAPI 3.1 contract.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td><code class="language-plaintext highlighter-rouge">/pricing</code></td>
+      <td>Server-owned price and availability catalog. Optional <code class="language-plaintext highlighter-rouge">service</code> query: <code class="language-plaintext highlighter-rouge">platform-api</code>, <code class="language-plaintext highlighter-rouge">managed-wallets</code>, <code class="language-plaintext highlighter-rouge">managed-trading</code>, <code class="language-plaintext highlighter-rouge">managed-agents</code>, or <code class="language-plaintext highlighter-rouge">managed-workflows</code>.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The health and OpenAPI documents are also available under <code class="language-plaintext highlighter-rouge">/v1</code>. Pricing is public and does not accept client-supplied prices.</p>
+
+<h2 id="scopes">Scopes</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Scope</th>
+      <th>Allows</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">services:read</code></td>
+      <td>List managed services visible to the key.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">services:invoke</code></td>
+      <td>Invoke an allowed generic managed service.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">credits:read</code></td>
+      <td>Read the account’s HivemindOS credit balance.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">databases:read</code></td>
+      <td>Read database status, structure, records, transfers, and archives.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">databases:write</code></td>
+      <td>Provision or change database data and manage portable copies.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td>List wallets, read one wallet, and read balances.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">wallets:create</code></td>
+      <td>Create a managed wallet.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">wallets:sign</code></td>
+      <td>Quote and execute approved message signatures.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">wallets:transact</code></td>
+      <td>Quote and execute wallet sends and swaps.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">trading:read</code></td>
+      <td>Read managed trading positions.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">trading:execute</code></td>
+      <td>Quote and submit managed spot trades.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">runs:read</code></td>
+      <td>List and read durable service runs.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">runs:write</code></td>
+      <td>Create and cancel durable service runs.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">approvals:read</code></td>
+      <td>List approvals visible to the account.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">approvals:write</code></td>
+      <td>Approve or reject actions and administer wallet policy.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">artifacts:read</code></td>
+      <td>List and download authenticated run artifacts.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">webhooks:read</code></td>
+      <td>List webhooks manageable by the key.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">webhooks:write</code></td>
+      <td>Create and disable webhooks.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">api_keys:manage</code></td>
+      <td>Create narrower child keys and list or revoke the current key and descendants.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="endpoint-map">Endpoint map</h2>
+
+<p><code class="language-plaintext highlighter-rouge">Idem</code> means a valid <code class="language-plaintext highlighter-rouge">Idempotency-Key</code> header is required. <code class="language-plaintext highlighter-rouge">Limit operation</code> is the selector used in API-key limits.</p>
+
+<h3 id="api-keys-services-and-credits">API keys, services, and credits</h3>
+
+<table>
+  <thead>
+    <tr>
+      <th>Method and path</th>
+      <th>Scope</th>
+      <th style="text-align: center">Idem</th>
+      <th>Limit operation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /api-keys</code></td>
+      <td><code class="language-plaintext highlighter-rouge">api_keys:manage</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">apiKeys.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /api-keys</code></td>
+      <td>First-key credit token or <code class="language-plaintext highlighter-rouge">api_keys:manage</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">apiKeys.create</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DELETE /api-keys/{id}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">api_keys:manage</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">apiKeys.revoke</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /services</code></td>
+      <td><code class="language-plaintext highlighter-rouge">services:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">services.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /services/{serviceId}/invoke</code></td>
+      <td><code class="language-plaintext highlighter-rouge">services:invoke</code> and service access</td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">services.invoke</code>, <code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /credits/balance</code></td>
+      <td><code class="language-plaintext highlighter-rouge">credits:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">credits.balance.read</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="managed-databases">Managed databases</h3>
+
+<p>All database endpoints also require service access to <code class="language-plaintext highlighter-rouge">hivemind-database</code>.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Method and path</th>
+      <th>Scope</th>
+      <th style="text-align: center">Idem</th>
+      <th>Limit operation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /databases/account</code></td>
+      <td><code class="language-plaintext highlighter-rouge">databases:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">databases.account.read</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /databases/account</code></td>
+      <td><code class="language-plaintext highlighter-rouge">databases:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">databases.account.provision</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /databases/query</code></td>
+      <td><code class="language-plaintext highlighter-rouge">databases:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">databases.query</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /databases/actions</code></td>
+      <td><code class="language-plaintext highlighter-rouge">databases:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">databases.actions</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /databases/transfers</code></td>
+      <td><code class="language-plaintext highlighter-rouge">databases:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">databases.transfers.create</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">PUT /databases/transfers/{transferId}/parts/{partNumber}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">databases:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">databases.transfers.part.upload</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /databases/transfers/{transferId}/complete</code></td>
+      <td><code class="language-plaintext highlighter-rouge">databases:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">databases.transfers.complete</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /databases/transfers/{transferId}/archive</code></td>
+      <td><code class="language-plaintext highlighter-rouge">databases:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">databases.transfers.archive</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /databases/transfers/{transferId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">databases:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">databases.transfers.read</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DELETE /databases/transfers/{transferId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">databases:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">databases.transfers.cancel</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="managed-wallets-and-trading">Managed wallets and trading</h3>
+
+<p>Wallet endpoints require service access to <code class="language-plaintext highlighter-rouge">managed-wallets</code>. Trading endpoints require service access to <code class="language-plaintext highlighter-rouge">managed-trading</code>.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Method and path</th>
+      <th>Scope</th>
+      <th style="text-align: center">Idem</th>
+      <th>Limit operation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /wallets</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /wallets</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:create</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets.create</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /wallets/{walletId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets.read</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /wallets/{walletId}/balances</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets.balances.read</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">PATCH /wallets/{walletId}/policy</code></td>
+      <td><code class="language-plaintext highlighter-rouge">approvals:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets.policy.update</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /wallets/{walletId}/transactions/quote</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:transact</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets.transactions.quote</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /wallets/{walletId}/transactions</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:transact</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets.transactions.create</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /wallets/{walletId}/signatures/quote</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:sign</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets.signatures.quote</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /wallets/{walletId}/signatures</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:sign</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets.signatures.create</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /trading/quotes</code></td>
+      <td><code class="language-plaintext highlighter-rouge">trading:execute</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">trading.quotes.create</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /trading/orders</code></td>
+      <td><code class="language-plaintext highlighter-rouge">trading:execute</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">trading.orders.create</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /trading/positions</code></td>
+      <td><code class="language-plaintext highlighter-rouge">trading:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">trading.positions.list</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="runs-approvals-artifacts-and-webhooks">Runs, approvals, artifacts, and webhooks</h3>
+
+<p>Run and artifact reads also require service access to the resource’s source service.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Method and path</th>
+      <th>Scope</th>
+      <th style="text-align: center">Idem</th>
+      <th>Limit operation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /runs</code></td>
+      <td><code class="language-plaintext highlighter-rouge">runs:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">runs.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /runs</code></td>
+      <td><code class="language-plaintext highlighter-rouge">runs:write</code> and service access</td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">runs.create</code>, <code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /runs/{runId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">runs:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">runs.read</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /runs/{runId}/cancel</code></td>
+      <td><code class="language-plaintext highlighter-rouge">runs:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">runs.cancel</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /approvals</code></td>
+      <td><code class="language-plaintext highlighter-rouge">approvals:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">approvals.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /approvals/{approvalId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">approvals:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">approvals.decide</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /artifacts</code></td>
+      <td><code class="language-plaintext highlighter-rouge">artifacts:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">artifacts.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /artifacts/{artifactId}/content</code></td>
+      <td><code class="language-plaintext highlighter-rouge">artifacts:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">artifacts.content.read</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /webhooks</code></td>
+      <td><code class="language-plaintext highlighter-rouge">webhooks:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">webhooks.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /webhooks</code></td>
+      <td><code class="language-plaintext highlighter-rouge">webhooks:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">webhooks.create</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">DELETE /webhooks/{webhookId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">webhooks:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">webhooks.disable</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="limit-operation-ids">Limit operation ids</h2>
+
+<p>The wildcard selector <code class="language-plaintext highlighter-rouge">*</code> matches every authenticated operation. The complete static set is:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>services.list
+services.invoke
+credits.balance.read
+apiKeys.list
+apiKeys.create
+apiKeys.revoke
+databases.account.read
+databases.account.provision
+databases.query
+databases.actions
+databases.transfers.create
+databases.transfers.part.upload
+databases.transfers.complete
+databases.transfers.archive
+databases.transfers.read
+databases.transfers.cancel
+wallets.list
+wallets.create
+wallets.read
+wallets.balances.read
+wallets.policy.update
+wallets.transactions.quote
+wallets.transactions.create
+wallets.signatures.quote
+wallets.signatures.create
+trading.quotes.create
+trading.orders.create
+trading.positions.list
+runs.list
+runs.create
+runs.read
+runs.cancel
+approvals.list
+approvals.decide
+artifacts.list
+artifacts.content.read
+webhooks.list
+webhooks.create
+webhooks.disable
+</code></pre></div></div>
+
+<p>For every service id, two exact selectors are also valid:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>services.invoke.&lt;serviceId&gt;
+runs.create.&lt;serviceId&gt;
+</code></pre></div></div>
+
+<p>The SDK exports the expanded list as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_OPERATION_IDS</code> and exports the four operations that accept <code class="language-plaintext highlighter-rouge">creditsPerDay</code> as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_CREDIT_METERED_OPERATION_IDS</code>.</p>
+
+<h2 id="request-headers">Request headers</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Header</th>
+      <th>When to send</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Authorization: Bearer &lt;key&gt;</code></td>
+      <td>Every authenticated request.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Content-Type: application/json</code></td>
+      <td>JSON request bodies.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Content-Type: application/zip</code></td>
+      <td>A database transfer part.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Content-Length</code></td>
+      <td>A database transfer part.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Idempotency-Key</code></td>
+      <td>Every endpoint marked <code class="language-plaintext highlighter-rouge">Yes</code> above.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Credit-Token</code></td>
+      <td>Only while bootstrapping the first API key.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="response-headers">Response headers</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Header</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Idempotent-Replayed: true</code></td>
+      <td>This successful response came from an earlier request with the same key and input.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Retry-After</code></td>
+      <td>Seconds before the exhausted API-key window or capacity may be available.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Limit-Operation</code></td>
+      <td>Exact operation id reported with HTTP 429.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-Content-Sha256</code></td>
+      <td>SHA-256 checksum for a database archive download.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Archive-Public-Key</code></td>
+      <td>Provenance key supplied with a database archive download.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Event</code></td>
+      <td>Webhook event name.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Signature</code></td>
+      <td>Timestamp and HMAC for a webhook delivery.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="sdk-constants-and-helpers">SDK constants and helpers</h2>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span>
+  <span class="nx">HIVEMINDOS_PLATFORM_API_BASE_URL</span><span class="p">,</span>
+  <span class="nx">HIVEMINDOS_PLATFORM_API_VERSION</span><span class="p">,</span>
+  <span class="nx">HIVEMINDOS_PLATFORM_SCOPES</span><span class="p">,</span>
+  <span class="nx">HIVEMINDOS_PLATFORM_SERVICE_IDS</span><span class="p">,</span>
+  <span class="nx">HIVEMINDOS_PLATFORM_OPERATION_IDS</span><span class="p">,</span>
+  <span class="nx">HIVEMINDOS_PLATFORM_CREDIT_METERED_OPERATION_IDS</span><span class="p">,</span>
+  <span class="nx">HIVEMINDOS_DATABASE_CONFIRMATIONS</span><span class="p">,</span>
+  <span class="nx">HivemindOSClient</span><span class="p">,</span>
+  <span class="nx">createHivemindOSApiKey</span><span class="p">,</span>
+  <span class="nx">hivemindOSRunCreateOperationId</span><span class="p">,</span>
+  <span class="nx">hivemindOSServiceInvocationOperationId</span><span class="p">,</span>
+<span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@hivemindos/sdk</span><span class="dl">"</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>The SDK returns the same <code class="language-plaintext highlighter-rouge">{ ok: true, ... }</code> or <code class="language-plaintext highlighter-rouge">{ ok: false, error, ... }</code> envelopes as the HTTPS API. It does not throw for an ordinary API failure; check <code class="language-plaintext highlighter-rouge">ok</code> before using the result.</p>
+
+<p>Return to the <a href="../platform-api.html">Platform API quickstart</a>, or open <a href="authentication.html">authentication</a>, <a href="limits.html">limits</a>, <a href="databases.html">databases</a>, <a href="wallets-trading.html">wallets and trading</a>, or <a href="runs-webhooks.html">runs and webhooks</a>.</p>
+
+        <nav class="pageNav" aria-label="Previous and next pages" hidden>
+          <a class="pageNavCard pageNavPrev" data-page-prev href="#">
+            <span>Previous</span>
+            <strong></strong>
+          </a>
+          <a class="pageNavCard pageNavNext" data-page-next href="#">
+            <span>Next</span>
+            <strong></strong>
+          </a>
+        </nav>
+      </article>
+    </main>
+
+    <aside class="pageOutline" aria-label="On this page" hidden>
+      <p>On this page</p>
+      <nav data-page-outline></nav>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/reference.md">Improve this page ↗</a>
+    </aside>
+  </div>
+
+  <footer class="siteFooter">
+    <div>
+      <strong>HivemindOS</strong>
+      <span>Local-first infrastructure for agent teams.</span>
+    </div>
+    <div class="footerLinks">
+      <a href="/hivemindos/for-users/">User docs</a>
+      <a href="/hivemindos/for-users/architecture/">Architecture</a>
+      <a href="https://github.com/LiamVisionary/hivemindos">GitHub</a>
+    </div>
+  </footer>
+
+  <dialog class="imageViewer" aria-label="Expanded media viewer" data-image-viewer>
+    <header class="imageViewerBar">
+      <div class="imageViewerHeading">
+        <strong data-viewer-title>Expanded image</strong>
+        <span>Scroll to pan · Esc to close</span>
+      </div>
+      <div class="imageViewerControls" aria-label="Image zoom controls">
+        <button type="button" data-viewer-fit>Fit</button>
+        <div class="imageViewerZoomGroup">
+          <button type="button" aria-label="Zoom out" data-viewer-zoom-out>−</button>
+          <output aria-live="polite" data-viewer-zoom>100%</output>
+          <button type="button" aria-label="Zoom in" data-viewer-zoom-in>+</button>
+        </div>
+        <button class="imageViewerClose" type="button" data-viewer-close>Close <span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="imageViewerViewport" tabindex="0" data-viewer-viewport>
+      <div class="imageViewerCanvas" data-viewer-canvas></div>
+    </div>
+    <p class="imageViewerCaption" data-viewer-caption hidden></p>
+  </dialog>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const normalizePath = (href) => {
+      const url = new URL(href, window.location.href);
+      const pathname = url.pathname.replace(/index\.html$/, "");
+      return pathname.endsWith("/") ? pathname : pathname.replace(/\.html$/, "");
+    };
+
+    const currentPath = normalizePath(window.location.href);
+    const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
+    const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
+
+    if (currentIndex >= 0) {
+      navLinks[currentIndex].classList.add("isActive");
+      navLinks[currentIndex].setAttribute("aria-current", "page");
+      navLinks[currentIndex].closest("details")?.setAttribute("open", "");
+
+      const pageNav = document.querySelector(".pageNav");
+      const previous = navLinks[currentIndex - 1];
+      const next = navLinks[currentIndex + 1];
+      const wireCard = (card, link) => {
+        if (!card || !link) {
+          card?.remove();
+          return;
+        }
+        card.href = link.href;
+        card.querySelector("strong").textContent = link.textContent.trim();
+      };
+
+      wireCard(document.querySelector("[data-page-prev]"), previous);
+      wireCard(document.querySelector("[data-page-next]"), next);
+      if (pageNav && (previous || next)) pageNav.hidden = false;
+    }
+
+    const navSearch = document.querySelector("#navSearch");
+    const searchEmpty = document.querySelector(".searchEmpty");
+    navSearch?.addEventListener("input", () => {
+      const query = navSearch.value.trim().toLowerCase();
+      let visibleSections = 0;
+      document.querySelectorAll(".navSection").forEach((section) => {
+        let sectionHasMatch = false;
+        section.querySelectorAll(":scope > .navLink").forEach((link) => {
+          const matches = !query || link.textContent.toLowerCase().includes(query);
+          link.hidden = !matches;
+          sectionHasMatch ||= matches;
+        });
+        section.querySelectorAll(".navGroup").forEach((group) => {
+          const summary = group.querySelector("summary")?.textContent.toLowerCase() || "";
+          const groupMatches = !query || summary.includes(query);
+          let childMatches = false;
+          group.querySelectorAll(".navLink").forEach((link) => {
+            const matches = groupMatches || link.textContent.toLowerCase().includes(query);
+            link.hidden = !matches;
+            childMatches ||= matches;
+          });
+          group.hidden = !(groupMatches || childMatches);
+          sectionHasMatch ||= groupMatches || childMatches;
+          if (query && childMatches) group.setAttribute("open", "");
+        });
+        section.hidden = !sectionHasMatch;
+        if (sectionHasMatch) visibleSections += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visibleSections > 0;
+    });
+
+    window.addEventListener("keydown", (event) => {
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.matches("input, textarea, select") || activeElement?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        navSearch?.focus();
+      }
+      if (event.key === "Escape") closeNavigation();
+    });
+
+    const navToggle = document.querySelector("[data-nav-toggle]");
+    const closeNavigation = () => {
+      document.body.classList.remove("navOpen");
+      navToggle?.setAttribute("aria-expanded", "false");
+    };
+    navToggle?.addEventListener("click", () => {
+      const isOpen = document.body.classList.toggle("navOpen");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelector("[data-nav-close]")?.addEventListener("click", closeNavigation);
+    document.querySelector("[data-nav-backdrop]")?.addEventListener("click", closeNavigation);
+    document.querySelectorAll(".sideNav a").forEach((link) => link.addEventListener("click", closeNavigation));
+
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fall through for embedded or permission-restricted browsers.
+        }
+      }
+      const copyField = document.createElement("textarea");
+      copyField.value = text;
+      copyField.setAttribute("readonly", "");
+      copyField.className = "clipboardCopyField";
+      document.body.appendChild(copyField);
+      copyField.select();
+      const copied = document.execCommand("copy");
+      copyField.remove();
+      if (!copied) throw new Error("Browser clipboard access is unavailable");
+    };
+
+    document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const original = button.innerHTML;
+      try {
+        await copyTextToClipboard(window.location.href);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+      window.setTimeout(() => { button.innerHTML = original; }, 1400);
+    });
+
+    document.querySelector("[data-copy-ai]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const label = button.querySelector("[data-copy-ai-label]");
+      const originalLabel = label.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(button.dataset.copyAiUrl, { headers: { Accept: "text/plain" } });
+        if (!response.ok) throw new Error(`Investor context request failed with ${response.status}`);
+        const investorContext = await response.text();
+        if (!investorContext.includes("HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE") || !investorContext.includes("=== BEGIN DOCUMENT ===")) {
+          throw new Error("Investor context bundle is malformed");
+        }
+        await copyTextToClipboard(investorContext);
+        label.textContent = "Investor docs copied";
+      } catch {
+        label.textContent = "Copy failed";
+      } finally {
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        window.setTimeout(() => { label.textContent = originalLabel; }, 1800);
+      }
+    });
+
+    const outline = document.querySelector(".pageOutline");
+    const outlineNav = document.querySelector("[data-page-outline]");
+    const headings = Array.from(document.querySelectorAll(".docContent h2"));
+    const usedIds = new Set();
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const baseId = heading.textContent.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
+        let id = baseId;
+        let suffix = 2;
+        while (usedIds.has(id) || document.getElementById(id)) id = `${baseId}-${suffix++}`;
+        heading.id = id;
+      }
+      usedIds.add(heading.id);
+      const link = document.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent;
+      outlineNav?.appendChild(link);
+    });
+    if (outline && headings.length > 1) outline.hidden = false;
+
+    const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.id = `mermaid-${index}`;
+      diagram.textContent = code.textContent;
+      const wrapper = code.closest(".highlighter-rouge") || code.closest("pre") || code;
+      wrapper.replaceWith(diagram);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        background: "#14161c",
+        primaryColor: "#211d16",
+        primaryTextColor: "#f3f0e9",
+        primaryBorderColor: "#e7b45c",
+        lineColor: "#a7a39a",
+        secondaryColor: "#15221f",
+        tertiaryColor: "#1b1e25",
+        fontFamily: "Geist, system-ui, sans-serif"
+      }
+    });
+
+    for (const node of document.querySelectorAll(".mermaid")) {
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch (error) {
+        node.classList.add("mermaidError");
+        node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
+      }
+    }
+
+    const imageViewer = document.querySelector("[data-image-viewer]");
+    const viewerCanvas = document.querySelector("[data-viewer-canvas]");
+    const viewerViewport = document.querySelector("[data-viewer-viewport]");
+    const viewerTitle = document.querySelector("[data-viewer-title]");
+    const viewerCaption = document.querySelector("[data-viewer-caption]");
+    const viewerZoomLabel = document.querySelector("[data-viewer-zoom]");
+    const viewerZoomOut = document.querySelector("[data-viewer-zoom-out]");
+    const viewerZoomIn = document.querySelector("[data-viewer-zoom-in]");
+    let viewerScale = 1;
+    let viewerBaseWidth = 1;
+    let viewerBaseHeight = 1;
+    let viewerMedia = null;
+    let viewerSource = null;
+    let restoreViewerMedia = null;
+
+    const setViewerScale = (nextScale) => {
+      viewerScale = Math.min(4, Math.max(0.25, nextScale));
+      if (viewerMedia) viewerMedia.style.width = `${Math.round(viewerBaseWidth * viewerScale)}px`;
+      if (viewerZoomLabel) viewerZoomLabel.textContent = `${Math.round(viewerScale * 100)}%`;
+      if (viewerZoomOut) viewerZoomOut.disabled = viewerScale <= 0.25;
+      if (viewerZoomIn) viewerZoomIn.disabled = viewerScale >= 4;
+    };
+
+    const fitViewerMedia = () => {
+      if (!viewerViewport) return;
+      const availableWidth = Math.max(160, viewerViewport.clientWidth - 64);
+      const availableHeight = Math.max(120, viewerViewport.clientHeight - 64);
+      setViewerScale(Math.min(1, availableWidth / viewerBaseWidth, availableHeight / viewerBaseHeight));
+    };
+
+    const mediaSectionTitle = (source) => {
+      const headings = Array.from(document.querySelectorAll(".docContent h2, .docContent h3"));
+      const preceding = headings.filter((heading) => heading.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.at(-1)?.textContent.trim() || "Expanded image";
+    };
+
+    const openMediaViewer = (source) => {
+      if (!imageViewer || !viewerCanvas || !viewerViewport) return;
+      restoreViewerMedia?.();
+      viewerCanvas.replaceChildren();
+      viewerSource = source;
+      viewerTitle.textContent = mediaSectionTitle(source);
+      const figureCaption = source.closest("figure")?.querySelector("figcaption")?.textContent.trim();
+      const imageAlt = source instanceof HTMLImageElement ? source.alt.trim() : "";
+      const caption = figureCaption || imageAlt;
+      viewerCaption.textContent = caption;
+      viewerCaption.hidden = !caption;
+
+      if (source instanceof HTMLImageElement) {
+        viewerMedia = source.cloneNode();
+        viewerMedia.removeAttribute("width");
+        viewerMedia.removeAttribute("height");
+        viewerMedia.className = "imageViewerMedia";
+        viewerMedia.alt = source.alt;
+        viewerBaseWidth = source.naturalWidth || source.getBoundingClientRect().width;
+        viewerBaseHeight = source.naturalHeight || source.getBoundingClientRect().height;
+        restoreViewerMedia = null;
+      } else {
+        const svg = source.querySelector("svg");
+        if (!svg) return;
+        const placeholder = document.createComment("diagram viewer placeholder");
+        const originalStyle = svg.getAttribute("style");
+        const originalClass = svg.getAttribute("class");
+        const renderedBounds = svg.getBoundingClientRect();
+        const viewBox = svg.viewBox?.baseVal;
+        viewerBaseWidth = viewBox?.width || renderedBounds.width;
+        viewerBaseHeight = viewBox?.height || renderedBounds.height;
+        svg.replaceWith(placeholder);
+        viewerMedia = svg;
+        viewerMedia.setAttribute("class", `${originalClass || ""} imageViewerMedia`.trim());
+        restoreViewerMedia = () => {
+          if (originalStyle === null) svg.removeAttribute("style");
+          else svg.setAttribute("style", originalStyle);
+          if (originalClass === null) svg.removeAttribute("class");
+          else svg.setAttribute("class", originalClass);
+          placeholder.replaceWith(svg);
+        };
+      }
+
+      viewerCanvas.appendChild(viewerMedia);
+      setViewerScale(1);
+      document.body.classList.add("mediaViewerOpen");
+      if (typeof imageViewer.showModal === "function") imageViewer.showModal();
+      else imageViewer.setAttribute("open", "");
+      requestAnimationFrame(() => {
+        viewerViewport.scrollLeft = Math.max(0, (viewerCanvas.scrollWidth - viewerViewport.clientWidth) / 2);
+        viewerViewport.scrollTop = Math.max(0, (viewerCanvas.scrollHeight - viewerViewport.clientHeight) / 2);
+        viewerViewport.focus({ preventScroll: true });
+      });
+    };
+
+    const registerZoomableMedia = (source, label) => {
+      if (source.closest("a")) return;
+      source.classList.add("zoomableMedia");
+      source.tabIndex = 0;
+      source.setAttribute("role", "button");
+      source.setAttribute("aria-label", label);
+      source.addEventListener("click", () => openMediaViewer(source));
+      source.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openMediaViewer(source);
+      });
+    };
+
+    document.querySelectorAll(".docContent img").forEach((image) => {
+      registerZoomableMedia(image, `Open image full screen${image.alt ? `: ${image.alt}` : ""}`);
+    });
+    document.querySelectorAll(".docContent .mermaid:not(.mermaidError)").forEach((diagram) => {
+      registerZoomableMedia(diagram, `Open ${mediaSectionTitle(diagram)} diagram full screen`);
+    });
+
+    viewerZoomOut?.addEventListener("click", () => setViewerScale(viewerScale - 0.25));
+    viewerZoomIn?.addEventListener("click", () => setViewerScale(viewerScale + 0.25));
+    document.querySelector("[data-viewer-fit]")?.addEventListener("click", fitViewerMedia);
+    document.querySelector("[data-viewer-close]")?.addEventListener("click", () => imageViewer?.close());
+    viewerViewport?.addEventListener("click", (event) => {
+      if (event.target === viewerViewport || event.target === viewerCanvas) imageViewer?.close();
+    });
+    imageViewer?.addEventListener("close", () => {
+      restoreViewerMedia?.();
+      restoreViewerMedia = null;
+      viewerCanvas?.replaceChildren();
+      document.body.classList.remove("mediaViewerOpen");
+      viewerSource?.focus({ preventScroll: true });
+      viewerSource = null;
+      viewerMedia = null;
+    });
+  </script>
+</body>
+</html>

@@ -212,7 +212,45 @@
               
 
               
+                <details class="navGroup">
+                  <summary>Platform API</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
               
             
               
@@ -600,11 +638,11 @@
 
 <h3 id="cross-session-publish-barriers">Cross-session publish barriers</h3>
 
-<p>An explicit request to commit, merge, land, publish, or push work across all sessions creates a coordination barrier before shared Git state changes. The coordinating agent uses the current runtime’s native task/thread discovery, background messaging, and bounded waiting capabilities to contact relevant sibling tasks in the same project. It does not message unrelated chats or create replacement subagents for work already owned by another task.</p>
+<p>An explicit request to commit, merge, land, publish, or push work across all sessions creates a passive coordination barrier before shared Git state changes. The coordinating agent uses read-only task/thread discovery, status snapshots, and direct Git inspection to find relevant sibling work in the same project. It does not message sibling conversations or create replacement subagents for work already owned by another task.</p>
 
-<p>Each sibling receives a concise readiness request naming the exact authorized operation, intended branch, and observed task, worktree, and branch. A reply must begin with a clear readiness word such as <code class="language-plaintext highlighter-rouge">ready</code> or <code class="language-plaintext highlighter-rouge">idle</code>, or a hold word such as <code class="language-plaintext highlighter-rouge">hold</code> or <code class="language-plaintext highlighter-rouge">blocked</code>. Silence, timeouts, and narrative comments do not count as consent. The coordinator can keep doing read-only preparation while responses are pending, but it waits at the Git dependency point and surfaces returned handoffs as <strong>Message from <em>task</em></strong>.</p>
+<p>The coordinator verifies each relevant task’s repository, worktree, branch, activity, Git status, and unpublished commits without waking, resuming, steering, or interrupting it. Active, unreachable, uncertain, or dirty shared-checkout work keeps the barrier closed. The coordinator can continue read-only preparation and passively wait when requested, but it reports unresolved work only in the publishing conversation.</p>
 
-<p>Before relying on a reply, the coordinator verifies its Git claims against the real repository or worktree. It proceeds only when every relevant sibling is ready. A hold response or unavailable cross-task messaging stops the publish operation with a named blocker instead of producing a false “all sessions landed” claim. Ordinary single-task commit or push requests do not trigger this fan-out.</p>
+<p>The operation proceeds only when every relevant task is inactive or complete and direct Git inspection shows its work is safely included or irrelevant. Contacting another task requires a separate explicit request from the user. Ordinary single-task commit or push requests do not trigger cross-session discovery.</p>
 
 <h2 id="dashboard-pins">Dashboard Pins</h2>
 

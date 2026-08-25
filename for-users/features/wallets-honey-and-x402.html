@@ -212,7 +212,45 @@
               
 
               
+                <details class="navGroup">
+                  <summary>Platform API</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
               
             
               
@@ -560,6 +598,7 @@
 
 <ul>
   <li>Create Base, Robinhood Chain, and Solana wallet secrets for agent-scoped token rails.</li>
+  <li>Optionally connect a managed wallet for Bitcoin and Sui transfers, broader EVM account coverage, protected remote signing, and supported EVM yield opportunities.</li>
   <li>Read native/token balances.</li>
   <li>Send the wallet’s dollar stablecoin where configured, capped, and approved: USDC on Base/Solana, or USDG on Robinhood Chain.</li>
   <li>Store, recover, and explicitly export local wallet secrets.</li>
@@ -798,6 +837,8 @@
 </ul>
 
 <p>Offers reuse the paid-agent seller gate and payment env verbatim (<code class="language-plaintext highlighter-rouge">HIVEMINDOS_PAID_AGENT_SELLER_MODE</code>, <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PAID_AGENT_PAY_TO</code>, facilitator settings). Settled purchases append the same local receipts and bridge into the company revenue ledger idempotently — see the Zero Human Companies doc’s Automated Revenue Rail section.</p>
+
+<p>Published products can also be advertised to compatible shopping agents through UCP and ACP after a Finance District commerce access token is saved. Those checkout sessions keep the server-owned catalog price, use Finance District’s advertised payment handler and settlement service, bind each signed payment to its unique checkout address, and replay a completed order without settling twice. The original company-offer x402 link remains available independently. <a href="../integrations/finance-district.html">Managed Wallet setup</a> explains the optional broader wallet and merchant-management connection.</p>
 
 <h2 id="wallet-paid-hivemindos-models">Wallet-Paid HivemindOS Models</h2>
 

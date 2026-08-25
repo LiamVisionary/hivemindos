@@ -212,7 +212,45 @@
               
 
               
+                <details class="navGroup">
+                  <summary>Platform API</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
               
             
               
@@ -639,26 +677,48 @@
   <li>learning-loop metrics and capability-capital summaries</li>
 </ul>
 
-<p>The cockpit is organized into tabs:</p>
+<p>The cockpit is organized into six groups. Picking a group shows its sections as small pills underneath:</p>
 
 <ul>
-  <li><strong>Board</strong> — the active work block, the autonomous-execution launch control, and issue-board work lanes.</li>
-  <li><strong>Issues</strong> — open company work and items that need review.</li>
-  <li><strong>Deliverables</strong> — the company’s real outputs, with a collapsed work log for the scratch that evidenced them. The label can follow the company’s primary output.</li>
-  <li><strong>Comms</strong> — outreach threads and the crew’s mailboxes, with a company-specific label where appropriate.</li>
-  <li><strong>Sales</strong> — customer and pipeline activity.</li>
-  <li><strong>Products</strong> — the catalog for companies that sell fixed products.</li>
-  <li><strong>Systems</strong> — imported workflows and schedules for companies linked from an existing project.</li>
-  <li><strong>Sources</strong> — locally imported data-room documents with type, provenance, and direct links to their Shared Brain notes.</li>
-  <li><strong>Limits</strong> — integration request and spend guardrails, Google Cloud quotas and billing budgets, and 30-day usage charts.</li>
-  <li><strong>Frontier Lab</strong> — company-scoped token capacity, elastic task slots, earned scale gates, the reviewed OpenAI OAuth model ladder, and recent task settlements.</li>
-  <li><strong>Team</strong> — the org chart and agent membership.</li>
-  <li><strong>Analytics</strong> — company performance and operating summaries.</li>
-  <li><strong>Learning</strong> — capability-capital metrics and the eval frontier.</li>
-  <li><strong>Labs</strong> — bounded hypotheses, measured results, evidence lineage, frontiers, and a preview-first Hive Skill Fusion path for graduating verified methods into reusable shared skills.</li>
-  <li><strong>Approvals</strong> — spend and actions waiting for human sign-off.</li>
-  <li><strong>Runs</strong> — accepted dispatches, flow history, proposals, outputs, and replay requests.</li>
-  <li><strong>Ops</strong> — governance, treasury, budgets, the kill switch, and other operator controls.</li>
+  <li><strong>Overview</strong> — the landing view: the active work block at a glance with per-lane summaries, recent governance events, and live activity.</li>
+  <li><strong>Work</strong>
+    <ul>
+      <li><strong>Board</strong> — the active work block, the autonomous-execution launch control, and issue-board work lanes.</li>
+      <li><strong>Issues</strong> — open company work and items that need review, plus a compact table of everything currently in flight.</li>
+      <li><strong>Runs</strong> — accepted dispatches, flow history, proposals, outputs, and replay requests.</li>
+    </ul>
+  </li>
+  <li><strong>Output</strong>
+    <ul>
+      <li><strong>Deliverables</strong> — the company’s real outputs, with a collapsed work log for the scratch that evidenced them. The label can follow the company’s primary output.</li>
+      <li><strong>Comms</strong> — outreach threads and the crew’s mailboxes, with a company-specific label where appropriate.</li>
+      <li><strong>Sales</strong> — customer and pipeline activity.</li>
+      <li><strong>Products</strong> — the catalog for companies that sell fixed products.</li>
+      <li><strong>Systems</strong> — imported workflows and schedules for companies linked from an existing project.</li>
+      <li><strong>Sources</strong> — locally imported data-room documents with type, provenance, and direct links to their Shared Brain notes.</li>
+    </ul>
+  </li>
+  <li><strong>Money</strong>
+    <ul>
+      <li><strong>Treasury</strong> — budgets and burn, per-agent caps, external revenue, and the kill switch.</li>
+      <li><strong>Approvals</strong> — spend and actions waiting for human sign-off.</li>
+      <li><strong>Analytics</strong> — company performance and operating summaries.</li>
+      <li><strong>Spend &amp; limits</strong> — integration request and spend guardrails, Google Cloud quotas and billing budgets, and 30-day usage charts.</li>
+    </ul>
+  </li>
+  <li><strong>Team</strong>
+    <ul>
+      <li><strong>Org</strong> — the org chart and agent membership.</li>
+      <li><strong>Learning</strong> — capability-capital metrics and the eval frontier.</li>
+      <li><strong>Frontier Lab</strong> — company-scoped token capacity, elastic task slots, earned scale gates, the reviewed OpenAI OAuth model ladder, and recent task settlements.</li>
+      <li><strong>Labs</strong> — bounded hypotheses, measured results, evidence lineage, frontiers, and a preview-first Hive Skill Fusion path for graduating verified methods into reusable shared skills.</li>
+    </ul>
+  </li>
+  <li><strong>Setup</strong>
+    <ul>
+      <li><strong>Connections</strong> — company-scoped provider connections.</li>
+    </ul>
+  </li>
 </ul>
 
 <p>The cockpit is designed as a control surface, not a magic-autonomy promise. It keeps the human operator close to funding, risky actions, and governance while letting agents carry the routine execution loop.</p>
@@ -849,6 +909,8 @@
 <h2 id="deliverables">Deliverables</h2>
 
 <p>The Deliverables tab shows what the company actually produced — the live sites it built, the pieces it published, the clips it made — as the headline output, and demotes the trackers, receipts, and scratch files that only evidence the work into a collapsed work log. What counts as a deliverable versus work log is decided per company from its charter, so a website agency’s product is a preview link while a spreadsheet is just work log.</p>
+
+<p>Each deliverable is drawn as the physical thing it delivers, so the shelf reads at a glance: a delivered website appears as a browser window with a capture of the live page inside it, an image as an instant-photo print, a video as a film strip, a report as a paper sheet, a spreadsheet as a ledger, code as a terminal window, a payment page as a till receipt, a booking link as an admission ticket, an offer as a swing price tag, audio as a cassette, and anything else as a labeled parcel. Page captures are taken and cached locally; when a page can’t be captured, the card falls back to drawn placeholder art.</p>
 
 <h2 id="emails">Emails</h2>
 

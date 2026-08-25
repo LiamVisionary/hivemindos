@@ -212,7 +212,45 @@
               
 
               
+                <details class="navGroup">
+                  <summary>Platform API</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
               
             
               
@@ -553,6 +591,7 @@
   <li>Robinhood Trading MCP as the official OAuth bridge for Agentic brokerage accounts, portfolio and market reads, and governed equity orders.</li>
   <li>n8n as an installable workflow automation service.</li>
   <li>Listmonk as a localhost-only campaign and transactional-email manager that uses a separately configured SMTP provider.</li>
+  <li>NocoDB as a private local database with spreadsheet-style tables and governed agent record access.</li>
   <li>Cal.com, local Cal.diy, and Managed Hivemind Bookings through provider-neutral, confirmation-gated agent booking tools.</li>
   <li>Queen Bee PRD decomposition for turning product requirements into linked Work Board tasks.</li>
 </ul>
@@ -643,6 +682,14 @@ USDG, ETH gas, and on-chain Stock Token liquidity; it is not a brokerage-account
 <p>The Apps &amp; Services view includes Listmonk for self-hosted newsletters, subscriber lists, campaigns, and transactional templates. HivemindOS creates a dedicated Docker Compose project under its local service directory, binds the admin UI to <code class="language-plaintext highlighter-rouge">127.0.0.1:9000</code>, keeps PostgreSQL off host ports, preserves database and upload volumes across stops, and pins both container images by immutable digest.</p>
 
 <p>Listmonk is not an inbox and does not replace AgentMail, Cloudflare Agentic Inbox, or an IMAP mailbox. It also does not deliver mail by itself. Before a live send, the operator must configure an SMTP provider inside Listmonk, verify the sending domain, review recipients and content, and configure bounce handling. Keep administrative access limited to trusted operators because campaign HTML, templates, uploads, and advanced subscriber permissions are powerful.</p>
+
+<h3 id="nocodb-service">NocoDB Service</h3>
+
+<p>The Connections view can connect a NocoDB workspace on the current machine or a private fleet machine. HivemindOS keeps the connection private and limits how much information an agent can read at once.</p>
+
+<p>Create a dedicated connection key in NocoDB and connect it from Integrations. Agents can discover bases and tables, read at most 100 records at once, and retrieve one record. Creating, changing, or deleting a record requires an exact human confirmation and a unique change reference, so repeating the request does not repeat the change.</p>
+
+<p>The Apps &amp; Services card does not currently install NocoDB because the current release did not pass security review. This is still a user-operated integration: HivemindOS does not provide hosted NocoDB workspaces, and NocoDB’s current license requires a separate commercial agreement before a company may offer it as a hosted service to customers. See <a href="../integrations/nocodb.html">NocoDB</a> for connection and recovery guidance.</p>
 
 <h3 id="booking-services">Booking Services</h3>
 

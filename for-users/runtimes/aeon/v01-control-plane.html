@@ -212,7 +212,45 @@
               
 
               
+                <details class="navGroup">
+                  <summary>Platform API</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
               
             
               
@@ -531,6 +569,8 @@
 
 <p>HivemindOS can operate a current AEON checkout from the Autopilot view or directly from chat. Link or clone the official <code class="language-plaintext highlighter-rouge">aeonfun/aeon</code> repository, open the agent, and use the Control tab for runtime-wide configuration—or type <code class="language-plaintext highlighter-rouge">/aeon</code> in Chat.</p>
 
+<p>The workspace may live on this Mac or on another linked HivemindOS machine. Status, skills, schedules, runs, logs, outputs, memory, document edits, and safe repository updates are performed on the machine that owns the workspace, while the controls stay the same in HivemindOS.</p>
+
 <p>AEON is optional. HivemindOS still works with native crews and other runtimes when no AEON workspace is configured. When you do use AEON, its own workspace and command-line control plane remain the authority for AEON skills, configuration, schedules, runs, logs, and outputs. That authority applies to the linked AEON workspace—not to unrelated HivemindOS features.</p>
 
 <p>The Autopilot view is an operator interface over that authority. Actions such as enabling a skill, changing a schedule, selecting a model, or installing an MCP server are sent through AEON’s own control plane and validation. HivemindOS does not keep a second competing copy of those settings.</p>
@@ -632,7 +672,8 @@
   <li>the company editor offers only saved AEON workspaces and skills currently discovered there</li>
   <li>the binding is checked again when the company dispatches</li>
   <li>queued or active work in the selected workspace prevents overlapping company dispatches</li>
-  <li>company Runs records the accepted handoff without inventing a completed Work Board task</li>
+  <li>company Runs records the accepted handoff, then closes it only after HivemindOS observes one exactly matched terminal AEON run</li>
+  <li>a completed or failed company run includes a direct link back to that matched AEON run when AEON provides one</li>
   <li>detailed logs and outputs stay in the Autopilot view</li>
 </ul>
 
@@ -657,7 +698,7 @@
 
 <p>HivemindOS discovers current AEON artifacts in <code class="language-plaintext highlighter-rouge">output/articles/</code>, <code class="language-plaintext highlighter-rouge">output/images/</code>, <code class="language-plaintext highlighter-rouge">output/.chains/</code>, <code class="language-plaintext highlighter-rouge">output/.attest/</code>, and <code class="language-plaintext highlighter-rouge">apps/dashboard/outputs/</code>. Older output folders remain readable during migration, but new work follows the v0.1 layout.</p>
 
-<p>Run logs come from AEON’s filtered run history, so the Activity tab excludes unrelated repository CI. The Deliverables tab can preview local evidence and hand it to another machine through HivemindOS.</p>
+<p>Run logs come from AEON’s filtered run history, so the Activity tab excludes unrelated repository CI. The Deliverables tab can preview evidence and hand it to another machine through HivemindOS, including when the AEON workspace belongs to a linked machine.</p>
 
 <h2 id="shared-brain-skills-and-credentials">Shared Brain skills and credentials</h2>
 

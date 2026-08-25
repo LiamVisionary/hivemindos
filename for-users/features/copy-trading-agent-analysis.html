@@ -212,7 +212,45 @@
               
 
               
+                <details class="navGroup">
+                  <summary>Platform API</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
               
             
               
@@ -531,6 +569,24 @@
 
 <p>Agent-analyzed copy trading lets you compare an ordinary copy-trader with an isolated, research-assisted twin. The original configuration keeps its settings and positions. The twin watches the same wallet, uses the same sizing and safety limits, and records its own cash, positions, decisions, and results.</p>
 
+<h2 id="local-or-always-on">Local or always on</h2>
+
+<p>The Copy trading workspace now includes an always-on option above the local controls. Choose <strong>HivemindOS wallet</strong> to create a separate hosted Base wallet from your signed-in HivemindOS account, or connect an existing Bankr wallet. The always-on monitor keeps watching and executing when the desktop app is closed. It uses the same target detection, risk caps, verified execution ledger, price, and performance reporting for either wallet choice.</p>
+
+<p>Before confirmation, HivemindOS shows the one-time hosted-wallet setup price from your account alongside the copy-trading price. The wallet starts paused until you fund its displayed address with Base USDC. After funding, resume the monitor; the first $1 covers a rolling 30-day usage period and is credited toward the 0.5% fee on verified live copied notional. Failed, skipped, paper, and unverified trades do not incur the percentage fee. Canceling stops the monitor and revokes its dedicated trading access.</p>
+
+<h2 id="one-budget-across-both-copies">One budget across both copies</h2>
+
+<p>The ordinary and agent-analyzed copies divide one configured trade amount and one daily copy limit when both are running. The default pair assigns half to each side, so a $10 copy becomes two $5 entries instead of two $10 entries. If either side is stopped, the running side receives the full configured amount and daily limit again. Existing ordinary/agent pairs receive the same shared-budget behavior automatically.</p>
+
+<p>Each side keeps its own positions and results, so the comparison remains clear. A verified source signal that is more than 90 seconds old is not copied. If a live submission cannot be confirmed, that copy pauses before any later trade can run; check the wallet, then stop and start the copy to continue.</p>
+
+<h2 id="matching-paper-and-live-timing">Matching paper and live timing</h2>
+
+<p>On Base, every running copy receives the same newly sealed block as soon as it arrives. Paper copies, ordinary live copies, and agent-analyzed live copies do not use different detection delays, so a paper comparison cannot gain or lose time solely because it is simulated. If the immediate update is interrupted, a backup check runs within three seconds and feeds the same path.</p>
+
+<p>Paper results still model network, venue, slippage, and liquidity-impact costs rather than claiming the exact price a future wallet will receive. Real execution can vary with market movement and available liquidity, but the source-trade detection clock is shared across paper and live modes.</p>
+
 <h2 id="what-happens-after-a-copied-buy">What happens after a copied buy</h2>
 
 <p>The twin still mirrors the buy first, just as the original does. As soon as the token is known, it begins preparing current market, liquidity, contract or mint security, and prior target-wallet performance evidence while the fill completes.</p>
@@ -568,7 +624,7 @@
 
 <p>Open <strong>Show data</strong> to read the latest calibrated confidence, raw model confidence, close threshold, decision path, review summary, and source links.</p>
 
-<p>Start in dry-run. A live twin performs a second real buy before analysis and may perform a real closing sale afterward, so it uses additional wallet funds, gas, and model/web-search usage. Creating a twin from a live source leaves the twin stopped until you explicitly start it.</p>
+<p>Start in dry-run. A live pair divides the configured amount across two real buys before analysis and the agent side may perform a real closing sale afterward. The total copied buy amount stays within the shared limit, while the extra transaction can still use additional gas and research. Creating a twin from a live source leaves the twin stopped until you explicitly start it.</p>
 
 <h2 id="how-evo-uses-the-results">How EVO uses the results</h2>
 

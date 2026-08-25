@@ -1,0 +1,1095 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c0d11">
+  <title>Hivemind Database 2026.08 Review | HivemindOS Docs</title>
+  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/hivemindos/assets/img/app-icon-1024.png">
+  <link rel="apple-touch-icon" href="/hivemindos/assets/img/app-icon-1024.png">
+  <link rel="stylesheet" href="/hivemindos/assets/css/site.css">
+</head>
+<body>
+  <a class="skipLink" href="#content">Skip to content</a>
+
+  <header class="siteHeader">
+    <nav class="topNav" aria-label="Primary">
+      <button class="mobileNavButton" type="button" aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-navigation" data-nav-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brandMark" href="/hivemindos/" aria-label="HivemindOS Docs home">
+        <img class="brandIcon" src="/hivemindos/assets/img/app-icon-1024.png" alt="" width="40" height="40" aria-hidden="true">
+        <span class="brandName">HivemindOS</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+        <span class="brandEdition">Docs</span>
+      </a>
+      <div class="topLinks">
+        
+          <a href="/hivemindos/for-users/">User Guide</a>
+        
+          <a href="/hivemindos/for-users/features/">Features</a>
+        
+          <a href="/hivemindos/for-users/whole-brain/">Hive Superbrain</a>
+        
+          <a href="/hivemindos/for-users/trading/">Trading</a>
+        
+          <a href="/hivemindos/for-users/troubleshooting-cookbook.html">Help</a>
+        
+      </div>
+      <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
+        <span>GitHub</span>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 .2a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.49c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.08-1.88 3.75-3.66 3.95.29.25.54.74.54 1.5l-.01 2.22c0 .21.14.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <button class="navBackdrop" type="button" aria-label="Close documentation menu" data-nav-backdrop></button>
+
+  <div class="docFrame">
+    <aside id="docs-navigation" class="docSidebar" aria-label="Documentation navigation">
+      <div class="sidebarHeader">
+        <span class="sidebarKicker">Explore the docs</span>
+        <button class="sidebarClose" type="button" aria-label="Close documentation menu" data-nav-close>Close</button>
+      </div>
+      <label class="searchShell" for="navSearch">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter pages" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <p class="searchEmpty" role="status" hidden>No matching pages.</p>
+      <nav class="sideNav">
+        
+          <section class="navSection">
+            <h2>Start Here</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/">HivemindOS Overview</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/">User Guide</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/">Find A Feature</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/native-app.html">Desktop App</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/browser-extension.html">Browser Extension</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/troubleshooting-cookbook.html">Troubleshooting</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Everyday Work</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/work-and-scheduler.html">Work And Automations</a>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Hive Superbrain</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/brain-services.html">Memory And Knowledge</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-skills.html">Shared Skills</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/shared-env.html">Shared Env</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/sync-and-health.html">Sync And Repair</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/whole-brain/workspaces.html">Separate Workspaces</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/hivemind-sync.html">Hivemind Sync</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/zero-human-companies.html">Zero Human Companies</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/integrations-and-work-history.html">Integrations And History</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Build And Automate</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/app-builder.html">App Builder And Hosting</a>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Platform API</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/web-research.html">Web Research</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/hive-fusion.html">Hive Fusion</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/packaged-skills/">Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/calling.html">Calling</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/socials.html">Socials</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/bookings.html">Bookings</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/hivemind-analytics.html">Analytics</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Money And Compute</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/wallets-honey-and-x402.html">Wallets And Spending Controls</a>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Trading</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/crypto.html">Crypto</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/stocks.html">Stocks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/prediction-markets.html">Prediction Markets</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/agent-access.html">Ways To Trade</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/trading/governance.html">Safety And Limits</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/hive-compute.html">Hive Compute</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Connections</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/">Integrations Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/usepod.html">UsePod</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/integrations/miroshark/">MiroShark</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Advanced And Reference</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/runtimes/">Advanced Guides</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/architecture/">How HivemindOS Works</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/fleet-machine-permissions.html">Fleet Machine Permissions</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/agent-evaluations.html">Agent Evaluations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/loop-engineering.html">Loop Engineering</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/capability-approvals.html">Capability Approvals</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/slash-commands.html">Slash Command Reference</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/diagrams.html">Diagrams And Maps</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/bankr/bankr-platform-reference.html">Bankr Provider Reference</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Investors</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/">Investor Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/ecosystem-plan.html">Ecosystem Plan</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/honey-hive-treasury.html">Honey And HIVE Treasury</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-investors/paid-features/">Paid Features</a>
+              
+            
+          </section>
+        
+      </nav>
+    </aside>
+
+    <main id="content" class="docMain" tabindex="-1">
+      <article class="docContent">
+        <div class="pageTools">
+          <p class="pageKicker">HivemindOS manual</p>
+          <div class="pageToolActions">
+            
+            <button class="copyPageButton" type="button" data-copy-page>
+              <span aria-hidden="true">⧉</span> Copy link
+            </button>
+          </div>
+        </div>
+        <h1 id="hivemind-database-202608-review">Hivemind Database 2026.08 Review</h1>
+
+<h2 id="decision">Decision</h2>
+
+<ul>
+  <li><strong>Approved for local self-hosting:</strong> ship a HivemindOS-managed installer around the Baserow Open Source Edition, restricted with <code class="language-plaintext highlighter-rouge">BASEROW_OSS_ONLY=true</code>, loopback-only ingress, sign-ups disabled after owner creation, exact image digests, and HivemindOS hardening overlays.</li>
+  <li><strong>Approved in source for a managed subscriber service:</strong> use the same Open Source Edition in private HivemindOS infrastructure, with one isolated engine workspace per authenticated HivemindOS account. Entitlement, hierarchy, quotas, idempotency, and migration ownership remain server-authoritative.</li>
+  <li><strong>Not deployed:</strong> the Worker database identifier is deliberately still a placeholder, no D1/R2 resources or production runtime were created, no migration was applied, and no DNS or Worker release changed in this task.</li>
+  <li><strong>NocoDB remains a user-operated connector only:</strong> its current Sustainable Use License does not provide the commercial hosting right required for HivemindOS to sell managed NocoDB without a separate agreement.</li>
+</ul>
+
+<h2 id="license-basis">License Basis</h2>
+
+<p>Baserow’s repository states that the core Open Source Edition is MIT licensed and that Premium and Advanced functionality use Baserow’s commercial license. The reviewed runtime forces the Open Source Edition path and neither installs nor enables premium/enterprise functionality. Primary references:</p>
+
+<ul>
+  <li><a href="https://github.com/baserow/baserow/blob/develop/LICENSE">https://github.com/baserow/baserow/blob/develop/LICENSE</a></li>
+  <li><a href="https://github.com/baserow/baserow">https://github.com/baserow/baserow</a></li>
+</ul>
+
+<p>The commercial conclusion is limited to the MIT-covered Open Source Edition. It does not cover Baserow Premium, Advanced, hosted branding claims, trademarks, or future releases. Re-review the license and the full image set before every engine upgrade.</p>
+
+<h2 id="reviewed-release-and-provenance">Reviewed Release And Provenance</h2>
+
+<ul>
+  <li>Engine release: Baserow <code class="language-plaintext highlighter-rouge">2.3.3</code>.</li>
+  <li>Backend: <code class="language-plaintext highlighter-rouge">baserow/backend@sha256:7c00549b3a6fd79ab861b9eb63468152d5a4c9deac9d6b60d840fdf0284c87c2</code>.</li>
+  <li>Web frontend: <code class="language-plaintext highlighter-rouge">baserow/web-frontend@sha256:566d24c7d9f5995e5a1a660293e151c72bc1371c294930e6d1abc0948e04fe21</code>.</li>
+  <li>PostgreSQL: <code class="language-plaintext highlighter-rouge">postgres@sha256:5fe8ca7fc662071188c30271cb870d1ce9a6ec4578c934b064697ae77a9241e1</code>.</li>
+  <li>Redis: <code class="language-plaintext highlighter-rouge">redis@sha256:e7723ff73d963f5cc6d9c4643ea3d989527a402a319239054e9472a7fb9219a2</code>.</li>
+  <li>HivemindOS overlays: backend, frontend, and PostgreSQL are rebuilt as versioned <code class="language-plaintext highlighter-rouge">2.3.3-hardened.1</code> images; pulls never use floating tags.</li>
+</ul>
+
+<p>The backend overlay removes unused Perl and PostgreSQL CLI packages and pins patched Python packages. The frontend overlay pins patched <code class="language-plaintext highlighter-rouge">linkify-it</code>, <code class="language-plaintext highlighter-rouge">brace-expansion</code>, and <code class="language-plaintext highlighter-rouge">xlsx</code> packages. The PostgreSQL overlay upgrades Alpine packages and replaces the Go-based <code class="language-plaintext highlighter-rouge">gosu</code> binary with <code class="language-plaintext highlighter-rouge">su-exec</code>. Startup performs independent provenance and hardening assertions before any local service can run.</p>
+
+<p>Docker Scout review on the hardened images found no critical/high findings in the backend, PostgreSQL, or exact Redis images. The frontend scanner reported two SheetJS metadata findings against version ranges that do not include the installed <code class="language-plaintext highlighter-rouge">xlsx 0.20.3</code>; the actual package version and affected ranges were checked directly. Treat this as a reviewed false positive, not a blanket scanner waiver.</p>
+
+<h2 id="local-trust-boundary">Local Trust Boundary</h2>
+
+<ul>
+  <li>Only <code class="language-plaintext highlighter-rouge">127.0.0.1:8095</code> is published. PostgreSQL, Redis, workers, media, and backend services have no host port.</li>
+  <li>A small Node gateway routes UI/API traffic and serves media with <code class="language-plaintext highlighter-rouge">nosniff</code> plus a sandbox content-security policy. It refuses media path traversal.</li>
+  <li>The installer generates private owner, database, Redis, application, and signing secrets under <code class="language-plaintext highlighter-rouge">~/.hivemindos/services/database</code> with owner-only permissions.</li>
+  <li>New sign-ups and invitation sign-ups are disabled immediately after the local owner is created.</li>
+  <li>Private-address webhooks, integrations, data sync, and SSO callbacks are disabled. Active-content upload policy is set to block. OpenTelemetry and the support surface are disabled. Baserow treats some feature switches as enabled whenever the value is non-empty, so the reviewed Compose files deliberately leave the OpenTelemetry and private-webhook enable switches empty; the focused tests pin those exact semantics.</li>
+  <li>Local connection URLs accept loopback or reviewed private fleet addresses; redirects and oversized responses are rejected.</li>
+  <li>Stop is recoverable and preserves named volumes. The app exposes no remove-volumes action.</li>
+</ul>
+
+<h2 id="managed-trust-boundary">Managed Trust Boundary</h2>
+
+<p>The managed path spans the private sibling <code class="language-plaintext highlighter-rouge">hivemind-cloud-services</code> repository:</p>
+
+<ol>
+  <li>The desktop app authenticates with the user’s single HivemindOS account token and cannot choose a payer, tier, workspace mapping, quota, or official service origin in production.</li>
+  <li>The paid-agent gateway proves the account and its active Plus, Pro, or Max subscription over an internal service-authenticated route.</li>
+  <li>The database Worker owns the account-to-workspace mapping, validates the complete workspace/database/table/record hierarchy, applies quotas, claims idempotency keys, meters operations and transfer bytes, and stores migration receipts.</li>
+  <li>The private runtime adapter owns the engine administrator credential and exposes only an allowlisted set of operations to the Worker. It cannot select a customer account.</li>
+  <li>A private trust broker reads only transfer/media archive paths, extracts and validates the archive’s RSA public signing key, temporarily registers that public key for an import, and removes the temporary trust record after the import. It never receives, exports, or stores another installation’s private signing key. Cloud-to-local downloads carry the validated public key alongside the separately verified archive checksum; the local installer validates it again before registering the managed source.</li>
+</ol>
+
+<p>The shared runtime contains one engine workspace per HivemindOS account. This is logical tenant isolation inside a shared runtime, not a separate database process per customer. A future enterprise tier that promises process or database-level isolation requires a distinct architecture and contract.</p>
+
+<h2 id="included-subscription-limits">Included Subscription Limits</h2>
+
+<p>The authoritative cloud service mirrors these initial limits and rejects client overrides:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Tier</th>
+      <th style="text-align: right">Workspaces</th>
+      <th style="text-align: right">Databases</th>
+      <th style="text-align: right">Tables</th>
+      <th style="text-align: right">Rows</th>
+      <th style="text-align: right">Storage</th>
+      <th style="text-align: right">Transfer/month</th>
+      <th style="text-align: right">Operations/month</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Plus</td>
+      <td style="text-align: right">1</td>
+      <td style="text-align: right">10</td>
+      <td style="text-align: right">100</td>
+      <td style="text-align: right">100,000</td>
+      <td style="text-align: right">1 GiB</td>
+      <td style="text-align: right">5 GiB</td>
+      <td style="text-align: right">100,000</td>
+    </tr>
+    <tr>
+      <td>Pro</td>
+      <td style="text-align: right">1</td>
+      <td style="text-align: right">50</td>
+      <td style="text-align: right">500</td>
+      <td style="text-align: right">1,000,000</td>
+      <td style="text-align: right">5 GiB</td>
+      <td style="text-align: right">25 GiB</td>
+      <td style="text-align: right">1,000,000</td>
+    </tr>
+    <tr>
+      <td>Max</td>
+      <td style="text-align: right">1</td>
+      <td style="text-align: right">200</td>
+      <td style="text-align: right">2,000</td>
+      <td style="text-align: right">5,000,000</td>
+      <td style="text-align: right">20 GiB</td>
+      <td style="text-align: right">100 GiB</td>
+      <td style="text-align: right">5,000,000</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>There is no standalone or per-seat database charge in this design. Managed availability is a resource entitlement attached to an active subscription. The free local path has no HivemindOS subscription fee; the user provides their own machine and local runtime resources.</p>
+
+<h2 id="two-way-portability-contract">Two-Way Portability Contract</h2>
+
+<p>Both directions use the engine’s native workspace ZIP export/import format rather than a HivemindOS-specific row dump.</p>
+
+<ul>
+  <li>Local to cloud: export the chosen local workspace to an owner-only temporary file; enforce the 100 MiB transfer bound; calculate SHA-256; create an authenticated migration receipt; upload exact 8 MiB parts; reassemble and verify byte count plus digest; import into the mapped managed workspace; roll back applications created by a failed import; delete the temporary archive and multipart objects. The local workspace is never deleted.</li>
+  <li>Cloud to local: export the mapped managed workspace; verify and store the archive behind an expiring authenticated receipt; download and independently verify size plus SHA-256; create a new local staging workspace; import; delete only that staging workspace if import fails; clean temporary files and expire the cloud archive. The managed workspace is never deleted.</li>
+</ul>
+
+<p>Native workspace archives include tables, fields, relations, views, rows, attachments, and supported workspace applications. They exclude users, memberships/permissions, domains, webhooks, and personal settings. The destination must run the same or a newer compatible engine release. Local and managed image upgrades therefore need coordinated compatibility tests before promotion.</p>
+
+<p>The end-to-end harness builds two fresh isolated runtimes, writes and updates real records, exports the source workspace, imports it into the managed runtime, adds another managed record, exports it back, imports it into a new local workspace, and verifies both sources remain unchanged. It also checks SHA-256 digests, public-key handoff, usage reporting, and rollback after a corrupt import. The 2026-08-24 run passed through both native signed-archive directions and removed its test containers and volumes afterward.</p>
+
+<h2 id="deployment-gate-and-recovery">Deployment Gate And Recovery</h2>
+
+<p>Before any production deployment:</p>
+
+<ol>
+  <li>Create the dedicated D1 database and R2 bucket; replace the placeholder database id; apply the schema migration.</li>
+  <li>Provision the private runtime behind HivemindOS-controlled HTTPS ingress and take a restorable PostgreSQL plus media backup.</li>
+  <li>Set matching internal and runtime secrets without placing values in source, docs, logs, or the desktop app.</li>
+  <li>Deploy the database Worker and paid-gateway binding through a zero-traffic canary, then compare the existing catalog and subscription paths against baseline.</li>
+  <li>Run a funded Plus/Pro/Max entitlement matrix and the full local-to-cloud-to-local E2E through the deployed origins with synthetic data, then delete only the synthetic account mapping and archives.</li>
+</ol>
+
+<p>Rollback keeps customer data in place: return the Workers and runtime to their prior version, restore the matching PostgreSQL/media backup when a schema-incompatible runtime rollback requires it, and preserve D1/R2 receipts until the investigation is complete. Never remove named volumes or customer workspaces as part of code rollback.</p>
+
+        <nav class="pageNav" aria-label="Previous and next pages" hidden>
+          <a class="pageNavCard pageNavPrev" data-page-prev href="#">
+            <span>Previous</span>
+            <strong></strong>
+          </a>
+          <a class="pageNavCard pageNavNext" data-page-next href="#">
+            <span>Next</span>
+            <strong></strong>
+          </a>
+        </nav>
+      </article>
+    </main>
+
+    <aside class="pageOutline" aria-label="On this page" hidden>
+      <p>On this page</p>
+      <nav data-page-outline></nav>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/internal/hivemind-database-2026-08-review.md">Improve this page ↗</a>
+    </aside>
+  </div>
+
+  <footer class="siteFooter">
+    <div>
+      <strong>HivemindOS</strong>
+      <span>Local-first infrastructure for agent teams.</span>
+    </div>
+    <div class="footerLinks">
+      <a href="/hivemindos/for-users/">User docs</a>
+      <a href="/hivemindos/for-users/architecture/">Architecture</a>
+      <a href="https://github.com/LiamVisionary/hivemindos">GitHub</a>
+    </div>
+  </footer>
+
+  <dialog class="imageViewer" aria-label="Expanded media viewer" data-image-viewer>
+    <header class="imageViewerBar">
+      <div class="imageViewerHeading">
+        <strong data-viewer-title>Expanded image</strong>
+        <span>Scroll to pan · Esc to close</span>
+      </div>
+      <div class="imageViewerControls" aria-label="Image zoom controls">
+        <button type="button" data-viewer-fit>Fit</button>
+        <div class="imageViewerZoomGroup">
+          <button type="button" aria-label="Zoom out" data-viewer-zoom-out>−</button>
+          <output aria-live="polite" data-viewer-zoom>100%</output>
+          <button type="button" aria-label="Zoom in" data-viewer-zoom-in>+</button>
+        </div>
+        <button class="imageViewerClose" type="button" data-viewer-close>Close <span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="imageViewerViewport" tabindex="0" data-viewer-viewport>
+      <div class="imageViewerCanvas" data-viewer-canvas></div>
+    </div>
+    <p class="imageViewerCaption" data-viewer-caption hidden></p>
+  </dialog>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const normalizePath = (href) => {
+      const url = new URL(href, window.location.href);
+      const pathname = url.pathname.replace(/index\.html$/, "");
+      return pathname.endsWith("/") ? pathname : pathname.replace(/\.html$/, "");
+    };
+
+    const currentPath = normalizePath(window.location.href);
+    const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
+    const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
+
+    if (currentIndex >= 0) {
+      navLinks[currentIndex].classList.add("isActive");
+      navLinks[currentIndex].setAttribute("aria-current", "page");
+      navLinks[currentIndex].closest("details")?.setAttribute("open", "");
+
+      const pageNav = document.querySelector(".pageNav");
+      const previous = navLinks[currentIndex - 1];
+      const next = navLinks[currentIndex + 1];
+      const wireCard = (card, link) => {
+        if (!card || !link) {
+          card?.remove();
+          return;
+        }
+        card.href = link.href;
+        card.querySelector("strong").textContent = link.textContent.trim();
+      };
+
+      wireCard(document.querySelector("[data-page-prev]"), previous);
+      wireCard(document.querySelector("[data-page-next]"), next);
+      if (pageNav && (previous || next)) pageNav.hidden = false;
+    }
+
+    const navSearch = document.querySelector("#navSearch");
+    const searchEmpty = document.querySelector(".searchEmpty");
+    navSearch?.addEventListener("input", () => {
+      const query = navSearch.value.trim().toLowerCase();
+      let visibleSections = 0;
+      document.querySelectorAll(".navSection").forEach((section) => {
+        let sectionHasMatch = false;
+        section.querySelectorAll(":scope > .navLink").forEach((link) => {
+          const matches = !query || link.textContent.toLowerCase().includes(query);
+          link.hidden = !matches;
+          sectionHasMatch ||= matches;
+        });
+        section.querySelectorAll(".navGroup").forEach((group) => {
+          const summary = group.querySelector("summary")?.textContent.toLowerCase() || "";
+          const groupMatches = !query || summary.includes(query);
+          let childMatches = false;
+          group.querySelectorAll(".navLink").forEach((link) => {
+            const matches = groupMatches || link.textContent.toLowerCase().includes(query);
+            link.hidden = !matches;
+            childMatches ||= matches;
+          });
+          group.hidden = !(groupMatches || childMatches);
+          sectionHasMatch ||= groupMatches || childMatches;
+          if (query && childMatches) group.setAttribute("open", "");
+        });
+        section.hidden = !sectionHasMatch;
+        if (sectionHasMatch) visibleSections += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visibleSections > 0;
+    });
+
+    window.addEventListener("keydown", (event) => {
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.matches("input, textarea, select") || activeElement?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        navSearch?.focus();
+      }
+      if (event.key === "Escape") closeNavigation();
+    });
+
+    const navToggle = document.querySelector("[data-nav-toggle]");
+    const closeNavigation = () => {
+      document.body.classList.remove("navOpen");
+      navToggle?.setAttribute("aria-expanded", "false");
+    };
+    navToggle?.addEventListener("click", () => {
+      const isOpen = document.body.classList.toggle("navOpen");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelector("[data-nav-close]")?.addEventListener("click", closeNavigation);
+    document.querySelector("[data-nav-backdrop]")?.addEventListener("click", closeNavigation);
+    document.querySelectorAll(".sideNav a").forEach((link) => link.addEventListener("click", closeNavigation));
+
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fall through for embedded or permission-restricted browsers.
+        }
+      }
+      const copyField = document.createElement("textarea");
+      copyField.value = text;
+      copyField.setAttribute("readonly", "");
+      copyField.className = "clipboardCopyField";
+      document.body.appendChild(copyField);
+      copyField.select();
+      const copied = document.execCommand("copy");
+      copyField.remove();
+      if (!copied) throw new Error("Browser clipboard access is unavailable");
+    };
+
+    document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const original = button.innerHTML;
+      try {
+        await copyTextToClipboard(window.location.href);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+      window.setTimeout(() => { button.innerHTML = original; }, 1400);
+    });
+
+    document.querySelector("[data-copy-ai]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const label = button.querySelector("[data-copy-ai-label]");
+      const originalLabel = label.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(button.dataset.copyAiUrl, { headers: { Accept: "text/plain" } });
+        if (!response.ok) throw new Error(`Investor context request failed with ${response.status}`);
+        const investorContext = await response.text();
+        if (!investorContext.includes("HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE") || !investorContext.includes("=== BEGIN DOCUMENT ===")) {
+          throw new Error("Investor context bundle is malformed");
+        }
+        await copyTextToClipboard(investorContext);
+        label.textContent = "Investor docs copied";
+      } catch {
+        label.textContent = "Copy failed";
+      } finally {
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        window.setTimeout(() => { label.textContent = originalLabel; }, 1800);
+      }
+    });
+
+    const outline = document.querySelector(".pageOutline");
+    const outlineNav = document.querySelector("[data-page-outline]");
+    const headings = Array.from(document.querySelectorAll(".docContent h2"));
+    const usedIds = new Set();
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const baseId = heading.textContent.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
+        let id = baseId;
+        let suffix = 2;
+        while (usedIds.has(id) || document.getElementById(id)) id = `${baseId}-${suffix++}`;
+        heading.id = id;
+      }
+      usedIds.add(heading.id);
+      const link = document.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent;
+      outlineNav?.appendChild(link);
+    });
+    if (outline && headings.length > 1) outline.hidden = false;
+
+    const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.id = `mermaid-${index}`;
+      diagram.textContent = code.textContent;
+      const wrapper = code.closest(".highlighter-rouge") || code.closest("pre") || code;
+      wrapper.replaceWith(diagram);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        background: "#14161c",
+        primaryColor: "#211d16",
+        primaryTextColor: "#f3f0e9",
+        primaryBorderColor: "#e7b45c",
+        lineColor: "#a7a39a",
+        secondaryColor: "#15221f",
+        tertiaryColor: "#1b1e25",
+        fontFamily: "Geist, system-ui, sans-serif"
+      }
+    });
+
+    for (const node of document.querySelectorAll(".mermaid")) {
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch (error) {
+        node.classList.add("mermaidError");
+        node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
+      }
+    }
+
+    const imageViewer = document.querySelector("[data-image-viewer]");
+    const viewerCanvas = document.querySelector("[data-viewer-canvas]");
+    const viewerViewport = document.querySelector("[data-viewer-viewport]");
+    const viewerTitle = document.querySelector("[data-viewer-title]");
+    const viewerCaption = document.querySelector("[data-viewer-caption]");
+    const viewerZoomLabel = document.querySelector("[data-viewer-zoom]");
+    const viewerZoomOut = document.querySelector("[data-viewer-zoom-out]");
+    const viewerZoomIn = document.querySelector("[data-viewer-zoom-in]");
+    let viewerScale = 1;
+    let viewerBaseWidth = 1;
+    let viewerBaseHeight = 1;
+    let viewerMedia = null;
+    let viewerSource = null;
+    let restoreViewerMedia = null;
+
+    const setViewerScale = (nextScale) => {
+      viewerScale = Math.min(4, Math.max(0.25, nextScale));
+      if (viewerMedia) viewerMedia.style.width = `${Math.round(viewerBaseWidth * viewerScale)}px`;
+      if (viewerZoomLabel) viewerZoomLabel.textContent = `${Math.round(viewerScale * 100)}%`;
+      if (viewerZoomOut) viewerZoomOut.disabled = viewerScale <= 0.25;
+      if (viewerZoomIn) viewerZoomIn.disabled = viewerScale >= 4;
+    };
+
+    const fitViewerMedia = () => {
+      if (!viewerViewport) return;
+      const availableWidth = Math.max(160, viewerViewport.clientWidth - 64);
+      const availableHeight = Math.max(120, viewerViewport.clientHeight - 64);
+      setViewerScale(Math.min(1, availableWidth / viewerBaseWidth, availableHeight / viewerBaseHeight));
+    };
+
+    const mediaSectionTitle = (source) => {
+      const headings = Array.from(document.querySelectorAll(".docContent h2, .docContent h3"));
+      const preceding = headings.filter((heading) => heading.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.at(-1)?.textContent.trim() || "Expanded image";
+    };
+
+    const openMediaViewer = (source) => {
+      if (!imageViewer || !viewerCanvas || !viewerViewport) return;
+      restoreViewerMedia?.();
+      viewerCanvas.replaceChildren();
+      viewerSource = source;
+      viewerTitle.textContent = mediaSectionTitle(source);
+      const figureCaption = source.closest("figure")?.querySelector("figcaption")?.textContent.trim();
+      const imageAlt = source instanceof HTMLImageElement ? source.alt.trim() : "";
+      const caption = figureCaption || imageAlt;
+      viewerCaption.textContent = caption;
+      viewerCaption.hidden = !caption;
+
+      if (source instanceof HTMLImageElement) {
+        viewerMedia = source.cloneNode();
+        viewerMedia.removeAttribute("width");
+        viewerMedia.removeAttribute("height");
+        viewerMedia.className = "imageViewerMedia";
+        viewerMedia.alt = source.alt;
+        viewerBaseWidth = source.naturalWidth || source.getBoundingClientRect().width;
+        viewerBaseHeight = source.naturalHeight || source.getBoundingClientRect().height;
+        restoreViewerMedia = null;
+      } else {
+        const svg = source.querySelector("svg");
+        if (!svg) return;
+        const placeholder = document.createComment("diagram viewer placeholder");
+        const originalStyle = svg.getAttribute("style");
+        const originalClass = svg.getAttribute("class");
+        const renderedBounds = svg.getBoundingClientRect();
+        const viewBox = svg.viewBox?.baseVal;
+        viewerBaseWidth = viewBox?.width || renderedBounds.width;
+        viewerBaseHeight = viewBox?.height || renderedBounds.height;
+        svg.replaceWith(placeholder);
+        viewerMedia = svg;
+        viewerMedia.setAttribute("class", `${originalClass || ""} imageViewerMedia`.trim());
+        restoreViewerMedia = () => {
+          if (originalStyle === null) svg.removeAttribute("style");
+          else svg.setAttribute("style", originalStyle);
+          if (originalClass === null) svg.removeAttribute("class");
+          else svg.setAttribute("class", originalClass);
+          placeholder.replaceWith(svg);
+        };
+      }
+
+      viewerCanvas.appendChild(viewerMedia);
+      setViewerScale(1);
+      document.body.classList.add("mediaViewerOpen");
+      if (typeof imageViewer.showModal === "function") imageViewer.showModal();
+      else imageViewer.setAttribute("open", "");
+      requestAnimationFrame(() => {
+        viewerViewport.scrollLeft = Math.max(0, (viewerCanvas.scrollWidth - viewerViewport.clientWidth) / 2);
+        viewerViewport.scrollTop = Math.max(0, (viewerCanvas.scrollHeight - viewerViewport.clientHeight) / 2);
+        viewerViewport.focus({ preventScroll: true });
+      });
+    };
+
+    const registerZoomableMedia = (source, label) => {
+      if (source.closest("a")) return;
+      source.classList.add("zoomableMedia");
+      source.tabIndex = 0;
+      source.setAttribute("role", "button");
+      source.setAttribute("aria-label", label);
+      source.addEventListener("click", () => openMediaViewer(source));
+      source.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openMediaViewer(source);
+      });
+    };
+
+    document.querySelectorAll(".docContent img").forEach((image) => {
+      registerZoomableMedia(image, `Open image full screen${image.alt ? `: ${image.alt}` : ""}`);
+    });
+    document.querySelectorAll(".docContent .mermaid:not(.mermaidError)").forEach((diagram) => {
+      registerZoomableMedia(diagram, `Open ${mediaSectionTitle(diagram)} diagram full screen`);
+    });
+
+    viewerZoomOut?.addEventListener("click", () => setViewerScale(viewerScale - 0.25));
+    viewerZoomIn?.addEventListener("click", () => setViewerScale(viewerScale + 0.25));
+    document.querySelector("[data-viewer-fit]")?.addEventListener("click", fitViewerMedia);
+    document.querySelector("[data-viewer-close]")?.addEventListener("click", () => imageViewer?.close());
+    viewerViewport?.addEventListener("click", (event) => {
+      if (event.target === viewerViewport || event.target === viewerCanvas) imageViewer?.close();
+    });
+    imageViewer?.addEventListener("close", () => {
+      restoreViewerMedia?.();
+      restoreViewerMedia = null;
+      viewerCanvas?.replaceChildren();
+      document.body.classList.remove("mediaViewerOpen");
+      viewerSource?.focus({ preventScroll: true });
+      viewerSource = null;
+      viewerMedia = null;
+    });
+  </script>
+</body>
+</html>

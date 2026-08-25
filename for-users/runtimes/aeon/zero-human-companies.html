@@ -212,7 +212,45 @@
               
 
               
+                <details class="navGroup">
+                  <summary>Platform API</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
               
             
               
@@ -544,7 +582,7 @@
   <li>an apex goal for the company</li>
 </ul>
 
-<p>If you have not linked AEON yet, start with the <a href="v01-control-plane.html">Current AEON Control Plane</a> guide.</p>
+<p>If you have not linked AEON yet, choose <strong>Set up AEON here</strong> in the company form. Setup opens in place and returns you to the same company with the new workspace selected. The <a href="v01-control-plane.html">Current AEON Control Plane</a> guide covers the full workspace controls.</p>
 
 <h2 id="choose-the-right-engine">Choose The Right Engine</h2>
 
@@ -594,8 +632,8 @@
 <ol>
   <li>Open the company’s <strong>Board</strong> tab.</li>
   <li>Choose <strong>Launch AEON skill</strong>.</li>
-  <li>Open <strong>Runs</strong> to confirm that AEON accepted the company dispatch.</li>
-  <li>Open the <strong>Autopilot</strong> view to follow detailed run state, logs, and outputs in the selected workspace.</li>
+  <li>Open <strong>Runs</strong> to confirm that AEON accepted the company dispatch. When AEON reaches a terminal result, the same company run closes as completed or failed and includes a direct link to the matched AEON run.</li>
+  <li>Open the direct run link or the <strong>Autopilot</strong> view to follow detailed logs and outputs in the selected workspace.</li>
 </ol>
 
 <p>The company reuses the saved workspace and skill on later autonomy cycles. A cycle runs only when the selected AEON workspace has no queued or active run. If HivemindOS cannot read workspace activity, it waits rather than starting another job blindly.</p>
@@ -623,7 +661,7 @@
       <td>Runtime credentials and provider permissions</td>
     </tr>
     <tr>
-      <td>The accepted-dispatch record in company Runs</td>
+      <td>The accepted dispatch, observed terminal result, and direct run link in company Runs</td>
       <td>Detailed run status, logs, schedules, and outputs</td>
     </tr>
     <tr>
@@ -633,7 +671,7 @@
   </tbody>
 </table>
 
-<p>An accepted AEON dispatch does not create a fake completed Work Board task. The company Runs tab proves that HivemindOS handed off the goal; the AEON workspace remains the source of truth for what the skill did afterward.</p>
+<p>An accepted AEON dispatch does not create a fake completed Work Board task. HivemindOS waits for one AEON run carrying the dispatch’s exact receipt, then closes the company run from that observed terminal result. If no unique match exists, the company run stays open rather than guessing. AEON remains the detailed source for logs and outputs.</p>
 
 <h2 id="safety-and-cost-boundaries">Safety And Cost Boundaries</h2>
 
@@ -649,7 +687,7 @@
 
 <h3 id="the-workspace-does-not-appear">The workspace does not appear</h3>
 
-<p>Open the Autopilot view and confirm that the workspace is linked and recognized as current. Legacy or unavailable workspaces are not offered as new company bindings.</p>
+<p>Choose <strong>Set up AEON here</strong> in the company form, or open the Autopilot view and confirm that the workspace is linked and recognized as current. Legacy or unavailable workspaces are not offered as new company bindings.</p>
 
 <h3 id="the-skill-does-not-appear">The skill does not appear</h3>
 
@@ -665,7 +703,7 @@
 
 <h3 id="runs-shows-an-accepted-dispatch-but-no-work-board-card">Runs shows an accepted dispatch but no Work Board card</h3>
 
-<p>That is expected in AEON mode. Follow the detailed run and its outputs in the Autopilot view. Choose the HivemindOS crew engine when the work should be decomposed into Work Board tasks.</p>
+<p>That is expected in AEON mode. Wait for the company run to receive its matched AEON result, then use <strong>Open AEON run</strong> for the detailed work and outputs. Choose the HivemindOS crew engine when the work should be decomposed into Work Board tasks.</p>
 
 <h2 id="related-guides">Related Guides</h2>
 

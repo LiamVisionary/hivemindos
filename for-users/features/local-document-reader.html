@@ -212,7 +212,45 @@
               
 
               
+                <details class="navGroup">
+                  <summary>Platform API</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/databases.html">Managed Databases</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/reference.html">API Reference</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/hivemindos/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
               
             
               
@@ -529,9 +567,15 @@
         </div>
         <h1 id="documents-and-brain-drop">Documents And Brain Drop</h1>
 
-<p>HivemindOS can read common documents on your computer and turn them into text an agent can use. The reader is included in the desktop app, works locally, and does not require a separate converter or API key.</p>
+<p>HivemindOS can read common documents on your computer and turn them into text an agent can use. The bundled native reader works locally and does not require a separate converter or API key.</p>
 
-<p>There is no cloud upload for conversion. If you use a cloud-backed agent or model in Chat, however, the extracted Markdown becomes part of that model request just like text you type. Choose a local runtime when the extracted content must remain entirely on the device.</p>
+<p>Fast local reading is the default, with no cloud upload for conversion. If you use a cloud-backed agent or model in Chat, however, the extracted Markdown becomes part of that model request just like text you type. Choose a local runtime when the extracted content must remain entirely on the device.</p>
+
+<h2 id="enhanced-reading">Enhanced Reading</h2>
+
+<p>Distill also offers <strong>Enhanced (Pro)</strong> reading for scanned pages, complex tables, formulas, images, and difficult multi-column layouts. It is available with active HivemindOS Pro or Max plans and uses your shared HivemindOS credit balance. Before a read starts, Distill shows the most it can cost; afterward, it charges only for the pages read. Enhanced reading is $0.03 per page with a $0.29 minimum. Because selected files are processed online in this mode, use <strong>Fast and private</strong> whenever a source must stay entirely on the computer.</p>
+
+<p>Enhanced reading returns clean Markdown plus structured page content for the Distill pipeline. The normal reader remains available without a subscription and is still the right choice for ordinary digital documents.</p>
 
 <h2 id="where-you-can-use-it">Where You Can Use It</h2>
 
@@ -666,7 +710,7 @@
 
 <p>The result is semantic Markdown for reading and reasoning, not a pixel-perfect recreation. Headings, paragraphs, rows, cells, slide boundaries, message fields, and other readable structure are kept where the source format exposes them.</p>
 
-<p>The reader does not run OCR. An image-only PDF, a scan without a text layer, or text embedded only in an image may produce a no-readable-content error. Complex page layout, visual styling, charts, macros, animations, and embedded media are not reproduced as working Markdown.</p>
+<p>The fast local reader does not run OCR. An image-only PDF, a scan without a text layer, or text embedded only in an image may produce a no-readable-content error. Complex page layout, visual styling, charts, macros, animations, and embedded media are not reproduced as working Markdown. Use Enhanced reading in Distill when you need scanned text, layout recovery, tables, formulas, or extracted images.</p>
 
 <h2 id="safety-and-trust-boundaries">Safety And Trust Boundaries</h2>
 
@@ -693,7 +737,7 @@
 
 <h3 id="a-pdf-has-pages-but-no-text-was-extracted">A PDF has pages but no text was extracted</h3>
 
-<p>The PDF is probably image-only or uses a text representation the reader cannot recover. Run OCR in a trusted local tool, save a searchable PDF or plain-text export, and import that copy.</p>
+<p>The PDF is probably image-only or uses a text representation the fast reader cannot recover. In Distill, choose <strong>Enhanced (Pro)</strong> to read the scanned pages online. To keep the document entirely local, run OCR in a trusted local tool, save a searchable PDF or plain-text export, and import that copy.</p>
 
 <h3 id="a-large-document-is-rejected">A large document is rejected</h3>
 
@@ -710,6 +754,7 @@
 <h2 id="related-guides">Related Guides</h2>
 
 <ul>
+  <li><a href="connected-intelligence-private-work.html">Connected Intelligence, Private Work, And Workflows</a></li>
   <li><a href="hivemind-office.html">Hivemind Office Companion</a></li>
   <li><a href="runtimes-and-chat.html">Agents, Runtimes, And Chat</a></li>
   <li><a href="brain-vault-and-skills.html">Brain, Vault, And Skills</a></li>
