@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Troubleshooting | HivemindOS Docs</title>
-  <meta name="description" content="Plain-language fixes for common HivemindOS setup, connection, agent, brain, env, and wallet problems.">
+  <title>Hive Compute And Testnet Assets | HivemindOS Docs</title>
+  <meta name="description" content="Run managed compute and request supported testnet assets through the HivemindOS Platform API and one credit balance.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -38,7 +38,7 @@
         
           <a href="/hivemindos/for-users/trading/">Trading</a>
         
-          <a aria-current="page" href="/hivemindos/for-users/troubleshooting-cookbook.html">Help</a>
+          <a href="/hivemindos/for-users/troubleshooting-cookbook.html">Help</a>
         
       </div>
       <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
@@ -112,7 +112,7 @@
               
 
               
-                <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/troubleshooting-cookbook.html">Troubleshooting</a>
+                <a class="navLink" href="/hivemindos/for-users/troubleshooting-cookbook.html">Troubleshooting</a>
               
             
           </section>
@@ -212,7 +212,7 @@
               
 
               
-                <details class="navGroup">
+                <details class="navGroup" open>
                   <summary>Platform API</summary>
                   <div class="navChildren">
                     
@@ -227,7 +227,7 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                      <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
@@ -567,7 +567,7 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">HivemindOS manual</p>
+          <p class="pageKicker">Platform API</p>
           <div class="pageToolActions">
             
             <button class="copyPageButton" type="button" data-copy-page>
@@ -575,135 +575,226 @@
             </button>
           </div>
         </div>
-        <h1 id="troubleshooting-hivemindos">Troubleshooting HivemindOS</h1>
+        <h1 id="hive-compute-and-testnet-assets">Hive Compute And Testnet Assets</h1>
 
-<p>Start with the warning where it appears. HivemindOS setup and repair actions open in place, so you should not need to abandon a conversation or task just to fix a missing connection.</p>
+<p><code class="language-plaintext highlighter-rouge">hive-compute</code> and <code class="language-plaintext highlighter-rouge">testnet-faucet</code> are live managed services in the Platform API catalog. Both use the authenticated account’s HivemindOS credits. Your integration does not need a separate service balance, service credential, or desktop session.</p>
 
-<p>If the warning has no action, open <strong>More → Checks &amp; repairs</strong>, run the relevant check, and use the sections below.</p>
+<p>The primary compute operations are <code class="language-plaintext highlighter-rouge">models.list</code>, <code class="language-plaintext highlighter-rouge">chat.create</code>, <code class="language-plaintext highlighter-rouge">images.create</code>, <code class="language-plaintext highlighter-rouge">jobs.create</code>, <code class="language-plaintext highlighter-rouge">artifacts.upload</code>, and <code class="language-plaintext highlighter-rouge">artifacts.get</code>. The faucet operations are <code class="language-plaintext highlighter-rouge">assets.list</code>, <code class="language-plaintext highlighter-rouge">claims.create</code>, and <code class="language-plaintext highlighter-rouge">claims.get</code>. Discover the complete live set, including job submission, cancellation, and artifact acknowledgement, through <code class="language-plaintext highlighter-rouge">GET /capabilities/{serviceId}</code>.</p>
 
-<h2 id="the-dashboard-will-not-unlock">The Dashboard Will Not Unlock</h2>
+<p>Use an API key with <code class="language-plaintext highlighter-rouge">services:read</code> and <code class="language-plaintext highlighter-rouge">services:invoke</code>. Restrict production keys to the exact operations they need:</p>
 
-<p>You may see the unlock screen repeatedly or a message that dashboard authentication is required.</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">issued</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">createHivemindOSApiKey</span><span class="p">({</span>
+  <span class="na">creditToken</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_CREDIT_TOKEN</span><span class="o">!</span><span class="p">,</span>
+  <span class="na">label</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Compute and testnet backend</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">scopes</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">services:read</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">services:invoke</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">files:read</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">files:write</span><span class="dl">"</span><span class="p">],</span>
+  <span class="na">allowedServices</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">hive-compute</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">testnet-faucet</span><span class="dl">"</span><span class="p">],</span>
+  <span class="na">allowedOperations</span><span class="p">:</span> <span class="p">[</span>
+    <span class="dl">"</span><span class="s2">capabilities.list</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.models.list</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.chat.create</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.images.create</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.jobs.create</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.jobs.get</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.jobs.submit</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.artifacts.upload</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.artifacts.get</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.artifacts.acknowledge</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.testnet-faucet.assets.list</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.testnet-faucet.claims.create</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.testnet-faucet.claims.get</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">],</span>
+  <span class="na">limits</span><span class="p">:</span> <span class="p">{</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.chat.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
+      <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span>
+      <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="dl">"</span><span class="s2">services.invoke.testnet-faucet.claims.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
+      <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+      <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="p">},</span>
+  <span class="p">},</span>
+  <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">compute-testnet-key-v1</span><span class="dl">"</span><span class="p">,</span>
+<span class="p">});</span>
+</code></pre></div></div>
 
-<ol>
-  <li>Make sure you are opening the normal HivemindOS desktop app or the expected local dashboard address.</li>
-  <li>In the desktop app, reopen <strong>Security</strong> and check whether the operating-system unlock option is ready.</li>
-  <li>In a browser, use the device token from your original setup. Never paste it into chat, a screenshot, or a support post.</li>
-  <li>If the token is lost, use the local dashboard-auth recovery tool on that machine to copy or rotate it, then restart HivemindOS.</li>
-</ol>
+<p>Remove the file scopes and compute artifact operations when a key only needs chat, images, or faucet claims.</p>
 
-<p>Rotating the token signs out other browser sessions. It does not delete agents, projects, or the shared brain.</p>
+<h2 id="run-managed-inference">Run managed inference</h2>
 
-<h2 id="machine-or-agent-is-offline">Machine Or Agent Is Offline</h2>
+<p>Read the live model catalog before selecting a model:</p>
 
-<p>Fleet may show a machine but say its HivemindOS connection or agent is not ready.</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">models</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">hive-compute</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">models.list</span><span class="dl">"</span><span class="p">,</span>
+  <span class="kc">undefined</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">compute-models-2026-08-25</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
 
-<ol>
-  <li>Confirm that the target computer is awake and connected to the internet or your private machine network.</li>
-  <li>Open its Fleet card and use <strong>Set up</strong>, <strong>Repair</strong>, or <strong>Update</strong> if shown.</li>
-  <li>Wait for both the machine connection and the agent to report ready. A computer can be online while its agent runtime is still stopped or signed out.</li>
-  <li>If only one agent is affected, open that agent’s settings and finish the provider or runtime setup shown there.</li>
-</ol>
+<p>Official managed output is encrypted to an RSA-OAEP public key you control. Keep the matching private key in your application and send the SPKI PEM public key with the request:</p>
 
-<p>Do not expose a local dashboard or helper directly to the public internet to make the warning disappear.</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">completion</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">hive-compute</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">chat.create</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">model</span><span class="p">:</span> <span class="dl">"</span><span class="s2">hive-compute/auto</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">messages</span><span class="p">:</span> <span class="p">[{</span> <span class="na">role</span><span class="p">:</span> <span class="dl">"</span><span class="s2">user</span><span class="dl">"</span><span class="p">,</span> <span class="na">content</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Summarize the key risks.</span><span class="dl">"</span> <span class="p">}],</span>
+    <span class="na">stream</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+    <span class="na">hivemindos</span><span class="p">:</span> <span class="p">{</span> <span class="na">outputPublicKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">COMPUTE_OUTPUT_PUBLIC_KEY_PEM</span><span class="o">!</span> <span class="p">},</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">risk-summary-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
 
-<h2 id="chat-cannot-start-or-continue">Chat Cannot Start Or Continue</h2>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">completion</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">chargedCredits</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">result</span><span class="p">);</span>
+</code></pre></div></div>
 
-<p>Common causes are a signed-out runtime, missing provider setup, unavailable model, offline machine, or a folder the agent cannot reach.</p>
+<p>Use <code class="language-plaintext highlighter-rouge">images.create</code> for image generation. It uses the same encrypted-output option and returns base64 image data inside <code class="language-plaintext highlighter-rouge">result</code>:</p>
 
-<p>If Chat briefly says capability planning or a local service is unavailable, keep
-the app open. The desktop app now restarts its background dashboard service,
-restores the current view, and holds the capability check while recovery runs.
-Closing and reopening the app should not be part of normal recovery.</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">image</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">hive-compute</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">images.create</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">model</span><span class="p">:</span> <span class="dl">"</span><span class="s2">hive-compute/image</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">prompt</span><span class="p">:</span> <span class="dl">"</span><span class="s2">A clean studio product photograph</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">n</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="na">response_format</span><span class="p">:</span> <span class="dl">"</span><span class="s2">b64_json</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">hivemindos</span><span class="p">:</span> <span class="p">{</span> <span class="na">outputPublicKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">COMPUTE_OUTPUT_PUBLIC_KEY_PEM</span><span class="o">!</span> <span class="p">},</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">product-image-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
 
-<ol>
-  <li>Check the selected agent and machine at the top of Chat.</li>
-  <li>Use the setup card shown in the conversation if a provider or runtime is missing.</li>
-  <li>Choose another available model if the selected one is unavailable.</li>
-  <li>Reattach the folder or file if it moved, was renamed, or belongs to another machine.</li>
-  <li>For an older conversation, confirm that its original agent and workspace still exist.</li>
-</ol>
+<p>Streaming is not available on the managed-credit route because the service reports one exact settled charge after completion. Use <code class="language-plaintext highlighter-rouge">stream: false</code> and read <code class="language-plaintext highlighter-rouge">chargedCredits</code> from the successful invocation.</p>
 
-<p>HivemindOS should show a real failure rather than silently switching to a differently billed provider or an unrelated project.</p>
+<h2 id="run-a-confidential-asynchronous-workload">Run a confidential asynchronous workload</h2>
 
-<p>If the same local-service error survives automatic recovery, choose
-<strong>HivemindOS → Send Logs…</strong> from the system menu. The confirmation explains
-exactly what is sent, and a successful upload returns an opaque support ID you
-can share. Despite the menu label, no raw log lines are uploaded. The report is
-limited to the app/build version, coarse operating-system and architecture,
-background-service state, recovery counters, and counts from a fixed set of
-failure categories. It excludes prompts, file paths, account details, secrets,
-and network addresses.</p>
-
-<h2 id="shared-brain-or-shared-env-is-out-of-date">Shared Brain Or Shared Env Is Out Of Date</h2>
-
-<p>First decide what is missing:</p>
-
-<ul>
-  <li>A note, memory, skill, or task is <strong>brain data</strong> and follows your chosen vault sync.</li>
-  <li>A provider key or service credential is <strong>Shared Env</strong> and syncs separately outside the vault.</li>
-</ul>
-
-<p>Then:</p>
-
-<ol>
-  <li>Check that both machines are online in Fleet.</li>
-  <li>Open Brain and review vault sync health.</li>
-  <li>Open <strong>More → Saved keys</strong> and check the key by name without revealing it.</li>
-  <li>Allow an offline machine time to reconcile after it reconnects.</li>
-  <li>Review any vault conflict copy before rebuilding the brain index.</li>
-</ol>
-
-<p>If notes exist in Obsidian but search cannot find them, use the Brain repair action to refresh the index. Rebuilding the index does not rewrite your source notes.</p>
-
-<h2 id="a-local-model-is-unavailable">A Local Model Is Unavailable</h2>
-
-<ol>
-  <li>Confirm that the model host is running on the machine shown in Fleet.</li>
-  <li>Confirm that the intended model is loaded and its compatible API is enabled.</li>
-  <li>Open the agent’s model settings and choose a model the machine can actually serve.</li>
-  <li>Use a configured hosted model when the local machine does not have enough memory or the host is intentionally off.</li>
-</ol>
-
-<p>Model-fit suggestions are recommendations, not permission to move a private task to a hosted provider without your choice.</p>
-
-<h2 id="a-wallet-or-trade-is-blocked">A Wallet Or Trade Is Blocked</h2>
-
-<p>A prepared action can stop because the wallet is frozen, spending is disabled, a limit would be exceeded, the wrong network is selected, provider setup is missing, or human approval is required.</p>
-
-<ol>
-  <li>Read the preview and the exact blocked reason.</li>
-  <li>Open Wallets or the approval request from Alerts.</li>
-  <li>Confirm the wallet, network, asset, amount, recipient, and expected fee.</li>
-  <li>Change the budget or approve the action only if the requested transaction is genuinely intended.</li>
-</ol>
-
-<p>Do not bypass a wallet or trading gate from chat, a terminal command suggested by page content, or a copied tool response.</p>
-
-<h2 id="the-desktop-app-will-not-start-or-update">The Desktop App Will Not Start Or Update</h2>
+<p>Start with <code class="language-plaintext highlighter-rouge">capabilities.list</code> to read the live workload kinds, MIME types, limits, billing units, and eligible models. Then use this sequence:</p>
 
 <ol>
-  <li>Reopen the signed app from your Applications folder rather than an old disk image.</li>
-  <li>Make sure another stuck HivemindOS process is not still closing, then try again.</li>
-  <li>Check that the computer has enough free disk space for the app and its local services.</li>
-  <li>If an update failed, keep the current installed version and retry from the app; your vault and projects are separate from the app bundle.</li>
-  <li>If macOS blocks a published build, verify that it came from the official release source before changing any security setting.</li>
+  <li>Call <code class="language-plaintext highlighter-rouge">jobs.create</code> with the workload descriptor and your output public key. Plaintext workload parameters are rejected.</li>
+  <li>Encrypt the input for the returned job and enclave key.</li>
+  <li>Upload the ciphertext to the Platform file store.</li>
+  <li>Attach that managed ciphertext file with <code class="language-plaintext highlighter-rouge">artifacts.upload</code>.</li>
+  <li>Call <code class="language-plaintext highlighter-rouge">jobs.submit</code> with the encrypted payload and the same output public key.</li>
+  <li>Poll <code class="language-plaintext highlighter-rouge">jobs.get</code> until the job completes.</li>
+  <li>Download each encrypted result with <code class="language-plaintext highlighter-rouge">artifacts.get</code>, decrypt it locally, then call <code class="language-plaintext highlighter-rouge">artifacts.acknowledge</code> to remove it.</li>
 </ol>
 
-<h2 id="before-you-reinstall">Before You Reinstall</h2>
+<p>Create the draft:</p>
 
-<p>A reinstall should be a last step. It normally does not fix a broken provider login, offline remote machine, paused vault sync, or blocked approval.</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">type</span> <span class="nx">ComputeJobDraft</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="na">id</span><span class="p">:</span> <span class="kr">string</span><span class="p">;</span>
+  <span class="nl">worker</span><span class="p">:</span> <span class="p">{</span> <span class="na">encryptionKeySha256</span><span class="p">:</span> <span class="kr">string</span> <span class="p">};</span>
+<span class="p">};</span>
 
-<p>Before reinstalling, preserve:</p>
+<span class="kd">const</span> <span class="nx">created</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="o">&lt;</span><span class="nx">ComputeJobDraft</span><span class="o">&gt;</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">hive-compute</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">jobs.create</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">protocol</span><span class="p">:</span> <span class="dl">"</span><span class="s2">hive-compute.workload.v1</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">kind</span><span class="p">:</span> <span class="dl">"</span><span class="s2">video</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">task</span><span class="p">:</span> <span class="dl">"</span><span class="s2">text-to-video</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">model</span><span class="p">:</span> <span class="nx">selectedModel</span><span class="p">,</span>
+    <span class="na">inputMimeTypes</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">application/octet-stream</span><span class="dl">"</span><span class="p">],</span>
+    <span class="na">outputMimeTypes</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">video/mp4</span><span class="dl">"</span><span class="p">],</span>
+    <span class="na">billingUnit</span><span class="p">:</span> <span class="dl">"</span><span class="s2">second</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">requestedUnits</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="na">outputPublicKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">COMPUTE_OUTPUT_PUBLIC_KEY_PEM</span><span class="o">!</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">confidential-video-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
 
-<ul>
-  <li>your Obsidian Hive Superbrain vault;</li>
-  <li>project folders and deliverables;</li>
-  <li>any wallet backups and recovery material in their approved secure location;</li>
-  <li>the names—not values—of shared credentials you will need to recheck.</li>
-</ul>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">created</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">created</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+</code></pre></div></div>
 
-<p>Never delete the vault, runtime homes, or <code class="language-plaintext highlighter-rouge">~/.hivemindos</code> as a generic repair step. If Checks &amp; repairs identifies a specific corrupted item, follow that scoped recovery instruction.</p>
+<p>Upload only ciphertext. The <code class="language-plaintext highlighter-rouge">artifacts.upload</code> capability declares <code class="language-plaintext highlighter-rouge">requestFormat: "binary"</code>, accepts exactly one managed file, and derives the ciphertext digest from that file’s verified record:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">ciphertextFile</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">files</span><span class="p">.</span><span class="nx">upload</span><span class="p">(</span>
+  <span class="p">{</span>
+    <span class="na">name</span><span class="p">:</span> <span class="dl">"</span><span class="s2">job-input.enc</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">contentType</span><span class="p">:</span> <span class="dl">"</span><span class="s2">application/octet-stream</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">bytes</span><span class="p">:</span> <span class="nx">ciphertextBytes</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">confidential-video-input-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">ciphertextFile</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">ciphertextFile</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+
+<span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">hive-compute</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">artifacts.upload</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">encryptedMimeType</span><span class="p">:</span> <span class="dl">"</span><span class="s2">application/octet-stream</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">encryptionPublicKeySha256</span><span class="p">:</span> <span class="nx">created</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">worker</span><span class="p">.</span><span class="nx">encryptionKeySha256</span><span class="p">,</span>
+    <span class="na">encryptedKey</span><span class="p">:</span> <span class="nx">wrappedContentKeyBase64</span><span class="p">,</span>
+    <span class="na">chunkSize</span><span class="p">:</span> <span class="nx">ciphertextBytes</span><span class="p">.</span><span class="nx">byteLength</span><span class="p">,</span>
+    <span class="na">chunks</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span>
+    <span class="na">pathParameters</span><span class="p">:</span> <span class="p">{</span>
+      <span class="na">jobId</span><span class="p">:</span> <span class="nx">created</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">id</span><span class="p">,</span>
+      <span class="na">artifactId</span><span class="p">:</span> <span class="s2">`</span><span class="p">${</span><span class="nx">created</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">id</span><span class="p">}</span><span class="s2">.input.1`</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="na">fileIds</span><span class="p">:</span> <span class="p">[</span><span class="nx">ciphertextFile</span><span class="p">.</span><span class="nx">file</span><span class="p">.</span><span class="nx">id</span><span class="p">],</span>
+    <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">confidential-video-artifact-001</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">artifacts.get</code> returns encrypted bytes as a JSON-safe envelope with <code class="language-plaintext highlighter-rouge">contentType</code>, <code class="language-plaintext highlighter-rouge">encoding: "base64"</code>, and <code class="language-plaintext highlighter-rouge">data</code>. The Platform API accepts managed input files up to 25 MB and returns encrypted compute artifacts up to 25 MB per call.</p>
+
+<h2 id="request-testnet-assets">Request testnet assets</h2>
+
+<p>Testnet assets have no monetary value. Read <code class="language-plaintext highlighter-rouge">assets.list</code> immediately before a claim to get the supported network and asset pairs, amount, quota, and exact <code class="language-plaintext highlighter-rouge">priceCredits</code>:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">catalog</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">testnet-faucet</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">assets.list</span><span class="dl">"</span><span class="p">,</span>
+  <span class="kc">undefined</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">faucet-assets-2026-08-25</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>Create a claim using a pair returned by the live catalog. The input idempotency key identifies the faucet claim; the request option protects the outer Platform invocation:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">type</span> <span class="nx">FaucetClaimResult</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="na">claim</span><span class="p">:</span> <span class="p">{</span> <span class="na">id</span><span class="p">:</span> <span class="kr">string</span><span class="p">;</span> <span class="nl">status</span><span class="p">:</span> <span class="kr">string</span> <span class="p">};</span>
+<span class="p">};</span>
+
+<span class="kd">const</span> <span class="nx">claim</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="o">&lt;</span><span class="nx">FaucetClaimResult</span><span class="o">&gt;</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">testnet-faucet</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">claims.create</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">network</span><span class="p">:</span> <span class="nx">selected</span><span class="p">.</span><span class="nx">network</span><span class="p">,</span>
+    <span class="na">asset</span><span class="p">:</span> <span class="nx">selected</span><span class="p">.</span><span class="nx">asset</span><span class="p">,</span>
+    <span class="na">recipient</span><span class="p">:</span> <span class="nx">testnetRecipient</span><span class="p">,</span>
+    <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">onboarding-wallet-001</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">platform-onboarding-wallet-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">claim</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">claim</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">claim</span><span class="p">.</span><span class="nx">chargedCredits</span><span class="p">,</span> <span class="nx">claim</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">claim</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>Retry an uncertain request with both original idempotency keys. Use <code class="language-plaintext highlighter-rouge">claims.get</code> with the returned claim id to read its current state:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">status</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">testnet-faucet</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">claims.get</span><span class="dl">"</span><span class="p">,</span>
+  <span class="kc">undefined</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">pathParameters</span><span class="p">:</span> <span class="p">{</span> <span class="na">claimId</span><span class="p">:</span> <span class="nx">claim</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">claim</span><span class="p">.</span><span class="nx">id</span> <span class="p">},</span>
+    <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">claim-status-onboarding-wallet-001</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>Claims are isolated to the HivemindOS account behind the API key. Another account cannot read a claim by guessing its id. Provider failures release the credit reservation; a delivered and settled claim returns the exact final charge.</p>
+
+<p>Next: <a href="limits.html">set exact endpoint limits</a>, <a href="usage-audit.html">inspect usage and audit records</a>, or <a href="services.html">browse every service</a>.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -721,7 +812,7 @@ and network addresses.</p>
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/troubleshooting-cookbook.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/compute-faucet.md">Improve this page ↗</a>
     </aside>
   </div>
 

@@ -227,6 +227,8 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/files-connections.html">Files And Connections</a>
@@ -724,7 +726,7 @@
     <tr>
       <td>Finance</td>
       <td><code class="language-plaintext highlighter-rouge">testnet-faucet</code></td>
-      <td>Discover the planned unified-credit testnet funding surface. It reports <code class="language-plaintext highlighter-rouge">coming-soon</code> until claim fulfillment uses the Platform account-credit authority.</td>
+      <td>Discover supported testnet assets, request them, and track each claim with HivemindOS credits.</td>
     </tr>
     <tr>
       <td>Finance</td>
@@ -784,7 +786,7 @@
     <tr>
       <td>Platform</td>
       <td><code class="language-plaintext highlighter-rouge">hive-compute</code></td>
-      <td>Discover the planned unified-credit compute surface. It reports <code class="language-plaintext highlighter-rouge">coming-soon</code> until marketplace settlement uses the Platform account-credit authority.</td>
+      <td>Run managed inference, image generation, and confidential asynchronous workloads with HivemindOS credits.</td>
     </tr>
     <tr>
       <td>Platform</td>
@@ -832,13 +834,17 @@
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
   </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
   </span><span class="nl">"serviceId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"hive-research"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"operationId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"analyses.create"</span><span class="p">,</span><span class="w">
   </span><span class="nl">"status"</span><span class="p">:</span><span class="w"> </span><span class="mi">200</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"chargedCredits"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w">
   </span><span class="nl">"result"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
     </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
     </span><span class="nl">"report"</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span><span class="w">
   </span><span class="p">}</span><span class="w">
 </span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">chargedCredits</code> is the exact completed charge reported by the owning service. It is <code class="language-plaintext highlighter-rouge">0</code> for free reads and for work that did not complete. The same value is available in <code class="language-plaintext highlighter-rouge">X-HivemindOS-Credits-Charged</code> and in usage and audit records.</p>
 
 <p>Legacy reviewed paths remain supported for compatibility, but registered operations are safer: they validate the method and path template, work with exact API-key access, and remain discoverable. The Platform API rejects account, payment, credential, administrative, and other private service routes.</p>
 
@@ -899,7 +905,7 @@
 
 <p>Running and retained managed-agent time use the same account credit balance as other managed work. Read the current plan catalog through <code class="language-plaintext highlighter-rouge">GET /pricing?service=managed-agents</code> before creating an agent.</p>
 
-<p>Next: <a href="limits.html">configure per-service and per-operation limits</a> or <a href="runs-webhooks.html">use durable runs and webhooks</a>.</p>
+<p>Next: <a href="compute-faucet.html">use Hive Compute and the testnet faucet</a>, <a href="limits.html">configure per-service and per-operation limits</a>, or <a href="runs-webhooks.html">use durable runs and webhooks</a>.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

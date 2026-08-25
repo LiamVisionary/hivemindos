@@ -227,6 +227,8 @@
                     
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/files-connections.html">Files And Connections</a>
@@ -575,7 +577,7 @@
         </div>
         <h1 id="capabilities-agents-workflows-and-mini-apps">Capabilities, Agents, Workflows, And Mini Apps</h1>
 
-<p>The capability registry turns HivemindOS cloud services into stable, discoverable backend operations. It covers managed agents, scheduled workflows, research, swarms, memory, models, media, app hosting, communications, analytics, integrations, market intelligence, wallets, trading, and managed databases. The catalog also identifies planned surfaces without pretending they are available.</p>
+<p>The capability registry turns HivemindOS cloud services into stable, discoverable backend operations. It covers managed agents, scheduled workflows, research, swarms, memory, models, media, app hosting, communications, analytics, integrations, market intelligence, wallets, trading, compute, testnet funding, and managed databases. The catalog also identifies planned surfaces without pretending they are available.</p>
 
 <h2 id="discover-capabilities">Discover capabilities</h2>
 
@@ -677,6 +679,8 @@
 
 <p>The calling key needs <code class="language-plaintext highlighter-rouge">files:read</code>. A single invocation may attach up to 40 files with a combined 25 MB limit.</p>
 
+<p>Capabilities with <code class="language-plaintext highlighter-rouge">requestFormat: "binary"</code> accept exactly one managed file by id. The published <code class="language-plaintext highlighter-rouge">hive-compute.artifacts.upload</code> operation uses this path for encrypted workload input. The Platform API takes the ciphertext digest from the managed file record and validates the encryption metadata before forwarding the bytes. It never accepts a caller-supplied replacement digest.</p>
+
 <h2 id="create-a-protected-action-approval">Create a protected action approval</h2>
 
 <p>Capabilities marked <code class="language-plaintext highlighter-rouge">approval: "always"</code> require a matching Platform approval. The approval binds the service, operation, path parameters, query, input, managed files, and connection id, so approving one action cannot authorize changed input or a different credential.</p>
@@ -719,17 +723,17 @@
   <li>Persistent cloud agents, agent chat, app building, integrations, and governed computer actions through <code class="language-plaintext highlighter-rouge">managed-agents</code>.</li>
   <li>Scheduled, manual, and event-driven routines through <code class="language-plaintext highlighter-rouge">managed-workflows</code>.</li>
   <li>Research, multi-agent swarms, audience discovery, transcripts, skill distillation, market intelligence, and lead data.</li>
-  <li>Managed model inference, media generation, photo analysis, and GPU rentals. The separate Hive Compute marketplace remains visible as <code class="language-plaintext highlighter-rouge">coming-soon</code> until its jobs use the same API account-credit authority.</li>
+  <li>Managed model inference, media generation, photo analysis, GPU rentals, and Hive Compute jobs.</li>
   <li>Cloud memory through <code class="language-plaintext highlighter-rouge">cloud-superbrain</code> and portable application data through <code class="language-plaintext highlighter-rouge">hivemind-database</code>.</li>
   <li>App hosting, bookings, social publishing, email, analytics, X operations, calendar access, and remote tool servers.</li>
   <li>Token research, wallet risk, bridge quotes, copy-trading monitors, managed wallets, and managed spot trading.</li>
 </ul>
 
-<p><code class="language-plaintext highlighter-rouge">hive-compute</code> and <code class="language-plaintext highlighter-rouge">testnet-faucet</code> remain discoverable with <code class="language-plaintext highlighter-rouge">coming-soon</code> status. Their marketplace operations are not invocable from this API until they settle through the same Platform account-credit authority.</p>
+<p><code class="language-plaintext highlighter-rouge">hive-compute</code> and <code class="language-plaintext highlighter-rouge">testnet-faucet</code> are available through registered operations and settle against the same authenticated HivemindOS credit account as the rest of the managed suite. Failed work releases its reservation; completed work reports the exact charge in the invocation result, response header, usage records, and audit records.</p>
 
 <p>Available managed mini-app backends use the same account credit balance and service-owned policies. The API exposes their backend logic without requiring a desktop session or copying their protected credentials into your product.</p>
 
-<p>Next: <a href="services.html">browse the service catalog</a>, <a href="runs-webhooks.html">create durable runs</a>, or <a href="reference.html">open the exact endpoint map</a>.</p>
+<p>Next: <a href="compute-faucet.html">use Hive Compute and the testnet faucet</a>, <a href="services.html">browse the service catalog</a>, or <a href="reference.html">open the exact endpoint map</a>.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
