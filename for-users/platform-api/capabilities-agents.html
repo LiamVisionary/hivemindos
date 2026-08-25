@@ -213,7 +213,7 @@
 
               
                 <details class="navGroup" open>
-                  <summary>Platform API</summary>
+                  <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
@@ -225,9 +225,11 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
+                    
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
@@ -567,7 +569,7 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">Platform API</p>
+          <p class="pageKicker">SuperAgent API</p>
           <div class="pageToolActions">
             
             <button class="copyPageButton" type="button" data-copy-page>
@@ -679,7 +681,7 @@
 
 <p>The calling key needs <code class="language-plaintext highlighter-rouge">files:read</code>. A single invocation may attach up to 40 files with a combined 25 MB limit.</p>
 
-<p>Capabilities with <code class="language-plaintext highlighter-rouge">requestFormat: "binary"</code> accept exactly one managed file by id. The published <code class="language-plaintext highlighter-rouge">hive-compute.artifacts.upload</code> operation uses this path for encrypted workload input. The Platform API takes the ciphertext digest from the managed file record and validates the encryption metadata before forwarding the bytes. It never accepts a caller-supplied replacement digest.</p>
+<p>Capabilities with <code class="language-plaintext highlighter-rouge">requestFormat: "binary"</code> accept exactly one managed file by id. The published <code class="language-plaintext highlighter-rouge">hive-compute.artifacts.upload</code> operation uses this path for encrypted workload input. The SuperAgent API takes the ciphertext digest from the managed file record and validates the encryption metadata before forwarding the bytes. It never accepts a caller-supplied replacement digest.</p>
 
 <h2 id="create-a-protected-action-approval">Create a protected action approval</h2>
 
@@ -724,7 +726,7 @@
   <li>Scheduled, manual, and event-driven routines through <code class="language-plaintext highlighter-rouge">managed-workflows</code>.</li>
   <li>Research, multi-agent swarms, audience discovery, transcripts, skill distillation, market intelligence, and lead data.</li>
   <li>Managed model inference, media generation, photo analysis, GPU rentals, and Hive Compute jobs.</li>
-  <li>Cloud memory through <code class="language-plaintext highlighter-rouge">cloud-superbrain</code> and portable application data through <code class="language-plaintext highlighter-rouge">hivemind-database</code>.</li>
+  <li>Typed and evolving cloud memory, lexical and semantic recall, grounded answers, generations, capsules, and knowledge graphs through <code class="language-plaintext highlighter-rouge">cloud-superbrain</code>; portable application data through <code class="language-plaintext highlighter-rouge">hivemind-database</code>.</li>
   <li>App hosting, bookings, social publishing, email, analytics, X operations, calendar access, and remote tool servers.</li>
   <li>Token research, wallet risk, bridge quotes, copy-trading monitors, managed wallets, and managed spot trading.</li>
 </ul>
@@ -733,7 +735,7 @@
 
 <p>Available managed mini-app backends use the same account credit balance and service-owned policies. The API exposes their backend logic without requiring a desktop session or copying their protected credentials into your product.</p>
 
-<p>Next: <a href="compute-faucet.html">use Hive Compute and the testnet faucet</a>, <a href="services.html">browse the service catalog</a>, or <a href="reference.html">open the exact endpoint map</a>.</p>
+<p>Next: <a href="memory.html">use managed memory and knowledge</a>, <a href="compute-faucet.html">use Hive Compute and the testnet faucet</a>, <a href="services.html">browse the service catalog</a>, or <a href="reference.html">open the exact endpoint map</a>.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

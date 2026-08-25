@@ -213,7 +213,7 @@
 
               
                 <details class="navGroup">
-                  <summary>Platform API</summary>
+                  <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
@@ -225,9 +225,11 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
@@ -659,7 +661,7 @@
 
 <p>Customer-facing billing shows ordinary dollar-denominated managed usage. This prevents a funding/cash-out loop and avoids presenting service credit as a token reward.</p>
 
-<p>Lifetime Honey unlocks a larger daily allowance for HivemindOS free agents. The benefit starts at 10 Honey and grows through six levels to a maximum 2× request-and-token allowance. Honey from verified work, bounded peer recognition, and the documented historical launch seed all advances the same total and levels. Raw activity and ordinary chat volume do not earn Honey. If a workspace also has a HIVE staking benefit, HivemindOS uses whichever allowance multiplier is higher instead of stacking them. The allowance is an in-kind service benefit, not a spendable or withdrawable balance.</p>
+<p>Lifetime Honey unlocks a larger daily allowance for HivemindOS free agents. The benefit starts at 10 Honey and grows through six levels to a maximum 2× request-and-token allowance. Honey from verified work, bounded peer recognition, verified Community Hive Brain outcomes, and the documented historical launch seed all advances the same total and levels. A distinct shared copy-trading outcome earns 0.1 Honey only after hosted verification; retries and duplicates earn nothing. Raw activity and ordinary chat volume do not earn Honey. If a workspace also has a HIVE staking benefit, HivemindOS uses whichever allowance multiplier is higher instead of stacking them. The allowance is an in-kind service benefit, not a spendable or withdrawable balance.</p>
 
 <table>
   <thead>
@@ -713,7 +715,7 @@
 
 <p>The 🏆 reaction uses the same hosted identity, cooldown, daily quota, pair, recipient, and replay checks as the typed command. Removing a trophy, adding an ordinary reaction, reacting anonymously, or reacting to a message whose author the bot cannot identify awards nothing. The bot does not send the message text to the hosted service. To use this shortcut, the bot must be a group administrator with permission to delete messages, Group Privacy must be disabled, and the group’s reaction settings must allow 🏆 (or all emoji). Telegram bots cannot change that group-wide reaction setting, so a group admin enables it once; <code class="language-plaintext highlighter-rouge">/honey &lt;why&gt;</code> remains the fallback.</p>
 
-<p>The first seasonal leaderboard preserves historical HIVE-tip receiver rank at 1 Honey per 1,000,000 HIVE received. Mission, recognition, verified-work, and historical-seed labels show where Honey came from, but every Honey advances the same cumulative total and allowance levels. Telegram messages, ordinary reactions, invites, and raw activity do not earn Honey. Honey remains non-transferable and separate from HIVE tips, bounty escrow, and purchased Hivemind Cloud credits.</p>
+<p>The first seasonal leaderboard preserves historical HIVE-tip receiver rank at 1 Honey per 1,000,000 HIVE received. Mission, recognition, verified-work, learning, and historical-seed labels show where Honey came from, but every Honey advances the same cumulative total and allowance levels. Telegram messages, ordinary reactions, invites, and raw activity do not earn Honey. Honey remains non-transferable and separate from HIVE tips, bounty escrow, and purchased Hivemind Cloud credits.</p>
 
 <p>Hosted model messages are <strong>metered</strong>: each successful message is charged the <strong>upstream provider price × 1.25 (a 25% markup)</strong>, with a <strong>$0.001 minimum per message</strong>. A short message on a cheap model hits the <code class="language-plaintext highlighter-rouge">$0.001</code> floor; a longer message on a premium model costs proportionally more.</p>
 

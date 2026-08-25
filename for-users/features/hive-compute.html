@@ -213,7 +213,7 @@
 
               
                 <details class="navGroup">
-                  <summary>Platform API</summary>
+                  <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
@@ -225,9 +225,11 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
@@ -609,6 +611,25 @@ OpenAI-compatible shape.</li>
 receipt, releases unused reserve, and updates the host’s pending earnings.</li>
 </ol>
 
+<p>Every live host belongs to one of two marketplace trust tiers:</p>
+
+<ul>
+  <li><strong>Standard</strong> — compatible community hardware with lower-cost eligibility.
+Traffic is protected in transit, but the host may be able to see prompts and
+outputs. Standard workers never receive a request that requires confidential
+execution.</li>
+  <li><strong>Confidential Verified</strong> — a worker with fresh server-verified hardware
+attestation, encrypted prompt delivery, and renter-only output encryption.
+These hosts receive a visible trust badge and can compete for premium private
+jobs as well as ordinary standard jobs.</li>
+</ul>
+
+<p>Both tiers earn from completed customer-funded jobs. A hardware-attested
+machine is not required to host; attestation is a competitive trust advantage,
+not an admission requirement. A request that selects Confidential Verified
+fails closed when no eligible private worker is live. It is never downgraded to
+Standard.</p>
+
 <p>For hosts, it is a way to earn from spare local capacity:</p>
 
 <ol>
@@ -892,6 +913,11 @@ may therefore show as measuring until enough real samples complete.</p>
 
 <p>Open <strong>More → Hive Compute</strong>.</p>
 
+<p>If this machine does not have a local model ready yet, setup pauses before the
+benchmark and shows <strong>Set up LM Studio</strong> in the same view. Finish making a local
+model available, then refresh; Hive Compute continues from that saved setup
+instead of treating the missing model as a failed marketplace action.</p>
+
 <p>The view checks:</p>
 
 <ul>
@@ -916,6 +942,11 @@ checkouts need Node.js 20 or newer)</li>
   <li>Ollama or an OpenAI-compatible local server such as LM Studio</li>
   <li>the local worker module under <code class="language-plaintext highlighter-rouge">~/.hivemindos/modules/hive-compute-worker</code></li>
 </ul>
+
+<p>A Standard host needs the gateway URL, worker token, local model runtime, and
+valid price listings. The attestation, enclave key, and confidential sidecar
+settings are optional and are needed only to earn the <strong>Confidential Verified</strong>
+badge and accept confidential jobs.</p>
 
 <p>For earning, set the worker token issued by the gateway, press <strong>Set up
 hosting</strong>, then press <strong>Go live</strong> in the app. The setup action installs the
@@ -1002,15 +1033,23 @@ configuration.</p>
 
 <h2 id="privacy-and-payment-rails">Privacy And Payment Rails</h2>
 
-<p>Official asynchronous Hive Compute workload jobs fail closed unless they have
-hardware-enforced confidentiality and renter-only output encryption. The host’s operating system,
-worker process, logs, gateway, artifact store, and human operator receive only
-ciphertext, bounded metadata, progress, usage, and signed manifests. The model
-must necessarily process clear data inside an attested confidential-compute
-boundary, but clear prompts and generated content must never be exposed to the
-host machine outside that boundary. This guarantee requires a real hardware TEE,
-gateway verification of fresh attestation, expected code/model binding, and a
-confidential sidecar that holds decryption and completion-signing keys.</p>
+<p>Chat and image requests choose <code class="language-plaintext highlighter-rouge">standard</code>, <code class="language-plaintext highlighter-rouge">confidential</code>, or <code class="language-plaintext highlighter-rouge">auto</code> privacy.
+Standard is appropriate only when the caller accepts that the selected host may
+see the input and output. Confidential requires server-verified hardware and
+renter-only output encryption. Auto uses the caller’s structured sensitivity:
+<code class="language-plaintext highlighter-rouge">public</code> and <code class="language-plaintext highlighter-rouge">low</code> may use Standard; <code class="language-plaintext highlighter-rouge">personal</code>, <code class="language-plaintext highlighter-rouge">confidential</code>, <code class="language-plaintext highlighter-rouge">secret</code>,
+<code class="language-plaintext highlighter-rouge">unknown</code>, or an omitted classification resolve to Confidential. This is a
+fail-closed policy, not a best-effort preference.</p>
+
+<p>Official asynchronous artifact workloads currently use Confidential Verified
+only. The host’s operating system, worker process, logs, gateway, artifact
+store, and human operator receive only ciphertext, bounded metadata, progress,
+usage, and signed manifests. The model must necessarily process clear data
+inside an attested confidential-compute boundary, but clear prompts and
+generated content must never be exposed to the host machine outside that
+boundary. This guarantee requires a real hardware TEE, gateway verification of
+fresh attestation, expected code/model binding, and a confidential sidecar that
+holds decryption and completion-signing keys.</p>
 
 <p>The OpenAI-compatible chat facade has a narrower compatibility boundary: its
 generated answer is encrypted inside the confidential runtime directly to the
@@ -1028,9 +1067,9 @@ when the enclave runtime provides the matching private key or sealed payload key
 Verified-only routing fails closed when no live worker has attestation evidence
 and encrypted delivery capability.</p>
 
-<p>Encrypted prompt delivery protects the job payload all the way into the
-attested sidecar. Renter-only output encryption is mandatory on official routes:
-clients generate an RSA-OAEP keypair, send the public key with
+<p>Encrypted prompt delivery protects a confidential job payload all the way into
+the attested sidecar. Renter-only output encryption is mandatory on
+Confidential Verified routes: clients generate an RSA-OAEP keypair, send the public key with
 <code class="language-plaintext highlighter-rouge">X-HivemindOS-Compute-Output-Encryption: required</code> and
 <code class="language-plaintext highlighter-rouge">X-HivemindOS-Compute-Output-Public-Key</code>, then decrypt response envelopes on
 the client side. Workers send encrypted token, final-output, or artifact
@@ -1058,7 +1097,7 @@ X-HivemindOS-Compute-Output-Public-Key: &lt;RSA-OAEP SPKI public key&gt;
 envelope at <code class="language-plaintext highlighter-rouge">hiveCompute.encryptedOutput</code>. The gateway still returns the signed
 receipt and token usage, but it should not see the decrypted answer.</p>
 
-<p>Official requests also require:</p>
+<p>Confidential requests also require:</p>
 
 <div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">X-HivemindOS-Compute-Hardware-TEE-Required: true
 </span></code></pre></div></div>
@@ -1066,16 +1105,16 @@ receipt and token usage, but it should not see the decrypted answer.</p>
 <p>The request fails closed unless an eligible worker has gateway-verified hardware
 attestation. Dev or locally asserted attestation is not hardware privacy.</p>
 
-<h3 id="confidential-verified-models">Confidential verified models</h3>
+<h3 id="confidential-verified-models">Confidential Verified models</h3>
 
 <p>The HivemindOS model selector places currently available confidential models
-first and marks them <strong>Confidential verified</strong>. The label is not supplied by the
+first and marks them <strong>Confidential Verified</strong>. The label is not supplied by the
 host. It appears only when the official gateway has accepted fresh hardware
 attestation, verified the expected runtime and model image, bound the enclave
 keys, and confirmed renter-only output encryption. The label disappears when
 the attestation expires or the worker disconnects.</p>
 
-<p>“Confidential verified” is deliberately narrower than “100% confidential.” It
+<p>“Confidential Verified” is deliberately narrower than “100% confidential.” It
 describes verified execution state and the designed trust boundary; it cannot
 promise that supported hardware has no unknown defect or side channel.</p>
 
@@ -1127,10 +1166,11 @@ Self-hosted operators can point the app and worker at their own compatible
 gateway, but that is a self-hosted marketplace, not official HivemindOS
 settlement.</p>
 
-<p>Plaintext compatibility exists only for an explicitly self-hosted, non-official
-gateway with <code class="language-plaintext highlighter-rouge">HIVE_COMPUTE_SELF_HOSTED_ALLOW_NONCONFIDENTIAL=1</code>. It must be
-presented as non-confidential: the host can see prompts and outputs, and it must
-never be used as an official marketplace privacy claim.</p>
+<p>Standard execution is an official marketplace tier, not a confidentiality
+claim. It must always be labeled <strong>Standard</strong>, and callers must be told that the
+host may see prompts and outputs. Self-hosted gateways can also permit this
+mode, but cannot convert it into a Confidential Verified claim through local
+configuration.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

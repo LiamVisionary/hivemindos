@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Platform API Reference | HivemindOS Docs</title>
-  <meta name="description" content="HivemindOS Platform API endpoints, scopes, idempotency requirements, operation ids, headers, and SDK constants.">
+  <title>SuperAgent API Reference | HivemindOS Docs</title>
+  <meta name="description" content="HivemindOS SuperAgent API endpoints, scopes, idempotency requirements, operation ids, headers, and SDK constants.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -213,7 +213,7 @@
 
               
                 <details class="navGroup" open>
-                  <summary>Platform API</summary>
+                  <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
@@ -225,9 +225,11 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
@@ -567,7 +569,7 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">Platform API</p>
+          <p class="pageKicker">SuperAgent API</p>
           <div class="pageToolActions">
             
             <button class="copyPageButton" type="button" data-copy-page>
@@ -575,7 +577,7 @@
             </button>
           </div>
         </div>
-        <h1 id="platform-api-reference">Platform API Reference</h1>
+        <h1 id="superagent-api-reference">SuperAgent API Reference</h1>
 
 <p>This page is the human-readable route map. The <a href="https://api.hivemindos.app/openapi.json">OpenAPI 3.1 document</a> is authoritative for schemas and can generate clients, validators, and API explorers.</p>
 
@@ -1427,7 +1429,7 @@ runs.create.&lt;serviceId&gt;.&lt;operationId&gt;
 
 <p>The SDK returns the same <code class="language-plaintext highlighter-rouge">{ ok: true, ... }</code> or <code class="language-plaintext highlighter-rouge">{ ok: false, error, ... }</code> envelopes as the HTTPS API. It does not throw for an ordinary API failure; check <code class="language-plaintext highlighter-rouge">ok</code> before using the result.</p>
 
-<p>Return to the <a href="../platform-api.html">Platform API quickstart</a>, or open <a href="authentication.html">authentication</a>, <a href="limits.html">limits</a>, <a href="databases.html">databases</a>, <a href="wallets-trading.html">wallets and trading</a>, or <a href="runs-webhooks.html">runs and webhooks</a>.</p>
+<p>Return to the <a href="../platform-api.html">SuperAgent API quickstart</a>, or open <a href="authentication.html">authentication</a>, <a href="limits.html">limits</a>, <a href="databases.html">databases</a>, <a href="wallets-trading.html">wallets and trading</a>, or <a href="runs-webhooks.html">runs and webhooks</a>.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

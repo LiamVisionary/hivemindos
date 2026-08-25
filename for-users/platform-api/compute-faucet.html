@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
   <title>Hive Compute And Testnet Assets | HivemindOS Docs</title>
-  <meta name="description" content="Run managed compute and request supported testnet assets through the HivemindOS Platform API and one credit balance.">
+  <meta name="description" content="Run managed compute and request supported testnet assets through the HivemindOS SuperAgent API and one credit balance.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -213,7 +213,7 @@
 
               
                 <details class="navGroup" open>
-                  <summary>Platform API</summary>
+                  <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
@@ -225,9 +225,11 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
-                      <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                      <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
@@ -567,7 +569,7 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">Platform API</p>
+          <p class="pageKicker">SuperAgent API</p>
           <div class="pageToolActions">
             
             <button class="copyPageButton" type="button" data-copy-page>
@@ -577,9 +579,9 @@
         </div>
         <h1 id="hive-compute-and-testnet-assets">Hive Compute And Testnet Assets</h1>
 
-<p><code class="language-plaintext highlighter-rouge">hive-compute</code> and <code class="language-plaintext highlighter-rouge">testnet-faucet</code> are live managed services in the Platform API catalog. Both use the authenticated account’s HivemindOS credits. Your integration does not need a separate service balance, service credential, or desktop session.</p>
+<p><code class="language-plaintext highlighter-rouge">hive-compute</code> and <code class="language-plaintext highlighter-rouge">testnet-faucet</code> are live managed services in the SuperAgent API catalog. Both use the authenticated account’s HivemindOS credits. Your integration does not need a separate service balance, service credential, or desktop session.</p>
 
-<p>The primary compute operations are <code class="language-plaintext highlighter-rouge">models.list</code>, <code class="language-plaintext highlighter-rouge">chat.create</code>, <code class="language-plaintext highlighter-rouge">images.create</code>, <code class="language-plaintext highlighter-rouge">jobs.create</code>, <code class="language-plaintext highlighter-rouge">artifacts.upload</code>, and <code class="language-plaintext highlighter-rouge">artifacts.get</code>. The faucet operations are <code class="language-plaintext highlighter-rouge">assets.list</code>, <code class="language-plaintext highlighter-rouge">claims.create</code>, and <code class="language-plaintext highlighter-rouge">claims.get</code>. Discover the complete live set, including job submission, cancellation, and artifact acknowledgement, through <code class="language-plaintext highlighter-rouge">GET /capabilities/{serviceId}</code>.</p>
+<p>The primary compute operations are <code class="language-plaintext highlighter-rouge">marketplace.search</code>, <code class="language-plaintext highlighter-rouge">models.list</code>, <code class="language-plaintext highlighter-rouge">chat.create</code>, <code class="language-plaintext highlighter-rouge">images.create</code>, <code class="language-plaintext highlighter-rouge">jobs.create</code>, <code class="language-plaintext highlighter-rouge">artifacts.upload</code>, and <code class="language-plaintext highlighter-rouge">artifacts.get</code>. <code class="language-plaintext highlighter-rouge">marketplace.listings</code> and <code class="language-plaintext highlighter-rouge">marketplace.status</code> expose the live offer and capacity views. The faucet operations are <code class="language-plaintext highlighter-rouge">assets.list</code>, <code class="language-plaintext highlighter-rouge">claims.create</code>, and <code class="language-plaintext highlighter-rouge">claims.get</code>. Discover the complete live set, including job submission, cancellation, and artifact acknowledgement, through <code class="language-plaintext highlighter-rouge">GET /capabilities/{serviceId}</code>.</p>
 
 <p>Use an API key with <code class="language-plaintext highlighter-rouge">services:read</code> and <code class="language-plaintext highlighter-rouge">services:invoke</code>. Restrict production keys to the exact operations they need:</p>
 
@@ -590,6 +592,9 @@
   <span class="na">allowedServices</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">hive-compute</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">testnet-faucet</span><span class="dl">"</span><span class="p">],</span>
   <span class="na">allowedOperations</span><span class="p">:</span> <span class="p">[</span>
     <span class="dl">"</span><span class="s2">capabilities.list</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.marketplace.search</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.marketplace.listings</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.marketplace.status</span><span class="dl">"</span><span class="p">,</span>
     <span class="dl">"</span><span class="s2">services.invoke.hive-compute.models.list</span><span class="dl">"</span><span class="p">,</span>
     <span class="dl">"</span><span class="s2">services.invoke.hive-compute.chat.create</span><span class="dl">"</span><span class="p">,</span>
     <span class="dl">"</span><span class="s2">services.invoke.hive-compute.images.create</span><span class="dl">"</span><span class="p">,</span>
@@ -604,6 +609,10 @@
     <span class="dl">"</span><span class="s2">services.invoke.testnet-faucet.claims.get</span><span class="dl">"</span><span class="p">,</span>
   <span class="p">],</span>
   <span class="na">limits</span><span class="p">:</span> <span class="p">{</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-compute.marketplace.search</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
+      <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">60</span><span class="p">,</span>
+      <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+    <span class="p">},</span>
     <span class="dl">"</span><span class="s2">services.invoke.hive-compute.chat.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
       <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span>
       <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
@@ -619,6 +628,72 @@
 
 <p>Remove the file scopes and compute artifact operations when a key only needs chat, images, or faucet claims.</p>
 
+<h2 id="search-the-compute-marketplace">Search the compute marketplace</h2>
+
+<p>Search before execution when an agent needs GPU work. The server resolves the
+privacy requirement, filters unavailable or ineligible hosts, calculates each
+offer’s maximum charge from its authenticated listing, and returns a recommended
+offer with a <code class="language-plaintext highlighter-rouge">listingId</code> that can be pinned on the execution call.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">capacity</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">hive-compute</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">marketplace.search</span><span class="dl">"</span><span class="p">,</span>
+  <span class="kc">undefined</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">query</span><span class="p">:</span> <span class="p">{</span>
+      <span class="na">modality</span><span class="p">:</span> <span class="dl">"</span><span class="s2">chat</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">model</span><span class="p">:</span> <span class="dl">"</span><span class="s2">hive-compute/auto</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">privacy</span><span class="p">:</span> <span class="dl">"</span><span class="s2">auto</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">dataSensitivity</span><span class="p">:</span> <span class="dl">"</span><span class="s2">public</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">estimatedInputTokens</span><span class="p">:</span> <span class="mi">2</span><span class="nx">_000</span><span class="p">,</span>
+      <span class="na">estimatedOutputTokens</span><span class="p">:</span> <span class="mi">1</span><span class="nx">_000</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">compute-search-public-chat-001</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">capacity</span><span class="p">.</span><span class="nx">ok</span> <span class="o">||</span> <span class="o">!</span><span class="nx">capacity</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">available</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="dl">"</span><span class="s2">No eligible compute offer is live.</span><span class="dl">"</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">capacity</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">privacy</span><span class="p">.</span><span class="nx">resolved</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">capacity</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">recommended</span><span class="p">.</span><span class="nx">trust</span><span class="p">.</span><span class="nx">label</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">capacity</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">recommended</span><span class="p">.</span><span class="nx">estimatedChargeCredits</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>Privacy values:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Value</th>
+      <th>Routing behavior</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">standard</code></td>
+      <td>Includes compatible community hardware. The host may see inputs and outputs.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">confidential</code></td>
+      <td>Requires fresh server-verified hardware attestation and renter-only output encryption. Never downgrades.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">auto</code></td>
+      <td>Uses <code class="language-plaintext highlighter-rouge">dataSensitivity</code>; only <code class="language-plaintext highlighter-rouge">public</code> and <code class="language-plaintext highlighter-rouge">low</code> may resolve to Standard. All other or unknown values resolve to Confidential.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Standard and Confidential Verified hosts both earn from completed customer-paid
+jobs. Attested hosts carry a visible <code class="language-plaintext highlighter-rouge">Confidential Verified</code> trust badge even
+when the particular request is Standard. The signed completion receipt records
+both the actual execution privacy tier and the selected worker’s trust tier.</p>
+
+<p>Never send wallet secrets, passwords, API keys, private keys, or recovery
+phrases to a GPU worker in either tier.</p>
+
 <h2 id="run-managed-inference">Run managed inference</h2>
 
 <p>Read the live model catalog before selecting a model:</p>
@@ -631,16 +706,20 @@
 <span class="p">);</span>
 </code></pre></div></div>
 
-<p>Official managed output is encrypted to an RSA-OAEP public key you control. Keep the matching private key in your application and send the SPKI PEM public key with the request:</p>
+<p>For public or low-sensitivity work, select Standard and pin the offer returned by marketplace search:</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">completion</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
   <span class="dl">"</span><span class="s2">hive-compute</span><span class="dl">"</span><span class="p">,</span>
   <span class="dl">"</span><span class="s2">chat.create</span><span class="dl">"</span><span class="p">,</span>
   <span class="p">{</span>
     <span class="na">model</span><span class="p">:</span> <span class="dl">"</span><span class="s2">hive-compute/auto</span><span class="dl">"</span><span class="p">,</span>
-    <span class="na">messages</span><span class="p">:</span> <span class="p">[{</span> <span class="na">role</span><span class="p">:</span> <span class="dl">"</span><span class="s2">user</span><span class="dl">"</span><span class="p">,</span> <span class="na">content</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Summarize the key risks.</span><span class="dl">"</span> <span class="p">}],</span>
+    <span class="na">messages</span><span class="p">:</span> <span class="p">[{</span> <span class="na">role</span><span class="p">:</span> <span class="dl">"</span><span class="s2">user</span><span class="dl">"</span><span class="p">,</span> <span class="na">content</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Summarize this public benchmark.</span><span class="dl">"</span> <span class="p">}],</span>
     <span class="na">stream</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
-    <span class="na">hivemindos</span><span class="p">:</span> <span class="p">{</span> <span class="na">outputPublicKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">COMPUTE_OUTPUT_PUBLIC_KEY_PEM</span><span class="o">!</span> <span class="p">},</span>
+    <span class="na">hivemindos</span><span class="p">:</span> <span class="p">{</span>
+      <span class="na">privacy</span><span class="p">:</span> <span class="dl">"</span><span class="s2">standard</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">dataSensitivity</span><span class="p">:</span> <span class="dl">"</span><span class="s2">public</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">listingId</span><span class="p">:</span> <span class="nx">capacity</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">recommended</span><span class="p">.</span><span class="nx">listingId</span><span class="p">,</span>
+    <span class="p">},</span>
   <span class="p">},</span>
   <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">risk-summary-001</span><span class="dl">"</span> <span class="p">},</span>
 <span class="p">);</span>
@@ -648,6 +727,28 @@
 <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">completion</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
 <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">chargedCredits</span><span class="p">);</span>
 <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">completion</span><span class="p">.</span><span class="nx">result</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>For private work, keep the matching RSA-OAEP private key in your application
+and send only its SPKI PEM public key. A confidential request without this key,
+or without eligible attested capacity, fails without charge and never falls
+back to Standard:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">privateCompletion</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">hive-compute</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">chat.create</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">model</span><span class="p">:</span> <span class="dl">"</span><span class="s2">hive-compute/auto</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">messages</span><span class="p">:</span> <span class="p">[{</span> <span class="na">role</span><span class="p">:</span> <span class="dl">"</span><span class="s2">user</span><span class="dl">"</span><span class="p">,</span> <span class="na">content</span><span class="p">:</span> <span class="nx">privatePrompt</span> <span class="p">}],</span>
+    <span class="na">stream</span><span class="p">:</span> <span class="kc">false</span><span class="p">,</span>
+    <span class="na">hivemindos</span><span class="p">:</span> <span class="p">{</span>
+      <span class="na">privacy</span><span class="p">:</span> <span class="dl">"</span><span class="s2">confidential</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">dataSensitivity</span><span class="p">:</span> <span class="dl">"</span><span class="s2">confidential</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">outputPublicKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">COMPUTE_OUTPUT_PUBLIC_KEY_PEM</span><span class="o">!</span><span class="p">,</span>
+    <span class="p">},</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">private-summary-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
 </code></pre></div></div>
 
 <p>Use <code class="language-plaintext highlighter-rouge">images.create</code> for image generation. It uses the same encrypted-output option and returns base64 image data inside <code class="language-plaintext highlighter-rouge">result</code>:</p>
@@ -660,13 +761,74 @@
     <span class="na">prompt</span><span class="p">:</span> <span class="dl">"</span><span class="s2">A clean studio product photograph</span><span class="dl">"</span><span class="p">,</span>
     <span class="na">n</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
     <span class="na">response_format</span><span class="p">:</span> <span class="dl">"</span><span class="s2">b64_json</span><span class="dl">"</span><span class="p">,</span>
-    <span class="na">hivemindos</span><span class="p">:</span> <span class="p">{</span> <span class="na">outputPublicKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">COMPUTE_OUTPUT_PUBLIC_KEY_PEM</span><span class="o">!</span> <span class="p">},</span>
+    <span class="na">hivemindos</span><span class="p">:</span> <span class="p">{</span> <span class="na">privacy</span><span class="p">:</span> <span class="dl">"</span><span class="s2">standard</span><span class="dl">"</span><span class="p">,</span> <span class="na">dataSensitivity</span><span class="p">:</span> <span class="dl">"</span><span class="s2">public</span><span class="dl">"</span> <span class="p">},</span>
   <span class="p">},</span>
   <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">product-image-001</span><span class="dl">"</span> <span class="p">},</span>
 <span class="p">);</span>
 </code></pre></div></div>
 
 <p>Streaming is not available on the managed-credit route because the service reports one exact settled charge after completion. Use <code class="language-plaintext highlighter-rouge">stream: false</code> and read <code class="language-plaintext highlighter-rouge">chargedCredits</code> from the successful invocation.</p>
+
+<h2 id="connect-an-agent-through-mcp">Connect an agent through MCP</h2>
+
+<p>The remote Hive Compute MCP server is a request-driven facade over the same
+SuperAgent API operations:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>URL: https://compute-mcp.hivemindos.app/mcp
+Authentication: Authorization: Bearer hmos_live_...
+Transport: Streamable HTTP
+</code></pre></div></div>
+
+<p>It does not create a separate balance or permission system. The bearer key’s
+service allowlist, exact operation allowlist, project boundary, per-endpoint
+limits, and HivemindOS credit balance remain authoritative.</p>
+
+<p>Available tools:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Tool</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">hive_compute_search</code></td>
+      <td>Resolve privacy, search live offers, compare trust, and quote credits.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">hive_compute_chat</code></td>
+      <td>Run non-streaming chat inference against the selected offer.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">hive_compute_image</code></td>
+      <td>Generate images against the selected offer.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">hive_compute_job_create</code></td>
+      <td>Create a Confidential Verified asynchronous workload draft.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">hive_compute_job_status</code></td>
+      <td>Read asynchronous job status.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">hive_compute_job_cancel</code></td>
+      <td>Cancel a job and release unused reservation.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Give an agent the smallest API key it needs. A search-only agent can be limited
+to <code class="language-plaintext highlighter-rouge">services.invoke.hive-compute.marketplace.search</code>. A chat agent can add
+<code class="language-plaintext highlighter-rouge">services.invoke.hive-compute.chat.create</code> with independent request, daily,
+credit, and concurrency ceilings.</p>
+
+<p>MCP clients that support custom authorization headers can use SuperAgent API keys
+directly. Products that require OAuth for remote MCP connectors need a future
+HivemindOS OAuth authorization flow; do not paste a SuperAgent API key into a
+client that cannot store bearer credentials securely.</p>
 
 <h2 id="run-a-confidential-asynchronous-workload">Run a confidential asynchronous workload</h2>
 
@@ -743,7 +905,7 @@
 <span class="p">);</span>
 </code></pre></div></div>
 
-<p><code class="language-plaintext highlighter-rouge">artifacts.get</code> returns encrypted bytes as a JSON-safe envelope with <code class="language-plaintext highlighter-rouge">contentType</code>, <code class="language-plaintext highlighter-rouge">encoding: "base64"</code>, and <code class="language-plaintext highlighter-rouge">data</code>. The Platform API accepts managed input files up to 25 MB and returns encrypted compute artifacts up to 25 MB per call.</p>
+<p><code class="language-plaintext highlighter-rouge">artifacts.get</code> returns encrypted bytes as a JSON-safe envelope with <code class="language-plaintext highlighter-rouge">contentType</code>, <code class="language-plaintext highlighter-rouge">encoding: "base64"</code>, and <code class="language-plaintext highlighter-rouge">data</code>. The SuperAgent API accepts managed input files up to 25 MB and returns encrypted compute artifacts up to 25 MB per call.</p>
 
 <h2 id="request-testnet-assets">Request testnet assets</h2>
 

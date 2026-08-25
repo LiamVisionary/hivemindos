@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
   <title>Per-Endpoint Limits | HivemindOS Docs</title>
-  <meta name="description" content="Set request, concurrency, and daily credit limits for individual HivemindOS Platform API operations.">
+  <meta name="description" content="Set request, concurrency, and daily credit limits for individual HivemindOS SuperAgent API operations.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -213,7 +213,7 @@
 
               
                 <details class="navGroup" open>
-                  <summary>Platform API</summary>
+                  <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
@@ -225,9 +225,11 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
@@ -567,7 +569,7 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">Platform API</p>
+          <p class="pageKicker">SuperAgent API</p>
           <div class="pageToolActions">
             
             <button class="copyPageButton" type="button" data-copy-page>
@@ -604,6 +606,10 @@
       <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
         <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">250</span><span class="p">,</span>
       <span class="p">},</span>
+      <span class="dl">"</span><span class="s2">services.invoke.cloud-superbrain.memory.answer</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
+        <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+        <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">500</span><span class="p">,</span>
+      <span class="p">},</span>
       <span class="dl">"</span><span class="s2">wallets.transactions.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
         <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
         <span class="na">creditsPerDay</span><span class="p">:</span> <span class="mi">25</span><span class="p">,</span>
@@ -628,7 +634,7 @@
   <tbody>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">*</code></td>
-      <td>Every authenticated Platform API operation.</td>
+      <td>Every authenticated SuperAgent API operation.</td>
     </tr>
     <tr>
       <td>A static operation such as <code class="language-plaintext highlighter-rouge">databases.actions</code></td>
@@ -662,6 +668,8 @@
 </table>
 
 <p>For <code class="language-plaintext highlighter-rouge">hive-research</code> operation <code class="language-plaintext highlighter-rouge">analyses.create</code>, the API checks <code class="language-plaintext highlighter-rouge">*</code>, <code class="language-plaintext highlighter-rouge">services.invoke</code>, <code class="language-plaintext highlighter-rouge">services.invoke.hive-research</code>, and <code class="language-plaintext highlighter-rouge">services.invoke.hive-research.analyses.create</code>. Every matching limit applies. The request is rejected as soon as any one of them is exhausted.</p>
+
+<p>The same hierarchy applies to managed memory. An answer call can be limited independently with <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.answer</code>, while <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain</code> caps every Cloud Superbrain operation available to that key.</p>
 
 <p>The complete set of accepted operation ids is exported as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_OPERATION_IDS</code> by the TypeScript SDK and appears in the <a href="reference.html">endpoint reference</a>.</p>
 

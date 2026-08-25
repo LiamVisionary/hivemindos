@@ -213,7 +213,7 @@
 
               
                 <details class="navGroup" open>
-                  <summary>Platform API</summary>
+                  <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
@@ -225,9 +225,11 @@
                     
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
@@ -567,7 +569,7 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">Platform API</p>
+          <p class="pageKicker">SuperAgent API</p>
           <div class="pageToolActions">
             
             <button class="copyPageButton" type="button" data-copy-page>
@@ -803,7 +805,7 @@
 
 <h2 id="invoke-a-service-directly">Invoke a service directly</h2>
 
-<p>Generic managed services use one Platform API front door:</p>
+<p>Generic managed services use one SuperAgent API front door:</p>
 
 <div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST /v1/services/{serviceId}/invoke
 </span></code></pre></div></div>
@@ -846,9 +848,11 @@
 
 <p><code class="language-plaintext highlighter-rouge">chargedCredits</code> is the exact completed charge reported by the owning service. It is <code class="language-plaintext highlighter-rouge">0</code> for free reads and for work that did not complete. The same value is available in <code class="language-plaintext highlighter-rouge">X-HivemindOS-Credits-Charged</code> and in usage and audit records.</p>
 
-<p>Legacy reviewed paths remain supported for compatibility, but registered operations are safer: they validate the method and path template, work with exact API-key access, and remain discoverable. The Platform API rejects account, payment, credential, administrative, and other private service routes.</p>
+<p>Legacy reviewed paths remain supported for compatibility, but registered operations are safer: they validate the method and path template, work with exact API-key access, and remain discoverable. The SuperAgent API rejects account, payment, credential, administrative, and other private service routes.</p>
 
 <p>Managed databases, wallets, and trading use dedicated Platform endpoints instead of the generic invocation route. Those endpoints provide narrower scopes and safer request contracts.</p>
+
+<p>Cloud Superbrain uses registered operations for typed memory, evolution, lexical search, paid semantic recall, grounded answers, generations, capsules, and knowledge graphs. See <a href="memory.html">managed memory and knowledge</a> for the complete operation map and request examples.</p>
 
 <h2 id="create-a-durable-run">Create a durable run</h2>
 

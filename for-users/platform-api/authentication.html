@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
   <title>Authentication And API Keys | HivemindOS Docs</title>
-  <meta name="description" content="Create, restrict, delegate, rotate, and revoke HivemindOS Platform API keys.">
+  <meta name="description" content="Create, restrict, delegate, rotate, and revoke HivemindOS SuperAgent API keys.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -213,7 +213,7 @@
 
               
                 <details class="navGroup" open>
-                  <summary>Platform API</summary>
+                  <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
@@ -225,9 +225,11 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
@@ -567,7 +569,7 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">Platform API</p>
+          <p class="pageKicker">SuperAgent API</p>
           <div class="pageToolActions">
             
             <button class="copyPageButton" type="button" data-copy-page>
@@ -577,7 +579,7 @@
         </div>
         <h1 id="authentication-and-api-keys">Authentication And API Keys</h1>
 
-<p>Platform API keys are server-side credentials tied to one HivemindOS account. A key combines four independent controls:</p>
+<p>SuperAgent API keys are server-side credentials tied to one HivemindOS account. A key combines four independent controls:</p>
 
 <ol>
   <li><strong>Scopes</strong> decide which kinds of actions the key may perform.</li>
@@ -586,11 +588,11 @@
   <li><strong>Operation limits</strong> cap how often or how much the key may use each operation.</li>
 </ol>
 
-<p>All three controls must allow a request.</p>
+<p>All four controls must allow a request.</p>
 
 <h2 id="create-the-first-key">Create the first key</h2>
 
-<p>The first key is created with an existing HivemindOS credit token. This is the only Platform API request that accepts <code class="language-plaintext highlighter-rouge">X-HivemindOS-Credit-Token</code> in place of a bearer key.</p>
+<p>The first key is created with an existing HivemindOS credit token. This is the only SuperAgent API request that accepts <code class="language-plaintext highlighter-rouge">X-HivemindOS-Credit-Token</code> in place of a bearer key.</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl https://api.hivemindos.app/v1/api-keys <span class="se">\</span>
   <span class="nt">--request</span> POST <span class="se">\</span>
@@ -620,7 +622,7 @@
 
 <h2 id="authenticate-requests">Authenticate requests</h2>
 
-<p>Send the Platform API key as a bearer token:</p>
+<p>Send the SuperAgent API key as a bearer token:</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl https://api.hivemindos.app/v1/services <span class="se">\</span>
   <span class="nt">--header</span> <span class="s2">"Authorization: Bearer </span><span class="nv">$HIVEMINDOS_API_KEY</span><span class="s2">"</span>
@@ -674,6 +676,8 @@
 </span></code></pre></div></div>
 
 <p>Operation selection is resolved when the key is created. New capabilities added later do not silently become reachable through an explicit allowlist or an exclusion-derived boundary. Aggregate selectors such as <code class="language-plaintext highlighter-rouge">services.invoke.hive-research</code> cover that service’s registered operations; exact selectors such as <code class="language-plaintext highlighter-rouge">services.invoke.hive-research.analyses.create</code> cover only one capability.</p>
+
+<p>Include the supporting Platform operations a narrowly allowed workflow needs. For example, a worker that permanently deletes managed memory must allow its exact <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.delete</code> operation together with <code class="language-plaintext highlighter-rouge">approvals.create</code> and <code class="language-plaintext highlighter-rouge">approvals.decide</code>. A key that revokes itself also needs <code class="language-plaintext highlighter-rouge">apiKeys.revoke</code>. These supporting operations do not broaden the key’s managed-service boundary.</p>
 
 <p>Project-bound keys are permanently restricted to one project and all descendants inherit that restriction. Read <a href="projects-security.html">projects and isolation</a> for the account-level and project-level key pattern.</p>
 

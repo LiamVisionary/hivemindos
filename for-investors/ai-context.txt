@@ -3,7 +3,7 @@ format_version: 1
 content_format: Markdown with embedded HTML
 scope: Every public Markdown page under docs/for-investors
 document_count: 11
-generated_at: 2026-08-25T16:01:28+00:00
+generated_at: 2026-08-25T21:12:39+00:00
 usage: Treat each BEGIN/END DOCUMENT block as one source document. Preserve source_path attribution when citing or summarizing claims.
 
 
@@ -520,9 +520,11 @@ HivemindOS separates three concepts that must not be presented as one balance.
 
 Honey can record useful participation such as reviewed agent work, accepted open-source contributions, verified testing, documentation, or completed bounties.
 
+Community Hive Brain awards 0.1 Honey for each distinct copy-trading outcome accepted by the hosted verification gate. Unverified submissions, duplicate outcomes, and retries earn nothing. The contributing wallet must resolve to a HivemindOS workspace before the signed ledger records the reward; eligible unmatched rewards remain pending rather than being redirected or lost.
+
 Honey should be earned only from bounded evidence. Raw model tokens, self-reported activity, or unobserved output do not by themselves prove productive contribution.
 
-Telegram members with a signature-verified identity can issue a fixed, scarce Honey recognition for a named contribution. Hosted daily, pair, recipient, cooldown, global-budget, and idempotency controls bound that signal. Historical HIVE-tip receiver rank may be represented at 1 Honey per 1,000,000 HIVE received. Mission, verified-work, peer-recognition, and historical-seed labels preserve provenance, but they do not create different classes of Honey.
+Telegram members with a signature-verified identity can issue a fixed, scarce Honey recognition for a named contribution. Hosted daily, pair, recipient, cooldown, global-budget, and idempotency controls bound that signal. Historical HIVE-tip receiver rank may be represented at 1 Honey per 1,000,000 HIVE received. Mission, verified-work, peer-recognition, learning, and historical-seed labels preserve provenance, but they do not create different classes of Honey.
 
 Lifetime Honey can qualify a workspace for a larger daily free-agent request-and-token allowance, from 1.10× at 10 Honey to a capped 2.00× at 5,000. HivemindOS-controlled infrastructure calculates the total from verified ledger records, bounded recognition, and documented seed events; local state cannot grant it. The Honey allowance and a verified HIVE staking allowance do not stack—the higher one applies. This is revocable in-kind service access, not stored monetary value, a purchased credit, or a withdrawal right.
 

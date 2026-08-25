@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>HivemindOS Platform API | HivemindOS Docs</title>
+  <title>HivemindOS SuperAgent API | HivemindOS Docs</title>
   <meta name="description" content="Use HivemindOS managed agents, apps, data, wallets, trading, and workflows as the backend for another product.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -213,7 +213,7 @@
 
               
                 <details class="navGroup" open>
-                  <summary>Platform API</summary>
+                  <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api.html">Overview</a>
@@ -225,9 +225,11 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
@@ -567,7 +569,7 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">Platform API</p>
+          <p class="pageKicker">SuperAgent API</p>
           <div class="pageToolActions">
             
             <button class="copyPageButton" type="button" data-copy-page>
@@ -575,9 +577,9 @@
             </button>
           </div>
         </div>
-        <h1 id="hivemindos-platform-api">HivemindOS Platform API</h1>
+        <h1 id="hivemindos-superagent-api">HivemindOS SuperAgent API</h1>
 
-<p>The HivemindOS Platform API gives another product a managed HivemindOS backend. Your server can call cloud agents and mini apps, run durable workflows, use managed databases, create policy-controlled wallets, request approvals, execute transfers and spot trades, and receive signed events. It does not control a user’s desktop or expose a desktop session.</p>
+<p>The HivemindOS SuperAgent API gives another product the complete managed HivemindOS backend. Your server can call cloud agents and mini apps, run durable workflows, search and use customer-funded GPU capacity, use managed databases, create policy-controlled wallets, request approvals, execute transfers and spot trades, publish apps and content, and receive signed events. It does not control a user’s desktop or expose a desktop session.</p>
 
 <table>
   <thead>
@@ -608,9 +610,16 @@
   <li>An agent product backed by HivemindOS research, swarms, memory, media, social, analytics, and automation services.</li>
   <li>A hosted workflow system with durable runs, results, approvals, and webhooks.</li>
   <li>An application with portable managed databases and account-bound access controls.</li>
+  <li>A hosted agent with typed, evolving memory, semantic recall, grounded answers, knowledge links, and portable memory capsules.</li>
   <li>A wallet or trading experience where your application never receives raw wallet keys.</li>
+  <li>An agent that searches the Hive Compute marketplace, chooses Standard or Confidential Verified execution, and pays from the user’s existing HivemindOS credits.</li>
   <li>A restricted integration key that can reach only selected services and has separate limits for individual operations.</li>
 </ul>
+
+<p>The managed catalog currently spans 31 stable service ids across agents, mini
+apps, data, media, integrations, finance, and platform services. The API key,
+project, operation policy, endpoint limits, idempotency, usage history, and
+credit balance stay consistent across the whole suite.</p>
 
 <p>The authenticated service catalog and capability registry are the source of truth. Each service entry includes its status and capability URL. Each capability has a stable operation id, exact access selector, request method, path template, approval mode, and run support.</p>
 
@@ -625,7 +634,7 @@
 
 <h3 id="2-create-the-first-api-key">2. Create the first API key</h3>
 
-<p>Use an existing HivemindOS credit token once to bootstrap a Platform API key. The example limits the key to research and managed databases, then adds both a key-wide limit and narrower operation limits.</p>
+<p>Use an existing HivemindOS credit token once to bootstrap a SuperAgent API key. The example limits the key to research and managed databases, then adds both a key-wide limit and narrower operation limits.</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">createHivemindOSApiKey</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@hivemindos/sdk</span><span class="dl">"</span><span class="p">;</span>
 
@@ -729,7 +738,9 @@
   <li><a href="platform-api/authentication.html">Authentication and API keys</a></li>
   <li><a href="platform-api/projects-security.html">Projects, isolation, and service accounts</a></li>
   <li><a href="platform-api/services.html">Service access and catalog</a></li>
+  <li><a href="platform-api/memory.html">Managed memory and knowledge</a></li>
   <li><a href="platform-api/capabilities-agents.html">Capabilities, agents, workflows, and mini apps</a></li>
+  <li><a href="platform-api/compute-faucet.html">Hive Compute marketplace, privacy tiers, MCP, and testnet assets</a></li>
   <li><a href="platform-api/limits.html">Per-endpoint limits</a></li>
   <li><a href="platform-api/files-connections.html">Files, connections, and integrations</a></li>
   <li><a href="platform-api/databases.html">Managed databases</a></li>

@@ -213,7 +213,7 @@
 
               
                 <details class="navGroup">
-                  <summary>Platform API</summary>
+                  <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
@@ -225,9 +225,11 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
@@ -632,6 +634,30 @@
 
 <p>Use <strong>Publish performance</strong> on the monitor card, then copy the URL into the Bankr app. <strong>Rotate link</strong> invalidates the old URL and creates a new one. <strong>Revoke</strong> disables public access, and canceling the monitor revokes its link automatically. The public link never exposes the private monitor credential.</p>
 
+<h2 id="join-the-copytrading-leaderboard">Join the copytrading leaderboard</h2>
+
+<p>Agentic Copytrader includes a leaderboard for comparing verified Basic and Agent copy results. Each strategy joins separately, and nothing is published until you choose <strong>Join leaderboard</strong> on that copy.</p>
+
+<p>Leaderboard rows show only the copied target’s shortened label, the strategy, verified net result after fees, verified trade count, copied volume, and an optional X handle. Your execution wallet is not shown. A copy receives a rank only after it has at least one verified copied trade and complete performance accounting; otherwise it remains visible as <strong>Collecting</strong>.</p>
+
+<p>If your Bankr Agent Profile is already approved and public, its public X handle can appear automatically. Otherwise, <strong>Link X</strong> uses the X account already verified by Bankr. You can leave a spot anonymous or unlink X at any time without removing the copy’s results. Results remain historical and are never a performance guarantee.</p>
+
+<h2 id="how-agent-strategies-learn">How Agent strategies learn</h2>
+
+<p>An Agent strategy checks each new opportunity before deciding whether to copy or skip it. After 24 hours, it compares that decision with what would have happened under the other choice. Those completed outcomes become learning evidence for later opportunities with similar conditions.</p>
+
+<p>Your personal outcome history stays attached to your copytrader. A separate shared layer can learn from anonymous paper-trading patterns across users, but it receives no wallet, transaction, X identity, target, token address, or symbol. The dashboard shows the number of eligible outcomes and progress toward the next completed learning batch for both layers.</p>
+
+<p>Learning is deliberately gradual. Decisions use only prior completed batches of 50 outcomes; the batch currently being collected cannot influence itself. A single trade cannot rewrite behavior, and learning can make a borderline copy more cautious but can never override a hard safety rejection. This is outcome-based policy adaptation, not a promise of profit.</p>
+
+<h3 id="community-hive-brain">Community Hive Brain</h3>
+
+<p>The HivemindOS Copy Trading screen includes an optional <strong>Community Hive Brain</strong> switch. It is off by default. When you turn it on, future Agent copies can use verified, completed learning patterns from Bankr while HivemindOS contributes anonymized outcomes from your own Agent-copy experiments.</p>
+
+<p>Shared learning contains only the choice, result, and broad evidence tags. Wallets, identities, balances, target wallets, token addresses, symbols, and transaction references are never included. Your contributed outcomes can help your private Bankr learner immediately; they must pass hosted verification before they can guide the wider community. Turning the switch off stops future exchange without deleting your local learning history.</p>
+
+<p>Every distinct shared outcome that passes that verification earns <strong>0.1 HONEY</strong>. A learning that is still awaiting verification earns nothing yet, and resending or retrying the same outcome never earns it twice. If the contributing wallet has not joined your HONEY profile yet, the verified reward stays saved until it does. HONEY is a cumulative contribution record, not cash or spendable credit.</p>
+
 <h2 id="ask-an-agent-to-set-it-up">Ask an agent to set it up</h2>
 
 <p>The bundled <code class="language-plaintext highlighter-rouge">hive-copy-trading</code> skill contains the existing-wallet, optional partner-provisioning, direct Bankr payment, funding, secret-handling, management, cancellation, and legacy workflow. For example:</p>
@@ -710,6 +736,7 @@
   <li>New swaps only; no historical backfill.</li>
   <li>Ambiguous, failed, unpriced, multi-asset, or sub-$5 copies are skipped.</li>
   <li>Server-enforced scale, per-trade, UTC daily, slippage, and signal-count limits.</li>
+  <li>Agent learning uses a fixed 24-hour comparison, completed prior batches only, and repeated matching evidence; hard safety rejections always win.</li>
   <li>At most one unsettled live execution and excess fee per monitor.</li>
   <li>Ambiguous submissions pause without automatic retry.</li>
   <li>Pause, resume, risk changes, optional mode changes, and cancellation use the private monitor credential.</li>

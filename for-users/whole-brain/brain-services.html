@@ -213,7 +213,7 @@
 
               
                 <details class="navGroup">
-                  <summary>Platform API</summary>
+                  <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
@@ -225,9 +225,11 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute And Testnet Assets</a>
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
@@ -640,6 +642,11 @@
       <td>Only when you want a curated knowledge base.</td>
     </tr>
     <tr>
+      <td>Cloud Superbrain</td>
+      <td>Gives a hosted product isolated typed memory, semantic recall, grounded answers, history, knowledge links, and portable capsules through the SuperAgent API.</td>
+      <td>Only when your cloud application needs managed memory without a desktop or vault.</td>
+    </tr>
+    <tr>
       <td>QMD or GBrain</td>
       <td>Adds another way to search a large vault.</td>
       <td>Optional.</td>
@@ -666,6 +673,14 @@
   <li>Routine retries, completion receipts, and other noisy events do not crowd durable memory.</li>
   <li>Imported brain capsules and mined patterns remain review proposals until someone approves them.</li>
 </ul>
+
+<h2 id="local-hive-superbrain-or-cloud-superbrain">Local Hive Superbrain or Cloud Superbrain</h2>
+
+<p>Use the local Hive Superbrain when the Obsidian vault should remain the editable source of truth and agents should also search ordinary notes, projects, skills, conversations, and Compiled Knowledge. It works without a hosted memory plan.</p>
+
+<p>Use Cloud Superbrain when a product built on the SuperAgent API needs memory that remains available between hosted calls. It supports typed and evolving memories, lexical search, paid semantic recall, grounded answers with cited memory ids, retained generations, knowledge backlinks, and checksummed capsule transfer. It is isolated to the authenticated HivemindOS account and uses that account’s existing credits for metered recall and answer operations.</p>
+
+<p>The two layers do not silently replace or overwrite each other. Move selected memory explicitly with a capsule when a workflow needs portability, and keep plaintext secrets out of both. See <a href="../platform-api/memory.html">Managed Memory And Knowledge</a> for the hosted API contract.</p>
 
 <h2 id="if-an-answer-uses-the-wrong-memory">If an answer uses the wrong memory</h2>
 

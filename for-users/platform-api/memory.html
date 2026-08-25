@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Page Agent | HivemindOS Docs</title>
-  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <title>Managed Memory And Knowledge | HivemindOS Docs</title>
+  <meta name="description" content="Give an application typed, evolving, searchable memory through the HivemindOS SuperAgent API.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -212,7 +212,7 @@
               
 
               
-                <details class="navGroup">
+                <details class="navGroup" open>
                   <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
@@ -225,7 +225,7 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
+                      <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
                     
@@ -569,7 +569,7 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">HivemindOS manual</p>
+          <p class="pageKicker">SuperAgent API</p>
           <div class="pageToolActions">
             
             <button class="copyPageButton" type="button" data-copy-page>
@@ -577,82 +577,335 @@
             </button>
           </div>
         </div>
-        <h1 id="page-agent">Page Agent</h1>
+        <h1 id="managed-memory-and-knowledge">Managed Memory And Knowledge</h1>
 
-<blockquote>
-  <p><strong>Experimental — developer preview.</strong> Page Agent is opt-in and off by default. It
-is an early feature and its behaviour, scope, and controls may change. Enable it
-only if you’re comfortable with a preview.</p>
-</blockquote>
+<p>Cloud Superbrain is the hosted memory layer for products built on the SuperAgent API. It gives each HivemindOS account an isolated memory store with typed records, current and historical versions, lexical and semantic recall, grounded answers, knowledge links, portable capsules, and health checks. It does not require a desktop session or an Obsidian vault.</p>
 
-<p>Page Agent is an in-page agent that operates the HivemindOS dashboard for you from
-plain language. You type what you want — <em>“open the work board and add a task”,
-“switch to the agents view”</em> — and it reads the current screen, decides which
-control to use, and clicks and types for you.</p>
+<p>Use the <code class="language-plaintext highlighter-rouge">cloud-superbrain</code> service when another application needs to remember durable context between calls. The local Hive Superbrain remains the user-owned, vault-native experience; Cloud Superbrain is its managed API counterpart for hosted products.</p>
 
-<p>It is built on the open-source <a href="https://github.com/alibaba/page-agent">alibaba/page-agent</a>
-project (MIT), driven through your own configured model.</p>
+<h2 id="choose-a-recall-mode">Choose a recall mode</h2>
 
-<h2 id="how-to-try-it">How to try it</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Mode</th>
+      <th>Operation</th>
+      <th>Result</th>
+      <th style="text-align: right">Charge</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Lexical search</td>
+      <td><code class="language-plaintext highlighter-rouge">memory.search</code></td>
+      <td>Fast matches from titles, content, tags, projects, entities, aliases, and usage.</td>
+      <td style="text-align: right">0 credits</td>
+    </tr>
+    <tr>
+      <td>Semantic recall</td>
+      <td><code class="language-plaintext highlighter-rouge">memory.recall</code></td>
+      <td>Hybrid meaning and keyword matches, with the evidence used for ranking.</td>
+      <td style="text-align: right">1 credit</td>
+    </tr>
+    <tr>
+      <td>Memory Answer</td>
+      <td><code class="language-plaintext highlighter-rouge">memory.answer</code></td>
+      <td>A concise answer grounded in returned memories, plus cited memory ids.</td>
+      <td style="text-align: right">5 credits</td>
+    </tr>
+  </tbody>
+</table>
 
-<p>Page Agent currently lives in the developer lab; it is not an installable My Apps
-card and it does not mount across the normal dashboard. In a development build,
-open <code class="language-plaintext highlighter-rouge">/page-agent-lab</code>. Production builds keep that lab unavailable unless the
-operator starts the dashboard with <code class="language-plaintext highlighter-rouge">PAGE_AGENT_LAB=1</code>.</p>
+<p>Semantic Recall and Memory Answer require a paid Cloud Superbrain plan. Lexical search, storage within the account’s plan, history, graph reads, capsules, and health checks do not consume agent credits. Read <code class="language-plaintext highlighter-rouge">catalog.get</code> before onboarding an account so your product can show its current plan, storage limits, and availability.</p>
 
-<p>The lab shows a command bar. Type an instruction and Page Agent drives only that
-lab page.</p>
+<p>Semantic indexing runs when memory changes, so there is no idle compute charge to keep a model running. A newly written memory is immediately available to lexical search and becomes eligible for Semantic Recall after its index status is ready. Use <code class="language-plaintext highlighter-rouge">memory.health</code> when a workflow must confirm that state.</p>
 
-<h2 id="what-it-can--and-cant--reach">What it can — and can’t — reach</h2>
+<h2 id="create-typed-memory">Create typed memory</h2>
 
-<p>Page Agent works <strong>inside the HivemindOS window only</strong>. It reads and controls the
-dashboard you’re looking at.</p>
+<p>Only <code class="language-plaintext highlighter-rouge">title</code> and <code class="language-plaintext highlighter-rouge">contentText</code> are needed for a basic Markdown memory. Add a stable <code class="language-plaintext highlighter-rouge">memoryKey</code> when later calls should update one canonical subject instead of creating unrelated records.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">saved</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.create</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">title</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Aurora compute funding decision</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">contentText</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Compute capacity starts only after the customer-funded job is accepted.</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">memoryKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">decision:aurora-compute-funding</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">memoryType</span><span class="p">:</span> <span class="dl">"</span><span class="s2">decision</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">project</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Aurora</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">confidence</span><span class="p">:</span> <span class="mf">0.96</span><span class="p">,</span>
+    <span class="na">tags</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">compute</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">commercial</span><span class="dl">"</span><span class="p">],</span>
+    <span class="na">entities</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">Project Aurora</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">Hive Compute</span><span class="dl">"</span><span class="p">],</span>
+    <span class="na">evidenceCount</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-compute-decision-v1</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">saved</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">saved</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+<span class="kd">const</span> <span class="nx">memoryId</span> <span class="o">=</span> <span class="nx">saved</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">memory</span><span class="p">.</span><span class="nx">id</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>Supported memory types are <code class="language-plaintext highlighter-rouge">instruction</code>, <code class="language-plaintext highlighter-rouge">fact</code>, <code class="language-plaintext highlighter-rouge">decision</code>, <code class="language-plaintext highlighter-rouge">goal</code>, <code class="language-plaintext highlighter-rouge">commitment</code>, <code class="language-plaintext highlighter-rouge">preference</code>, <code class="language-plaintext highlighter-rouge">relationship</code>, <code class="language-plaintext highlighter-rouge">context</code>, <code class="language-plaintext highlighter-rouge">event</code>, <code class="language-plaintext highlighter-rouge">learning</code>, <code class="language-plaintext highlighter-rouge">observation</code>, <code class="language-plaintext highlighter-rouge">artifact</code>, <code class="language-plaintext highlighter-rouge">error</code>, <code class="language-plaintext highlighter-rouge">action</code>, and <code class="language-plaintext highlighter-rouge">knowledge</code>. Optional fields include <code class="language-plaintext highlighter-rouge">path</code>, <code class="language-plaintext highlighter-rouge">kind</code>, <code class="language-plaintext highlighter-rouge">mimeType</code>, <code class="language-plaintext highlighter-rouge">mediaUrl</code>, <code class="language-plaintext highlighter-rouge">links</code>, <code class="language-plaintext highlighter-rouge">metaTags</code>, <code class="language-plaintext highlighter-rouge">aliases</code>, <code class="language-plaintext highlighter-rouge">sourceType</code>, <code class="language-plaintext highlighter-rouge">actorRole</code>, <code class="language-plaintext highlighter-rouge">memoryOrigin</code>, and <code class="language-plaintext highlighter-rouge">cognitiveStage</code>.</p>
+
+<p>Cloud Superbrain rejects content that appears to contain a credential, private key, bearer token, seed phrase, or mnemonic. Store only the credential name and safe set/missing status; keep the value in a secret manager.</p>
+
+<p>Use <code class="language-plaintext highlighter-rouge">memory.batch</code> for up to 25 already-bounded records. Each accepted record returns its own id and immutable generation receipt.</p>
+
+<h2 id="search-and-answer">Search and answer</h2>
+
+<p>Lexical search is useful for autocomplete, retrieval before a model call, and predictable no-charge lookups:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">search</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.search</span><span class="dl">"</span><span class="p">,</span>
+  <span class="kc">undefined</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">query</span><span class="p">:</span> <span class="p">{</span>
+      <span class="na">q</span><span class="p">:</span> <span class="dl">"</span><span class="s2">customer-funded compute</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">project</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Aurora</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">memoryType</span><span class="p">:</span> <span class="dl">"</span><span class="s2">decision</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">limit</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-memory-search-001</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>Use semantic recall when wording may differ from the saved memory:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">recalled</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.recall</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Who pays before an Aurora GPU starts?</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">mode</span><span class="p">:</span> <span class="dl">"</span><span class="s2">hybrid</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">project</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Aurora</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">limit</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-memory-recall-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>Use Memory Answer when the caller wants a finished, grounded response:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">answered</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.answer</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">What is the Aurora compute funding policy?</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">limit</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-memory-answer-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">answered</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">answer</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">answered</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">citedMemoryIds</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>If no relevant managed memory can support an answer, the request returns a
+not-found response and releases the credit reservation. You are not charged.</p>
+
+<p>Every hit includes its memory fields, excerpt, total score, matched signals, and score details. Set <code class="language-plaintext highlighter-rouge">trackUsage: false</code> when a diagnostic lookup should not influence the soft usage signal. <code class="language-plaintext highlighter-rouge">memory.usage</code> can explicitly record retrieved or final-answer use for known memory ids.</p>
+
+<h2 id="evolve-instead-of-contradicting">Evolve instead of contradicting</h2>
+
+<p>When reviewed information replaces an active memory, use <code class="language-plaintext highlighter-rouge">memory.evolve</code>. The old record becomes <code class="language-plaintext highlighter-rouge">superseded</code>, the new record becomes the active canonical head, and both remain linked in the evolution chain.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">evolved</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.evolve</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">contentText</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Aurora capacity starts only after the customer's maximum charge is reserved.</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">evolutionReason</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Clarified when funding is secured.</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span>
+    <span class="na">pathParameters</span><span class="p">:</span> <span class="p">{</span> <span class="nx">memoryId</span> <span class="p">},</span>
+    <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-compute-decision-v2</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">memory.update</code> changes the current record in place. Use it for metadata or wording fixes that do not replace the underlying truth. <code class="language-plaintext highlighter-rouge">memory.delete</code> permanently removes a non-starter memory and requires an exact SuperAgent approval. An operation-only deletion key therefore needs <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.delete</code>, <code class="language-plaintext highlighter-rouge">approvals.create</code>, and <code class="language-plaintext highlighter-rouge">approvals.decide</code> in <code class="language-plaintext highlighter-rouge">allowedOperations</code>; include <code class="language-plaintext highlighter-rouge">apiKeys.revoke</code> only when the worker must also revoke its own key. Prefer <code class="language-plaintext highlighter-rouge">archived</code> or evolution when history still matters.</p>
+
+<h2 id="generations-and-historical-recall">Generations and historical recall</h2>
+
+<p>Each write publishes an immutable generation receipt. Use:</p>
 
 <ul>
-  <li>It <strong>cannot</strong> reach out to a separate Chrome, Safari, or other browser window,
-and it cannot control other desktop apps. Those need a different tool (see the
-browser-automation and computer-use capabilities), not Page Agent.</li>
-  <li>It does not take screenshots or use your camera. It reads the page’s structure
-as text and acts on it.</li>
+  <li><code class="language-plaintext highlighter-rouge">generations.list</code> to read retained generations and the visible replay boundary.</li>
+  <li><code class="language-plaintext highlighter-rouge">generations.compare</code> to find added, removed, and changed memory ids between two retained generations.</li>
+  <li><code class="language-plaintext highlighter-rouge">memory.recall</code> with <code class="language-plaintext highlighter-rouge">generationId</code> to replay a lexical question against a retained historical state.</li>
+  <li><code class="language-plaintext highlighter-rouge">temporalMode: "historical"</code> to include superseded and archived records, or <code class="language-plaintext highlighter-rouge">temporalMode: "as-of"</code> with <code class="language-plaintext highlighter-rouge">asOf</code> for a time cutoff.</li>
 </ul>
 
-<h2 id="safety">Safety</h2>
+<p>Cloud Superbrain retains up to 256 generations per account. A request outside the reported replay boundary fails instead of silently substituting newer memory.</p>
 
-<p>The dashboard can move money (wallets, trading), so Page Agent is deliberately
-constrained:</p>
+<h2 id="knowledge-nodes-and-backlinks">Knowledge nodes and backlinks</h2>
 
-<ul>
-  <li><strong>Money is off-limits.</strong> Page Agent is kept away from wallet, trade, and
-transfer controls — moving funds always goes through the normal confirm-first
-wallet flow, never an automated click.</li>
-  <li><strong>No arbitrary code.</strong> The tool that would let it run generated JavaScript is
-disabled and stays disabled.</li>
-  <li><strong>Fresh state before interaction.</strong> Click, type, and selection tools re-read the
-page immediately before acting instead of trusting an old element number.</li>
-  <li><strong>Untrusted pages pause the run.</strong> Instruction-like page content is treated as
-data and suspected prompt injection stops the task for human review.</li>
-  <li><strong>Consequences ask at the moment of action.</strong> Submit, send, publish, purchase,
-transfer, delete, install, upload, and signature-shaped controls require a
-one-action confirmation.</li>
-  <li><strong>Receipts survive reloads.</strong> Governed runs retain redacted observations,
-policy decisions, action results, and post-action verification without storing
-typed text or secrets.</li>
-  <li><strong>You stay in control.</strong> It’s opt-in, off by default, step-capped, and can be
-stopped mid-task at any time.</li>
-</ul>
+<p>Memories with type <code class="language-plaintext highlighter-rouge">knowledge</code>, a <code class="language-plaintext highlighter-rouge">knowledge</code> tag, or a path under <code class="language-plaintext highlighter-rouge">Synthesis/</code> become knowledge nodes. The registered operations are:</p>
 
-<h2 id="limitations">Limitations</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">knowledge.search</code></td>
+      <td>Search knowledge-only records.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">knowledge.get</code></td>
+      <td>Read one knowledge node.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">knowledge.backlinks</code></td>
+      <td>Find memories connected through entities, aliases, and links.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">knowledge.graph</code></td>
+      <td>Read a bounded node-and-edge overview.</td>
+    </tr>
+  </tbody>
+</table>
 
-<ul>
-  <li>Preview quality: it can misread an unusual control or take an extra step or two
-and correct itself.</li>
-  <li>It needs a model that supports tool calling; if your active agent’s model
-can’t, Page Agent will tell you rather than guess.</li>
-  <li>It operates one screen at a time — it doesn’t span multiple windows or tabs.</li>
-  <li>The developer lab is not a promise that every dashboard control is ready for
-autonomous operation. For general web browsing, HivemindOS uses the governed
-computer-interaction capability and Browser Use instead.</li>
-</ul>
+<p>Use <code class="language-plaintext highlighter-rouge">entities</code>, <code class="language-plaintext highlighter-rouge">aliases</code>, and <code class="language-plaintext highlighter-rouge">links</code> consistently when another product needs dependable graph navigation.</p>
+
+<h2 id="portable-capsules">Portable capsules</h2>
+
+<p><code class="language-plaintext highlighter-rouge">capsules.export</code> returns a bounded, checksummed capsule for selected memory ids or the next page of the account. <code class="language-plaintext highlighter-rouge">capsules.import</code> verifies the schema and content hash before adding the records to the authenticated account. A capsule never grants access to its source account, and an import cannot overwrite another account’s memory.</p>
+
+<p>Export no more than 100 memories per capsule part. Follow <code class="language-plaintext highlighter-rouge">hasMore</code> and <code class="language-plaintext highlighter-rouge">nextCursor</code> until the export is complete. Keep the capsule private when its memories are private; its checksum detects corruption but is not encryption.</p>
+
+<h2 id="registered-operations">Registered operations</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>Method</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">catalog.get</code></td>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td>Read plans, limits, features, and current charges.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.snapshot</code></td>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td>Read the account’s current managed-memory snapshot.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.get</code></td>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td>Read one memory by id.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.create</code></td>
+      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td>Create or upsert one memory.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.update</code></td>
+      <td><code class="language-plaintext highlighter-rouge">PATCH</code></td>
+      <td>Update one current memory.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.delete</code></td>
+      <td><code class="language-plaintext highlighter-rouge">DELETE</code></td>
+      <td>Permanently delete one memory after approval.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.batch</code></td>
+      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td>Create up to 25 memories.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.evolve</code></td>
+      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td>Create a new canonical head and supersede the old one.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.search</code></td>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td>Run lexical search.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.recall</code></td>
+      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td>Run paid hybrid semantic recall.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.answer</code></td>
+      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td>Return a paid grounded answer with citations.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.usage</code></td>
+      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td>Record retrieved or final-answer use.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.health</code></td>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td>Read plan, index, generation, and usage health.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">index.rebuild</code></td>
+      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td>Rebuild indexes after an import or repair.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">generations.list</code></td>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td>List retained immutable generations.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">generations.compare</code></td>
+      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td>Compare two retained generations.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">capsules.export</code></td>
+      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td>Export a checksummed capsule part.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">capsules.import</code></td>
+      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td>Verify and import a capsule part.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">knowledge.search</code></td>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td>Search knowledge nodes.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">knowledge.get</code></td>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td>Read one knowledge node.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">knowledge.backlinks</code></td>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td>Read backlinks for a knowledge node.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">knowledge.graph</code></td>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td>Read a bounded knowledge graph.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Restrict a worker key to only the operations it needs. For example, an answer-only service can allow <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.answer</code> and set a separate request limit on that exact selector.</p>
+
+<p>Next: <a href="authentication.html">create narrow API keys</a>, <a href="limits.html">set per-operation limits</a>, or <a href="../whole-brain/brain-services.html">use the local Hive Superbrain</a>.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -670,7 +923,7 @@ computer-interaction capability and Browser Use instead.</li>
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/features/page-agent.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/memory.md">Improve this page ↗</a>
     </aside>
   </div>
 
