@@ -656,7 +656,7 @@
     <tr>
       <td>HivemindOS</td>
       <td>Interactive</td>
-      <td>status, chat, model selection</td>
+      <td>status, chat, managed background tasks, live progress, run logs, stop and resume, model selection, completion evaluation</td>
     </tr>
   </tbody>
 </table>
@@ -705,6 +705,14 @@ generation may still use their documented API credentials.</p>
 <p>Only managed tasks receive this run evaluation. Starting <code class="language-plaintext highlighter-rouge">codex</code> or <code class="language-plaintext highlighter-rouge">claude</code> independently in a terminal stays outside the HivemindOS run path. If that work needs to count toward routing, a company, or a loop contract, return the result and evidence through the Work Board.</p>
 
 <p>See <a href="agent-evaluations.html">Agent Evaluations</a> for the shared completion rules.</p>
+
+<h2 id="managed-hivemindos-tasks">Managed HivemindOS Tasks</h2>
+
+<p>HivemindOS background tasks keep one live agent session attached to the selected workspace. Plans, progress, tool activity, and the final response flow into the normal run record. You can stop an active task, and a later task can continue from a saved session when the agent supports it.</p>
+
+<p>Built-in file reads and edits remain inside the selected workspace. Trusted local commands start in that workspace and follow the task’s permission setting; restricted and plan-only agents cannot change files or start commands. If the bundled agent cannot start the live session, HivemindOS automatically uses its compatibility runner without losing the task.</p>
+
+<p>The local session bridge implements stable <a href="https://agentclientprotocol.com/get-started/introduction">Agent Client Protocol v1</a>. Remote machine work still travels through Hivemind Link so it keeps the app’s existing machine identity, authentication, and fleet controls.</p>
 
 <p>Managed assistant messages also include thumbs-up and thumbs-down controls. Ratings stay attached to the exact saved response and feed its chat evaluation without becoming autonomous worker-routing evidence.</p>
 
