@@ -905,6 +905,37 @@
 
 <p>Running and retained managed-agent time use the same account credit balance as other managed work. Read the current plan catalog through <code class="language-plaintext highlighter-rouge">GET /pricing?service=managed-agents</code> before creating an agent.</p>
 
+<h2 id="lead-generation">Lead Generation</h2>
+
+<p><code class="language-plaintext highlighter-rouge">leadgen-data</code> is a live managed service for finding and enriching businesses without adding a separate data-provider account to your product. Every call uses the authenticated account’s HivemindOS balance and returns its completed charge through the normal Platform usage and audit records.</p>
+
+<p>Read service availability and the current allowance before starting a batch:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">catalog</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">leadgen-data</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">catalog.get</span><span class="dl">"</span><span class="p">,</span>
+  <span class="kc">undefined</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">lead-catalog-2026-08-25</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>Discover businesses with a stable company identifier so usage can be governed per company:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">leadgen-data</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">leads.discover</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">companyId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">company_acme</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">independent dental practices in Austin, Texas</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">maxResults</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
+    <span class="na">regionCode</span><span class="p">:</span> <span class="dl">"</span><span class="s2">US</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">acme-austin-dentists-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>The registered operations are <code class="language-plaintext highlighter-rouge">catalog.get</code>, <code class="language-plaintext highlighter-rouge">leads.discover</code>, <code class="language-plaintext highlighter-rouge">leads.nearby</code>, and <code class="language-plaintext highlighter-rouge">leads.enrich</code>. Restrict production keys to only the operations they need, set per-operation request and concurrency limits, and retry uncertain requests with the original idempotency key. The service enforces its own per-call and daily safety ceilings and refunds work that fails before producing usable results.</p>
+
 <p>Next: <a href="compute-faucet.html">use Hive Compute and the testnet faucet</a>, <a href="limits.html">configure per-service and per-operation limits</a>, or <a href="runs-webhooks.html">use durable runs and webhooks</a>.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
