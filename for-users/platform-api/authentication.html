@@ -577,9 +577,16 @@
             </button>
           </div>
         </div>
-        <h1 id="authentication-and-api-keys">Authentication And API Keys</h1>
+        <h1 id="authentication-and-api-keys">Authentication and API keys</h1>
 
-<p>SuperAgent API keys are server-side credentials tied to one HivemindOS account. A key combines four independent controls:</p>
+<p>An API key lets your backend call HivemindOS for one account. Keep it on your server, give it only the access its job needs, and replace it if it is ever exposed.</p>
+
+<div class="plainAnswer">
+  <strong>The safe default</strong>
+  <p>Create a separate key for each app or worker. Allow only the services and actions it needs, add limits, and keep approval power on a different key.</p>
+</div>
+
+<p>Four controls decide what a key can do:</p>
 
 <ol>
   <li><strong>Scopes</strong> decide which kinds of actions the key may perform.</li>
@@ -588,7 +595,7 @@
   <li><strong>Operation limits</strong> cap how often or how much the key may use each operation.</li>
 </ol>
 
-<p>All four controls must allow a request.</p>
+<p>All four controls must allow a request. If any control says no, the request is rejected.</p>
 
 <h2 id="create-the-first-key">Create the first key</h2>
 
@@ -630,42 +637,45 @@
 
 <p>Do not put the key in a URL or request body. Keep the API call on infrastructure you control; a browser or mobile client should call your backend, which then calls HivemindOS.</p>
 
-<h2 id="choose-service-access">Choose service access</h2>
+<details class="advancedDetails">
+  <summary>Advanced: exact service, operation, and child-key rules</summary>
 
-<p>Use one of these fields when creating a key:</p>
+  <h2 id="choose-service-access">Choose service access</h2>
 
-<table>
-  <thead>
-    <tr>
-      <th>Field</th>
-      <th>Meaning</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">allowedServices</code></td>
-      <td>The key can reach only the listed service ids. This is the safest default for production integrations.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">excludedServices</code></td>
-      <td>The listed services are removed and every other service available at creation remains allowed. The result is saved as an explicit allowlist, so services added later stay excluded.</td>
-    </tr>
-    <tr>
-      <td>Neither field</td>
-      <td>The key inherits its parent’s service boundary. A root key without a boundary may use any service its scopes permit, including services added later.</td>
-    </tr>
-  </tbody>
-</table>
+  <p>Use one of these fields when creating a key:</p>
 
-<p>Do not send both fields. An empty <code class="language-plaintext highlighter-rouge">allowedServices</code> array creates a key that cannot reach a managed service, while still permitting non-service operations covered by its scopes.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Meaning</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">allowedServices</code></td>
+        <td>The key can reach only the listed service ids. This is the safest default for production integrations.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">excludedServices</code></td>
+        <td>The listed services are removed and every other service available at creation remains allowed. The result is saved as an explicit allowlist, so services added later stay excluded.</td>
+      </tr>
+      <tr>
+        <td>Neither field</td>
+        <td>The key inherits its parent’s service boundary. A root key without a boundary may use any service its scopes permit, including services added later.</td>
+      </tr>
+    </tbody>
+  </table>
 
-<p>Dedicated database, wallet, and trading routes respect the same service boundary through <code class="language-plaintext highlighter-rouge">hivemind-database</code>, <code class="language-plaintext highlighter-rouge">managed-wallets</code>, and <code class="language-plaintext highlighter-rouge">managed-trading</code> respectively.</p>
+  <p>Do not send both fields. An empty <code class="language-plaintext highlighter-rouge">allowedServices</code> array creates a key that cannot reach a managed service, while still permitting non-service operations covered by its scopes.</p>
 
-<h2 id="choose-operation-access">Choose operation access</h2>
+  <p>Dedicated database, wallet, and trading routes respect the same service boundary through <code class="language-plaintext highlighter-rouge">hivemind-database</code>, <code class="language-plaintext highlighter-rouge">managed-wallets</code>, and <code class="language-plaintext highlighter-rouge">managed-trading</code> respectively.</p>
 
-<p>Use <code class="language-plaintext highlighter-rouge">allowedOperations</code> to allow only exact capabilities and Platform endpoints. Use <code class="language-plaintext highlighter-rouge">excludedOperations</code> to remove selected operations from the parent boundary. Do not send both.</p>
+  <h2 id="choose-operation-access">Choose operation access</h2>
 
-<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  <p>Use <code class="language-plaintext highlighter-rouge">allowedOperations</code> to allow only exact capabilities and Platform endpoints. Use <code class="language-plaintext highlighter-rouge">excludedOperations</code> to remove selected operations from the parent boundary. Do not send both.</p>
+
+  <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
   </span><span class="nl">"allowedOperations"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
     </span><span class="s2">"capabilities.list"</span><span class="p">,</span><span class="w">
     </span><span class="s2">"services.invoke.hive-research.analyses.create"</span><span class="p">,</span><span class="w">
@@ -673,19 +683,19 @@
     </span><span class="s2">"runs.read"</span><span class="w">
   </span><span class="p">]</span><span class="w">
 </span><span class="p">}</span><span class="w">
-</span></code></pre></div></div>
+</span></code></pre></div>  </div>
 
-<p>Operation selection is resolved when the key is created. New capabilities added later do not silently become reachable through an explicit allowlist or an exclusion-derived boundary. Aggregate selectors such as <code class="language-plaintext highlighter-rouge">services.invoke.hive-research</code> cover that service’s registered operations; exact selectors such as <code class="language-plaintext highlighter-rouge">services.invoke.hive-research.analyses.create</code> cover only one capability.</p>
+  <p>Operation selection is resolved when the key is created. New capabilities added later do not silently become reachable through an explicit allowlist or an exclusion-derived boundary. Aggregate selectors such as <code class="language-plaintext highlighter-rouge">services.invoke.hive-research</code> cover that service’s registered operations; exact selectors such as <code class="language-plaintext highlighter-rouge">services.invoke.hive-research.analyses.create</code> cover only one capability.</p>
 
-<p>Include the supporting Platform operations a narrowly allowed workflow needs. For example, a worker that permanently deletes managed memory must allow its exact <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.delete</code> operation together with <code class="language-plaintext highlighter-rouge">approvals.create</code> and <code class="language-plaintext highlighter-rouge">approvals.decide</code>. A key that revokes itself also needs <code class="language-plaintext highlighter-rouge">apiKeys.revoke</code>. These supporting operations do not broaden the key’s managed-service boundary.</p>
+  <p>Include the supporting Platform operations a narrowly allowed workflow needs. For example, a worker that permanently deletes managed memory must allow its exact <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.delete</code> operation together with <code class="language-plaintext highlighter-rouge">approvals.create</code> and <code class="language-plaintext highlighter-rouge">approvals.decide</code>. A key that revokes itself also needs <code class="language-plaintext highlighter-rouge">apiKeys.revoke</code>. These supporting operations do not broaden the key’s managed-service boundary.</p>
 
-<p>Project-bound keys are permanently restricted to one project and all descendants inherit that restriction. Read <a href="projects-security.html">projects and isolation</a> for the account-level and project-level key pattern.</p>
+  <p>Project-bound keys are permanently restricted to one project and all descendants inherit that restriction. Read <a href="projects-security.html">projects and isolation</a> for the account-level and project-level key pattern.</p>
 
-<h2 id="delegate-narrower-child-keys">Delegate narrower child keys</h2>
+  <h2 id="delegate-narrower-child-keys">Delegate narrower child keys</h2>
 
-<p>A key with <code class="language-plaintext highlighter-rouge">api_keys:manage</code> can create a child key with <code class="language-plaintext highlighter-rouge">POST /api-keys</code>. Authenticate with the parent bearer key instead of the credit-token header.</p>
+  <p>A key with <code class="language-plaintext highlighter-rouge">api_keys:manage</code> can create a child key with <code class="language-plaintext highlighter-rouge">POST /api-keys</code>. Authenticate with the parent bearer key instead of the credit-token header.</p>
 
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">workerKey</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">apiKeys</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
+  <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">workerKey</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">apiKeys</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
   <span class="p">{</span>
     <span class="na">label</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Research worker</span><span class="dl">"</span><span class="p">,</span>
     <span class="na">scopes</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">services:read</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">services:invoke</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">runs:read</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">runs:write</span><span class="dl">"</span><span class="p">],</span>
@@ -706,22 +716,24 @@
   <span class="p">},</span>
   <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">research-worker-2026-12</span><span class="dl">"</span> <span class="p">},</span>
 <span class="p">);</span>
-</code></pre></div></div>
+</code></pre></div>  </div>
 
-<p>A child key can only become narrower:</p>
+  <p>A child key can only become narrower:</p>
 
-<ul>
-  <li>Every child scope must exist on its parent.</li>
-  <li>Every child service must be available through its full ancestor chain.</li>
-  <li>Every child operation must be covered by its full ancestor chain.</li>
-  <li>A project-bound key cannot change projects or create an account-level descendant.</li>
-  <li>A child expiry cannot be later than the earliest ancestor expiry.</li>
-  <li>A child limit cannot exceed a covering ancestor limit.</li>
-  <li>Every ancestor limit continues to apply even when the child does not repeat it.</li>
-  <li>Delegation is limited to eight total levels.</li>
-</ul>
+  <ul>
+    <li>Every child scope must exist on its parent.</li>
+    <li>Every child service must be available through its full ancestor chain.</li>
+    <li>Every child operation must be covered by its full ancestor chain.</li>
+    <li>A project-bound key cannot change projects or create an account-level descendant.</li>
+    <li>A child expiry cannot be later than the earliest ancestor expiry.</li>
+    <li>A child limit cannot exceed a covering ancestor limit.</li>
+    <li>Every ancestor limit continues to apply even when the child does not repeat it.</li>
+    <li>Delegation is limited to eight total levels.</li>
+  </ul>
 
-<p>Revoking or expiring an ancestor invalidates all descendants. A key with <code class="language-plaintext highlighter-rouge">api_keys:manage</code> can list and revoke only itself and its descendants; it cannot inspect or change a sibling branch.</p>
+  <p>Revoking or expiring an ancestor invalidates all descendants. A key with <code class="language-plaintext highlighter-rouge">api_keys:manage</code> can list and revoke only itself and its descendants; it cannot inspect or change a sibling branch.</p>
+
+</details>
 
 <h2 id="use-idempotency-keys">Use idempotency keys</h2>
 
@@ -734,7 +746,7 @@
 
 <p>Idempotency is isolated by API key. Two sibling keys may use the same external job id without replaying one another’s response.</p>
 
-<h2 id="production-key-pattern">Production key pattern</h2>
+<h2 id="use-one-key-for-one-responsibility">Use one key for one responsibility</h2>
 
 <p>Use separate keys for separate responsibilities:</p>
 

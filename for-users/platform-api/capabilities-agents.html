@@ -577,9 +577,19 @@
             </button>
           </div>
         </div>
-        <h1 id="capabilities-agents-workflows-and-mini-apps">Capabilities, Agents, Workflows, And Mini Apps</h1>
+        <h1 id="capabilities-agents-workflows-and-mini-apps">Capabilities, agents, workflows, and mini apps</h1>
 
-<p>The capability registry turns HivemindOS cloud services into stable, discoverable backend operations. It covers managed agents, scheduled workflows, research, swarms, memory, models, media, app hosting, communications, analytics, integrations, market intelligence, wallets, trading, compute, testnet funding, and managed databases. The catalog also identifies planned surfaces without pretending they are available.</p>
+<p>A <strong>service</strong> is a managed product area, such as research or memory. A <strong>capability</strong> is one action inside it, such as creating an analysis or recalling a memory.</p>
+
+<p>The normal path is simple:</p>
+
+<ol>
+  <li>List the capabilities your key can use.</li>
+  <li>Pick a stable operation id.</li>
+  <li>Call it now, or create a durable run for longer work.</li>
+</ol>
+
+<p>The registry covers agents, scheduled workflows, mini apps, research, memory, media, app hosting, communications, analytics, market intelligence, wallets, trading, compute, testnet assets, and managed databases. It also marks work that is not currently available.</p>
 
 <h2 id="discover-capabilities">Discover capabilities</h2>
 
@@ -598,50 +608,55 @@
 
 <p>Filter to one service with <code class="language-plaintext highlighter-rouge">hive.services.capabilities("managed-agents")</code> or <code class="language-plaintext highlighter-rouge">GET /capabilities/{serviceId}</code>. Results are filtered through the caller’s service and operation boundary.</p>
 
-<p>Each capability declares:</p>
+<details class="advancedDetails">
+  <summary>Advanced: fields returned for each capability</summary>
 
-<table>
-  <thead>
-    <tr>
-      <th>Field</th>
-      <th>Meaning</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">id</code></td>
-      <td>Stable id within the service, such as <code class="language-plaintext highlighter-rouge">agents.create</code>.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">operationId</code></td>
-      <td>Exact selector for direct invocation or a dedicated Platform route.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">runOperationId</code></td>
-      <td>Exact background-run selector, or <code class="language-plaintext highlighter-rouge">null</code> for a dedicated Platform route.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">method</code> and <code class="language-plaintext highlighter-rouge">path</code></td>
-      <td>Reviewed managed-service contract and path parameters.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">mode</code></td>
-      <td><code class="language-plaintext highlighter-rouge">read</code>, <code class="language-plaintext highlighter-rouge">write</code>, or <code class="language-plaintext highlighter-rouge">execute</code>.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">idempotent</code></td>
-      <td>Whether the operation requires a protected idempotent mutation.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">approval</code></td>
-      <td><code class="language-plaintext highlighter-rouge">never</code>, <code class="language-plaintext highlighter-rouge">policy</code>, or <code class="language-plaintext highlighter-rouge">always</code>.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">asynchronous</code></td>
-      <td>Whether the owning service normally continues work after accepting it.</td>
-    </tr>
-  </tbody>
-</table>
+  <p>Each capability declares:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Meaning</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">id</code></td>
+        <td>Stable id within the service, such as <code class="language-plaintext highlighter-rouge">agents.create</code>.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">operationId</code></td>
+        <td>Exact selector for direct invocation or a dedicated Platform route.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">runOperationId</code></td>
+        <td>Exact background-run selector, or <code class="language-plaintext highlighter-rouge">null</code> for a dedicated Platform route.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">method</code> and <code class="language-plaintext highlighter-rouge">path</code></td>
+        <td>Reviewed managed-service contract and path parameters.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">mode</code></td>
+        <td><code class="language-plaintext highlighter-rouge">read</code>, <code class="language-plaintext highlighter-rouge">write</code>, or <code class="language-plaintext highlighter-rouge">execute</code>.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">idempotent</code></td>
+        <td>Whether the operation requires a protected idempotent mutation.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">approval</code></td>
+        <td><code class="language-plaintext highlighter-rouge">never</code>, <code class="language-plaintext highlighter-rouge">policy</code>, or <code class="language-plaintext highlighter-rouge">always</code>.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">asynchronous</code></td>
+        <td>Whether the owning service normally continues work after accepting it.</td>
+      </tr>
+    </tbody>
+  </table>
+
+</details>
 
 <h2 id="invoke-by-operation-id">Invoke by operation id</h2>
 

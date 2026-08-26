@@ -577,9 +577,36 @@
             </button>
           </div>
         </div>
-        <h1 id="runs-artifacts-webhooks-and-errors">Runs, Artifacts, Webhooks, And Errors</h1>
+        <h1 id="runs-artifacts-webhooks-and-errors">Runs, artifacts, webhooks, and errors</h1>
 
-<p>Use runs when a managed-service call needs a durable id, result, status, and event trail. Use webhooks when another system should react to run, approval, wallet, or trading changes without polling.</p>
+<p>Use a <strong>direct call</strong> when your app can wait for the answer. Use a <strong>run</strong> when work may continue after the request ends. Use a <strong>webhook</strong> when HivemindOS should tell your app that something changed.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Need</th>
+      <th>Use</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>A quick result in the current request</td>
+      <td>Direct service invocation</td>
+    </tr>
+    <tr>
+      <td>A durable status for longer work</td>
+      <td>Run</td>
+    </tr>
+    <tr>
+      <td>A saved result file</td>
+      <td>Artifact</td>
+    </tr>
+    <tr>
+      <td>An automatic notification</td>
+      <td>Webhook</td>
+    </tr>
+  </tbody>
+</table>
 
 <h2 id="durable-runs">Durable runs</h2>
 

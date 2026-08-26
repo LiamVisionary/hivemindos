@@ -577,11 +577,16 @@
             </button>
           </div>
         </div>
-        <h1 id="wallets-approvals-and-trading">Wallets, Approvals, And Trading</h1>
+        <h1 id="wallets-approvals-and-trading">Wallets, approvals, and trading</h1>
 
-<p>Managed wallets let an application use an address without receiving raw private-key material. Every state-changing action is checked against the wallet policy, a short-lived quote, the API key’s scopes and limits, the account credit balance, and an approval when required.</p>
+<p>Managed wallets let your app use a wallet address without receiving its private key or recovery phrase. Before money moves, HivemindOS checks the wallet policy, a short-lived quote, the API key’s permissions and limits, available Agent Credits, and any required approval.</p>
 
-<p>Start on a test network. Move to a main network only after policy, approval separation, idempotency, event handling, and recovery behavior have been tested end to end.</p>
+<div class="plainAnswer">
+  <strong>Start safely</strong>
+  <p>Use a test network first. Keep proposal, approval, and execution on separate keys. Show the complete action and maximum price before approval.</p>
+</div>
+
+<p>Move to a main network only after policy, approval separation, retry safety, event handling, and recovery have been tested end to end.</p>
 
 <h2 id="separate-responsibilities">Separate responsibilities</h2>
 

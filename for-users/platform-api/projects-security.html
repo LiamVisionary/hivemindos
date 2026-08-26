@@ -577,9 +577,14 @@
             </button>
           </div>
         </div>
-        <h1 id="projects-isolation-and-service-accounts">Projects, Isolation, And Service Accounts</h1>
+        <h1 id="projects-isolation-and-service-accounts">Projects, isolation, and service accounts</h1>
 
-<p>A project is the security and data boundary for one product, customer tenant, or deployment environment. Wallets, quotes, approvals, runs, artifacts, files, connections, idempotency records, webhooks, managed database data, usage, and audit events stay inside the selected project.</p>
+<p>A project keeps one product, customer, or environment separate from another. Its wallets, approvals, runs, files, webhooks, database data, usage, and audit history stay inside that boundary.</p>
+
+<div class="plainAnswer">
+  <strong>Do you need a project?</strong>
+  <p>Use one when you have more than one customer, app, or environment. For a small first integration, the account-level default is enough.</p>
+</div>
 
 <h2 id="create-a-project">Create a project</h2>
 
@@ -599,7 +604,7 @@
 
 <p>Projects can be listed, read, renamed, and archived. Archiving prevents new requests from selecting the project. It does not silently move its resources to another project.</p>
 
-<h2 id="bind-a-key-permanently">Bind a key permanently</h2>
+<h2 id="give-one-workload-its-own-key">Give one workload its own key</h2>
 
 <p>Create a child key with <code class="language-plaintext highlighter-rouge">projectId</code>. The project binding cannot be removed or changed, and every descendant inherits it.</p>
 
@@ -630,34 +635,39 @@
 
 <p>This is the recommended service-account pattern: one project-bound key per workload, with exact scopes, services, operations, expiry, and limits.</p>
 
-<h2 id="select-a-project-with-an-account-key">Select a project with an account key</h2>
+<details class="advancedDetails">
+  <summary>Advanced: temporary project selection and isolation rules</summary>
 
-<p>An account-level key can select an active project for one request:</p>
+  <h2 id="select-a-project-with-an-account-key">Select a project with an account key</h2>
 
-<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">X-HivemindOS-Project: project_...
-</span></code></pre></div></div>
+  <p>An account-level key can select an active project for one request:</p>
 
-<p>The TypeScript client sends that header automatically when constructed with <code class="language-plaintext highlighter-rouge">projectId</code>:</p>
+  <div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">X-HivemindOS-Project: project_...
+</span></code></pre></div>  </div>
 
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">acme</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">HivemindOSClient</span><span class="p">({</span>
+  <p>The TypeScript client sends that header automatically when constructed with <code class="language-plaintext highlighter-rouge">projectId</code>:</p>
+
+  <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">acme</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">HivemindOSClient</span><span class="p">({</span>
   <span class="na">apiKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_ACCOUNT_API_KEY</span><span class="o">!</span><span class="p">,</span>
   <span class="na">projectId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">project_...</span><span class="dl">"</span><span class="p">,</span>
 <span class="p">});</span>
-</code></pre></div></div>
+</code></pre></div>  </div>
 
-<p>A project-bound key rejects a different project header. Use separate client instances for separate projects and never accept an unvalidated project id directly from an end-user request.</p>
+  <p>A project-bound key rejects a different project header. Use separate client instances for separate projects and never accept an unvalidated project id directly from an end-user request.</p>
 
-<h2 id="isolation-rules">Isolation rules</h2>
+  <h2 id="isolation-rules">Isolation rules</h2>
 
-<ul>
-  <li>Resource ids are meaningful only inside their account and project.</li>
-  <li>An id from one project returns not found from another project.</li>
-  <li>Idempotency keys are isolated by project and API key.</li>
-  <li>Webhooks receive only events from their project and allowed services.</li>
-  <li>Usage and audit queries report only the selected project.</li>
-  <li>Managed databases receive the same project boundary as every other resource.</li>
-  <li>A project-bound key cannot create another project or an account-level child key.</li>
-</ul>
+  <ul>
+    <li>Resource ids are meaningful only inside their account and project.</li>
+    <li>An id from one project returns not found from another project.</li>
+    <li>Idempotency keys are isolated by project and API key.</li>
+    <li>Webhooks receive only events from their project and allowed services.</li>
+    <li>Usage and audit queries report only the selected project.</li>
+    <li>Managed databases receive the same project boundary as every other resource.</li>
+    <li>A project-bound key cannot create another project or an account-level child key.</li>
+  </ul>
+
+</details>
 
 <h2 id="environment-pattern">Environment pattern</h2>
 

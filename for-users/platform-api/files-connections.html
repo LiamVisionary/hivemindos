@@ -577,9 +577,11 @@
             </button>
           </div>
         </div>
-        <h1 id="files-connections-and-integrations">Files, Connections, And Integrations</h1>
+        <h1 id="files-connections-and-integrations">Files, connections, and integrations</h1>
 
-<p>Projects can keep durable files and protected connection credentials alongside their runs, agents, workflows, and databases. File bytes and credential values are never included in list responses.</p>
+<p>Upload files when a managed service needs source material. Create a connection when it needs to use another account or tool without revealing that credential to your app workers.</p>
+
+<p>File lists show metadata, not file bytes. Connection lists show safe labels and field names, not secret values.</p>
 
 <h2 id="upload-a-file">Upload a file</h2>
 
@@ -596,42 +598,47 @@
 
 <p>Files must be between 1 byte and 25 MB. The API calculates a SHA-256 checksum. You may pass a known checksum in <code class="language-plaintext highlighter-rouge">sha256</code>; the upload fails if it does not match.</p>
 
-<p>HTTP uploads use the request body for bytes and these headers:</p>
+<details class="advancedDetails">
+  <summary>Advanced: raw HTTP upload headers</summary>
 
-<table>
-  <thead>
-    <tr>
-      <th>Header</th>
-      <th>Use</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">Content-Type</code></td>
-      <td>File media type.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">Content-Length</code></td>
-      <td>File size in bytes.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">X-File-Name</code></td>
-      <td>Customer-visible file name.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">X-Content-Sha256</code></td>
-      <td>Optional expected checksum.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-File-Purpose</code></td>
-      <td>Optional project-defined purpose.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">Idempotency-Key</code></td>
-      <td>Stable identifier for one logical upload.</td>
-    </tr>
-  </tbody>
-</table>
+  <p>HTTP uploads use the request body for bytes and these headers:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Header</th>
+        <th>Use</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">Content-Type</code></td>
+        <td>File media type.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">Content-Length</code></td>
+        <td>File size in bytes.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">X-File-Name</code></td>
+        <td>Customer-visible file name.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">X-Content-Sha256</code></td>
+        <td>Optional expected checksum.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-File-Purpose</code></td>
+        <td>Optional project-defined purpose.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">Idempotency-Key</code></td>
+        <td>Stable identifier for one logical upload.</td>
+      </tr>
+    </tbody>
+  </table>
+
+</details>
 
 <p>List metadata with <code class="language-plaintext highlighter-rouge">files.list()</code>, download authenticated bytes with <code class="language-plaintext highlighter-rouge">files.download(id)</code>, and delete with <code class="language-plaintext highlighter-rouge">files.remove(id)</code>. A deleted file cannot be recreated by replaying its old idempotency key.</p>
 

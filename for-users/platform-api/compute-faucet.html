@@ -577,15 +577,45 @@
             </button>
           </div>
         </div>
-        <h1 id="hive-compute-and-testnet-assets">Hive Compute And Testnet Assets</h1>
+        <h1 id="hive-compute-and-testnet-assets">Hive Compute and testnet assets</h1>
 
-<p><code class="language-plaintext highlighter-rouge">hive-compute</code> and <code class="language-plaintext highlighter-rouge">testnet-faucet</code> are live managed services in the SuperAgent API catalog. Both use the authenticated account’s HivemindOS credits. Your integration does not need a separate service balance, service credential, or desktop session.</p>
+<p>Use Hive Compute when an agent needs hosted GPU work. Use the testnet faucet when a developer needs supported test assets with no monetary value. Both use the account’s Agent Credits and do not need a desktop session.</p>
 
-<p>The primary compute operations are <code class="language-plaintext highlighter-rouge">marketplace.search</code>, <code class="language-plaintext highlighter-rouge">models.list</code>, <code class="language-plaintext highlighter-rouge">chat.create</code>, <code class="language-plaintext highlighter-rouge">images.create</code>, <code class="language-plaintext highlighter-rouge">jobs.create</code>, <code class="language-plaintext highlighter-rouge">artifacts.upload</code>, and <code class="language-plaintext highlighter-rouge">artifacts.get</code>. <code class="language-plaintext highlighter-rouge">marketplace.listings</code> and <code class="language-plaintext highlighter-rouge">marketplace.status</code> expose the live offer and capacity views. The faucet operations are <code class="language-plaintext highlighter-rouge">assets.list</code>, <code class="language-plaintext highlighter-rouge">claims.create</code>, and <code class="language-plaintext highlighter-rouge">claims.get</code>. Discover the complete live set, including job submission, cancellation, and artifact acknowledgement, through <code class="language-plaintext highlighter-rouge">GET /capabilities/{serviceId}</code>.</p>
+<table>
+  <thead>
+    <tr>
+      <th>If you need</th>
+      <th>Start with</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>A model response or generated image</td>
+      <td>Managed inference</td>
+    </tr>
+    <tr>
+      <td>The best live GPU offer</td>
+      <td>Marketplace search</td>
+    </tr>
+    <tr>
+      <td>Private GPU work with verified hardware</td>
+      <td>Confidential execution</td>
+    </tr>
+    <tr>
+      <td>A test wallet funded for development</td>
+      <td>Testnet assets</td>
+    </tr>
+  </tbody>
+</table>
 
-<p>Use an API key with <code class="language-plaintext highlighter-rouge">services:read</code> and <code class="language-plaintext highlighter-rouge">services:invoke</code>. Restrict production keys to the exact operations they need:</p>
+<p>The primary compute operations are <code class="language-plaintext highlighter-rouge">marketplace.search</code>, <code class="language-plaintext highlighter-rouge">models.list</code>, <code class="language-plaintext highlighter-rouge">chat.create</code>, <code class="language-plaintext highlighter-rouge">images.create</code>, <code class="language-plaintext highlighter-rouge">jobs.create</code>, <code class="language-plaintext highlighter-rouge">artifacts.upload</code>, and <code class="language-plaintext highlighter-rouge">artifacts.get</code>. <code class="language-plaintext highlighter-rouge">marketplace.listings</code> and <code class="language-plaintext highlighter-rouge">marketplace.status</code> show live offers and capacity. The faucet operations are <code class="language-plaintext highlighter-rouge">assets.list</code>, <code class="language-plaintext highlighter-rouge">claims.create</code>, and <code class="language-plaintext highlighter-rouge">claims.get</code>. Read the complete live set through <code class="language-plaintext highlighter-rouge">GET /capabilities/{serviceId}</code>.</p>
 
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">issued</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">createHivemindOSApiKey</span><span class="p">({</span>
+<details class="advancedDetails">
+  <summary>Advanced: create a tightly limited compute key</summary>
+
+  <p>Use an API key with <code class="language-plaintext highlighter-rouge">services:read</code> and <code class="language-plaintext highlighter-rouge">services:invoke</code>. Restrict production keys to the exact operations they need:</p>
+
+  <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">issued</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">createHivemindOSApiKey</span><span class="p">({</span>
   <span class="na">creditToken</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_CREDIT_TOKEN</span><span class="o">!</span><span class="p">,</span>
   <span class="na">label</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Compute and testnet backend</span><span class="dl">"</span><span class="p">,</span>
   <span class="na">scopes</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">services:read</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">services:invoke</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">files:read</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">files:write</span><span class="dl">"</span><span class="p">],</span>
@@ -624,9 +654,11 @@
   <span class="p">},</span>
   <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">compute-testnet-key-v1</span><span class="dl">"</span><span class="p">,</span>
 <span class="p">});</span>
-</code></pre></div></div>
+</code></pre></div>  </div>
 
-<p>Remove the file scopes and compute artifact operations when a key only needs chat, images, or faucet claims.</p>
+  <p>Remove the file scopes and compute artifact operations when a key only needs chat, images, or faucet claims.</p>
+
+</details>
 
 <h2 id="search-the-compute-marketplace">Search the compute marketplace</h2>
 

@@ -577,9 +577,11 @@
             </button>
           </div>
         </div>
-        <h1 id="service-access-and-catalog">Service Access And Catalog</h1>
+        <h1 id="service-access-and-catalog">Service access and catalog</h1>
 
-<p>Use the service catalog before starting work. It is filtered to the caller’s API-key boundary. Pass <code class="language-plaintext highlighter-rouge">probe: true</code> when you need a fresh health check from every visible cloud service.</p>
+<p>The service catalog answers two questions: <strong>what can this key use, and is it ready now?</strong> Read it before showing a feature or starting work.</p>
+
+<p>The result is already filtered to the key’s permissions. A service marked <code class="language-plaintext highlighter-rouge">available</code> can be used. A service marked <code class="language-plaintext highlighter-rouge">setup-required</code> needs the account owner to finish setup first. Do not repeatedly retry <code class="language-plaintext highlighter-rouge">coming-soon</code> or <code class="language-plaintext highlighter-rouge">unavailable</code> services.</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">response</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">list</span><span class="p">({</span> <span class="na">probe</span><span class="p">:</span> <span class="kc">true</span> <span class="p">});</span>
 <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">response</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">response</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
@@ -589,219 +591,229 @@
 <span class="p">}</span>
 </code></pre></div></div>
 
-<p>Each catalog item includes:</p>
+<details class="advancedDetails">
+  <summary>Advanced: catalog response fields</summary>
 
-<table>
-  <thead>
-    <tr>
-      <th>Field</th>
-      <th>Meaning</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">id</code></td>
-      <td>Stable service id used in keys, invocations, runs, events, and limits.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">name</code> and <code class="language-plaintext highlighter-rouge">description</code></td>
-      <td>Customer-readable purpose.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">category</code></td>
-      <td><code class="language-plaintext highlighter-rouge">agent</code>, <code class="language-plaintext highlighter-rouge">app</code>, <code class="language-plaintext highlighter-rouge">data</code>, <code class="language-plaintext highlighter-rouge">finance</code>, <code class="language-plaintext highlighter-rouge">integration</code>, <code class="language-plaintext highlighter-rouge">media</code>, or <code class="language-plaintext highlighter-rouge">platform</code>.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">status</code></td>
-      <td><code class="language-plaintext highlighter-rouge">available</code>, <code class="language-plaintext highlighter-rouge">setup-required</code>, <code class="language-plaintext highlighter-rouge">coming-soon</code>, or <code class="language-plaintext highlighter-rouge">unavailable</code>.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">operations</code></td>
-      <td>Dedicated Platform routes or the managed-service invocation facade.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">operationCount</code></td>
-      <td>Number of registered exact capabilities.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">capabilitiesUrl</code></td>
-      <td>Filtered capability registry for the service.</td>
-    </tr>
-  </tbody>
-</table>
+  <p>Each catalog item includes:</p>
 
-<p>Only call a service when its status is <code class="language-plaintext highlighter-rouge">available</code>. When the status is <code class="language-plaintext highlighter-rouge">setup-required</code>, the account owner must finish that service’s setup. Treat <code class="language-plaintext highlighter-rouge">coming-soon</code> and <code class="language-plaintext highlighter-rouge">unavailable</code> as unavailable without repeatedly retrying them.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Field</th>
+        <th>Meaning</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">id</code></td>
+        <td>Stable service id used in keys, invocations, runs, events, and limits.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">name</code> and <code class="language-plaintext highlighter-rouge">description</code></td>
+        <td>Customer-readable purpose.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">category</code></td>
+        <td><code class="language-plaintext highlighter-rouge">agent</code>, <code class="language-plaintext highlighter-rouge">app</code>, <code class="language-plaintext highlighter-rouge">data</code>, <code class="language-plaintext highlighter-rouge">finance</code>, <code class="language-plaintext highlighter-rouge">integration</code>, <code class="language-plaintext highlighter-rouge">media</code>, or <code class="language-plaintext highlighter-rouge">platform</code>.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">status</code></td>
+        <td><code class="language-plaintext highlighter-rouge">available</code>, <code class="language-plaintext highlighter-rouge">setup-required</code>, <code class="language-plaintext highlighter-rouge">coming-soon</code>, or <code class="language-plaintext highlighter-rouge">unavailable</code>.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">operations</code></td>
+        <td>Dedicated Platform routes or the managed-service invocation facade.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">operationCount</code></td>
+        <td>Number of registered exact capabilities.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">capabilitiesUrl</code></td>
+        <td>Filtered capability registry for the service.</td>
+      </tr>
+    </tbody>
+  </table>
 
-<h2 id="managed-service-catalog">Managed service catalog</h2>
+  <p>Pass <code class="language-plaintext highlighter-rouge">probe: true</code> when you need a fresh health check from every visible cloud service.</p>
 
-<p>Availability is account- and deployment-specific. This table defines stable ids and purposes; <code class="language-plaintext highlighter-rouge">GET /services</code> defines live status.</p>
+</details>
 
-<table>
-  <thead>
-    <tr>
-      <th>Category</th>
-      <th>Service id</th>
-      <th>Purpose</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Agent</td>
-      <td><code class="language-plaintext highlighter-rouge">hive-research</code></td>
-      <td>Deep research with sourced results and reusable artifacts.</td>
-    </tr>
-    <tr>
-      <td>Agent</td>
-      <td><code class="language-plaintext highlighter-rouge">swarm</code></td>
-      <td>Coordinate multiple cloud agents around one outcome.</td>
-    </tr>
-    <tr>
-      <td>Agent</td>
-      <td><code class="language-plaintext highlighter-rouge">distill</code></td>
-      <td>Turn source material into reusable agent capabilities.</td>
-    </tr>
-    <tr>
-      <td>Agent</td>
-      <td><code class="language-plaintext highlighter-rouge">managed-models</code></td>
-      <td>Use HivemindOS-managed model inference.</td>
-    </tr>
-    <tr>
-      <td>Agent</td>
-      <td><code class="language-plaintext highlighter-rouge">cloud-superbrain</code></td>
-      <td>Use managed memory and knowledge services.</td>
-    </tr>
-    <tr>
-      <td>Agent</td>
-      <td><code class="language-plaintext highlighter-rouge">managed-agents</code></td>
-      <td>Create and operate persistent cloud agents.</td>
-    </tr>
-    <tr>
-      <td>Agent</td>
-      <td><code class="language-plaintext highlighter-rouge">managed-workflows</code></td>
-      <td>Run scheduled and event-driven cloud workflows.</td>
-    </tr>
-    <tr>
-      <td>App</td>
-      <td><code class="language-plaintext highlighter-rouge">managed-bookings</code></td>
-      <td>Create and operate booking flows.</td>
-    </tr>
-    <tr>
-      <td>Data</td>
-      <td><code class="language-plaintext highlighter-rouge">reddit-voc</code></td>
-      <td>Discover audience language, pain points, and opportunities.</td>
-    </tr>
-    <tr>
-      <td>Data</td>
-      <td><code class="language-plaintext highlighter-rouge">hivemind-analytics</code></td>
-      <td>Capture and query product analytics.</td>
-    </tr>
-    <tr>
-      <td>Data</td>
-      <td><code class="language-plaintext highlighter-rouge">miroshark</code></td>
-      <td>Run managed market-intelligence workflows.</td>
-    </tr>
-    <tr>
-      <td>Data</td>
-      <td><code class="language-plaintext highlighter-rouge">leadgen-data</code></td>
-      <td>Enrich and qualify business leads.</td>
-    </tr>
-    <tr>
-      <td>Finance</td>
-      <td><code class="language-plaintext highlighter-rouge">token-autopsy</code></td>
-      <td>Analyze token structure, activity, and market risk.</td>
-    </tr>
-    <tr>
-      <td>Finance</td>
-      <td><code class="language-plaintext highlighter-rouge">wallet-risk</code></td>
-      <td>Assess wallet behavior and risk signals.</td>
-    </tr>
-    <tr>
-      <td>Finance</td>
-      <td><code class="language-plaintext highlighter-rouge">copy-trading</code></td>
-      <td>Run HivemindOS copy-trading logic and monitors.</td>
-    </tr>
-    <tr>
-      <td>Finance</td>
-      <td><code class="language-plaintext highlighter-rouge">hive-bridge</code></td>
-      <td>Quote supported bridge routes and track route status.</td>
-    </tr>
-    <tr>
-      <td>Finance</td>
-      <td><code class="language-plaintext highlighter-rouge">testnet-faucet</code></td>
-      <td>Discover supported testnet assets, request them, and track each claim with HivemindOS credits.</td>
-    </tr>
-    <tr>
-      <td>Finance</td>
-      <td><code class="language-plaintext highlighter-rouge">managed-wallets</code></td>
-      <td>Create policy-controlled wallets and execute approved actions.</td>
-    </tr>
-    <tr>
-      <td>Finance</td>
-      <td><code class="language-plaintext highlighter-rouge">managed-trading</code></td>
-      <td>Quote and execute policy-controlled spot trades.</td>
-    </tr>
-    <tr>
-      <td>Integration</td>
-      <td><code class="language-plaintext highlighter-rouge">x-api</code></td>
-      <td>Use managed X actions and account workflows.</td>
-    </tr>
-    <tr>
-      <td>Integration</td>
-      <td><code class="language-plaintext highlighter-rouge">managed-socials</code></td>
-      <td>Schedule and manage social publishing.</td>
-    </tr>
-    <tr>
-      <td>Integration</td>
-      <td><code class="language-plaintext highlighter-rouge">outbound-email</code></td>
-      <td>Send and manage outbound email workflows.</td>
-    </tr>
-    <tr>
-      <td>Integration</td>
-      <td><code class="language-plaintext highlighter-rouge">integration-broker</code></td>
-      <td>Connect calendars and remote tool servers while HivemindOS protects their credentials.</td>
-    </tr>
-    <tr>
-      <td>Media</td>
-      <td><code class="language-plaintext highlighter-rouge">x-studio</code></td>
-      <td>Create, review, and package social content workflows.</td>
-    </tr>
-    <tr>
-      <td>Media</td>
-      <td><code class="language-plaintext highlighter-rouge">x-transcript</code></td>
-      <td>Create transcripts and structured knowledge from X media.</td>
-    </tr>
-    <tr>
-      <td>Media</td>
-      <td><code class="language-plaintext highlighter-rouge">media-studio</code></td>
-      <td>Generate and manage production-ready media.</td>
-    </tr>
-    <tr>
-      <td>Media</td>
-      <td><code class="language-plaintext highlighter-rouge">photo-keyworder</code></td>
-      <td>Analyze photos and create searchable metadata.</td>
-    </tr>
-    <tr>
-      <td>Platform</td>
-      <td><code class="language-plaintext highlighter-rouge">app-hosting</code></td>
-      <td>Publish static sites and managed dynamic apps.</td>
-    </tr>
-    <tr>
-      <td>Platform</td>
-      <td><code class="language-plaintext highlighter-rouge">hive-compute</code></td>
-      <td>Run managed inference, image generation, and confidential asynchronous workloads with HivemindOS credits.</td>
-    </tr>
-    <tr>
-      <td>Platform</td>
-      <td><code class="language-plaintext highlighter-rouge">gpu-rentals</code></td>
-      <td>Provision managed GPU workloads.</td>
-    </tr>
-    <tr>
-      <td>Platform</td>
-      <td><code class="language-plaintext highlighter-rouge">hivemind-database</code></td>
-      <td>Provision portable managed application data.</td>
-    </tr>
-  </tbody>
-</table>
+<details class="advancedDetails">
+  <summary>Advanced: all 31 stable service ids</summary>
+
+  <h2 id="managed-service-catalog">Managed service catalog</h2>
+
+  <p>Availability is account- and deployment-specific. This table defines stable ids and purposes; <code class="language-plaintext highlighter-rouge">GET /services</code> defines live status.</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Category</th>
+        <th>Service id</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Agent</td>
+        <td><code class="language-plaintext highlighter-rouge">hive-research</code></td>
+        <td>Deep research with sourced results and reusable artifacts.</td>
+      </tr>
+      <tr>
+        <td>Agent</td>
+        <td><code class="language-plaintext highlighter-rouge">swarm</code></td>
+        <td>Coordinate multiple cloud agents around one outcome.</td>
+      </tr>
+      <tr>
+        <td>Agent</td>
+        <td><code class="language-plaintext highlighter-rouge">distill</code></td>
+        <td>Turn source material into reusable agent capabilities.</td>
+      </tr>
+      <tr>
+        <td>Agent</td>
+        <td><code class="language-plaintext highlighter-rouge">managed-models</code></td>
+        <td>Use HivemindOS-managed model inference.</td>
+      </tr>
+      <tr>
+        <td>Agent</td>
+        <td><code class="language-plaintext highlighter-rouge">cloud-superbrain</code></td>
+        <td>Use managed memory and knowledge services.</td>
+      </tr>
+      <tr>
+        <td>Agent</td>
+        <td><code class="language-plaintext highlighter-rouge">managed-agents</code></td>
+        <td>Create and operate persistent cloud agents.</td>
+      </tr>
+      <tr>
+        <td>Agent</td>
+        <td><code class="language-plaintext highlighter-rouge">managed-workflows</code></td>
+        <td>Run scheduled and event-driven cloud workflows.</td>
+      </tr>
+      <tr>
+        <td>App</td>
+        <td><code class="language-plaintext highlighter-rouge">managed-bookings</code></td>
+        <td>Create and operate booking flows.</td>
+      </tr>
+      <tr>
+        <td>Data</td>
+        <td><code class="language-plaintext highlighter-rouge">reddit-voc</code></td>
+        <td>Discover audience language, pain points, and opportunities.</td>
+      </tr>
+      <tr>
+        <td>Data</td>
+        <td><code class="language-plaintext highlighter-rouge">hivemind-analytics</code></td>
+        <td>Capture and query product analytics.</td>
+      </tr>
+      <tr>
+        <td>Data</td>
+        <td><code class="language-plaintext highlighter-rouge">miroshark</code></td>
+        <td>Run managed market-intelligence workflows.</td>
+      </tr>
+      <tr>
+        <td>Data</td>
+        <td><code class="language-plaintext highlighter-rouge">leadgen-data</code></td>
+        <td>Enrich and qualify business leads.</td>
+      </tr>
+      <tr>
+        <td>Finance</td>
+        <td><code class="language-plaintext highlighter-rouge">token-autopsy</code></td>
+        <td>Analyze token structure, activity, and market risk.</td>
+      </tr>
+      <tr>
+        <td>Finance</td>
+        <td><code class="language-plaintext highlighter-rouge">wallet-risk</code></td>
+        <td>Assess wallet behavior and risk signals.</td>
+      </tr>
+      <tr>
+        <td>Finance</td>
+        <td><code class="language-plaintext highlighter-rouge">copy-trading</code></td>
+        <td>Run HivemindOS copy-trading logic and monitors.</td>
+      </tr>
+      <tr>
+        <td>Finance</td>
+        <td><code class="language-plaintext highlighter-rouge">hive-bridge</code></td>
+        <td>Quote supported bridge routes and track route status.</td>
+      </tr>
+      <tr>
+        <td>Finance</td>
+        <td><code class="language-plaintext highlighter-rouge">testnet-faucet</code></td>
+        <td>Discover supported testnet assets, request them, and track each claim with HivemindOS credits.</td>
+      </tr>
+      <tr>
+        <td>Finance</td>
+        <td><code class="language-plaintext highlighter-rouge">managed-wallets</code></td>
+        <td>Create policy-controlled wallets and execute approved actions.</td>
+      </tr>
+      <tr>
+        <td>Finance</td>
+        <td><code class="language-plaintext highlighter-rouge">managed-trading</code></td>
+        <td>Quote and execute policy-controlled spot trades.</td>
+      </tr>
+      <tr>
+        <td>Integration</td>
+        <td><code class="language-plaintext highlighter-rouge">x-api</code></td>
+        <td>Use managed X actions and account workflows.</td>
+      </tr>
+      <tr>
+        <td>Integration</td>
+        <td><code class="language-plaintext highlighter-rouge">managed-socials</code></td>
+        <td>Schedule and manage social publishing.</td>
+      </tr>
+      <tr>
+        <td>Integration</td>
+        <td><code class="language-plaintext highlighter-rouge">outbound-email</code></td>
+        <td>Send and manage outbound email workflows.</td>
+      </tr>
+      <tr>
+        <td>Integration</td>
+        <td><code class="language-plaintext highlighter-rouge">integration-broker</code></td>
+        <td>Connect calendars and remote tool servers while HivemindOS protects their credentials.</td>
+      </tr>
+      <tr>
+        <td>Media</td>
+        <td><code class="language-plaintext highlighter-rouge">x-studio</code></td>
+        <td>Create, review, and package social content workflows.</td>
+      </tr>
+      <tr>
+        <td>Media</td>
+        <td><code class="language-plaintext highlighter-rouge">x-transcript</code></td>
+        <td>Create transcripts and structured knowledge from X media.</td>
+      </tr>
+      <tr>
+        <td>Media</td>
+        <td><code class="language-plaintext highlighter-rouge">media-studio</code></td>
+        <td>Generate and manage production-ready media.</td>
+      </tr>
+      <tr>
+        <td>Media</td>
+        <td><code class="language-plaintext highlighter-rouge">photo-keyworder</code></td>
+        <td>Analyze photos and create searchable metadata.</td>
+      </tr>
+      <tr>
+        <td>Platform</td>
+        <td><code class="language-plaintext highlighter-rouge">app-hosting</code></td>
+        <td>Publish static sites and managed dynamic apps.</td>
+      </tr>
+      <tr>
+        <td>Platform</td>
+        <td><code class="language-plaintext highlighter-rouge">hive-compute</code></td>
+        <td>Run managed inference, image generation, and confidential asynchronous workloads with HivemindOS credits.</td>
+      </tr>
+      <tr>
+        <td>Platform</td>
+        <td><code class="language-plaintext highlighter-rouge">gpu-rentals</code></td>
+        <td>Provision managed GPU workloads.</td>
+      </tr>
+      <tr>
+        <td>Platform</td>
+        <td><code class="language-plaintext highlighter-rouge">hivemind-database</code></td>
+        <td>Provision portable managed application data.</td>
+      </tr>
+    </tbody>
+  </table>
+
+</details>
 
 <p>Media Studio and Photo Keyworder use the same HivemindOS Agent Credit balance as every other paid SuperAgent capability. A successful media-generation request reports its reserved credit charge, failed work returns the reservation, completed work settles the exact charge, and an idempotent replay never debits the balance again. Photo analysis is charged only after the result completes. Responses expose the authoritative charge in <code class="language-plaintext highlighter-rouge">chargedCredits</code> and <code class="language-plaintext highlighter-rouge">X-HivemindOS-Credits-Charged</code>.</p>
 

@@ -577,9 +577,14 @@
             </button>
           </div>
         </div>
-        <h1 id="managed-databases">Managed Databases</h1>
+        <h1 id="managed-databases">Managed databases</h1>
 
-<p>The managed database API gives an application account-bound structured storage without exposing another account’s workspace or letting a caller claim a different subscription tier.</p>
+<p>Managed databases give your app a private place to store structured records, such as customers, tasks, inventory, or saved results. The data belongs to the authenticated account and project.</p>
+
+<div class="plainAnswer">
+  <strong>Most apps need only three actions</strong>
+  <p>Provision the workspace once, create a table, then read or change records. Portable workspace copies are available when you need backup or migration.</p>
+</div>
 
 <p>Use a key with:</p>
 
@@ -589,7 +594,7 @@
   <li><code class="language-plaintext highlighter-rouge">databases:write</code> for provisioning, changes, uploads, downloads, and cancellation.</li>
 </ul>
 
-<p>The generic <code class="language-plaintext highlighter-rouge">/services/hivemind-database/invoke</code> route is intentionally unavailable. Use the dedicated database endpoints so scopes, confirmations, file bounds, and workspace ownership are enforced consistently.</p>
+<p>Use the dedicated database methods in the SDK. They keep access, confirmation, file-size, and workspace rules consistent.</p>
 
 <h2 id="read-account-status-and-usage">Read account status and usage</h2>
 
@@ -757,19 +762,22 @@
 
 <p>Repeating the same confirmed request is safe and returns <code class="language-plaintext highlighter-rouge">active: false</code>.</p>
 
-<h2 id="copy-a-workspace-to-the-cloud">Copy a workspace to the cloud</h2>
+<details class="advancedDetails">
+  <summary>Advanced: move a portable workspace copy</summary>
 
-<p>Local-to-cloud copies use a ZIP archive no larger than 100 MB. The source workspace is preserved.</p>
+  <h2 id="copy-a-workspace-to-the-cloud">Copy a workspace to the cloud</h2>
 
-<ol>
-  <li>Calculate the archive byte length and lowercase SHA-256 hash.</li>
-  <li>Call <code class="language-plaintext highlighter-rouge">beginUpload</code> with the file metadata and exact confirmation.</li>
-  <li>Split the archive using the returned <code class="language-plaintext highlighter-rouge">partSize</code> and upload numbered parts starting at 1.</li>
-  <li>Call <code class="language-plaintext highlighter-rouge">completeUpload</code>.</li>
-  <li>Poll <code class="language-plaintext highlighter-rouge">getTransfer</code> until the copy is <code class="language-plaintext highlighter-rouge">complete</code> or <code class="language-plaintext highlighter-rouge">failed</code>.</li>
-</ol>
+  <p>Local-to-cloud copies use a ZIP archive no larger than 100 MB. The source workspace is preserved.</p>
 
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">started</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">databases</span><span class="p">.</span><span class="nx">beginUpload</span><span class="p">(</span>
+  <ol>
+    <li>Calculate the archive byte length and lowercase SHA-256 hash.</li>
+    <li>Call <code class="language-plaintext highlighter-rouge">beginUpload</code> with the file metadata and exact confirmation.</li>
+    <li>Split the archive using the returned <code class="language-plaintext highlighter-rouge">partSize</code> and upload numbered parts starting at 1.</li>
+    <li>Call <code class="language-plaintext highlighter-rouge">completeUpload</code>.</li>
+    <li>Poll <code class="language-plaintext highlighter-rouge">getTransfer</code> until the copy is <code class="language-plaintext highlighter-rouge">complete</code> or <code class="language-plaintext highlighter-rouge">failed</code>.</li>
+  </ol>
+
+  <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">started</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">databases</span><span class="p">.</span><span class="nx">beginUpload</span><span class="p">(</span>
   <span class="p">{</span>
     <span class="na">fileName</span><span class="p">:</span> <span class="dl">"</span><span class="s2">customer-workspace.zip</span><span class="dl">"</span><span class="p">,</span>
     <span class="na">expectedBytes</span><span class="p">:</span> <span class="nx">archive</span><span class="p">.</span><span class="nx">byteLength</span><span class="p">,</span>
@@ -800,13 +808,13 @@
   <span class="nx">migration</span><span class="p">.</span><span class="nx">id</span><span class="p">,</span>
   <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">workspace-upload-complete-2026-08-24</span><span class="dl">"</span> <span class="p">},</span>
 <span class="p">);</span>
-</code></pre></div></div>
+</code></pre></div>  </div>
 
-<p>Each part must be between 1 byte and 8 MB. Do not upload parts in a browser with a SuperAgent API key.</p>
+  <p>Each part must be between 1 byte and 8 MB. Do not upload parts in a browser with a SuperAgent API key.</p>
 
-<h2 id="copy-a-workspace-to-a-device">Copy a workspace to a device</h2>
+  <h2 id="copy-a-workspace-to-a-device">Copy a workspace to a device</h2>
 
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">started</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">databases</span><span class="p">.</span><span class="nx">beginDownload</span><span class="p">(</span>
+  <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">started</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">databases</span><span class="p">.</span><span class="nx">beginDownload</span><span class="p">(</span>
   <span class="p">{</span> <span class="na">confirmation</span><span class="p">:</span> <span class="nx">HIVEMINDOS_DATABASE_CONFIRMATIONS</span><span class="p">.</span><span class="nx">migrateToLocal</span> <span class="p">},</span>
   <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">workspace-download-2026-08-24</span><span class="dl">"</span> <span class="p">},</span>
 <span class="p">);</span>
@@ -818,11 +826,13 @@
 
 <span class="kd">const</span> <span class="nx">bytes</span> <span class="o">=</span> <span class="k">new</span> <span class="nb">Uint8Array</span><span class="p">(</span><span class="k">await</span> <span class="nx">response</span><span class="p">.</span><span class="nx">arrayBuffer</span><span class="p">());</span>
 <span class="kd">const</span> <span class="nx">expectedSha256</span> <span class="o">=</span> <span class="nx">response</span><span class="p">.</span><span class="nx">headers</span><span class="p">.</span><span class="kd">get</span><span class="p">(</span><span class="dl">"</span><span class="s2">X-Content-Sha256</span><span class="dl">"</span><span class="p">);</span>
-</code></pre></div></div>
+</code></pre></div>  </div>
 
-<p>Wait until <code class="language-plaintext highlighter-rouge">getTransfer</code> reports <code class="language-plaintext highlighter-rouge">archiveReady: true</code> before downloading. Verify the downloaded bytes against <code class="language-plaintext highlighter-rouge">X-Content-Sha256</code> before importing them. The response also includes <code class="language-plaintext highlighter-rouge">X-HivemindOS-Archive-Public-Key</code> for archive provenance.</p>
+  <p>Wait until <code class="language-plaintext highlighter-rouge">getTransfer</code> reports <code class="language-plaintext highlighter-rouge">archiveReady: true</code> before downloading. Verify the downloaded bytes against <code class="language-plaintext highlighter-rouge">X-Content-Sha256</code> before importing them. The response also includes <code class="language-plaintext highlighter-rouge">X-HivemindOS-Archive-Public-Key</code> for archive provenance.</p>
 
-<p>Transfers expire. Store the downloaded archive in your own controlled storage if it must remain available. Use <code class="language-plaintext highlighter-rouge">cancelTransfer</code> with an idempotency key when a copy is no longer needed.</p>
+  <p>Transfers expire. Store the downloaded archive in your own controlled storage if it must remain available. Use <code class="language-plaintext highlighter-rouge">cancelTransfer</code> with an idempotency key when a copy is no longer needed.</p>
+
+</details>
 
 <h2 id="database-errors">Database errors</h2>
 

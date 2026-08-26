@@ -577,11 +577,13 @@
             </button>
           </div>
         </div>
-        <h1 id="managed-memory-and-knowledge">Managed Memory And Knowledge</h1>
+        <h1 id="managed-memory-and-knowledge">Managed memory and knowledge</h1>
 
-<p>Cloud Superbrain is the hosted memory layer for products built on the SuperAgent API. It gives each HivemindOS account an isolated memory store with typed records, current and historical versions, lexical and semantic recall, grounded answers, knowledge links, portable capsules, and health checks. It does not require a desktop session or an Obsidian vault.</p>
+<p>Cloud Superbrain lets a hosted app remember useful context between calls. It can save facts and decisions, find them by words or meaning, answer from them with citations, and keep earlier versions when something changes.</p>
 
-<p>Use the <code class="language-plaintext highlighter-rouge">cloud-superbrain</code> service when another application needs to remember durable context between calls. The local Hive Superbrain remains the user-owned, vault-native experience; Cloud Superbrain is its managed API counterpart for hosted products.</p>
+<p>It does not need a desktop session or an Obsidian vault. Each HivemindOS account receives an isolated memory store.</p>
+
+<p>Use <code class="language-plaintext highlighter-rouge">cloud-superbrain</code> when your hosted product needs durable memory. Use the local Hive Superbrain when the user’s Obsidian vault should remain the editable source of truth.</p>
 
 <h2 id="choose-a-recall-mode">Choose a recall mode</h2>
 
@@ -622,13 +624,18 @@
 
 <p>Operational memories such as action and handoff receipts stay out of default recall so routine execution history does not crowd durable facts, preferences, and decisions. Request a specific operational <code class="language-plaintext highlighter-rouge">memoryType</code> or set <code class="language-plaintext highlighter-rouge">includeOperational: true</code> when that history is the subject of the lookup.</p>
 
-<h2 id="measured-quality-and-latency">Measured quality and latency</h2>
+<details class="advancedDetails">
+  <summary>Advanced: measured hosted and local recall results</summary>
 
-<p>The August 27, 2026 authenticated API benchmark used three fresh isolated hosted accounts. Every account passed all eight lexical behavior cases, all six semantic Top-1 cases, and all three grounded-answer cases, including aliases, current and historical evolution, usage ranking, operational isolation, paraphrases, and unsupported-question abstention. The equivalent local typed-memory cases also passed in every fresh run.</p>
+  <h2 id="measured-quality-and-latency">Measured quality and latency</h2>
 
-<p>Hosted recall is not as fast as the local vault path. Across the three hosted trials, the median trial p50 was about 0.53 seconds for lexical search, 4.89 seconds for semantic recall, and 5.93 seconds for grounded answers. The corresponding local lexical/API behavior trials had a median p50 of 7.85 milliseconds. A separate 48-distractor diagnostic kept every quality check passing and measured 0.43 seconds lexical p50, 1.67 seconds semantic p50, and 2.59 seconds answer p50, which also shows that hosted latency varies with request and service state.</p>
+  <p>The August 27, 2026 authenticated API benchmark used three fresh isolated hosted accounts. Every account passed all eight lexical behavior cases, all six semantic Top-1 cases, and all three grounded-answer cases, including aliases, current and historical evolution, usage ranking, operational isolation, paraphrases, and unsupported-question abstention. The equivalent local typed-memory cases also passed in every fresh run.</p>
 
-<p>These are measured product-path snapshots, not an availability or latency promise. The result supports quality parity on the published cases, not universal parity with every private vault. See <a href="../features/shared-brain-benchmarks.html">Shared Brain Memory Benchmarks</a> for corpus sizes, repetition counts, and limitations.</p>
+  <p>Hosted recall is not as fast as the local vault path. Across the three hosted trials, the median trial p50 was about 0.53 seconds for lexical search, 4.89 seconds for semantic recall, and 5.93 seconds for grounded answers. The corresponding local lexical/API behavior trials had a median p50 of 7.85 milliseconds. A separate 48-distractor diagnostic kept every quality check passing and measured 0.43 seconds lexical p50, 1.67 seconds semantic p50, and 2.59 seconds answer p50, which also shows that hosted latency varies with request and service state.</p>
+
+  <p>These are measured product-path snapshots, not an availability or latency promise. The result supports quality parity on the published cases, not universal parity with every private vault. See <a href="../features/shared-brain-benchmarks.html">Shared Brain Memory Benchmarks</a> for corpus sizes, repetition counts, and limitations.</p>
+
+</details>
 
 <h2 id="create-typed-memory">Create typed memory</h2>
 
@@ -737,183 +744,188 @@ not-found response and releases the credit reservation. You are not charged.</p>
 
 <p><code class="language-plaintext highlighter-rouge">memory.update</code> changes the current record in place. Use it for metadata or wording fixes that do not replace the underlying truth. <code class="language-plaintext highlighter-rouge">memory.delete</code> permanently removes a non-starter memory and requires an exact SuperAgent approval. An operation-only deletion key therefore needs <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.delete</code>, <code class="language-plaintext highlighter-rouge">approvals.create</code>, and <code class="language-plaintext highlighter-rouge">approvals.decide</code> in <code class="language-plaintext highlighter-rouge">allowedOperations</code>; include <code class="language-plaintext highlighter-rouge">apiKeys.revoke</code> only when the worker must also revoke its own key. Prefer <code class="language-plaintext highlighter-rouge">archived</code> or evolution when history still matters.</p>
 
-<h2 id="generations-and-historical-recall">Generations and historical recall</h2>
+<details class="advancedDetails">
+  <summary>Advanced: history, knowledge graphs, capsules, and the full operation map</summary>
 
-<p>Each write publishes an immutable generation receipt. Use:</p>
+  <h2 id="generations-and-historical-recall">Generations and historical recall</h2>
 
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">generations.list</code> to read retained generations and the visible replay boundary.</li>
-  <li><code class="language-plaintext highlighter-rouge">generations.compare</code> to find added, removed, and changed memory ids between two retained generations.</li>
-  <li><code class="language-plaintext highlighter-rouge">memory.recall</code> with <code class="language-plaintext highlighter-rouge">generationId</code> to replay a lexical question against a retained historical state.</li>
-  <li><code class="language-plaintext highlighter-rouge">temporalMode: "historical"</code> to include superseded and archived records, or <code class="language-plaintext highlighter-rouge">temporalMode: "as-of"</code> with <code class="language-plaintext highlighter-rouge">asOf</code> for a time cutoff.</li>
-</ul>
+  <p>Each write publishes an immutable generation receipt. Use:</p>
 
-<p>Cloud Superbrain retains up to 256 generations per account. A request outside the reported replay boundary fails instead of silently substituting newer memory.</p>
+  <ul>
+    <li><code class="language-plaintext highlighter-rouge">generations.list</code> to read retained generations and the visible replay boundary.</li>
+    <li><code class="language-plaintext highlighter-rouge">generations.compare</code> to find added, removed, and changed memory ids between two retained generations.</li>
+    <li><code class="language-plaintext highlighter-rouge">memory.recall</code> with <code class="language-plaintext highlighter-rouge">generationId</code> to replay a lexical question against a retained historical state.</li>
+    <li><code class="language-plaintext highlighter-rouge">temporalMode: "historical"</code> to include superseded and archived records, or <code class="language-plaintext highlighter-rouge">temporalMode: "as-of"</code> with <code class="language-plaintext highlighter-rouge">asOf</code> for a time cutoff.</li>
+  </ul>
 
-<h2 id="knowledge-nodes-and-backlinks">Knowledge nodes and backlinks</h2>
+  <p>Cloud Superbrain retains up to 256 generations per account. A request outside the reported replay boundary fails instead of silently substituting newer memory.</p>
 
-<p>Memories with type <code class="language-plaintext highlighter-rouge">knowledge</code>, a <code class="language-plaintext highlighter-rouge">knowledge</code> tag, or a path under <code class="language-plaintext highlighter-rouge">Synthesis/</code> become knowledge nodes. The registered operations are:</p>
+  <h2 id="knowledge-nodes-and-backlinks">Knowledge nodes and backlinks</h2>
 
-<table>
-  <thead>
-    <tr>
-      <th>Operation</th>
-      <th>Purpose</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">knowledge.search</code></td>
-      <td>Search knowledge-only records.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">knowledge.get</code></td>
-      <td>Read one knowledge node.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">knowledge.backlinks</code></td>
-      <td>Find memories connected through entities, aliases, and links.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">knowledge.graph</code></td>
-      <td>Read a bounded node-and-edge overview.</td>
-    </tr>
-  </tbody>
-</table>
+  <p>Memories with type <code class="language-plaintext highlighter-rouge">knowledge</code>, a <code class="language-plaintext highlighter-rouge">knowledge</code> tag, or a path under <code class="language-plaintext highlighter-rouge">Synthesis/</code> become knowledge nodes. The registered operations are:</p>
 
-<p>Use <code class="language-plaintext highlighter-rouge">entities</code>, <code class="language-plaintext highlighter-rouge">aliases</code>, and <code class="language-plaintext highlighter-rouge">links</code> consistently when another product needs dependable graph navigation.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Operation</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.search</code></td>
+        <td>Search knowledge-only records.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.get</code></td>
+        <td>Read one knowledge node.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.backlinks</code></td>
+        <td>Find memories connected through entities, aliases, and links.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.graph</code></td>
+        <td>Read a bounded node-and-edge overview.</td>
+      </tr>
+    </tbody>
+  </table>
 
-<h2 id="portable-capsules">Portable capsules</h2>
+  <p>Use <code class="language-plaintext highlighter-rouge">entities</code>, <code class="language-plaintext highlighter-rouge">aliases</code>, and <code class="language-plaintext highlighter-rouge">links</code> consistently when another product needs dependable graph navigation.</p>
 
-<p><code class="language-plaintext highlighter-rouge">capsules.export</code> returns a bounded, checksummed capsule for selected memory ids or the next page of the account. <code class="language-plaintext highlighter-rouge">capsules.import</code> verifies the schema and content hash before adding the records to the authenticated account. A capsule never grants access to its source account, and an import cannot overwrite another account’s memory.</p>
+  <h2 id="portable-capsules">Portable capsules</h2>
 
-<p>Export no more than 100 memories per capsule part. Follow <code class="language-plaintext highlighter-rouge">hasMore</code> and <code class="language-plaintext highlighter-rouge">nextCursor</code> until the export is complete. Keep the capsule private when its memories are private; its checksum detects corruption but is not encryption.</p>
+  <p><code class="language-plaintext highlighter-rouge">capsules.export</code> returns a bounded, checksummed capsule for selected memory ids or the next page of the account. <code class="language-plaintext highlighter-rouge">capsules.import</code> verifies the schema and content hash before adding the records to the authenticated account. A capsule never grants access to its source account, and an import cannot overwrite another account’s memory.</p>
 
-<h2 id="registered-operations">Registered operations</h2>
+  <p>Export no more than 100 memories per capsule part. Follow <code class="language-plaintext highlighter-rouge">hasMore</code> and <code class="language-plaintext highlighter-rouge">nextCursor</code> until the export is complete. Keep the capsule private when its memories are private; its checksum detects corruption but is not encryption.</p>
 
-<table>
-  <thead>
-    <tr>
-      <th>Operation</th>
-      <th>Method</th>
-      <th>Purpose</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">catalog.get</code></td>
-      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
-      <td>Read plans, limits, features, and current charges.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">memory.snapshot</code></td>
-      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
-      <td>Read the account’s current managed-memory snapshot.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">memory.get</code></td>
-      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
-      <td>Read one memory by id.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">memory.create</code></td>
-      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
-      <td>Create or upsert one memory.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">memory.update</code></td>
-      <td><code class="language-plaintext highlighter-rouge">PATCH</code></td>
-      <td>Update one current memory.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">memory.delete</code></td>
-      <td><code class="language-plaintext highlighter-rouge">DELETE</code></td>
-      <td>Permanently delete one memory after approval.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">memory.batch</code></td>
-      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
-      <td>Create up to 25 memories.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">memory.evolve</code></td>
-      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
-      <td>Create a new canonical head and supersede the old one.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">memory.search</code></td>
-      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
-      <td>Run lexical search.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">memory.recall</code></td>
-      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
-      <td>Run paid hybrid semantic recall.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">memory.answer</code></td>
-      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
-      <td>Return a paid grounded answer with citations.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">memory.usage</code></td>
-      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
-      <td>Record retrieved or final-answer use.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">memory.health</code></td>
-      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
-      <td>Read plan, index, generation, and usage health.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">index.rebuild</code></td>
-      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
-      <td>Rebuild indexes after an import or repair.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">generations.list</code></td>
-      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
-      <td>List retained immutable generations.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">generations.compare</code></td>
-      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
-      <td>Compare two retained generations.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">capsules.export</code></td>
-      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
-      <td>Export a checksummed capsule part.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">capsules.import</code></td>
-      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
-      <td>Verify and import a capsule part.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">knowledge.search</code></td>
-      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
-      <td>Search knowledge nodes.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">knowledge.get</code></td>
-      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
-      <td>Read one knowledge node.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">knowledge.backlinks</code></td>
-      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
-      <td>Read backlinks for a knowledge node.</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">knowledge.graph</code></td>
-      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
-      <td>Read a bounded knowledge graph.</td>
-    </tr>
-  </tbody>
-</table>
+  <h2 id="registered-operations">Registered operations</h2>
 
-<p>Restrict a worker key to only the operations it needs. For example, an answer-only service can allow <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.answer</code> and set a separate request limit on that exact selector.</p>
+  <table>
+    <thead>
+      <tr>
+        <th>Operation</th>
+        <th>Method</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">catalog.get</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read plans, limits, features, and current charges.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.snapshot</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read the account’s current managed-memory snapshot.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.get</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read one memory by id.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.create</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Create or upsert one memory.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.update</code></td>
+        <td><code class="language-plaintext highlighter-rouge">PATCH</code></td>
+        <td>Update one current memory.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.delete</code></td>
+        <td><code class="language-plaintext highlighter-rouge">DELETE</code></td>
+        <td>Permanently delete one memory after approval.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.batch</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Create up to 25 memories.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.evolve</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Create a new canonical head and supersede the old one.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.search</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Run lexical search.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.recall</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Run paid hybrid semantic recall.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.answer</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Return a paid grounded answer with citations.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.usage</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Record retrieved or final-answer use.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.health</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read plan, index, generation, and usage health.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">index.rebuild</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Rebuild indexes after an import or repair.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">generations.list</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>List retained immutable generations.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">generations.compare</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Compare two retained generations.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">capsules.export</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Export a checksummed capsule part.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">capsules.import</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Verify and import a capsule part.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.search</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Search knowledge nodes.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.get</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read one knowledge node.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.backlinks</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read backlinks for a knowledge node.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.graph</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read a bounded knowledge graph.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>Restrict a worker key to only the operations it needs. For example, an answer-only service can allow <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.answer</code> and set a separate request limit on that exact selector.</p>
+
+</details>
 
 <p>Next: <a href="authentication.html">create narrow API keys</a>, <a href="limits.html">set per-operation limits</a>, or <a href="../whole-brain/brain-services.html">use the local Hive Superbrain</a>.</p>
 

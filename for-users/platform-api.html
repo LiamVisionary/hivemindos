@@ -577,9 +577,27 @@
             </button>
           </div>
         </div>
-        <h1 id="hivemindos-superagent-api">HivemindOS SuperAgent API</h1>
+        <div class="heroPanel">
+  <div>
+    <p class="eyebrow">SuperAgent API</p>
 
-<p>The HivemindOS SuperAgent API gives another product the complete managed HivemindOS backend. Your server can call cloud agents and mini apps, run durable workflows, search and use customer-funded GPU capacity, use managed databases, create policy-controlled wallets, request approvals, execute transfers and spot trades, publish apps and content, and receive signed events. It does not control a user’s desktop or expose a desktop session.</p>
+    <h1 id="build-with-the-hivemindos-backend">Build with the HivemindOS backend</h1>
+
+    <p class="lede">Add agents, memory, data, wallets, trading, media, and workflows to your own product.</p>
+
+    <div class="actionRow">
+  <a href="#quickstart">Make your first call</a>
+  <a href="https://api.hivemindos.app/openapi.json">Open the API reference</a>
+</div>
+  </div>
+</div>
+
+<p>The HivemindOS SuperAgent API lets your server use managed HivemindOS features. It does <strong>not</strong> control a user’s computer or open a desktop session.</p>
+
+<div class="plainAnswer">
+  <strong>In plain English</strong>
+  <p>Your app sends a request, HivemindOS does the managed work, and your app receives the result. Paid work uses the same Agent Credit balance as the rest of HivemindOS.</p>
+</div>
 
 <table>
   <thead>
@@ -604,37 +622,62 @@
   </tbody>
 </table>
 
-<h2 id="what-you-can-build">What you can build</h2>
+<h2 id="choose-what-you-want-to-build">Choose what you want to build</h2>
 
-<ul>
-  <li>An agent product backed by HivemindOS research, swarms, memory, media, social, analytics, and automation services.</li>
-  <li>A hosted workflow system with durable runs, results, approvals, and webhooks.</li>
-  <li>An application with portable managed databases and account-bound access controls.</li>
-  <li>A hosted agent with typed, evolving memory, semantic recall, grounded answers, knowledge links, and portable memory capsules.</li>
-  <li>A wallet or trading experience where your application never receives raw wallet keys.</li>
-  <li>An agent that searches the Hive Compute marketplace, chooses Standard or Confidential Verified execution, and pays from the user’s existing HivemindOS credits.</li>
-  <li>A restricted integration key that can reach only selected services and has separate limits for individual operations.</li>
-</ul>
+<div class="docGrid">
+  <div class="docCard">
+    <h3>Give your app an agent</h3>
+    <p>Run research, swarms, mini apps, media work, publishing, analytics, and scheduled workflows.</p>
+    <a href="platform-api/services.html">Browse managed services</a>
+  </div>
+  <div class="docCard">
+    <h3>Add long-term memory</h3>
+    <p>Save facts and decisions, find them later, answer from them, and keep a clear history.</p>
+    <a href="platform-api/memory.html">Use managed memory</a>
+  </div>
+  <div class="docCard">
+    <h3>Store application data</h3>
+    <p>Provision a managed database, read and change records, and move a portable copy when needed.</p>
+    <a href="platform-api/databases.html">Use managed databases</a>
+  </div>
+  <div class="docCard">
+    <h3>Build safer money flows</h3>
+    <p>Create managed wallets, ask for approvals, and submit bounded transfers, signatures, and spot trades.</p>
+    <a href="platform-api/wallets-trading.html">Use wallets and trading</a>
+  </div>
+  <div class="docCard">
+    <h3>Run work in the background</h3>
+    <p>Give long jobs a durable status, save their results, and notify your app with signed webhooks.</p>
+    <a href="platform-api/runs-webhooks.html">Use runs and webhooks</a>
+  </div>
+  <div class="docCard">
+    <h3>Control exactly what a key can do</h3>
+    <p>Allow only selected services and actions, then set request and spending limits for each endpoint.</p>
+    <a href="platform-api/authentication.html">Create a restricted key</a>
+  </div>
+</div>
 
-<p>The managed catalog currently spans 31 stable service ids across agents, mini
-apps, data, media, integrations, finance, and platform services. The API key,
-project, operation policy, endpoint limits, idempotency, usage history, and
-credit balance stay consistent across the whole suite.</p>
+<details class="advancedDetails">
+  <summary>Advanced: how the complete catalog stays predictable</summary>
 
-<p>The authenticated service catalog and capability registry are the source of truth. Each service entry includes its status and capability URL. Each capability has a stable operation id, exact access selector, request method, path template, approval mode, and run support.</p>
+  <p>The managed catalog currently spans 31 stable service ids across agents, mini apps, data, media, integrations, finance, and platform services. API-key policy, projects, endpoint limits, retry safety, usage history, and Agent Credits work consistently across the suite.</p>
+
+  <p>The authenticated service catalog and capability registry are the source of truth. Each service entry includes its status and capability URL. Each capability has a stable operation id, exact access selector, request method, path template, approval mode, and run support.</p>
+
+</details>
 
 <h2 id="quickstart">Quickstart</h2>
 
-<h3 id="1-install-the-typescript-sdk">1. Install the TypeScript SDK</h3>
+<h3 id="install-the-typescript-sdk">Install the TypeScript SDK</h3>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>npm <span class="nb">install</span> @hivemindos/sdk
 </code></pre></div></div>
 
 <p>The API also works with any HTTPS client. All examples use JSON unless a database archive is being uploaded or downloaded.</p>
 
-<h3 id="2-create-the-first-api-key">2. Create the first API key</h3>
+<h3 id="create-the-first-api-key">Create the first API key</h3>
 
-<p>Use an existing HivemindOS credit token once to bootstrap a SuperAgent API key. The example limits the key to research and managed databases, then adds both a key-wide limit and narrower operation limits.</p>
+<p>Use an existing HivemindOS credit token once to create a SuperAgent API key. The key below can use research and managed databases, but nothing else.</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">createHivemindOSApiKey</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@hivemindos/sdk</span><span class="dl">"</span><span class="p">;</span>
 
@@ -677,7 +720,7 @@ credit balance stay consistent across the whole suite.</p>
 
 <p>Keys begin with <code class="language-plaintext highlighter-rouge">hmos_live_</code>. Never place one in a browser bundle, mobile binary, public repository, log, or analytics event.</p>
 
-<h3 id="3-call-the-api">3. Call the API</h3>
+<h3 id="call-the-api">Call the API</h3>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">HivemindOSClient</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@hivemindos/sdk</span><span class="dl">"</span><span class="p">;</span>
 
@@ -706,7 +749,7 @@ credit balance stay consistent across the whole suite.</p>
 
 <p>Every mutation and spending action also requires a unique <code class="language-plaintext highlighter-rouge">Idempotency-Key</code> header.</p>
 
-<h2 id="response-envelope">Response envelope</h2>
+<h2 id="read-the-result">Read the result</h2>
 
 <p>JSON endpoints return a stable success or failure envelope:</p>
 
@@ -722,15 +765,15 @@ credit balance stay consistent across the whole suite.</p>
 </span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
-<p>Some failures add machine-readable fields such as <code class="language-plaintext highlighter-rouge">code</code>, <code class="language-plaintext highlighter-rouge">operationId</code>, <code class="language-plaintext highlighter-rouge">metric</code>, and <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code>. Do not decide success from the HTTP status alone; check <code class="language-plaintext highlighter-rouge">ok</code> as well.</p>
+<p>Check <code class="language-plaintext highlighter-rouge">ok</code> before reading the result. Failures may also include <code class="language-plaintext highlighter-rouge">code</code>, <code class="language-plaintext highlighter-rouge">operationId</code>, <code class="language-plaintext highlighter-rouge">metric</code>, and <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code> so your app can choose the right next action.</p>
 
-<h2 id="account-credits-and-wallet-assets">Account credits and wallet assets</h2>
+<h2 id="understand-payment">Understand payment</h2>
 
-<p>Every API key belongs to one HivemindOS account. Managed API charges use that account’s existing HivemindOS credit balance. A request cannot select another payer, submit its own price, or claim a different plan.</p>
+<p>Every API key belongs to one HivemindOS account. Paid API work uses that account’s Agent Credits. A request cannot charge a different account or choose its own price.</p>
 
-<p>Managed database capacity is included with eligible Plus, Pro, and Max subscriptions and follows the account’s plan limits. Wallet assets are separate from HivemindOS credits: credits pay for managed API work, while assets held by a managed wallet pay for transfers, network fees, and trades.</p>
+<p>Managed database capacity follows the account’s eligible plan. Wallet assets are separate: Agent Credits pay for managed work, while wallet assets pay transfer amounts, network fees, and trades.</p>
 
-<p>Use <code class="language-plaintext highlighter-rouge">GET /pricing</code> for the current server-owned price catalog and <code class="language-plaintext highlighter-rouge">GET /credits/balance</code> for the authenticated account balance. Show the returned final or maximum price to the account owner before a paid action.</p>
+<p>Use <code class="language-plaintext highlighter-rouge">GET /pricing</code> for the current price and <code class="language-plaintext highlighter-rouge">GET /credits/balance</code> for the current balance. Show the returned final or maximum price before paid work starts.</p>
 
 <h2 id="continue">Continue</h2>
 
