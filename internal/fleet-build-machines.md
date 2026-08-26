@@ -26,6 +26,8 @@ Managed runner setup currently supports Apple silicon macOS. Windows and Linux m
 
 The hub asks GitHub for the current compatible runner package and checksum. The collector accepts only an HTTPS archive from the official Actions runner release path, verifies the SHA-256 digest, rejects path traversal in the archive, configures argument by argument without a shell, and installs the per-user service under the private HivemindOS build-runner directory. The repository selector is derived by the server; a browser request cannot substitute an arbitrary download or command.
 
+Because a Hive builder is persistent rather than a disposable hosted runner, every macOS release job snapshots the user's existing keychain search list before importing its temporary signing identity. An unconditional final step restores that list and deletes the temporary certificate and keychain even when compilation, signing, notarization, smoke testing, or artifact upload fails.
+
 Each machine receives a stable opaque label derived from its Hive machine identity. The source workflow reads the repository's selected macOS label. If none is selected it uses the hosted macOS runner; if a selected Hive runner later goes offline, source resolution fails quickly instead of leaving a release queued indefinitely.
 
 ## Candidate and promotion flow
