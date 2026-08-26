@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>macOS code signing &amp; notarization | HivemindOS Docs</title>
+  <title>Fleet build machines | HivemindOS Docs</title>
   <meta name="description" content="Local-first agent fleet control room documentation.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -577,88 +577,64 @@
             </button>
           </div>
         </div>
-        <h1 id="macos-code-signing--notarization">macOS code signing &amp; notarization</h1>
+        <h1 id="fleet-build-machines">Fleet build machines</h1>
 
-<p>The HivemindOS desktop app must be <strong>Developer ID signed and notarized</strong> so it
-has a <em>stable code identity</em>. This is the foundation for the “pair your phone”
-file-access feature: macOS attaches Files-and-Folders / Full Disk Access grants
-to a code identity, so an unsigned (ad-hoc) app loses the grant on every update.
-Signing also removes the Gatekeeper “unidentified developer” warning.</p>
+<p>HivemindOS can assign a connected Hive computer to build work without turning its general remote shell into a build scheduler. Assignment, runner connection, release selection, and publication are separate states with separate recovery paths.</p>
 
-<p><strong>This project’s team:</strong> Rizzma Inc — <strong>Team ID <code class="language-plaintext highlighter-rouge">L7XLLTV3X7</code></strong> (the same team the
-Claw / HivemindOS Mobile iOS app is signed under). The Developer ID Application
-certificate and the notarization Apple ID below must belong to this team.</p>
-
-<h2 id="one-time-prerequisites-apple-developer-account">One-time prerequisites (Apple Developer account)</h2>
+<h2 id="operator-flow">Operator flow</h2>
 
 <ol>
-  <li><strong>Developer ID Application certificate</strong> — create it in the Apple Developer
-portal (or Xcode → Settings → Accounts → Manage Certificates → +). Export it
-from Keychain Access as a <code class="language-plaintext highlighter-rouge">.p12</code> with a password.</li>
-  <li><strong>App-specific password</strong> for notarization — create at appleid.apple.com →
-Sign-In and Security → App-Specific Passwords.</li>
-  <li><strong>Team ID</strong> — the 10-character ID from the Apple Developer membership page.</li>
+  <li>Open <strong>Fleet</strong>, select a connected computer, then open <strong>Machine settings → Builds</strong>.</li>
+  <li>Claim the machine from <strong>Authority</strong> if this hub does not already manage it.</li>
+  <li>Turn on <strong>Use this machine for builds</strong>, choose project and/or release work, keep parallel jobs at one until the machine has measured headroom, and save.</li>
+  <li>On a remote Apple silicon Mac, enable <strong>HivemindOS macOS releases</strong> and save. If the Builds panel asks for GitHub, connect it there and return to the still-open machine settings.</li>
+  <li>Choose <strong>Connect release jobs</strong>, then wait for the card to report both the machine service and release scheduler as ready. <strong>Verify connection</strong> completes selection if registration finished after the first request.</li>
 </ol>
 
-<h2 id="release-automation--repository-secrets">Release automation — repository secrets</h2>
+<p>Assignment is stored by the target collector in its existing machine policy. A version 1 policy migrates to version 2 with all build permissions off. No upgrade can opt a machine into builds implicitly.</p>
 
-<p>The release-candidate workflow already passes these to the macOS packaging job. Add them as repository secrets:</p>
+<h2 id="authority-and-transport">Authority and transport</h2>
 
-<table>
-  <thead>
-    <tr>
-      <th>Secret</th>
-      <th>Value</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">APPLE_CERTIFICATE</code></td>
-      <td>base64 of the <code class="language-plaintext highlighter-rouge">.p12</code>: <code class="language-plaintext highlighter-rouge">base64 -i DeveloperID.p12 \| pbcopy</code></td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">APPLE_CERTIFICATE_PASSWORD</code></td>
-      <td>the password you set when exporting the <code class="language-plaintext highlighter-rouge">.p12</code></td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">APPLE_SIGNING_IDENTITY</code></td>
-      <td>e.g. <code class="language-plaintext highlighter-rouge">Developer ID Application: Rizzma Inc (L7XLLTV3X7)</code></td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">APPLE_ID</code></td>
-      <td>the Apple ID email that’s a member of the Rizzma Inc team</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">APPLE_PASSWORD</code></td>
-      <td>the app-specific password from step 2</td>
-    </tr>
-    <tr>
-      <td><code class="language-plaintext highlighter-rouge">APPLE_TEAM_ID</code></td>
-      <td><code class="language-plaintext highlighter-rouge">L7XLLTV3X7</code></td>
-    </tr>
-  </tbody>
-</table>
+<ul>
+  <li>The authenticated dashboard route accepts only Fleet collector URLs.</li>
+  <li>The target collector requires a loopback caller or a Hivemind Link request stamped with the verified Tailnet owner and node identity.</li>
+  <li>Only the machine’s claimed master hub can change build policy or connect or disconnect a runner.</li>
+  <li>Release setup refuses the hub’s own local collector. A release computer must be assigned remotely.</li>
+  <li>The hub uses the existing shared GitHub connection server-side; the browser never receives its credential. Runner registration and removal approvals are short-lived. They are sent directly to the selected collector and are never written to policy, runner state, logs, responses, or Shared Brain Memory.</li>
+</ul>
 
-<p>Published candidates require all six values. Missing signing or notarization setup stops the candidate before promotion.</p>
+<h2 id="runner-installation-contract">Runner installation contract</h2>
 
-<p>An Apple silicon Mac connected in Fleet can be assigned from <strong>Machine settings → Builds</strong> and connected for macOS release jobs. Until a connected machine is selected and online, release candidates use the hosted macOS builder. Windows and Linux packages continue on hosted builders.</p>
+<p>Managed runner setup currently supports Apple silicon macOS. Windows and Linux machines can be assigned for future project routing, but HivemindOS desktop release jobs continue to use hosted Windows and Linux runners and Azure Windows signing.</p>
 
-<p>Building and publishing are separate. <strong>Tauri Release Candidate</strong> creates and verifies the packages. <strong>Tauri Release Promotion</strong> accepts a successful candidate run, rechecks every package against its recorded checksum, and publishes without rebuilding.</p>
+<p>The hub asks GitHub for the current compatible runner package and checksum. The collector accepts only an HTTPS archive from the official Actions runner release path, verifies the SHA-256 digest, rejects path traversal in the archive, configures argument by argument without a shell, and installs the per-user service under the private HivemindOS build-runner directory. The repository selector is derived by the server; a browser request cannot substitute an arbitrary download or command.</p>
 
-<h2 id="local-signed-build-to-test-the-phone-pairing-file-access-on-your-mac">Local signed build (to test the phone-pairing file access on your Mac)</h2>
+<p>Each machine receives a stable opaque label derived from its Hive machine identity. The source workflow reads the repository’s selected macOS label. If none is selected it uses the hosted macOS runner; if a selected Hive runner later goes offline, source resolution fails quickly instead of leaving a release queued indefinitely.</p>
 
-<p>You don’t need notarization locally — signing alone gives the stable TCC
-identity. Make sure the <strong>Developer ID Application</strong> cert is in your login
-keychain (Xcode → Settings → Accounts, or import the <code class="language-plaintext highlighter-rouge">.p12</code>), then:</p>
+<h2 id="candidate-and-promotion-flow">Candidate and promotion flow</h2>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nb">export </span><span class="nv">APPLE_SIGNING_IDENTITY</span><span class="o">=</span><span class="s2">"Developer ID Application: Your Name (TEAMID)"</span>
-pnpm tauri:build
-</code></pre></div></div>
+<p>The release process has two outward states:</p>
 
-<p>Open the built app from <code class="language-plaintext highlighter-rouge">src-tauri/target/release/bundle/macos/HivemindOS.app</code>.
-Because it’s signed with a stable identity, the macOS file-access grant you
-give it will persist across rebuilds (as long as the signing identity is the
-same), which is what makes the one-click “Allow” experience reliable.</p>
+<ol>
+  <li><strong>Tauri Release Candidate</strong> verifies that the exact 40-character source SHA already has a successful complete CI workflow, builds the shared embedded web payload once, builds platform packages, signs and notarizes them, and seals their names, sizes, and SHA-256 hashes in <code class="language-plaintext highlighter-rouge">release-candidate.json</code>.</li>
+  <li><strong>Tauri Release Promotion</strong> takes a successful candidate run id inside the protected <code class="language-plaintext highlighter-rouge">desktop-release</code> environment, verifies the originating workflow and every recorded artifact, then creates the source tag and release. Promotion never recompiles.</li>
+</ol>
+
+<p>Linux native test compilation is part of CI rather than the packaging critical path. Hosted Windows and Linux each run Complete Hub and Link as separate parallel jobs with product-specific Rust caches. macOS keeps Hub and Link together because a single protected Mac runner deliberately accepts only one release job at a time.</p>
+
+<h2 id="recovery">Recovery</h2>
+
+<ul>
+  <li>Turning build assignment off stops eligibility but does not remove the runner service.</li>
+  <li><strong>Disconnect release jobs</strong> stops and unregisters the runner, then renames its folder to a timestamped recovery copy instead of deleting it.</li>
+  <li>If registration fails after extraction, the incomplete directory is renamed with a <code class="language-plaintext highlighter-rouge">.failed-&lt;timestamp&gt;</code> suffix and a later connection can start cleanly.</li>
+  <li>Clearing or changing the repository’s selected macOS label returns future candidates to the hosted macOS fallback. An assigned but unselected runner cannot receive the release job.</li>
+  <li>A candidate is immutable and retained for 14 days. Re-run promotion with the same candidate when only publication failed; rebuild only when an artifact, source, signing, or notarization gate failed.</li>
+</ul>
+
+<h2 id="verification-boundary">Verification boundary</h2>
+
+<p>Local tests cover schema migration, master-hub enforcement, collector health and status, archive and checksum guards, token non-persistence, recoverable disconnect, GitHub package-shape handling, candidate hashing and tamper detection, workflow syntax, and release contracts. These tests do not claim an actual macOS package was built on the development Mac. Final infrastructure proof requires one connected remote Apple silicon runner, one candidate run at an exact green CI SHA, receipt of the job on that runner, and a promotion of the same candidate without compilation.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -676,7 +652,7 @@ same), which is what makes the one-click “Allow” experience reliable.</p>
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/macos-code-signing.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/internal/fleet-build-machines.md">Improve this page ↗</a>
     </aside>
   </div>
 
