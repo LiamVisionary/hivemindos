@@ -608,6 +608,10 @@
       <td>Chooses the correct Bankr skill, app, x402, Wallet/Agent API, and always-on hosting boundaries, then packages, publishes, installs, updates, and verifies the capability end to end.</td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">bankr-app-development</code></td>
+      <td>Creates, tests, publishes, shares, and repairs Bankr apps across the iframe SDK, backend scripts, permissions, identity, app state, schedules, secrets, x402 actions, hosted shells, live verification, and rollback.</td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">create-zero-human-company</code></td>
       <td>Creates a durable company from a business goal or existing repository, adds an available crew, measurable apex goal, products, budgets, and approval policies, verifies the saved record, and leaves autonomy stopped until the operator explicitly launches it.</td>
     </tr>
@@ -730,11 +734,18 @@ hive-capability-search <span class="nt">--live</span> <span class="s2">"task or 
 
 <p>The skill includes package/version verification, public-GitHub and Bankr Agent API installation gates, names-only secret handling, direct Wallet API versus asynchronous Agent API guidance, and real-path x402 schema/payment verification. It also captures the managed copy trader’s durable integration rules: existing Shared Hive Env selections continue without being re-saved, new variables use Save, company restrictions require a validated company task, and post-trade fees settle only after independent transaction verification.</p>
 
+<h2 id="bankr-app-development">Bankr App Development</h2>
+
+<p><code class="language-plaintext highlighter-rouge">bankr-app-development</code> is the default build-and-release playbook for Bankr-hosted interfaces. It covers Bankr’s sandboxed iframe, top-level server scripts, minimum-permission manifests, owner/viewer identity, public app snapshots, schedules, secret setup, host-confirmed transactions, visitor-paid x402 calls, sharing, and forking.</p>
+
+<p>For complex interfaces it also documents the cache-resistant pattern proven by Agentic Copytrader: a small stable Bankr bootstrap loads a content-versioned hosted shell, while the release verifies Bankr file hashes, the runnable bootstrap, the hosted shell, a live script, the app route, and a screenshot. Releases capture the previous Bankr payload and hosted Worker version so both can be restored together, and a repeat release must be a true no-op.</p>
+
 <h2 id="source-of-truth">Source Of Truth</h2>
 
 <p>The repository source is:</p>
 
 <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>packaged-skills/auto-install/bankr-skill-deployment/SKILL.md
+packaged-skills/auto-install/bankr-app-development/SKILL.md
 packaged-skills/auto-install/photo-library-keyworder/SKILL.md
 packaged-skills/auto-install/create-zero-human-company/SKILL.md
 packaged-skills/auto-install/hive-assimilate/SKILL.md
@@ -754,6 +765,7 @@ packaged-skills/auto-install/wrapup/SKILL.md
 <p>Setup mirrors it into the shared brain at:</p>
 
 <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Skills/bankr-skill-deployment/SKILL.md
+Skills/bankr-app-development/SKILL.md
 Skills/photo-library-keyworder/SKILL.md
 Skills/create-zero-human-company/SKILL.md
 Skills/hive-assimilate/SKILL.md

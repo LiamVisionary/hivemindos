@@ -620,6 +620,16 @@
 
 <p>Semantic indexing runs when memory changes, so there is no idle compute charge to keep a model running. A newly written memory is immediately available to lexical search and becomes eligible for Semantic Recall after its index status is ready. Use <code class="language-plaintext highlighter-rouge">memory.health</code> when a workflow must confirm that state.</p>
 
+<p>Operational memories such as action and handoff receipts stay out of default recall so routine execution history does not crowd durable facts, preferences, and decisions. Request a specific operational <code class="language-plaintext highlighter-rouge">memoryType</code> or set <code class="language-plaintext highlighter-rouge">includeOperational: true</code> when that history is the subject of the lookup.</p>
+
+<h2 id="measured-quality-and-latency">Measured quality and latency</h2>
+
+<p>The August 27, 2026 authenticated API benchmark used three fresh isolated hosted accounts. Every account passed all eight lexical behavior cases, all six semantic Top-1 cases, and all three grounded-answer cases, including aliases, current and historical evolution, usage ranking, operational isolation, paraphrases, and unsupported-question abstention. The equivalent local typed-memory cases also passed in every fresh run.</p>
+
+<p>Hosted recall is not as fast as the local vault path. Across the three hosted trials, the median trial p50 was about 0.53 seconds for lexical search, 4.89 seconds for semantic recall, and 5.93 seconds for grounded answers. The corresponding local lexical/API behavior trials had a median p50 of 7.85 milliseconds. A separate 48-distractor diagnostic kept every quality check passing and measured 0.43 seconds lexical p50, 1.67 seconds semantic p50, and 2.59 seconds answer p50, which also shows that hosted latency varies with request and service state.</p>
+
+<p>These are measured product-path snapshots, not an availability or latency promise. The result supports quality parity on the published cases, not universal parity with every private vault. See <a href="../features/shared-brain-benchmarks.html">Shared Brain Memory Benchmarks</a> for corpus sizes, repetition counts, and limitations.</p>
+
 <h2 id="create-typed-memory">Create typed memory</h2>
 
 <p>Only <code class="language-plaintext highlighter-rouge">title</code> and <code class="language-plaintext highlighter-rouge">contentText</code> are needed for a basic Markdown memory. Add a stable <code class="language-plaintext highlighter-rouge">memoryKey</code> when later calls should update one canonical subject instead of creating unrelated records.</p>

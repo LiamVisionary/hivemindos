@@ -7,6 +7,7 @@ HivemindOS is an ACP v1 client for local background-agent sessions. The bundled 
 - Stable ACP v1 only. The client rejects a negotiated protocol version it does not support.
 - Local stdio transport only. Remote machines continue through Hivemind Link and the authenticated collector boundary; draft remote ACP transports are not used.
 - New sessions, resume, load fallback, streamed session updates, prompt completion, and cancellation.
+- Stable session-scoped stdio MCP descriptors on new, resumed, and loaded sessions. HTTP, SSE, and experimental MCP-over-ACP descriptors are sent only when the agent advertises their respective capability.
 - Plans, message and thought chunks, tool-call lifecycle, mode changes, session information, command discovery, configuration changes, usage, and compaction updates are accepted. Customer run logs retain only useful progress and result text.
 - Permission requests, workspace-confined text-file access, and governed terminal create/output/wait/kill/release requests.
 
@@ -17,7 +18,7 @@ The reusable client is under `src/lib/services/agent-client-protocol`. Runtime a
 1. Resolve and verify the requested working directory.
 2. Spawn the local agent with separate protocol output and diagnostic error streams.
 3. Negotiate ACP v1 and advertise only the client capabilities allowed for the task.
-4. Create a new agent session, or resume/load the recorded session when a prior run is continued.
+4. Project the task's compact MCP server descriptors into the new, resumed, or loaded session, then create or attach to that session. Tool catalogs and schemas remain behind the runtime's MCP discovery mode rather than entering the model prompt.
 5. Apply the selected model through the session's standard `model` configuration option when the agent exposes one. This prevents a reused agent daemon from silently retaining another task's model.
 6. Persist the agent-owned session identifier with the private run record.
 7. Stream useful progress into the existing run log and evaluate the completed output through the existing completion gate. An exit-zero or `end_turn` response with no usable result is a failure, not a completed task.
@@ -33,12 +34,17 @@ If negotiation fails before a session starts, HivemindOS automatically invokes t
 - Permission responses prefer one-time decisions. The client never silently upgrades a request to an always-allow grant.
 - Terminal commands are spawned directly without a shell. Output is bounded, retains valid UTF-8, and truncates from the beginning as required by ACP.
 - Agent diagnostics stay on the private server log. The task receipt and customer run log do not expose executable paths, protocol messages, credentials, or stored session identifiers.
+- A session MCP descriptor receives only the scoped agent identity and local routing values it needs. Dashboard signing, device, bootstrap, and test credentials are never projected. Retained runtime configuration contains no token.
+
+## Bundled Runtime Compatibility
+
+The pinned JCode `v0.79.1` implements ACP lifecycle and validates that `mcpServers` is an array, but its source explicitly ignores session-scoped MCP entries. Current upstream source still has the same limitation. HivemindOS therefore materializes the canonical Hivemind stdio descriptor into each private JCode task home before the ACP session starts; the MCP child inherits the per-run agent token from the already-sanitized process environment. This is task-scoped and automatic, so the managed agent path does not depend on setup-time harness registration. When JCode consumes ACP session MCP, remove this compatibility delivery only after the ACP end-to-end probe passes against the staged sidecar and confirms one server instance.
 
 ## Recovery And Operator Controls
 
 Set `HIVEMINDOS_AGENT_CLIENT_PROTOCOL=off` before the dashboard starts to keep bundled tasks on the compatibility runner. A single task action may also pass `compatibilityMode: true`. Neither control changes stored workspaces or session history.
 
-Use the focused contract with `pnpm test:agent-client-protocol`. It runs a real stdio exchange against a hermetic agent fixture and covers capability negotiation, update mapping, permissions, file confinement, symlink rejection, terminal lifecycle, cancellation, persistence, and resume. `pnpm test:jcode-runtime-integration` separately proves that an older engine which cannot negotiate ACP recovers through the established command.
+Use the focused contract with `pnpm test:agent-client-protocol`. It runs a real stdio exchange against a hermetic agent fixture and covers capability negotiation, update mapping, permissions, file confinement, symlink rejection, terminal lifecycle, cancellation, persistence, resume, unsupported MCP transports, and an ACP-session launch of the real Hivemind MCP server against a fake authenticated dashboard. `pnpm test:jcode-runtime-integration` proves the bundled runtime stays on ACP, starts from no setup-time registration, receives a private automatic Hivemind MCP server, keeps deferred `mcp_search`/`mcp_call` exposure, and traverses that exact private config through the real MCP process to an authenticated fake dashboard without persisting a credential.
 
 Run `pnpm test:e2e:agent-client-protocol` when the bundled sidecar is staged. It negotiates with that exact executable, creates and closes an isolated temporary session, and deliberately sends no model prompt.
 

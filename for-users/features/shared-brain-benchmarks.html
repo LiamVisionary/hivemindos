@@ -628,6 +628,11 @@
       <td>400 sequential measured requests after warmup; 8/8 behavior checks passed</td>
     </tr>
     <tr>
+      <td>Hosted SuperAgent API memory</td>
+      <td style="text-align: right"><strong>8/8 lexical, 6/6 semantic, 3/3 grounded answers</strong></td>
+      <td>Three fresh hosted accounts; median trial p50 was 0.53s lexical, 4.89s semantic, and 5.93s answer</td>
+    </tr>
+    <tr>
       <td>Indexed typed memory at 1,500 records</td>
       <td style="text-align: right"><strong>27.16ms p50, 33.63ms p95</strong></td>
       <td>200-query synthetic scale corpus; Top-1/Top-3/MRR 1.00/1.00/1.00</td>
@@ -974,6 +979,47 @@
 </table>
 
 <p>This is a same-machine product-path benchmark, not a hosted-service latency promise. Hardware, vault shape, filesystem load, sync activity, and development versus production builds can change absolute timing.</p>
+
+<h3 id="hosted-superagent-api-memory">Hosted SuperAgent API memory</h3>
+
+<p>Cloud Superbrain was tested separately through the authenticated public SuperAgent API on August 27, 2026. Three fresh isolated accounts each received the same typed-memory behavior corpus and were measured for three repetitions after warmup.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Hosted path</th>
+      <th style="text-align: right">Quality result in every trial</th>
+      <th style="text-align: right">Median of trial p50s</th>
+      <th style="text-align: right">Trial p50 range</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Lexical search</td>
+      <td style="text-align: right">8/8 behavior cases</td>
+      <td style="text-align: right">534.48ms</td>
+      <td style="text-align: right">448.99–663.90ms</td>
+    </tr>
+    <tr>
+      <td>Hybrid semantic recall</td>
+      <td style="text-align: right">6/6 Top-1 cases</td>
+      <td style="text-align: right">4,894.42ms</td>
+      <td style="text-align: right">4,514.84–4,921.65ms</td>
+    </tr>
+    <tr>
+      <td>Grounded answer</td>
+      <td style="text-align: right">3/3 cases</td>
+      <td style="text-align: right">5,931.26ms</td>
+      <td style="text-align: right">5,290.64–6,245.85ms</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The three corresponding fresh local behavior runs passed 8/8 cases and 6/6 ranked Top-1 cases. Their median trial p50 was 7.85ms and their median trial p95 was 11.63ms. On this corpus, hosted recall matched the tested local behavior but did not match local latency.</p>
+
+<p>A separate scale diagnostic added 48 adversarial archive memories that reused coordinator, proof, and release terminology. The hosted corpus contained 57 memories and the local corpus contained 55 because the hosted test also carried two knowledge nodes for semantic-answer grading. Both paths kept every published behavior case correct. The single hosted run measured 431.67ms lexical p50, 1,674.67ms semantic p50, and 2,594.36ms answer p50; the repetition-matched local lexical run measured 14.48ms p50. This one scaled run is evidence that the distractors did not displace the expected memories, not a statistically powered scale or speed comparison.</p>
+
+<p>The hosted quality cases cover entity and alias lookup, canonical evolution heads, explicit history, usage-signal ranking, operational-memory isolation, semantic paraphrases, grounded citations, and negative abstention. They do not upload or reproduce a private Obsidian vault, and they do not establish universal recall parity across arbitrary customer data. Hosted timings include internet transit, account isolation, metering, durable storage, and any paid semantic or answer work; local timings stay on the machine.</p>
 
 <h2 id="typed-memory-at-scale">Typed Memory At Scale</h2>
 

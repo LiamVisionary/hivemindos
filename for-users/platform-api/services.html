@@ -803,6 +803,8 @@
   </tbody>
 </table>
 
+<p>Media Studio and Photo Keyworder use the same HivemindOS Agent Credit balance as every other paid SuperAgent capability. A successful media-generation request reports its reserved credit charge, failed work returns the reservation, completed work settles the exact charge, and an idempotent replay never debits the balance again. Photo analysis is charged only after the result completes. Responses expose the authoritative charge in <code class="language-plaintext highlighter-rouge">chargedCredits</code> and <code class="language-plaintext highlighter-rouge">X-HivemindOS-Credits-Charged</code>.</p>
+
 <h2 id="invoke-a-service-directly">Invoke a service directly</h2>
 
 <p>Generic managed services use one SuperAgent API front door:</p>
@@ -853,6 +855,25 @@
 <p>Managed databases, wallets, and trading use dedicated Platform endpoints instead of the generic invocation route. Those endpoints provide narrower scopes and safer request contracts.</p>
 
 <p>Cloud Superbrain uses registered operations for typed memory, evolution, lexical search, paid semantic recall, grounded answers, generations, capsules, and knowledge graphs. See <a href="memory.html">managed memory and knowledge</a> for the complete operation map and request examples.</p>
+
+<p>Distillation is also fully operable through registered operations. Upload managed files with <code class="language-plaintext highlighter-rouge">runs.create</code>, inspect the outline with <code class="language-plaintext highlighter-rouge">runs.get</code>, commit the selected section ids with <code class="language-plaintext highlighter-rouge">runs.select</code>, advance the durable run with <code class="language-plaintext highlighter-rouge">runs.step</code>, and optionally publish the completed artifact with the approval-bound <code class="language-plaintext highlighter-rouge">runs.share</code> operation. <code class="language-plaintext highlighter-rouge">shared.get</code> reads only the published artifact; uploaded source files remain private.</p>
+
+<p>Agent Swarm runs are durable too. Start a single-scenario run through the <code class="language-plaintext highlighter-rouge">swarm</code> service’s <code class="language-plaintext highlighter-rouge">runs.create</code> operation, then read it with <code class="language-plaintext highlighter-rouge">runs.get</code>. HivemindOS continues queued and running work in the background even if the calling app disconnects. <code class="language-plaintext highlighter-rouge">runs.step</code> remains available when an interactive client wants the lowest possible completion latency; repeated calls are safe and do not start duplicate work.</p>
+
+<p>Photo Keyworder accepts an inline image for small requests or one managed JPEG, PNG, or WebP file up to 8 MB. Managed files avoid the JSON request limit and are the recommended path for normal photos:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invoke</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">photo-keyworder</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">operationId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">photos.analyze</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">input</span><span class="p">:</span> <span class="p">{</span> <span class="na">context</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Describe only what is visible.</span><span class="dl">"</span> <span class="p">},</span>
+    <span class="na">files</span><span class="p">:</span> <span class="p">[{</span> <span class="na">fileId</span><span class="p">:</span> <span class="nx">uploadedPhoto</span><span class="p">.</span><span class="nx">id</span> <span class="p">}],</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">photo-analysis-2026-08-27</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>The analysis service does not retain the uploaded pixels. The managed file remains under your account until you delete it.</p>
 
 <h2 id="create-a-durable-run">Create a durable run</h2>
 

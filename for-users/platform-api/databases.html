@@ -690,6 +690,18 @@
       <td><code class="language-plaintext highlighter-rouge">tableId</code>, <code class="language-plaintext highlighter-rouge">name</code>, <code class="language-plaintext highlighter-rouge">fieldType</code>, <code class="language-plaintext highlighter-rouge">confirmation</code></td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">delete-database</code></td>
+      <td><code class="language-plaintext highlighter-rouge">databaseId</code>, <code class="language-plaintext highlighter-rouge">confirmation</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">delete-table</code></td>
+      <td><code class="language-plaintext highlighter-rouge">tableId</code>, <code class="language-plaintext highlighter-rouge">confirmation</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">delete-field</code></td>
+      <td><code class="language-plaintext highlighter-rouge">fieldId</code>, <code class="language-plaintext highlighter-rouge">confirmation</code></td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">create-record</code></td>
       <td><code class="language-plaintext highlighter-rouge">tableId</code>, <code class="language-plaintext highlighter-rouge">fields</code>, <code class="language-plaintext highlighter-rouge">confirmation</code></td>
     </tr>
@@ -732,6 +744,18 @@
 </code></pre></div></div>
 
 <p>Use a unique business identifier in the idempotency key so a retried write returns the original result instead of creating a duplicate.</p>
+
+<h2 id="delete-the-managed-workspace">Delete the managed workspace</h2>
+
+<p>Deleting the account workspace permanently removes its managed databases, records, usage history, and unfinished transfer files. Export anything you need first, then use the exact confirmation and an idempotency key:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">deleted</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">databases</span><span class="p">.</span><span class="nx">deprovision</span><span class="p">(</span>
+  <span class="p">{</span> <span class="na">confirmation</span><span class="p">:</span> <span class="nx">HIVEMINDOS_DATABASE_CONFIRMATIONS</span><span class="p">.</span><span class="nx">deprovision</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">customer-database-delete-v1</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>Repeating the same confirmed request is safe and returns <code class="language-plaintext highlighter-rouge">active: false</code>.</p>
 
 <h2 id="copy-a-workspace-to-the-cloud">Copy a workspace to the cloud</h2>
 

@@ -587,6 +587,7 @@
   <li>Stable ACP v1 only. The client rejects a negotiated protocol version it does not support.</li>
   <li>Local stdio transport only. Remote machines continue through Hivemind Link and the authenticated collector boundary; draft remote ACP transports are not used.</li>
   <li>New sessions, resume, load fallback, streamed session updates, prompt completion, and cancellation.</li>
+  <li>Stable session-scoped stdio MCP descriptors on new, resumed, and loaded sessions. HTTP, SSE, and experimental MCP-over-ACP descriptors are sent only when the agent advertises their respective capability.</li>
   <li>Plans, message and thought chunks, tool-call lifecycle, mode changes, session information, command discovery, configuration changes, usage, and compaction updates are accepted. Customer run logs retain only useful progress and result text.</li>
   <li>Permission requests, workspace-confined text-file access, and governed terminal create/output/wait/kill/release requests.</li>
 </ul>
@@ -599,7 +600,7 @@
   <li>Resolve and verify the requested working directory.</li>
   <li>Spawn the local agent with separate protocol output and diagnostic error streams.</li>
   <li>Negotiate ACP v1 and advertise only the client capabilities allowed for the task.</li>
-  <li>Create a new agent session, or resume/load the recorded session when a prior run is continued.</li>
+  <li>Project the task’s compact MCP server descriptors into the new, resumed, or loaded session, then create or attach to that session. Tool catalogs and schemas remain behind the runtime’s MCP discovery mode rather than entering the model prompt.</li>
   <li>Apply the selected model through the session’s standard <code class="language-plaintext highlighter-rouge">model</code> configuration option when the agent exposes one. This prevents a reused agent daemon from silently retaining another task’s model.</li>
   <li>Persist the agent-owned session identifier with the private run record.</li>
   <li>Stream useful progress into the existing run log and evaluate the completed output through the existing completion gate. An exit-zero or <code class="language-plaintext highlighter-rouge">end_turn</code> response with no usable result is a failure, not a completed task.</li>
@@ -617,13 +618,18 @@
   <li>Permission responses prefer one-time decisions. The client never silently upgrades a request to an always-allow grant.</li>
   <li>Terminal commands are spawned directly without a shell. Output is bounded, retains valid UTF-8, and truncates from the beginning as required by ACP.</li>
   <li>Agent diagnostics stay on the private server log. The task receipt and customer run log do not expose executable paths, protocol messages, credentials, or stored session identifiers.</li>
+  <li>A session MCP descriptor receives only the scoped agent identity and local routing values it needs. Dashboard signing, device, bootstrap, and test credentials are never projected. Retained runtime configuration contains no token.</li>
 </ul>
+
+<h2 id="bundled-runtime-compatibility">Bundled Runtime Compatibility</h2>
+
+<p>The pinned JCode <code class="language-plaintext highlighter-rouge">v0.79.1</code> implements ACP lifecycle and validates that <code class="language-plaintext highlighter-rouge">mcpServers</code> is an array, but its source explicitly ignores session-scoped MCP entries. Current upstream source still has the same limitation. HivemindOS therefore materializes the canonical Hivemind stdio descriptor into each private JCode task home before the ACP session starts; the MCP child inherits the per-run agent token from the already-sanitized process environment. This is task-scoped and automatic, so the managed agent path does not depend on setup-time harness registration. When JCode consumes ACP session MCP, remove this compatibility delivery only after the ACP end-to-end probe passes against the staged sidecar and confirms one server instance.</p>
 
 <h2 id="recovery-and-operator-controls">Recovery And Operator Controls</h2>
 
 <p>Set <code class="language-plaintext highlighter-rouge">HIVEMINDOS_AGENT_CLIENT_PROTOCOL=off</code> before the dashboard starts to keep bundled tasks on the compatibility runner. A single task action may also pass <code class="language-plaintext highlighter-rouge">compatibilityMode: true</code>. Neither control changes stored workspaces or session history.</p>
 
-<p>Use the focused contract with <code class="language-plaintext highlighter-rouge">pnpm test:agent-client-protocol</code>. It runs a real stdio exchange against a hermetic agent fixture and covers capability negotiation, update mapping, permissions, file confinement, symlink rejection, terminal lifecycle, cancellation, persistence, and resume. <code class="language-plaintext highlighter-rouge">pnpm test:jcode-runtime-integration</code> separately proves that an older engine which cannot negotiate ACP recovers through the established command.</p>
+<p>Use the focused contract with <code class="language-plaintext highlighter-rouge">pnpm test:agent-client-protocol</code>. It runs a real stdio exchange against a hermetic agent fixture and covers capability negotiation, update mapping, permissions, file confinement, symlink rejection, terminal lifecycle, cancellation, persistence, resume, unsupported MCP transports, and an ACP-session launch of the real Hivemind MCP server against a fake authenticated dashboard. <code class="language-plaintext highlighter-rouge">pnpm test:jcode-runtime-integration</code> proves the bundled runtime stays on ACP, starts from no setup-time registration, receives a private automatic Hivemind MCP server, keeps deferred <code class="language-plaintext highlighter-rouge">mcp_search</code>/<code class="language-plaintext highlighter-rouge">mcp_call</code> exposure, and traverses that exact private config through the real MCP process to an authenticated fake dashboard without persisting a credential.</p>
 
 <p>Run <code class="language-plaintext highlighter-rouge">pnpm test:e2e:agent-client-protocol</code> when the bundled sidecar is staged. It negotiates with that exact executable, creates and closes an isolated temporary session, and deliberately sends no model prompt.</p>
 

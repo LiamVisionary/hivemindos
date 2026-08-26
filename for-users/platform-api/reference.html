@@ -947,6 +947,12 @@ Content type: application/json
       <td><code class="language-plaintext highlighter-rouge">databases.account.provision</code></td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">DELETE /databases/account</code></td>
+      <td><code class="language-plaintext highlighter-rouge">databases:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">databases.account.deprovision</code></td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">POST /databases/query</code></td>
       <td><code class="language-plaintext highlighter-rouge">databases:read</code></td>
       <td style="text-align: center">No</td>
@@ -1252,6 +1258,7 @@ apiKeys.create
 apiKeys.revoke
 databases.account.read
 databases.account.provision
+databases.account.deprovision
 databases.query
 databases.actions
 databases.transfers.create
