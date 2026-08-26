@@ -621,7 +621,7 @@
 
 <ol>
   <li><strong>Tauri Release Candidate</strong> verifies that the exact 40-character source SHA already has a successful complete CI workflow, builds the shared embedded web payload once, builds platform packages, signs and notarizes them, and seals their names, sizes, and SHA-256 hashes in <code class="language-plaintext highlighter-rouge">release-candidate.json</code>.</li>
-  <li><strong>Tauri Release Promotion</strong> takes a successful candidate run id inside the protected <code class="language-plaintext highlighter-rouge">desktop-release</code> environment, verifies the originating workflow and every recorded artifact, then creates the source tag and release. Promotion never recompiles.</li>
+  <li><strong>Tauri Release Promotion</strong> takes a successful candidate run id inside the <code class="language-plaintext highlighter-rouge">desktop-release</code> environment, verifies the originating workflow and every recorded artifact, then creates the source tag and release. GitHub’s current private-repository plan cannot enforce environment reviewers, so the workflow allows only the repository owner and requires the owner to type <code class="language-plaintext highlighter-rouge">promote-&lt;candidate-run-id&gt;</code> before it starts. Promotion never recompiles.</li>
 </ol>
 
 <p>Linux native test compilation is part of CI rather than the packaging critical path. Hosted Windows and Linux each run Complete Hub and Link as separate parallel jobs with product-specific Rust caches. macOS keeps Hub and Link together because a single protected Mac runner deliberately accepts only one release job at a time.</p>

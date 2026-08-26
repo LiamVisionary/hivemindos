@@ -37,7 +37,7 @@ Each machine receives a stable opaque label derived from its Hive machine identi
 The release process has two outward states:
 
 1. **Tauri Release Candidate** verifies that the exact 40-character source SHA already has a successful complete CI workflow, builds the shared embedded web payload once, builds platform packages, signs and notarizes them, and seals their names, sizes, and SHA-256 hashes in `release-candidate.json`.
-2. **Tauri Release Promotion** takes a successful candidate run id inside the protected `desktop-release` environment, verifies the originating workflow and every recorded artifact, then creates the source tag and release. Promotion never recompiles.
+2. **Tauri Release Promotion** takes a successful candidate run id inside the `desktop-release` environment, verifies the originating workflow and every recorded artifact, then creates the source tag and release. GitHub's current private-repository plan cannot enforce environment reviewers, so the workflow allows only the repository owner and requires the owner to type `promote-<candidate-run-id>` before it starts. Promotion never recompiles.
 
 Linux native test compilation is part of CI rather than the packaging critical path. Hosted Windows and Linux each run Complete Hub and Link as separate parallel jobs with product-specific Rust caches. macOS keeps Hub and Link together because a single protected Mac runner deliberately accepts only one release job at a time.
 
