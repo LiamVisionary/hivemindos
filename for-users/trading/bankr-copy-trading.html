@@ -634,11 +634,11 @@
 
 <p>Use <strong>Publish performance</strong> on the monitor card, then copy the URL into the Bankr app. <strong>Rotate link</strong> invalidates the old URL and creates a new one. <strong>Revoke</strong> disables public access, and canceling the monitor revokes its link automatically. The public link never exposes the private monitor credential.</p>
 
-<h2 id="join-the-copytrading-leaderboard">Join the copytrading leaderboard</h2>
+<h2 id="copytrading-leaderboard-privacy">Copytrading leaderboard privacy</h2>
 
-<p>Agentic Copytrader includes a leaderboard for comparing verified Basic and Agent copy results. Each strategy joins separately, and nothing is published until you choose <strong>Join leaderboard</strong> on that copy.</p>
+<p>Agentic Copytrader includes separate Live and Paper leaderboards for comparing verified Basic and Agent copy results. Eligible strategies participate automatically, and you can opt any strategy out from its copy card.</p>
 
-<p>Leaderboard rows show only the copied target’s shortened label, the strategy, verified net result after fees, verified trade count, copied volume, and an optional X handle. Your execution wallet is not shown. A copy receives a rank only after it has at least one verified copied trade and complete performance accounting; otherwise it remains visible as <strong>Collecting</strong>.</p>
+<p>Leaderboard rows show only the copied target’s shortened label, strategy, verified result, verified trade count, copied volume, and an optional X handle and profile photo. Your execution wallet is not shown. Return percentage is the default ranking, with net profit available as a second view. A copy receives a rank only after it has at least one verified copied trade and complete performance accounting; otherwise it remains visible as <strong>Collecting</strong>.</p>
 
 <p>If your Bankr Agent Profile is already approved and public, its public X handle can appear automatically. Otherwise, <strong>Link X</strong> uses the X account already verified by Bankr. You can leave a spot anonymous or unlink X at any time without removing the copy’s results. Results remain historical and are never a performance guarantee.</p>
 
@@ -646,15 +646,19 @@
 
 <p>An Agent strategy checks each new opportunity before deciding whether to copy or skip it. After 24 hours, it compares that decision with what would have happened under the other choice. Those completed outcomes become learning evidence for later opportunities with similar conditions.</p>
 
-<p>Your personal outcome history stays attached to your copytrader. A separate shared layer can learn from anonymous paper-trading patterns across users, but it receives no wallet, transaction, X identity, target, token address, or symbol. The dashboard shows the number of eligible outcomes and progress toward the next completed learning batch for both layers.</p>
+<p>Your personal outcome history stays attached to your copytrader. A separate shared layer collects anonymous outcome evidence across Bankr and HivemindOS-hosted copytrading, but it receives no wallet, transaction, X identity, target, token address, or symbol. The dashboard keeps private evidence, community evidence, and validated shared generations visibly separate.</p>
 
-<p>Learning is deliberately gradual. Decisions use only prior completed batches of 50 outcomes; the batch currently being collected cannot influence itself. A single trade cannot rewrite behavior, and learning can make a borderline copy more cautious but can never override a hard safety rejection. This is outcome-based policy adaptation, not a promise of profit.</p>
+<p>Private learning is deliberately gradual. It uses only prior completed batches of 50 outcomes; the batch currently being collected cannot influence itself. A single trade cannot rewrite behavior, and learning can make a borderline copy more cautious but can never override a hard safety rejection. This is outcome-based policy adaptation, not a promise of profit.</p>
+
+<p>Community insights are held to a higher standard. A new insight must improve decisions across older results and then keep improving them across new practice results. If it increases downside or stops working, it is discarded. The Community Brain levels up only after an improvement proves itself repeatedly. Live behavior changes only after a separate safety review, and the previous version remains available to restore.</p>
+
+<p>Bankr-managed and HivemindOS-hosted wallets use that same validated Community Brain. They do not maintain separate shared policies that can drift apart. Each Agent opportunity receives hard safety checks first and then a deeper Agent review before a new position is opened. If that review is unavailable, the copy follows the strategy’s safe default instead of inventing a decision. The Community Brain’s broader expert review still runs as a separate daily learning cycle.</p>
 
 <h3 id="community-hive-brain">Community Hive Brain</h3>
 
-<p>The HivemindOS Copy Trading screen includes an optional <strong>Community Hive Brain</strong> switch. It is off by default. When you turn it on, future Agent copies can use verified, completed learning patterns from Bankr while HivemindOS contributes anonymized outcomes from your own Agent-copy experiments.</p>
+<p>The HivemindOS Copy Trading screen includes an optional <strong>Community Hive Brain</strong> switch. It is off by default. When you turn it on, HivemindOS contributes anonymized results from your own Agent-copy experiments and receives only shared insights that have passed the Community Brain’s safety checks.</p>
 
-<p>Shared learning contains only the choice, result, and broad evidence tags. Wallets, identities, balances, target wallets, token addresses, symbols, and transaction references are never included. Your contributed outcomes can help your private Bankr learner immediately; they must pass hosted verification before they can guide the wider community. Turning the switch off stops future exchange without deleting your local learning history.</p>
+<p>Shared learning contains only the choice, result, horizon, and broad evidence tags. Wallets, identities, balances, target wallets, token addresses, symbols, and transaction references are never included. Unreviewed community evidence can show progress but cannot enter your desktop Agent’s trading guidance. Turning the switch off stops future exchange without deleting your local private learning history.</p>
 
 <p>Every distinct shared outcome that passes that verification earns <strong>0.1 HONEY</strong>. A learning that is still awaiting verification earns nothing yet, and resending or retrying the same outcome never earns it twice. If the contributing wallet has not joined your HONEY profile yet, the verified reward stays saved until it does. HONEY is a cumulative contribution record, not cash or spendable credit.</p>
 

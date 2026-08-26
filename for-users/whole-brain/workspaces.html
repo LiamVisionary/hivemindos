@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
   <title>Separate Hive Superbrain Workspaces | HivemindOS Docs</title>
-  <meta name="description" content="Keep notes, skills, and credentials separate for a client, team, bot, or experiment.">
+  <meta name="description" content="Keep memory, skills, and saved keys separate for a client, team, bot, or experiment.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -579,155 +579,59 @@
         </div>
         <h1 id="separate-hive-superbrain-workspaces">Separate Hive Superbrain workspaces</h1>
 
-<p>Most people need only the default <code class="language-plaintext highlighter-rouge">main</code> workspace. Use another workspace when the separation itself matters, not simply because you started another project.</p>
+<p>Most people need only the default <strong>Main shared brain</strong> workspace. Create another workspace when the separation itself matters, not simply because you started another project.</p>
 
-<p>Each workspace has its own Obsidian vault, Shared Env, skill shelf, and memory data. An agent working in one workspace does not automatically inherit the notes or credentials from another.</p>
+<p>Each workspace has its own memory, skill collection, and saved keys. Work done in one workspace does not automatically carry into another.</p>
+
+<h2 id="open-the-workspace-chooser">Open the workspace chooser</h2>
+
+<p>In the HivemindOS sidebar, select the workspace name directly beneath the HivemindOS mark.</p>
+
+<p>The chooser shows every available workspace as a tile. Select a tile to switch; HivemindOS reloads into that workspace so the whole dashboard uses the right memory, skills, and saved keys.</p>
+
+<h2 id="create-a-workspace">Create a workspace</h2>
+
+<p>Open the workspace chooser and select <strong>New workspace</strong>. Enter a name, then select <strong>Create workspace</strong>.</p>
+
+<p>HivemindOS prepares the separate workspace and opens it immediately. You do not need to choose folders or configure anything else.</p>
+
+<p>Switching workspaces never merges, moves, or deletes the contents of either workspace.</p>
 
 <h2 id="when-to-create-one">When to create one</h2>
 
 <p>Create a separate workspace when:</p>
 
 <ul>
-  <li>Two clients must not share notes or API keys.</li>
+  <li>Two clients must not share memory or saved keys.</li>
   <li>A bot needs a narrow brain and skill set.</li>
-  <li>A team needs its own vault and sync owner.</li>
+  <li>A team needs its own shared context.</li>
   <li>An experiment should be easy to discard without touching your main brain.</li>
 </ul>
 
-<p>For ordinary work, keep the project in <code class="language-plaintext highlighter-rouge">Projects/</code> inside <code class="language-plaintext highlighter-rouge">main</code>. That gives agents shared context without creating another set of credentials and skills to maintain.</p>
-
-<h2 id="create-and-switch-workspaces">Create and switch workspaces</h2>
-
-<p>Run the guided setup and answer the prompts:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-workspace-add
-</code></pre></div></div>
-
-<p>Switch the default workspace with the arrow-key picker:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-workspace-switch
-</code></pre></div></div>
-
-<p>Check which workspace is active before adding memory or credentials:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-workspace
-</code></pre></div></div>
-
-<p>Switching changes the default for later HivemindOS work. It does not merge, copy, or delete anything in either workspace.</p>
+<p>For ordinary work, keep the project in your Main shared brain. That gives agents shared context without creating another set of skills and keys to maintain.</p>
 
 <details>
-  <summary>Open the workspace storage, API, and automation reference</summary>
+  <summary>Use workspaces from a terminal</summary>
 
-  <h2 id="workspace-store">Workspace Store</h2>
-
-  <p>Workspace definitions live in:</p>
-
-  <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>~/.hivemindos/workspaces.json
-</code></pre></div>  </div>
-
-  <p>The default workspace is <code class="language-plaintext highlighter-rouge">main</code>. If the store does not exist, HivemindOS behaves like older versions and uses:</p>
-
-  <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>vault: ~/Documents/Obsidian/hivemindos-vault
-env:   ~/.hivemindos/.env
-skills: &lt;vault&gt;/Skills
-brain: &lt;vault&gt;/Operations/Brain Services
-</code></pre></div>  </div>
-
-  <p>A workspace entry looks like:</p>
-
-  <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
-  </span><span class="nl">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"support-bot"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Support Bot Brain"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"vaultPath"</span><span class="p">:</span><span class="w"> </span><span class="s2">"~/Documents/Obsidian/support-bot-vault"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"envPath"</span><span class="p">:</span><span class="w"> </span><span class="s2">"~/.hivemindos/workspaces/support-bot/.env"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"skillsPath"</span><span class="p">:</span><span class="w"> </span><span class="s2">"~/Documents/Obsidian/support-bot-vault/Skills"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"brainServicesPath"</span><span class="p">:</span><span class="w"> </span><span class="s2">"~/Documents/Obsidian/support-bot-vault/Operations/Brain Services"</span><span class="w">
-</span><span class="p">}</span><span class="w">
-</span></code></pre></div>  </div>
-
-  <h2 id="cli">CLI</h2>
-
-  <p>Show the current default workspace:</p>
+  <p>Show the active workspace:</p>
 
   <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-workspace
 </code></pre></div>  </div>
 
-  <p>The command prints the current workspace name, vault/env paths, any other registered workspaces, and the follow-up hint:</p>
-
-  <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>want to change your default workspace? run hive-workspace-switch
-</code></pre></div>  </div>
-
-  <p>Switch the default workspace:</p>
-
-  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-workspace-switch
-</code></pre></div>  </div>
-
-  <p>In a terminal, this opens an arrow-key picker. Use ↑/↓ to cycle through registered workspaces, Enter to select, or <code class="language-plaintext highlighter-rouge">q</code> to cancel. Non-interactive callers can pass the id directly:</p>
-
-  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-workspace-switch support-bot
-</code></pre></div>  </div>
-
-  <p>Add a workspace with guided prompts:</p>
+  <p>Add one with guided prompts:</p>
 
   <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-workspace-add
 </code></pre></div>  </div>
 
-  <p>For scripts or setup automation, pass the fields directly:</p>
+  <p>Switch with the arrow-key chooser:</p>
 
-  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-workspace-add <span class="se">\</span>
-  <span class="nt">--id</span> support-bot <span class="se">\</span>
-  <span class="nt">--name</span> <span class="s2">"Support Bot Brain"</span> <span class="se">\</span>
-  <span class="nt">--vault-path</span> <span class="s2">"~/Documents/Obsidian/support-bot-vault"</span> <span class="se">\</span>
-  <span class="nt">--set-active</span> <span class="se">\</span>
-  <span class="nt">--scaffold</span>
+  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-workspace-switch
 </code></pre></div>  </div>
 
-  <h2 id="api">API</h2>
+  <p>For automation, pass a workspace id to a command:</p>
 
-  <p>List workspaces:</p>
-
-  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl http://127.0.0.1:5020/api/hive/workspaces
+  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">HIVE_WORKSPACE_ID</span><span class="o">=</span>support-bot hive-brain answer <span class="s2">"latest commitments"</span>
 </code></pre></div>  </div>
-
-  <p>Create or update a workspace and scaffold the folders:</p>
-
-  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl <span class="nt">-X</span> POST http://127.0.0.1:5020/api/hive/workspaces <span class="se">\</span>
-  <span class="nt">-H</span> <span class="s1">'content-type: application/json'</span> <span class="se">\</span>
-  <span class="nt">-d</span> <span class="s1">'{
-    "id": "support-bot",
-    "name": "Support Bot Brain",
-    "vaultPath": "~/Documents/Obsidian/support-bot-vault",
-    "setActive": true,
-    "scaffold": true
-  }'</span>
-</code></pre></div>  </div>
-
-  <p><code class="language-plaintext highlighter-rouge">setActive</code> updates the default workspace in <code class="language-plaintext highlighter-rouge">workspaces.json</code>. <code class="language-plaintext highlighter-rouge">scaffold</code> creates the vault, skills, brain-services, agent-memory, secure, and env parent folders.</p>
-
-  <h2 id="runtime-selection">Runtime Selection</h2>
-
-  <p>Use an environment variable to select a workspace for a process:</p>
-
-  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">HIVE_WORKSPACE_ID</span><span class="o">=</span>support-bot hive-brain answer <span class="s2">"what does this bot know?"</span>
-<span class="nv">HIVE_WORKSPACE_ID</span><span class="o">=</span>support-bot hive-env-add OPENAI_API_KEY
-</code></pre></div>  </div>
-
-  <p>The <code class="language-plaintext highlighter-rouge">hive-brain</code> CLI also accepts an explicit workspace:</p>
-
-  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-brain answer <span class="s2">"latest commitments"</span> <span class="nt">--workspace</span> support-bot
-hive-brain remember <span class="nt">--workspace</span> support-bot <span class="nt">--type</span> learning <span class="nt">--title</span> <span class="s2">"Refund policy"</span> <span class="nt">--content</span> <span class="s2">"Refunds are handled by support."</span>
-</code></pre></div>  </div>
-
-  <p>Passing <code class="language-plaintext highlighter-rouge">--vault</code> still wins for one-off local recall. Existing <code class="language-plaintext highlighter-rouge">vaultPath</code> query/body fields on brain APIs continue to work, so callers can route to a workspace vault without adopting the workspace store immediately.</p>
-
-  <h2 id="isolation-rules">Isolation Rules</h2>
-
-  <ul>
-    <li>Shared env values are read from the selected workspace env file unless a process env value is already set.</li>
-    <li>Shared skills are rooted at the selected workspace’s <code class="language-plaintext highlighter-rouge">Skills</code> folder.</li>
-    <li>Brain memory indexes and proof receipts live under the selected workspace’s <code class="language-plaintext highlighter-rouge">Operations/Brain Services</code> folder.</li>
-    <li>Public docs and setup examples should use placeholder workspace names. Do not document private machine names, personal vault paths, Tailnet IPs, or secret values.</li>
-  </ul>
 
 </details>
 
