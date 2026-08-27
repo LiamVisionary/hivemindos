@@ -80,6 +80,14 @@
               
 
               
+                <a class="navLink" href="/hivemindos/for-users/getting-started.html">Getting Started</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/">User Guide</a>
               
             
@@ -218,6 +226,10 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
                     
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/agent-setup.html">Agent Setup</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
                     
@@ -584,6 +596,7 @@
 <p>The <a href="https://api.hivemindos.app/openapi.json">OpenAPI 3.1 document</a> is the source of truth for request and response shapes. It can also generate clients, validators, and API explorers.</p>
 
 <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Base URL: https://api.hivemindos.app/v1
+MCP URL: https://api.hivemindos.app/mcp
 Authentication: Authorization: Bearer hmos_live_...
 Content type: application/json
 </code></pre></div></div>
@@ -610,6 +623,11 @@ Content type: application/json
       <td><code class="language-plaintext highlighter-rouge">GET</code></td>
       <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/openapi.json</code></td>
       <td>OpenAPI 3.1 contract.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/mcp</code></td>
+      <td>Authenticated Streamable HTTP MCP transport. Requires <code class="language-plaintext highlighter-rouge">services:read</code> and <code class="language-plaintext highlighter-rouge">actions.list</code>.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">GET</code></td>
@@ -642,6 +660,10 @@ Content type: application/json
     <tr>
       <td><code class="language-plaintext highlighter-rouge">credits:read</code></td>
       <td>Read the account’s HivemindOS credit balance.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">credits:write</code></td>
+      <td>Buy Agent Credits for the authenticated account through x402.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">projects:read</code></td>
@@ -795,6 +817,12 @@ Content type: application/json
       <td><code class="language-plaintext highlighter-rouge">capabilities.list</code></td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /actions</code></td>
+      <td><code class="language-plaintext highlighter-rouge">services:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">actions.list</code></td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">POST /services/{serviceId}/invoke</code></td>
       <td><code class="language-plaintext highlighter-rouge">services:invoke</code> and service access</td>
       <td style="text-align: center">Yes</td>
@@ -805,6 +833,12 @@ Content type: application/json
       <td><code class="language-plaintext highlighter-rouge">credits:read</code></td>
       <td style="text-align: center">No</td>
       <td><code class="language-plaintext highlighter-rouge">credits.balance.read</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /credits/x402/top-up</code></td>
+      <td><code class="language-plaintext highlighter-rouge">credits:write</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">credits.x402.topUp</code></td>
     </tr>
   </tbody>
 </table>
@@ -1239,6 +1273,7 @@ Content type: application/json
 capabilities.list
 services.invoke
 credits.balance.read
+credits.x402.topUp
 projects.list
 projects.create
 projects.read
@@ -1367,6 +1402,18 @@ runs.create.&lt;serviceId&gt;.&lt;operationId&gt;
       <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Credit-Token</code></td>
       <td>Only while bootstrapping the first API key.</td>
     </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Payment-Signature</code></td>
+      <td>x402 v2 signed payment on the retry after an HTTP 402 challenge. Normally added by an x402-aware client.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-PAYMENT</code></td>
+      <td>Legacy x402 payment header for compatible clients.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X402-Version</code></td>
+      <td>Optional x402 protocol-version hint.</td>
+    </tr>
   </tbody>
 </table>
 
@@ -1416,14 +1463,35 @@ runs.create.&lt;serviceId&gt;.&lt;operationId&gt;
       <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Signature</code></td>
       <td>Timestamp and HMAC for a webhook delivery.</td>
     </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Payment-Required</code></td>
+      <td>Base64-encoded x402 v2 payment requirements on HTTP 402.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Payment-Response</code></td>
+      <td>x402 settlement result after a successful payment.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Paid-Agent-Receipt</code></td>
+      <td>HivemindOS Agent Credit purchase receipt id.</td>
+    </tr>
   </tbody>
 </table>
+
+<h2 id="x402-agent-credit-top-up">x402 Agent Credit top-up</h2>
+
+<p>Send <code class="language-plaintext highlighter-rouge">{ "amountUsd": 5 }</code> to <code class="language-plaintext highlighter-rouge">POST /credits/x402/top-up</code> with an API key that has <code class="language-plaintext highlighter-rouge">credits:write</code>, an <code class="language-plaintext highlighter-rouge">Idempotency-Key</code>, and access to <code class="language-plaintext highlighter-rouge">credits.x402.topUp</code>. Amounts may be $5 to $500 with no more than two decimal places.</p>
+
+<p>The first request returns HTTP 402 and <code class="language-plaintext highlighter-rouge">Payment-Required</code>. An x402 v2 client signs the exact Base payment and retries the same request with <code class="language-plaintext highlighter-rouge">Payment-Signature</code> and the same idempotency key. A successful response includes <code class="language-plaintext highlighter-rouge">creditedUsd</code>, <code class="language-plaintext highlighter-rouge">creditedCredits</code>, <code class="language-plaintext highlighter-rouge">receiptId</code>, and the updated <code class="language-plaintext highlighter-rouge">credits</code> balance.</p>
+
+<p>The route never accepts a recipient, network, asset, price, credit token, or alternate account in its body. Those values are fixed and verified by HivemindOS, and the payment settles to the same official HivemindOS revenue wallet used by the other managed x402 services.</p>
 
 <h2 id="sdk-constants-and-helpers">SDK constants and helpers</h2>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span>
   <span class="nx">HIVEMINDOS_PLATFORM_API_BASE_URL</span><span class="p">,</span>
   <span class="nx">HIVEMINDOS_PLATFORM_API_VERSION</span><span class="p">,</span>
+  <span class="nx">HIVEMINDOS_SUPERAGENT_MCP_URL</span><span class="p">,</span>
   <span class="nx">HIVEMINDOS_PLATFORM_SCOPES</span><span class="p">,</span>
   <span class="nx">HIVEMINDOS_PLATFORM_SERVICE_IDS</span><span class="p">,</span>
   <span class="nx">HIVEMINDOS_PLATFORM_OPERATION_IDS</span><span class="p">,</span>

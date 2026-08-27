@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Per-Endpoint Limits | HivemindOS Docs</title>
-  <meta name="description" content="Set request, concurrency, and daily credit limits for individual HivemindOS SuperAgent API operations.">
+  <title>Connect An Agent With MCP | HivemindOS Docs</title>
+  <meta name="description" content="Give an MCP-compatible agent safe access to the complete HivemindOS SuperAgent API with one restricted key.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -229,7 +229,7 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/agent-setup.html">Agent Setup</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
+                      <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
                     
@@ -243,7 +243,7 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
-                      <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/files-connections.html">Files And Connections</a>
                     
@@ -589,224 +589,129 @@
             </button>
           </div>
         </div>
-        <h1 id="per-endpoint-limits">Per-endpoint limits</h1>
+        <h1 id="connect-an-agent-with-mcp">Connect an agent with MCP</h1>
 
-<p>Limits stop one key or worker from using more capacity than you intended. You can answer four separate questions for each endpoint:</p>
+<p>MCP is the simplest way to let an agent use HivemindOS managed services. The agent can search the actions available to its key, read data, and run approved work without you writing a separate wrapper for every endpoint.</p>
 
-<ul>
-  <li>How many requests can it make per minute, hour, or day?</li>
-  <li>How many requests can run at the same time?</li>
-  <li>How many Agent Credits can selected money operations spend per day?</li>
-  <li>Should a broad key-wide limit also apply?</li>
-</ul>
-
-<p>Limits are fixed when the key is created. Create a replacement key when you need different limits.</p>
-
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">apiKeys</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
-  <span class="p">{</span>
-    <span class="na">label</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Bounded worker</span><span class="dl">"</span><span class="p">,</span>
-    <span class="na">scopes</span><span class="p">:</span> <span class="p">[</span>
-      <span class="dl">"</span><span class="s2">services:read</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">services:invoke</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">wallets:read</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">wallets:transact</span><span class="dl">"</span><span class="p">,</span>
-    <span class="p">],</span>
-    <span class="na">allowedServices</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">managed-wallets</span><span class="dl">"</span><span class="p">],</span>
-    <span class="na">limits</span><span class="p">:</span> <span class="p">{</span>
-      <span class="dl">"</span><span class="s2">*</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerHour</span><span class="p">:</span> <span class="mi">2</span><span class="nx">_000</span><span class="p">,</span>
-        <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span>
-      <span class="p">},</span>
-      <span class="dl">"</span><span class="s2">services.invoke</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">120</span><span class="p">,</span>
-      <span class="p">},</span>
-      <span class="dl">"</span><span class="s2">services.invoke.hive-research</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">30</span><span class="p">,</span>
-        <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
-      <span class="p">},</span>
-      <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">250</span><span class="p">,</span>
-      <span class="p">},</span>
-      <span class="dl">"</span><span class="s2">services.invoke.cloud-superbrain.memory.answer</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-        <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">500</span><span class="p">,</span>
-      <span class="p">},</span>
-      <span class="dl">"</span><span class="s2">wallets.transactions.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-        <span class="na">creditsPerDay</span><span class="p">:</span> <span class="mi">25</span><span class="p">,</span>
-      <span class="p">},</span>
-      <span class="dl">"</span><span class="s2">credits.x402.topUp</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
-      <span class="p">},</span>
-    <span class="p">},</span>
-  <span class="p">},</span>
-  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">bounded-worker-v1</span><span class="dl">"</span> <span class="p">},</span>
-<span class="p">);</span>
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>MCP address: https://api.hivemindos.app/mcp
+Transport: Streamable HTTP
+Authentication: Authorization: Bearer hmos_live_...
 </code></pre></div></div>
 
-<details class="advancedDetails">
-  <summary>Advanced: selector matching and validation ceilings</summary>
+<p>This is the full SuperAgent MCP. The separate Hive Compute MCP remains useful for agents that need only the GPU marketplace.</p>
 
-  <h2 id="limit-selectors">Limit selectors</h2>
+<h2 id="connect-it">Connect it</h2>
 
-  <p>The <code class="language-plaintext highlighter-rouge">limits</code> object is keyed by an operation id:</p>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Selector</th>
-        <th>Applies to</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">*</code></td>
-        <td>Every authenticated SuperAgent API operation.</td>
-      </tr>
-      <tr>
-        <td>A static operation such as <code class="language-plaintext highlighter-rouge">databases.actions</code></td>
-        <td>Only that endpoint operation.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">services.invoke</code></td>
-        <td>Every direct managed-service invocation.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;</code></td>
-        <td>Direct invocation of one managed service.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;.&lt;operationId&gt;</code></td>
-        <td>One exact registered capability invoked directly.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">runs.create</code></td>
-        <td>Every durable run creation.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;</code></td>
-        <td>Run creation for one managed service.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;.&lt;operationId&gt;</code></td>
-        <td>One exact registered capability created as a run.</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p>For <code class="language-plaintext highlighter-rouge">hive-research</code> operation <code class="language-plaintext highlighter-rouge">analyses.create</code>, the API checks <code class="language-plaintext highlighter-rouge">*</code>, <code class="language-plaintext highlighter-rouge">services.invoke</code>, <code class="language-plaintext highlighter-rouge">services.invoke.hive-research</code>, and <code class="language-plaintext highlighter-rouge">services.invoke.hive-research.analyses.create</code>. Every matching limit applies. The request is rejected as soon as any one of them is exhausted.</p>
-
-  <p>The same hierarchy applies to managed memory. An answer call can be limited independently with <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.answer</code>, while <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain</code> caps every Cloud Superbrain operation available to that key.</p>
-
-  <p>The complete set of accepted operation ids is exported as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_OPERATION_IDS</code> by the TypeScript SDK and appears in the <a href="reference.html">endpoint reference</a>.</p>
-
-  <h2 id="limit-fields">Limit fields</h2>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Field</th>
-        <th>Meaning</th>
-        <th style="text-align: right">Accepted maximum</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">requestsPerMinute</code></td>
-        <td>Requests during a fixed minute window.</td>
-        <td style="text-align: right">60,000</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">requestsPerHour</code></td>
-        <td>Requests during a fixed hour window.</td>
-        <td style="text-align: right">1,000,000</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">requestsPerDay</code></td>
-        <td>Requests during a fixed UTC day.</td>
-        <td style="text-align: right">10,000,000</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">maxConcurrent</code></td>
-        <td>Requests for the selector that may be in progress at once.</td>
-        <td style="text-align: right">1,000</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">creditsPerDay</code></td>
-        <td>HivemindOS credits charged by one supported operation during a fixed UTC day.</td>
-        <td style="text-align: right">1,000,000,000</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p>Request and concurrency values must be positive integers. <code class="language-plaintext highlighter-rouge">creditsPerDay</code> must be positive and may have at most three decimal places. A key may define at most 128 operation selectors.</p>
-
-  <p>These are validation ceilings, not automatic quotas. If a field is omitted, that key does not add a limit for that field. Account balance, plan allowance, service availability, wallet policy, and any ancestor-key limits still apply.</p>
-
-  <p>Concurrent capacity remains in use until the response finishes, including a streamed response. Always consume or cancel response bodies so your application releases capacity promptly.</p>
-
-</details>
-
-<h2 id="daily-credit-limits">Daily credit limits</h2>
-
-<p><code class="language-plaintext highlighter-rouge">creditsPerDay</code> is available only for SuperAgent API-billed operations whose maximum charge can be checked before work starts:</p>
-
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">wallets.create</code></li>
-  <li><code class="language-plaintext highlighter-rouge">wallets.transactions.create</code></li>
-  <li><code class="language-plaintext highlighter-rouge">wallets.signatures.create</code></li>
-  <li><code class="language-plaintext highlighter-rouge">trading.orders.create</code></li>
-</ul>
-
-<p>Daily credit limits cannot be placed on <code class="language-plaintext highlighter-rouge">*</code>, a managed-service selector, a quote, a read, or another operation. Before a supported paid action starts, the API confirms that its maximum charge fits the remaining key limit. Only the final charged amount counts toward the daily total.</p>
-
-<p><code class="language-plaintext highlighter-rouge">credits.x402.topUp</code> accepts request and concurrency limits, but not <code class="language-plaintext highlighter-rouge">creditsPerDay</code>: it buys credits rather than spending them. The unsigned HTTP 402 challenge does not consume the top-up request window. The first signed payment attempt does, while a completed idempotent replay returns the saved result without consuming another slot.</p>
-
-<p>A key-level credit limit does not add credits to the account and does not replace wallet policy. A request must pass the key limit, have enough account credits, and satisfy the wallet’s own transaction and daily rules.</p>
-
-<h2 id="delegated-keys-and-ancestor-limits">Delegated keys and ancestor limits</h2>
-
-<p>Every key in the authority chain remains active policy. If a root key allows 1,000 requests per hour and a child allows 100, the child’s effective ceiling is 100. A child cannot create a covering limit with a larger value than an ancestor.</p>
-
-<p>Omitting a child limit does not bypass its parent. Revoking or expiring any ancestor invalidates the child entirely.</p>
-
-<p>Use this to enforce organizational ceilings at the root while allowing each worker to set a smaller local budget.</p>
-
-<h2 id="handle-http-429">Handle HTTP 429</h2>
-
-<p>When a key reaches a request, concurrency, or supported daily-credit limit, the API returns HTTP 429:</p>
+<p>Add a remote HTTP MCP server using your client’s secret or environment-variable feature:</p>
 
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
-  </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"rate_limit_exceeded"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"This API key has reached its request limit for this operation."</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"operationId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"services.invoke.hive-research"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"metric"</span><span class="p">:</span><span class="w"> </span><span class="s2">"requestsPerMinute"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"retryAfterSeconds"</span><span class="p">:</span><span class="w"> </span><span class="mi">18</span><span class="w">
+  </span><span class="nl">"mcpServers"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"hivemindos"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"http"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"url"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://api.hivemindos.app/mcp"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"headers"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+        </span><span class="nl">"Authorization"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Bearer ${HIVEMINDOS_API_KEY}"</span><span class="w">
+      </span><span class="p">}</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">}</span><span class="w">
 </span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
-<p>The response also includes:</p>
+<p>Client formats differ slightly. If your client has an <strong>Add remote MCP server</strong> screen, enter the address above and add <code class="language-plaintext highlighter-rouge">Authorization</code> as a protected header. Do not paste the key into a shared configuration file, prompt, repository, screenshot, or browser application.</p>
 
-<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">Retry-After: 18
-X-HivemindOS-Limit-Operation: services.invoke.hive-research
+<p>An MCP key needs:</p>
+
+<ul>
+  <li>the <code class="language-plaintext highlighter-rouge">services:read</code> scope;</li>
+  <li>the <code class="language-plaintext highlighter-rouge">actions.list</code> operation so the server can authenticate the MCP session and return its action catalog; and</li>
+  <li>only the additional scopes, services, and exact operations its job needs.</li>
+</ul>
+
+<p>For example, this operation allowlist can search Cloud Superbrain memory and do nothing else:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"scopes"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"services:read"</span><span class="p">,</span><span class="w"> </span><span class="s2">"services:invoke"</span><span class="p">],</span><span class="w">
+  </span><span class="nl">"allowedServices"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"cloud-superbrain"</span><span class="p">],</span><span class="w">
+  </span><span class="nl">"allowedOperations"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+    </span><span class="s2">"actions.list"</span><span class="p">,</span><span class="w">
+    </span><span class="s2">"services.invoke.cloud-superbrain.memory.search"</span><span class="w">
+  </span><span class="p">],</span><span class="w">
+  </span><span class="nl">"limits"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"services.invoke.cloud-superbrain.memory.search"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"requestsPerMinute"</span><span class="p">:</span><span class="w"> </span><span class="mi">30</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"maxConcurrent"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
-<p>Pause that workload for at least <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code>. Queueing work in your own backend is usually better than making every caller retry independently. A different operation may still have capacity, but do not route around a deliberate key-wide or ancestor limit.</p>
+<h2 id="what-the-agent-receives">What the agent receives</h2>
 
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
-  <span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span>
-  <span class="dl">"</span><span class="s2">analyses.create</span><span class="dl">"</span><span class="p">,</span>
-  <span class="p">{</span> <span class="na">question</span><span class="p">:</span> <span class="dl">"</span><span class="s2">...</span><span class="dl">"</span> <span class="p">},</span>
-  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="nx">jobId</span> <span class="p">},</span>
-<span class="p">);</span>
+<p>The MCP exposes four stable tools:</p>
 
-<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">result</span><span class="p">.</span><span class="nx">ok</span> <span class="o">&amp;&amp;</span> <span class="nx">result</span><span class="p">.</span><span class="nx">code</span> <span class="o">===</span> <span class="dl">"</span><span class="s2">rate_limit_exceeded</span><span class="dl">"</span><span class="p">)</span> <span class="p">{</span>
-  <span class="k">await</span> <span class="nx">queueForLater</span><span class="p">(</span><span class="nx">jobId</span><span class="p">,</span> <span class="nx">result</span><span class="p">.</span><span class="nx">retryAfterSeconds</span> <span class="o">??</span> <span class="mi">60</span><span class="p">);</span>
-<span class="p">}</span>
-</code></pre></div></div>
+<table>
+  <thead>
+    <tr>
+      <th>Tool</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">hive_services_list</code></td>
+      <td>List services the key may use and optionally check live availability.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">hive_actions_search</code></td>
+      <td>Find exact allowed actions and their input, approval, and execution details.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">hive_read</code></td>
+      <td>Run an action marked read-only. It refuses writes and execution.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">hive_write</code></td>
+      <td>Run a write or execution action with a stable idempotency key. It refuses reads.</td>
+    </tr>
+  </tbody>
+</table>
 
-<p>Next: review <a href="authentication.html">authentication and delegation</a> or find an exact selector in the <a href="reference.html">endpoint reference</a>.</p>
+<p>The small tool list keeps agent setup fast even though the API has hundreds of managed actions. Search results are filtered before they reach the agent. A restricted key cannot discover or call an excluded service or operation.</p>
+
+<h2 id="safe-agent-instructions">Safe agent instructions</h2>
+
+<p>Give the agent these rules:</p>
+
+<ol>
+  <li>Search before every unfamiliar action. Never invent an <code class="language-plaintext highlighter-rouge">actionId</code>.</li>
+  <li>Use <code class="language-plaintext highlighter-rouge">hive_read</code> for actions marked <code class="language-plaintext highlighter-rouge">read</code> and <code class="language-plaintext highlighter-rouge">hive_write</code> for <code class="language-plaintext highlighter-rouge">write</code> or <code class="language-plaintext highlighter-rouge">execute</code>.</li>
+  <li>Reuse an idempotency key only for the same intended write and the same input.</li>
+  <li>Ask the user before payments, trades, transfers, signatures, deletion, publishing, or another consequential action.</li>
+  <li>Never send a seed phrase, wallet private key, API secret, or unrelated credential as service input.</li>
+  <li>Treat an approval request or HTTP 402 response as a pause for user confirmation, not permission to continue automatically.</li>
+</ol>
+
+<p>The downloadable <a href="https://hivemindos.app/superagent-api/SKILL.md">SuperAgent API skill</a> includes these rules and the complete setup workflow.</p>
+
+<h2 id="projects-and-files">Projects and files</h2>
+
+<p>A project-bound key always stays in its project. An account-level key can select a project using the MCP connection’s <code class="language-plaintext highlighter-rouge">X-HivemindOS-Project</code> protected header or the <code class="language-plaintext highlighter-rouge">projectId</code> tool argument.</p>
+
+<p>JSON actions return their normal API result. Binary downloads return an authenticated resource link; fetch it with the same API key. Binary uploads accept <code class="language-plaintext highlighter-rouge">bodyBase64</code> plus a supported file header such as <code class="language-plaintext highlighter-rouge">X-File-Name</code>.</p>
+
+<h2 id="payments-and-agent-credits">Payments and Agent Credits</h2>
+
+<p>MCP calls use the same Agent Credit balance, service pricing, endpoint limits, approval rules, and audit trail as REST and the SDK.</p>
+
+<p>To buy Agent Credits with x402, search for <code class="language-plaintext highlighter-rouge">credits.x402.topUp</code>, then call it with <code class="language-plaintext highlighter-rouge">hive_write</code>. The first call returns the payment challenge. After the user confirms the exact amount, an x402 wallet signs the challenge and the retry sends <code class="language-plaintext highlighter-rouge">Payment-Signature</code> with the same idempotency key. The MCP cannot change the recipient, network, asset, price, or credited HivemindOS account.</p>
+
+<h2 id="advanced-protocol-behavior">Advanced: protocol behavior</h2>
+
+<p>The endpoint is a stateless Streamable HTTP MCP server. It supports <code class="language-plaintext highlighter-rouge">initialize</code>, <code class="language-plaintext highlighter-rouge">ping</code>, <code class="language-plaintext highlighter-rouge">tools/list</code>, <code class="language-plaintext highlighter-rouge">tools/call</code>, notifications, and JSON-RPC batches. Tool annotations explicitly separate read-only and consequential actions. The REST endpoint <code class="language-plaintext highlighter-rouge">GET /v1/actions</code> publishes the same key-filtered action catalog for SDK clients and custom agent adapters.</p>
+
+<p>All execution is sent through the normal SuperAgent API request path. Service allowlists, exact operation allowlists, project isolation, per-operation quotas, approvals, idempotency, Agent Credit charging, and downstream service policy remain authoritative; MCP does not create a second permission system.</p>
+
+<p>Continue with <a href="authentication.html">authentication and API keys</a>, <a href="limits.html">endpoint limits</a>, or the <a href="reference.html">complete API reference</a>.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -824,7 +729,7 @@ X-HivemindOS-Limit-Operation: services.invoke.hive-research
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/limits.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/mcp.md">Improve this page ↗</a>
     </aside>
   </div>
 

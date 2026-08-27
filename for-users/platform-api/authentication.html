@@ -80,6 +80,14 @@
               
 
               
+                <a class="navLink" href="/hivemindos/for-users/getting-started.html">Getting Started</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/">User Guide</a>
               
             
@@ -218,6 +226,10 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api.html">Overview</a>
                     
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/agent-setup.html">Agent Setup</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
                     
@@ -591,7 +603,7 @@
 <ol>
   <li><strong>Scopes</strong> decide which kinds of actions the key may perform.</li>
   <li><strong>Service access</strong> decides which managed services the key may reach.</li>
-  <li><strong>Operation access</strong> decides the exact managed capabilities and Platform endpoints the key may call.</li>
+  <li><strong>Operation access</strong> decides the exact managed capabilities and SuperAgent API endpoints the key may call.</li>
   <li><strong>Operation limits</strong> cap how often or how much the key may use each operation.</li>
 </ol>
 
@@ -616,8 +628,7 @@
     ],
     "allowedServices": ["hive-research", "managed-workflows"],
     "allowedOperations": [
-      "services.list",
-      "capabilities.list",
+      "actions.list",
       "services.invoke.hive-research.analyses.create",
       "runs.create.hive-research.analyses.create"
     ],
@@ -636,6 +647,8 @@
 </code></pre></div></div>
 
 <p>Do not put the key in a URL or request body. Keep the API call on infrastructure you control; a browser or mobile client should call your backend, which then calls HivemindOS.</p>
+
+<p>The remote MCP at <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/mcp</code> uses the same bearer key. An MCP key must include <code class="language-plaintext highlighter-rouge">services:read</code> and <code class="language-plaintext highlighter-rouge">actions.list</code>, then only the exact additional actions it should be able to discover and call.</p>
 
 <details class="advancedDetails">
   <summary>Advanced: exact service, operation, and child-key rules</summary>
@@ -673,7 +686,7 @@
 
   <h2 id="choose-operation-access">Choose operation access</h2>
 
-  <p>Use <code class="language-plaintext highlighter-rouge">allowedOperations</code> to allow only exact capabilities and Platform endpoints. Use <code class="language-plaintext highlighter-rouge">excludedOperations</code> to remove selected operations from the parent boundary. Do not send both.</p>
+  <p>Use <code class="language-plaintext highlighter-rouge">allowedOperations</code> to allow only exact capabilities and SuperAgent API endpoints. Use <code class="language-plaintext highlighter-rouge">excludedOperations</code> to remove selected operations from the parent boundary. Do not send both.</p>
 
   <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
   </span><span class="nl">"allowedOperations"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
@@ -687,7 +700,7 @@
 
   <p>Operation selection is resolved when the key is created. New capabilities added later do not silently become reachable through an explicit allowlist or an exclusion-derived boundary. Aggregate selectors such as <code class="language-plaintext highlighter-rouge">services.invoke.hive-research</code> cover that service’s registered operations; exact selectors such as <code class="language-plaintext highlighter-rouge">services.invoke.hive-research.analyses.create</code> cover only one capability.</p>
 
-  <p>Include the supporting Platform operations a narrowly allowed workflow needs. For example, a worker that permanently deletes managed memory must allow its exact <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.delete</code> operation together with <code class="language-plaintext highlighter-rouge">approvals.create</code> and <code class="language-plaintext highlighter-rouge">approvals.decide</code>. A key that revokes itself also needs <code class="language-plaintext highlighter-rouge">apiKeys.revoke</code>. These supporting operations do not broaden the key’s managed-service boundary.</p>
+  <p>Include the supporting SuperAgent API operations a narrowly allowed workflow needs. For example, a worker that permanently deletes managed memory must allow its exact <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.delete</code> operation together with <code class="language-plaintext highlighter-rouge">approvals.create</code> and <code class="language-plaintext highlighter-rouge">approvals.decide</code>. A key that revokes itself also needs <code class="language-plaintext highlighter-rouge">apiKeys.revoke</code>. These supporting operations do not broaden the key’s managed-service boundary.</p>
 
   <p>Project-bound keys are permanently restricted to one project and all descendants inherit that restriction. Read <a href="projects-security.html">projects and isolation</a> for the account-level and project-level key pattern.</p>
 
@@ -753,12 +766,15 @@
 <ul>
   <li>A catalog key with only read scopes.</li>
   <li>One worker key for each service or workload.</li>
+  <li>A funding key with <code class="language-plaintext highlighter-rouge">credits:read</code> and <code class="language-plaintext highlighter-rouge">credits:write</code>, restricted to <code class="language-plaintext highlighter-rouge">credits.balance.read</code> and <code class="language-plaintext highlighter-rouge">credits.x402.topUp</code>.</li>
   <li>A wallet execution key without approval authority.</li>
   <li>A reviewer key with <code class="language-plaintext highlighter-rouge">approvals:write</code> but no wallet or trading execution scope.</li>
   <li>A key-management credential kept outside ordinary application workers.</li>
 </ul>
 
 <p>This separation prevents one compromised component from gaining unrelated services or approving the action it proposed.</p>
+
+<p>A funding key controls who may ask the configured x402 payer to buy Agent Credits. It does not expose the official revenue wallet as a choice and it cannot credit another HivemindOS account. Keep the payer signer in a separate secret boundary and require your own user approval before signing each payment.</p>
 
 <h2 id="rotate-or-revoke-a-key">Rotate or revoke a key</h2>
 

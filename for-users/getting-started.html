@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Per-Endpoint Limits | HivemindOS Docs</title>
-  <meta name="description" content="Set request, concurrency, and daily credit limits for individual HivemindOS SuperAgent API operations.">
+  <title>Getting Started | HivemindOS Docs</title>
+  <meta name="description" content="Your first ten minutes with HivemindOS — create a helper, say hello, and learn the five screens that matter.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -80,7 +80,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/getting-started.html">Getting Started</a>
+                <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/getting-started.html">Getting Started</a>
               
             
               
@@ -220,7 +220,7 @@
               
 
               
-                <details class="navGroup" open>
+                <details class="navGroup">
                   <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
@@ -243,7 +243,7 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
                     
-                      <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/limits.html">Endpoint Limits</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/files-connections.html">Files And Connections</a>
                     
@@ -581,7 +581,7 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">SuperAgent API</p>
+          <p class="pageKicker">HivemindOS manual</p>
           <div class="pageToolActions">
             
             <button class="copyPageButton" type="button" data-copy-page>
@@ -589,224 +589,57 @@
             </button>
           </div>
         </div>
-        <h1 id="per-endpoint-limits">Per-endpoint limits</h1>
+        <h1 id="getting-started">Getting Started</h1>
 
-<p>Limits stop one key or worker from using more capacity than you intended. You can answer four separate questions for each endpoint:</p>
+<p>HivemindOS gives you a team of AI helpers that do real work for you — on your own computers, under your control. You tell the hive what you want; it figures out who does it. You do not need to understand any of the underlying technology to use it.</p>
 
-<ul>
-  <li>How many requests can it make per minute, hour, or day?</li>
-  <li>How many requests can run at the same time?</li>
-  <li>How many Agent Credits can selected money operations spend per day?</li>
-  <li>Should a broad key-wide limit also apply?</li>
-</ul>
+<p>This page is your first ten minutes.</p>
 
-<p>Limits are fixed when the key is created. Create a replacement key when you need different limits.</p>
+<h2 id="you-cant-break-anything">You can’t break anything</h2>
 
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">apiKeys</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
-  <span class="p">{</span>
-    <span class="na">label</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Bounded worker</span><span class="dl">"</span><span class="p">,</span>
-    <span class="na">scopes</span><span class="p">:</span> <span class="p">[</span>
-      <span class="dl">"</span><span class="s2">services:read</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">services:invoke</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">wallets:read</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">wallets:transact</span><span class="dl">"</span><span class="p">,</span>
-    <span class="p">],</span>
-    <span class="na">allowedServices</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">managed-wallets</span><span class="dl">"</span><span class="p">],</span>
-    <span class="na">limits</span><span class="p">:</span> <span class="p">{</span>
-      <span class="dl">"</span><span class="s2">*</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerHour</span><span class="p">:</span> <span class="mi">2</span><span class="nx">_000</span><span class="p">,</span>
-        <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">20</span><span class="p">,</span>
-      <span class="p">},</span>
-      <span class="dl">"</span><span class="s2">services.invoke</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">120</span><span class="p">,</span>
-      <span class="p">},</span>
-      <span class="dl">"</span><span class="s2">services.invoke.hive-research</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">30</span><span class="p">,</span>
-        <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
-      <span class="p">},</span>
-      <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">250</span><span class="p">,</span>
-      <span class="p">},</span>
-      <span class="dl">"</span><span class="s2">services.invoke.cloud-superbrain.memory.answer</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-        <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">500</span><span class="p">,</span>
-      <span class="p">},</span>
-      <span class="dl">"</span><span class="s2">wallets.transactions.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">10</span><span class="p">,</span>
-        <span class="na">creditsPerDay</span><span class="p">:</span> <span class="mi">25</span><span class="p">,</span>
-      <span class="p">},</span>
-      <span class="dl">"</span><span class="s2">credits.x402.topUp</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-        <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
-      <span class="p">},</span>
-    <span class="p">},</span>
-  <span class="p">},</span>
-  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">bounded-worker-v1</span><span class="dl">"</span> <span class="p">},</span>
-<span class="p">);</span>
-</code></pre></div></div>
+<p>Worth saying before anything else: <strong>exploring is always safe.</strong> Helpers ask before spending money, sending or posting anything, or doing anything hard to undo. Those decisions wait for your approval in <strong>Alerts</strong>. Click around freely — nothing runs away without you.</p>
 
-<details class="advancedDetails">
-  <summary>Advanced: selector matching and validation ceilings</summary>
+<h2 id="your-first-ten-minutes">Your first ten minutes</h2>
 
-  <h2 id="limit-selectors">Limit selectors</h2>
+<ol>
+  <li><strong>Open the app and finish setup.</strong> The setup wizard prepares a private workspace on your computer and finds any AI tools you already use. Defaults are safe — you can accept them all.</li>
+  <li><strong>Create your first helper.</strong> One click, and free to start — the built-in starter helper needs no accounts or keys. If setup already found helpers on your computer, you can skip this step; they are ready to use.</li>
+  <li><strong>Say hello.</strong> Type into the <strong>“Message the hive”</strong> bar at the bottom of any screen — it follows you everywhere. Ask for anything the way you would ask a capable teammate: “Research X and give me a short brief.”</li>
+  <li><strong>Take the tour.</strong> A one-minute walk through the screens that matter. You can replay it any time from Settings, or from the <strong>?</strong> button in the sidebar.</li>
+  <li><strong>Give the hive a job.</strong> When a request should be tracked and reviewed, put it on the <strong>Work</strong> board instead of chat. A helper picks it up; you see progress and results.</li>
+</ol>
 
-  <p>The <code class="language-plaintext highlighter-rouge">limits</code> object is keyed by an operation id:</p>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Selector</th>
-        <th>Applies to</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">*</code></td>
-        <td>Every authenticated SuperAgent API operation.</td>
-      </tr>
-      <tr>
-        <td>A static operation such as <code class="language-plaintext highlighter-rouge">databases.actions</code></td>
-        <td>Only that endpoint operation.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">services.invoke</code></td>
-        <td>Every direct managed-service invocation.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;</code></td>
-        <td>Direct invocation of one managed service.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;.&lt;operationId&gt;</code></td>
-        <td>One exact registered capability invoked directly.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">runs.create</code></td>
-        <td>Every durable run creation.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;</code></td>
-        <td>Run creation for one managed service.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;.&lt;operationId&gt;</code></td>
-        <td>One exact registered capability created as a run.</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p>For <code class="language-plaintext highlighter-rouge">hive-research</code> operation <code class="language-plaintext highlighter-rouge">analyses.create</code>, the API checks <code class="language-plaintext highlighter-rouge">*</code>, <code class="language-plaintext highlighter-rouge">services.invoke</code>, <code class="language-plaintext highlighter-rouge">services.invoke.hive-research</code>, and <code class="language-plaintext highlighter-rouge">services.invoke.hive-research.analyses.create</code>. Every matching limit applies. The request is rejected as soon as any one of them is exhausted.</p>
-
-  <p>The same hierarchy applies to managed memory. An answer call can be limited independently with <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.answer</code>, while <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain</code> caps every Cloud Superbrain operation available to that key.</p>
-
-  <p>The complete set of accepted operation ids is exported as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_OPERATION_IDS</code> by the TypeScript SDK and appears in the <a href="reference.html">endpoint reference</a>.</p>
-
-  <h2 id="limit-fields">Limit fields</h2>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Field</th>
-        <th>Meaning</th>
-        <th style="text-align: right">Accepted maximum</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">requestsPerMinute</code></td>
-        <td>Requests during a fixed minute window.</td>
-        <td style="text-align: right">60,000</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">requestsPerHour</code></td>
-        <td>Requests during a fixed hour window.</td>
-        <td style="text-align: right">1,000,000</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">requestsPerDay</code></td>
-        <td>Requests during a fixed UTC day.</td>
-        <td style="text-align: right">10,000,000</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">maxConcurrent</code></td>
-        <td>Requests for the selector that may be in progress at once.</td>
-        <td style="text-align: right">1,000</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">creditsPerDay</code></td>
-        <td>HivemindOS credits charged by one supported operation during a fixed UTC day.</td>
-        <td style="text-align: right">1,000,000,000</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p>Request and concurrency values must be positive integers. <code class="language-plaintext highlighter-rouge">creditsPerDay</code> must be positive and may have at most three decimal places. A key may define at most 128 operation selectors.</p>
-
-  <p>These are validation ceilings, not automatic quotas. If a field is omitted, that key does not add a limit for that field. Account balance, plan allowance, service availability, wallet policy, and any ancestor-key limits still apply.</p>
-
-  <p>Concurrent capacity remains in use until the response finishes, including a streamed response. Always consume or cancel response bodies so your application releases capacity promptly.</p>
-
-</details>
-
-<h2 id="daily-credit-limits">Daily credit limits</h2>
-
-<p><code class="language-plaintext highlighter-rouge">creditsPerDay</code> is available only for SuperAgent API-billed operations whose maximum charge can be checked before work starts:</p>
+<h2 id="the-five-screens-that-matter">The five screens that matter</h2>
 
 <ul>
-  <li><code class="language-plaintext highlighter-rouge">wallets.create</code></li>
-  <li><code class="language-plaintext highlighter-rouge">wallets.transactions.create</code></li>
-  <li><code class="language-plaintext highlighter-rouge">wallets.signatures.create</code></li>
-  <li><code class="language-plaintext highlighter-rouge">trading.orders.create</code></li>
+  <li><strong>Fleet</strong> — your computers and the helpers on them. Home base.</li>
+  <li><strong>Work</strong> — the task board. Write down what you want done; helpers pick it up.</li>
+  <li><strong>Brain</strong> — what your helpers remember and know. Everything one helper learns, all of them can use.</li>
+  <li><strong>Chat</strong> — talk with a specific helper directly.</li>
+  <li><strong>Alerts</strong> — anything waiting on you: questions, approvals, and decisions. An item here never means something broke.</li>
 </ul>
 
-<p>Daily credit limits cannot be placed on <code class="language-plaintext highlighter-rouge">*</code>, a managed-service selector, a quote, a read, or another operation. Before a supported paid action starts, the API confirms that its maximum charge fits the remaining key limit. Only the final charged amount counts toward the daily total.</p>
+<p>Everything else lives in <strong>More</strong> — you will not need it on day one.</p>
 
-<p><code class="language-plaintext highlighter-rouge">credits.x402.topUp</code> accepts request and concurrency limits, but not <code class="language-plaintext highlighter-rouge">creditsPerDay</code>: it buys credits rather than spending them. The unsigned HTTP 402 challenge does not consume the top-up request window. The first signed payment attempt does, while a completed idempotent replay returns the saved result without consuming another slot.</p>
+<h2 id="when-you-see-a-number-that-needs-you">When you see a number that “needs you”</h2>
 
-<p>A key-level credit limit does not add credits to the account and does not replace wallet policy. A request must pass the key limit, have enough account credits, and satisfy the wallet’s own transaction and daily rules.</p>
+<p>Fleet shows a small <strong>“need you”</strong> counter. On a brand-new setup this usually just means a setup step is waiting to be finished — click it and follow the guided fix. It is a to-do list, not an alarm.</p>
 
-<h2 id="delegated-keys-and-ancestor-limits">Delegated keys and ancestor limits</h2>
+<h2 id="help-is-always-one-click-away">Help is always one click away</h2>
 
-<p>Every key in the authority chain remains active policy. If a root key allows 1,000 requests per hour and a child allows 100, the child’s effective ceiling is 100. A child cannot create a covering limit with a larger value than an ancestor.</p>
+<ul>
+  <li>The <strong>?</strong> button at the bottom of the sidebar opens Help: what the current screen is for, a getting-started checklist, a glossary of every hive word, and keyboard shortcuts.</li>
+  <li><strong>“Explain this screen”</strong> inside Help asks your own hive to describe what you are looking at, in plain language.</li>
+  <li>Stuck on a real problem? See the <a href="troubleshooting-cookbook.html">Troubleshooting Cookbook</a>.</li>
+</ul>
 
-<p>Omitting a child limit does not bypass its parent. Revoking or expiring any ancestor invalidates the child entirely.</p>
+<h2 id="where-to-go-next">Where to go next</h2>
 
-<p>Use this to enforce organizational ceilings at the root while allowing each worker to set a smaller local budget.</p>
-
-<h2 id="handle-http-429">Handle HTTP 429</h2>
-
-<p>When a key reaches a request, concurrency, or supported daily-credit limit, the API returns HTTP 429:</p>
-
-<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
-  </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"rate_limit_exceeded"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"This API key has reached its request limit for this operation."</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"operationId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"services.invoke.hive-research"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"metric"</span><span class="p">:</span><span class="w"> </span><span class="s2">"requestsPerMinute"</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"retryAfterSeconds"</span><span class="p">:</span><span class="w"> </span><span class="mi">18</span><span class="w">
-</span><span class="p">}</span><span class="w">
-</span></code></pre></div></div>
-
-<p>The response also includes:</p>
-
-<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">Retry-After: 18
-X-HivemindOS-Limit-Operation: services.invoke.hive-research
-</span></code></pre></div></div>
-
-<p>Pause that workload for at least <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code>. Queueing work in your own backend is usually better than making every caller retry independently. A different operation may still have capacity, but do not route around a deliberate key-wide or ancestor limit.</p>
-
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
-  <span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span>
-  <span class="dl">"</span><span class="s2">analyses.create</span><span class="dl">"</span><span class="p">,</span>
-  <span class="p">{</span> <span class="na">question</span><span class="p">:</span> <span class="dl">"</span><span class="s2">...</span><span class="dl">"</span> <span class="p">},</span>
-  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="nx">jobId</span> <span class="p">},</span>
-<span class="p">);</span>
-
-<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">result</span><span class="p">.</span><span class="nx">ok</span> <span class="o">&amp;&amp;</span> <span class="nx">result</span><span class="p">.</span><span class="nx">code</span> <span class="o">===</span> <span class="dl">"</span><span class="s2">rate_limit_exceeded</span><span class="dl">"</span><span class="p">)</span> <span class="p">{</span>
-  <span class="k">await</span> <span class="nx">queueForLater</span><span class="p">(</span><span class="nx">jobId</span><span class="p">,</span> <span class="nx">result</span><span class="p">.</span><span class="nx">retryAfterSeconds</span> <span class="o">??</span> <span class="mi">60</span><span class="p">);</span>
-<span class="p">}</span>
-</code></pre></div></div>
-
-<p>Next: review <a href="authentication.html">authentication and delegation</a> or find an exact selector in the <a href="reference.html">endpoint reference</a>.</p>
+<ul>
+  <li><a href="features/">Find a feature by goal</a> — jump straight to what you want to accomplish.</li>
+  <li><a href="features/work-and-scheduler.html">Work and automations</a> — tracked tasks and work that repeats on a schedule.</li>
+  <li><a href="whole-brain/">Hive Superbrain</a> — how shared memory and knowledge work.</li>
+</ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -824,7 +657,7 @@ X-HivemindOS-Limit-Operation: services.invoke.hive-research
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/limits.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/getting-started.md">Improve this page ↗</a>
     </aside>
   </div>
 

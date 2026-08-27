@@ -80,6 +80,14 @@
               
 
               
+                <a class="navLink" href="/hivemindos/for-users/getting-started.html">Getting Started</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/hivemindos/for-users/">User Guide</a>
               
             
@@ -218,6 +226,10 @@
                     
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api.html">Overview</a>
                     
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/agent-setup.html">Agent Setup</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
                     
@@ -612,6 +624,10 @@
       <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1</code></td>
     </tr>
     <tr>
+      <td>Remote MCP</td>
+      <td><a href="https://api.hivemindos.app/mcp"><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/mcp</code></a></td>
+    </tr>
+    <tr>
       <td>OpenAPI 3.1 contract</td>
       <td><a href="https://api.hivemindos.app/openapi.json"><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/openapi.json</code></a></td>
     </tr>
@@ -668,6 +684,20 @@
 
 <h2 id="quickstart">Quickstart</h2>
 
+<h3 id="connect-an-mcp-compatible-agent">Connect an MCP-compatible agent</h3>
+
+<p>Add <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/mcp</code> as a remote Streamable HTTP server and send your restricted SuperAgent API key in the protected <code class="language-plaintext highlighter-rouge">Authorization</code> header. The agent receives four tools: list services, search allowed actions, read, and act. Your key’s scopes, service and operation boundaries, project, endpoint limits, approvals, and Agent Credit balance apply unchanged.</p>
+
+<p>See <a href="platform-api/mcp.html">Connect an agent with MCP</a> for a ready-to-copy configuration and a least-privilege key example.</p>
+
+<h3 id="let-your-agent-configure-it">Let your agent configure it</h3>
+
+<p>Open <a href="https://hivemindos.app/superagent-api/llms.txt">the copy-paste agent setup file</a>, copy the whole page, and paste it into the coding agent working on your project. It tells the agent how to inspect your project, create a restricted key, add the client, protect secrets, discover live capabilities, and verify the integration.</p>
+
+<p>If the agent supports reusable skills, download <a href="https://hivemindos.app/superagent-api/SKILL.md">the SuperAgent API <code class="language-plaintext highlighter-rouge">SKILL.md</code></a>. It teaches the agent how to keep managing keys, limits, capabilities, funding, tests, and audits after the first setup.</p>
+
+<p>The agent must still ask before signing or sending an x402 payment. See the <a href="platform-api/agent-setup.html">agent setup guide</a> if you want to review the steps first.</p>
+
 <h3 id="install-the-typescript-sdk">Install the TypeScript SDK</h3>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>npm <span class="nb">install</span> @hivemindos/sdk
@@ -697,6 +727,7 @@
   <span class="na">allowedOperations</span><span class="p">:</span> <span class="p">[</span>
     <span class="dl">"</span><span class="s2">services.list</span><span class="dl">"</span><span class="p">,</span>
     <span class="dl">"</span><span class="s2">capabilities.list</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">actions.list</span><span class="dl">"</span><span class="p">,</span>
     <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">,</span>
     <span class="dl">"</span><span class="s2">databases.account.read</span><span class="dl">"</span><span class="p">,</span>
     <span class="dl">"</span><span class="s2">databases.query</span><span class="dl">"</span><span class="p">,</span>
@@ -775,10 +806,14 @@
 
 <p>Use <code class="language-plaintext highlighter-rouge">GET /pricing</code> for the current price and <code class="language-plaintext highlighter-rouge">GET /credits/balance</code> for the current balance. Show the returned final or maximum price before paid work starts.</p>
 
+<p>An API key with <code class="language-plaintext highlighter-rouge">credits:write</code> can buy more Agent Credits through <code class="language-plaintext highlighter-rouge">POST /credits/x402/top-up</code>. The API returns a standard x402 challenge, accepts a signed Base payment, and adds the purchased credits to that key’s existing HivemindOS account. HivemindOS fixes the official revenue recipient, network, asset, price, and credited account on the server, so the caller cannot redirect a payment or fund another account.</p>
+
 <h2 id="continue">Continue</h2>
 
 <ul>
   <li><a href="platform-api/authentication.html">Authentication and API keys</a></li>
+  <li><a href="platform-api/agent-setup.html">Copy-paste agent setup</a></li>
+  <li><a href="platform-api/mcp.html">Connect an agent with MCP</a></li>
   <li><a href="platform-api/projects-security.html">Projects, isolation, and service accounts</a></li>
   <li><a href="platform-api/services.html">Service access and catalog</a></li>
   <li><a href="platform-api/memory.html">Managed memory and knowledge</a></li>
