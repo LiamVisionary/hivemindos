@@ -1043,14 +1043,16 @@
 
 <h3 id="dashboard-state">Dashboard State</h3>
 
-<p>The dashboard uses the authenticated <code class="language-plaintext highlighter-rouge">/api/dashboard/state</code> route for UI preferences and cache. The route persists to <code class="language-plaintext highlighter-rouge">~/.hivemindos/dashboard-state.json</code>, so packaged Tauri and ordinary browser sessions hydrate from the same local server source:</p>
+<p>The dashboard uses the authenticated <code class="language-plaintext highlighter-rouge">/api/dashboard/state</code> route for UI preferences and cache. State is stored per workspace: the main workspace persists to <code class="language-plaintext highlighter-rouge">~/.hivemindos/dashboard-state.json</code>, and every other workspace persists to <code class="language-plaintext highlighter-rouge">~/.hivemindos/workspaces/&lt;id&gt;/dashboard-state.json</code>, so packaged Tauri and ordinary browser sessions hydrate from the same local server source and a newly created workspace starts clean instead of inheriting another workspace’s data:</p>
 
 <ul>
   <li>Agent profile configuration.</li>
   <li>Shared vault UI configuration.</li>
   <li>Recent task, schedule, wallet, chat, folder, and discovered-machine state.</li>
-  <li>Theme and Honey opt-in flags.</li>
+  <li>Honey opt-in flags.</li>
 </ul>
+
+<p>A small set of install-wide keys — terms acceptance, onboarding progress, and appearance settings such as the theme — always lives in the main file and is shared by every workspace, so switching workspaces never re-prompts legal acceptance or resets the look.</p>
 
 <p>This avoids origin-scoped browser storage drift. Durable shared collaboration should use the vault or runtime-backed services.</p>
 
