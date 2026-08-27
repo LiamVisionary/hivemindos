@@ -609,6 +609,8 @@
 
 <p>The hub asks GitHub for the current compatible runner package and checksum. The collector accepts only an HTTPS archive from the official Actions runner release path, verifies the SHA-256 digest, rejects path traversal in the archive, configures argument by argument without a shell, and installs the per-user service under the private HivemindOS build-runner directory. Registration omits GitHub’s generic <code class="language-plaintext highlighter-rouge">self-hosted</code>, OS, and architecture labels so unrelated jobs cannot select this release-only Mac, and disables runner self-updates so the verified package cannot change between reviewed enrollments. The repository selector is derived by the server; a browser request cannot substitute an arbitrary download or command.</p>
 
+<p>Managed macOS setup also installs a per-user launch service that holds Apple’s AC-power-only system-sleep assertion while the release runner is connected. The display may still sleep, and unplugging the Mac releases the protection. <strong>Verify connection</strong> repairs a missing assertion or stopped runner; disconnect removes the assertion before retaining the runner recovery copy. This prevents the protected Mac from disappearing during the hosted standalone-build gap without changing battery sleep policy or requiring an administrator password.</p>
+
 <p>GitHub requires a runner with automatic updates disabled to be refreshed within 30 days of a new runner release. Refresh this protected machine by disconnecting and reconnecting release jobs from Fleet; that downloads and verifies GitHub’s then-current package before the next candidate. Do not replace the runner folder manually or enable self-updates as a shortcut.</p>
 
 <p>Because a Hive builder is persistent rather than a disposable hosted runner, every macOS release job snapshots the user’s existing keychain search list before importing its temporary signing identity. An unconditional final step restores that list and deletes the temporary certificate and keychain even when compilation, signing, notarization, smoke testing, or artifact upload fails.</p>
@@ -625,6 +627,8 @@
 </ol>
 
 <p>Linux native test compilation is part of CI rather than the packaging critical path. Hosted Windows and Linux each run Complete Hub and Link as separate parallel jobs with product-specific Rust caches. macOS keeps Hub and Link together because a single protected Mac runner deliberately accepts only one release job at a time.</p>
+
+<p>The shared architecture-independent dashboard remains on hosted Linux so the protected Mac does not build Windows or Linux payloads. Private-repository standard Linux runners provide 8 GB RAM. The standalone job therefore caps V8 at 5,120 MB and its complete process tree at 6,500 MB, prints detected physical memory, and refuses hosts below 7,500 MB before installing or compiling. Do not raise those limits above the runner’s physical memory; select a reviewed larger Linux runner or reduce measured peak usage instead.</p>
 
 <h2 id="recovery">Recovery</h2>
 
