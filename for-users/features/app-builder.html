@@ -714,9 +714,14 @@ so creating source files does not automatically execute downloaded code.</p>
 Agent. Project metadata and ownership remain server-authoritative, while source
 stays on that agent’s retained workspace.</p>
 
-<p>The first managed slice supports creating, listing, and reading projects. Local
-file editing and runtime lifecycle are not presented as managed capabilities
-until their isolated-container implementation is available.</p>
+<p>Managed projects support creating, listing, reading, starting, stopping, and
+deleting. Start runs the project’s development server inside an isolated,
+resource-limited container on the managed agent’s machine, and stop and delete
+are explicit, confirmed operations; deleting permanently removes the project’s
+workspace files. Local file editing and an in-dashboard preview of the running
+managed app are not presented as managed capabilities yet, and a managed agent
+deployed before these controls existed must be reconfigured once before its
+projects can be started, stopped, or deleted.</p>
 
 <p>Managed projects can prepare the same bounded static release artifact from an
 <code class="language-plaintext highlighter-rouge">out</code> directory when the managed agent is running. Publishing that artifact is

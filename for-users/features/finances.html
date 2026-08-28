@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Hivemind Bots | HivemindOS Docs</title>
-  <meta name="description" content="Run an always-on HivemindOS agent with a persistent computer, hosted routines, approvals, and human takeover.">
+  <title>Finances | HivemindOS Docs</title>
+  <meta name="description" content="See accounts, activity, investments, debts, budgets, goals, alerts, and trusted agent access in one private financial workspace.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -387,7 +387,7 @@
               
 
               
-                <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
+                <a class="navLink" href="/hivemindos/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
               
             
               
@@ -589,159 +589,75 @@
             </button>
           </div>
         </div>
-        <h1 id="hivemind-bots">Hivemind Bots</h1>
+        <h1 id="finances">Finances</h1>
 
-<p>A Hivemind Bot is a first-party always-on HivemindOS agent. It combines the existing managed cloud workspace with a persistent browser computer, hosted schedules and event routines, independent action review, exact approvals, human takeover, managed model access, and cloud-safe integrations.</p>
+<p>Finances gives you one place to understand what you own, what you owe, where money is going, and what needs attention. Open <strong>More → Finances</strong> to see your net worth, monthly cash flow, accounts, recent activity, budgets, goals, alerts, and agent suggestions.</p>
 
-<p>Use a cloud agent when the work genuinely needs to be always on. For normal interactive work or private local files, an agent on your own machine is usually simpler and cheaper.</p>
+<p>Your financial workspace starts empty. Add only the accounts you want HivemindOS to track.</p>
 
-<h2 id="create-a-cloud-agent">Create A Cloud Agent</h2>
+<h2 id="add-your-accounts">Add Your Accounts</h2>
 
-<ol>
-  <li>Open <strong>More → Hivemind Bots</strong>.</li>
-  <li>Choose <strong>Deploy agent</strong> and review the currently available size, storage, running price, stopped price, and setup cost.</li>
-  <li>Give the agent a name and fund only the amount you intend to use.</li>
-  <li>Wait for deployment to report healthy before starting work.</li>
-  <li>Connect Hive Superbrain, a private machine network, or external tools only when the agent actually needs them.</li>
-</ol>
-
-<p>Deployment can take a few minutes. HivemindOS shows the real service state instead of presenting the agent as ready while its workspace or runtime is still starting.</p>
-
-<h2 id="the-persistent-computer">The Persistent Computer</h2>
-
-<p>Each running Bot has a browser profile on its retained managed volume. Cookies, approved sessions, and normal browser state survive a stop and later start. The Bot sees the browser through a dedicated computer tool; it does not need a personal laptop to remain online.</p>
-
-<p>The <strong>Computer</strong> tab provides a current screenshot, URL bar, takeover controls, an exact-action approval card, and an ephemeral secret handoff:</p>
-
-<ol>
-  <li>Load the screen in view-only mode.</li>
-  <li>Choose <strong>Take over</strong> to pause agent input and acquire a short renewable lease.</li>
-  <li>Click the screenshot, type into the focused field, press Enter, scroll, or navigate.</li>
-  <li>For a password or other sensitive field, choose the field from the latest observation and use <strong>Enter without saving</strong>.</li>
-  <li>Release takeover so the Bot can resume.</li>
-</ol>
-
-<p>Takeover is exclusive and expires after one minute unless the open panel renews it. The lease credential remains in that panel’s memory. A secret value is relayed only to the selected field and immediately cleared from the form; it is not added to computer policy, hosted routine receipts, or audit metadata. Screenshots necessarily contain whatever is visibly rendered in the browser and should be treated like a live screen share.</p>
-
-<h2 id="computer-policy-and-approvals">Computer Policy And Approvals</h2>
-
-<p>The <strong>Policy</strong> tab can allow or deny domains, require approval for consequential actions or every interaction, and enable an independent model review for actions not already decided by deterministic rules.</p>
-
-<p>Denied domains always win. Sensitive fields and actions that appear capable of sending, publishing, purchasing, transferring, deleting, installing, uploading, changing an account, or accepting terms pause instead of silently executing. Approval binds to one exact action fingerprint; changing the action requires a new approval. Pending approvals also appear in <strong>Alerts</strong>.</p>
-
-<p>Computer policy is one layer, not the financial authority. An exact approval can authorize one browser interaction at a checkout, but it does not enforce the company budget, validate a recipient or amount, or unlock the local signing wallet while the owner machine is offline. Keep provider-side caps, wallet limits, ad-account limits, and payment confirmations enabled. Unattended hosted spending requires a separately connected, narrowly scoped provider or a reviewed hosted smart-wallet or custody rail; deploying a Bot does not enable one.</p>
-
-<h2 id="hosted-routines">Hosted Routines</h2>
-
-<p>The <strong>Routines</strong> tab creates two kinds of always-on work:</p>
+<p>Choose <strong>Add account</strong>, then use the option that fits the account:</p>
 
 <ul>
-  <li><strong>Schedule:</strong> a five-field cron expression evaluated in the selected IANA timezone.</li>
-  <li><strong>Event:</strong> a named event such as <code class="language-plaintext highlighter-rouge">company.lead.created</code>, published with a stable event id so retries are deduplicated.</li>
+  <li><strong>Connect automatically</strong> keeps supported bank, card, loan, and investment accounts current after a secure sign-in.</li>
+  <li><strong>Add it yourself</strong> tracks cash, property, loans, offline investments, or anything else with a balance.</li>
+  <li><strong>Import a statement</strong> adds transaction history from a CSV, OFX, or QFX file. Reimporting the same rows does not create duplicates.</li>
 </ul>
 
-<p>Every routine has a bounded prompt, runtime limit, stale-event window, pause control, manual <strong>Run now</strong> action, and recent run receipts. The routine prompt is stored so the schedule can run while your devices are offline; do not paste credential values into it. Only event keys, a payload hash, timestamps, status, and a generic output preview are stored in the routine ledger; raw event payloads and model responses are not kept there. A failed routine appears in the Bot panel and creates a deduplicated in-app Alert.</p>
+<p>HivemindOS also brings in supported HivemindOS wallets and connected brokerage accounts when you refresh. Automatic account updates are included with HivemindOS Plus, Pro, and Max; if you do not have an active plan, the account flow lets you choose one without losing your place. Self-hosted installations can use their own connection under <strong>Advanced</strong>. Manual balances and statement imports remain available without a plan.</p>
 
-<p>Routines tell the Bot to respect its computer policy, pending approvals, human takeover, provider limits, and secret handoffs. Test a routine manually before scheduling it, make external writes idempotent, and use stable event ids when a sender retries.</p>
+<p>Use <strong>Refresh</strong> when you want the latest available balances and activity. A connection that needs you appears in the financial watchlist and on its account card.</p>
 
-<h2 id="what-persists">What Persists</h2>
+<h2 id="understand-the-overview">Understand The Overview</h2>
 
-<p>The agent’s workspace and runtime state live on persistent managed storage. Stopping the agent removes active compute but keeps that workspace, its stable service identity, and the connections you explicitly retained.</p>
+<p>The Overview separates:</p>
 
 <ul>
-  <li><strong>Stop</strong> lowers ongoing compute use while preserving the workspace.</li>
-  <li><strong>Start</strong> creates fresh compute around the same retained workspace.</li>
-  <li><strong>Delete permanently</strong> removes the compute and persistent workspace. Review and export anything important first; deletion cannot be undone.</li>
+  <li>assets from liabilities;</li>
+  <li>cash from investments and crypto;</li>
+  <li>settled monthly income from settled monthly spending;</li>
+  <li>current totals from balances in another currency that have not been converted.</li>
 </ul>
 
-<p>Running out of managed credit stops compute rather than allowing an unbounded balance. Check current usage and funding in the Hivemind Bots view.</p>
+<p>Pending transactions do not change monthly cash flow. Accounts in a different currency remain visible, but HivemindOS does not guess an exchange rate or silently include them in the base-currency total.</p>
 
-<h2 id="run-a-zero-human-company-with-a-bot">Run A Zero Human Company With A Bot</h2>
+<p>The watchlist calls out connection problems, low balances, unusually large purchases, budgets that are nearly used or exceeded, and upcoming liability payments when that information is available.</p>
 
-<p>Create or edit a company and choose <strong>Hivemind Bot · first-party</strong> as its autonomy engine, then select one managed Bot. The binding contains only the managed Bot id; portable company templates never include that account-specific binding.</p>
+<h2 id="organize-activity-and-plans">Organize Activity And Plans</h2>
 
-<p>Launching the company sends a bounded operating brief containing the company shape, apex goal, directives, product catalog, budgets, approval policies, and saved autonomy cadence. It does not add personal profile fields, setup-key values, or recognized credential values. HivemindOS waits for the first managed response and records an observed Company Run, company memory entry, and governance receipt. It also creates one company-bound hosted routine in a paused state, records that server-created binding, and only then enables the saved cadence. Existing and manually configured companies default to 30 minutes; governed watcher templates may start at 60 minutes. Later hosted receipts remain on the Bot. <strong>Stop autonomy</strong>, <strong>Freeze</strong>, changing engines, and company deletion disable future hosted cycles before claiming the local state changed; a cycle already in flight is allowed to finish.</p>
+<p>Use <strong>Activity</strong> to search transactions and correct their categories. Categories feed the monthly spending breakdown and matching budgets.</p>
 
-<p>The first-party Bot path is different from <strong>Grok Bot · external handoff</strong>. HivemindOS can create, control, inspect, and record Hivemind Bot work. It can only produce a privacy-reviewed template and runbook for Grok Bot until xAI provides a documented Bot-control API.</p>
-
-<h2 id="pricing-and-funding">Pricing And Funding</h2>
-
-<p>Cloud-agent availability and pricing can change. HivemindOS loads the authoritative plans, rates, balances, and entitlements from the managed service at the time you review or fund an agent. Treat the values shown in the confirmation as current; do not rely on an old documentation table or a locally edited app setting.</p>
-
-<p>When wallet funding is available, HivemindOS shows the exact network, asset, amount, recipient, expiry, and expected credit before asking the selected wallet to sign. Normal wallet controls still apply:</p>
+<p>Use <strong>Plans</strong> to:</p>
 
 <ul>
-  <li>spending must be enabled;</li>
-  <li>per-payment, daily, and monthly limits must allow the amount;</li>
-  <li>company budgets and freeze controls apply to company-funded work;</li>
-  <li>an approval threshold can pause the payment;</li>
-  <li>the same onchain payment cannot be credited twice.</li>
+  <li>set monthly category budgets;</li>
+  <li>track savings, emergency-fund, net-worth, custom, or debt-payoff goals;</li>
+  <li>link goals to account balances so progress updates with those accounts;</li>
+  <li>review suggestions prepared by an agent.</li>
 </ul>
 
-<p>The managed service—not the desktop app—enforces official balances, settlement, pricing, resource ownership, quotas, and cloud entitlements.</p>
+<p>Removing a manually added account removes its imported history. Removing an automatically connected institution removes every account from that connection. HivemindOS asks before either action.</p>
 
-<h2 id="use-hive-superbrain-from-the-cloud">Use Hive Superbrain From The Cloud</h2>
+<p>Use <strong>Export data</strong> in Accounts whenever you want a portable copy of the financial records in the current workspace. If a subscription ends, existing records remain available to view and export, and connected institutions can still be removed. Automatic refresh and new connections resume when the subscription is active again.</p>
 
-<p>Cloud agents do not receive your brain automatically. You can explicitly pair a managed workspace with an approved Hive Superbrain sync peer. The cloud copy can then support work while personal machines are off and reconcile again when another authorized peer reconnects.</p>
+<h2 id="give-an-agent-access">Give An Agent Access</h2>
 
-<p>Review what the shared vault contains before pairing it with a managed machine. Plaintext secrets should remain outside the vault. Provider and integration credentials added to the managed agent are separate trust decisions and are stored by the managed service rather than copied silently from your laptop.</p>
+<p>Agents have no access to Finances by default. In <strong>Agent access</strong>, choose one agent and grant only the accounts and abilities it needs.</p>
 
-<h2 id="know-which-integrations-stay-available">Know Which Integrations Stay Available</h2>
+<p>Available permissions cover the financial overview, accounts, transactions, categorization, holdings, budgets, goals, alerts, and suggestions. Leaving every account unchecked grants the selected abilities across current and future accounts; selecting accounts narrows access to those accounts.</p>
 
-<p>An integration works only while the machine or service that owns it is running.</p>
+<p>An agent can be allowed to prepare a suggested transfer, trade, payment, or other action with an optional dollar ceiling. A suggestion is a reviewable plan, not a money movement. Approving it in Finances saves your decision; any real transfer or trade still follows its own wallet or trading confirmation and limits.</p>
 
-<table>
-  <thead>
-    <tr>
-      <th>Capability</th>
-      <th>When personal machines are off</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>Managed model access and files in the cloud workspace</td>
-      <td>Available while the cloud agent is running.</td>
-    </tr>
-    <tr>
-      <td>A remote HTTPS tool explicitly connected to the cloud agent</td>
-      <td>Available according to that connection’s permissions.</td>
-    </tr>
-    <tr>
-      <td>Hive Superbrain copied into the managed workspace</td>
-      <td>Available from the approved cloud copy.</td>
-    </tr>
-    <tr>
-      <td>An app on another always-on trusted machine</td>
-      <td>Available while that machine and its private connection remain online.</td>
-    </tr>
-    <tr>
-      <td>A filesystem, browser session, or local tool on an offline computer</td>
-      <td>Unavailable.</td>
-    </tr>
-  </tbody>
-</table>
+<p>Remove an agent’s Finance access at any time. This does not change the agent’s unrelated app permissions.</p>
 
-<p>Connecting a cloud agent to your private machine network does not make an offline computer’s files, browser, or local apps keep running. HivemindOS should never pretend otherwise.</p>
+<h2 id="privacy-and-safety">Privacy And Safety</h2>
 
-<h2 id="app-projects">App Projects</h2>
+<p>Financial records cached on your computer stay encrypted and private to the current workspace. Automatic connection access is isolated to your HivemindOS account and never appears in the Finance screen or agent output.</p>
 
-<p>A running Managed Cloud Agent can host app projects in its retained workspace. This is useful when the agent must continue building or operating away from your computer. Local and fleet agents use the same App Builder project model, so choose the host based on where the source should live and whether it must remain available continuously.</p>
+<p>Statement files are processed as imports and are not exposed to agents. Agents receive only the finance data covered by their saved permissions. Bank passwords stay in the secure connection window and are not given to HivemindOS or its agents.</p>
 
-<p>The Bot panel includes an App Projects section with a project host picker. Choose “Your computers” to see projects that live on your own machines (those are created and operated from Chat), or choose a Bot to manage the projects it hosts. On a running Bot you can create a project from the reviewed Next.js starter, start or stop its development runtime, and delete a project. Start runs the project in an isolated, resource-limited container on the Bot’s machine; starting, stopping, and deleting each ask for explicit confirmation, and deleting permanently removes that project’s workspace files from the Bot.</p>
-
-<p>Two honest limits apply today. First, the dashboard does not yet show a live preview of a managed project’s running app; publish through Hosting when you want a viewable site. Second, a Bot deployed before app runtime controls existed must be reconfigured once before Start, Stop, and Delete can manage its projects; the panel tells you when that is needed.</p>
-
-<p>Cloud-hosted app projects are still rolling out: today they can be created, listed, and inspected through the platform interfaces, while start, stop, and delete controls for cloud-hosted projects arrive in a later release. The App Builder view in the dashboard currently builds on local and fleet machines.</p>
-
-<p>Publishing is a separate decision from choosing a cloud build machine. Review the <a href="app-builder.html">App Builder and hosting guide</a> before creating a public preview or site.</p>
-
-<h2 id="smaller-screens-and-remote-access">Smaller Screens And Remote Access</h2>
-
-<p>The Bot panel collapses to one column on narrow screens, including the computer, approval, routine, and policy controls. It uses the same authenticated HivemindOS API rather than exposing the browser sidecar directly. Remote access still depends on the supported HivemindOS dashboard and network setup; do not publish the local dashboard or managed runtime endpoints to the open internet.</p>
-
-<h2 id="before-you-delete-one">Before You Delete One</h2>
-
-<p>Export or hand off important project files and deliverables, stop schedules that point to the agent, reassign company work, and check whether it is the only online copy of any explicitly paired data. Deleting a cloud agent does not delete your local Hive Superbrain, but it permanently removes that agent’s managed workspace.</p>
+<p>Finances is an organization and oversight workspace. It does not replace statements from your financial institution, and its summaries are not tax, legal, or investment advice.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -759,7 +675,7 @@
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/features/managed-cloud-agents.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/features/finances.md">Improve this page ↗</a>
     </aside>
   </div>
 
