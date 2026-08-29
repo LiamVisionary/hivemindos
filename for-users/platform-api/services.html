@@ -805,7 +805,7 @@
       <tr>
         <td>Media</td>
         <td><code class="language-plaintext highlighter-rouge">managed-media</code></td>
-        <td>Generate media across the full hosted provider catalog — image, video, audio, lip-sync, edit, upscale, and 3D.</td>
+        <td>Generate media across the full hosted catalog with automatic exact-model fallback — image, video, audio, lip-sync, edit, upscale, and 3D.</td>
       </tr>
       <tr>
         <td>Media</td>
@@ -838,6 +838,8 @@
 </details>
 
 <p>Media Studio and Photo Keyworder use the same HivemindOS Agent Credit balance as every other paid SuperAgent capability. A successful media-generation request reports its reserved credit charge, failed work returns the reservation, completed work settles the exact charge, and an idempotent replay never debits the balance again. Photo analysis is charged only after the result completes. Responses expose the authoritative charge in <code class="language-plaintext highlighter-rouge">chargedCredits</code> and <code class="language-plaintext highlighter-rouge">X-HivemindOS-Credits-Charged</code>.</p>
+
+<p>Managed Media chooses the lowest-priced healthy route for the model you requested. If that route becomes unavailable, the same job can continue through another exact route without changing models or reserving credits twice. The quote shows both the expected price and the highest possible reservation inside this fallback plan; anything not spent is returned when the job finishes. A content or safety rejection does not try another route.</p>
 
 <h2 id="invoke-a-service-directly">Invoke a service directly</h2>
 
