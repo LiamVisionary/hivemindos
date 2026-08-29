@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Concentrated Liquidity | HivemindOS Docs</title>
-  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <title>AI Web Search | HivemindOS Docs</title>
+  <meta name="description" content="Ask the web a question through the HivemindOS SuperAgent API and get an answer with cited sources.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -220,7 +220,7 @@
               
 
               
-                <details class="navGroup">
+                <details class="navGroup" open>
                   <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
@@ -237,7 +237,7 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
-                      <a class="navLink" href="/hivemindos/for-users/platform-api/answer-engine.html">AI Web Search</a>
+                      <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/answer-engine.html">AI Web Search</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
                     
@@ -583,7 +583,7 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">HivemindOS manual</p>
+          <p class="pageKicker">SuperAgent API</p>
           <div class="pageToolActions">
             
             <button class="copyPageButton" type="button" data-copy-page>
@@ -591,156 +591,245 @@
             </button>
           </div>
         </div>
-        <h1 id="concentrated-liquidity">Concentrated Liquidity</h1>
+        <h1 id="ai-web-search">AI web search</h1>
 
-<p>HivemindOS can watch a real Uniswap v3 position on Base and model when moving its
-price range may be worthwhile. The manager is deliberately <strong>shadow-only</strong>: it reads
-public chain state and updates a virtual range, but it has no signer and cannot
-approve tokens, remove liquidity, mint a position, or submit a transaction.</p>
+<p>The <code class="language-plaintext highlighter-rouge">answer-engine</code> service searches the web, reads the pages that matter, and writes an answer with numbered citations. Your app sends a question and gets back the answer text plus the list of sources it was built from.</p>
 
-<p>This makes it useful for testing the idea behind an automated market-making agent
-before giving any separate system authority over funds.</p>
+<div class="plainAnswer">
+  <strong>In plain English</strong>
+  <p>You ask a question. HivemindOS does the searching and reading, then writes the answer and shows you exactly which pages it came from.</p>
+</div>
 
-<h2 id="what-the-manager-checks">What the manager checks</h2>
+<p>The request and response shapes match the open-source <a href="https://github.com/ItzCrazyKns/Vane">Vane</a> search API, so a client written for Vane works here with only the address and the authorization header changed.</p>
 
-<p>Each evaluation reads the position NFT from Uniswap’s official Base position-manager
-contract, resolves its pool, and records the current tick, configured range, fee tier,
-owner, token amounts, and observed Base block. For stablecoin-quoted pools it also
-estimates the position’s USD value.</p>
+<h2 id="ask-a-question">Ask a question</h2>
 
-<p>The policy then classifies the position as:</p>
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">searches.create</span><span class="dl">"</span><span class="p">,</span> <span class="p">{</span>
+  <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">How well do heat pumps work below freezing?</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">optimizationMode</span><span class="p">:</span> <span class="dl">"</span><span class="s2">balanced</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">sources</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">web</span><span class="dl">"</span><span class="p">],</span>
+<span class="p">});</span>
+
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">message</span><span class="p">);</span>   <span class="c1">// the answer, with [1] style citations</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">sources</span><span class="p">);</span>   <span class="c1">// what each citation number points to</span>
+</code></pre></div></div>
+
+<p>Every source carries the page title and address, so your app can render citations as links:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Modern cold-climate units keep working near -25 °C [1], though their efficiency falls as it gets colder [2]."</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"sources"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+    </span><span class="p">{</span><span class="w"> </span><span class="nl">"content"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nl">"metadata"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nl">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Cold climate heat pumps"</span><span class="p">,</span><span class="w"> </span><span class="nl">"url"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://example.com/a"</span><span class="p">,</span><span class="w"> </span><span class="nl">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"web"</span><span class="p">,</span><span class="w"> </span><span class="nl">"read"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">},</span><span class="w">
+    </span><span class="p">{</span><span class="w"> </span><span class="nl">"content"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nl">"metadata"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nl">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Efficiency in winter"</span><span class="p">,</span><span class="w"> </span><span class="nl">"url"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://example.org/b"</span><span class="p">,</span><span class="w"> </span><span class="nl">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"web"</span><span class="p">,</span><span class="w"> </span><span class="nl">"read"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span><span class="w">
+  </span><span class="p">]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>A source with <code class="language-plaintext highlighter-rouge">read: true</code> was opened and read in full; the rest are search results with their summary text.</p>
+
+<h2 id="how-hard-it-should-look">How hard it should look</h2>
+
+<p><code class="language-plaintext highlighter-rouge">optimizationMode</code> sets how much work goes into one answer.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Mode</th>
+      <th>What it does</th>
+      <th>Use it for</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">speed</code></td>
+      <td>One search pass, answers from search results</td>
+      <td>Quick lookups where you need an answer now</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">balanced</code></td>
+      <td>A few search passes, reads the best pages</td>
+      <td>The everyday default</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">quality</code></td>
+      <td>Many search passes, reads more pages, writes a report</td>
+      <td>Research questions worth the extra time and credits</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="only-certain-sites">Only certain sites</h2>
+
+<p>Pass <code class="language-plaintext highlighter-rouge">includeDomains</code> to search nothing else, and <code class="language-plaintext highlighter-rouge">excludeDomains</code> to keep sites out. Both take plain site addresses; a pasted address with <code class="language-plaintext highlighter-rouge">https://</code> and a trailing slash is accepted and tidied.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">searches.create</span><span class="dl">"</span><span class="p">,</span> <span class="p">{</span>
+  <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">transformer scaling laws</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">includeDomains</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">arxiv.org</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">nature.com</span><span class="dl">"</span><span class="p">],</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<p>The restriction is applied twice — in the query, and again on the results — because search engines treat a site restriction as a hint rather than a rule.</p>
+
+<h2 id="where-to-look">Where to look</h2>
+
+<p><code class="language-plaintext highlighter-rouge">sources</code> chooses which parts of the web are searched. Ask for more than one when the question needs both.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Lane</th>
+      <th>Covers</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">web</code></td>
+      <td>The open web</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">discussions</code></td>
+      <td>Forums and community answers</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">academic</code></td>
+      <td>Papers, preprints, and journals</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">documents</code></td>
+      <td>Text you sent with the request</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>A lane is only used when the question actually calls for it, so asking for all three costs nothing extra on a question that needs none of them.</p>
+
+<h2 id="images-and-videos">Images and videos</h2>
+
+<p>Set <code class="language-plaintext highlighter-rouge">includeMedia: true</code> and pictures or clips come back alongside the answer, but only when the question is one they actually help with — “what does a heat pump look like” gets images, “what does a heat pump cost” does not.</p>
+
+<p>Images carry their licence and the page they came from, so they can be credited. You can also search either on its own:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">images</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">images.search</span><span class="dl">"</span><span class="p">,</span> <span class="p">{</span> <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">cold climate heat pump</span><span class="dl">"</span> <span class="p">});</span>
+<span class="kd">const</span> <span class="nx">videos</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">videos.search</span><span class="dl">"</span><span class="p">,</span> <span class="p">{</span> <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">how to install a heat pump</span><span class="dl">"</span> <span class="p">});</span>
+</code></pre></div></div>
+
+<h2 id="answer-from-your-own-documents">Answer from your own documents</h2>
+
+<p>Send the text with the request and add <code class="language-plaintext highlighter-rouge">documents</code> to <code class="language-plaintext highlighter-rouge">sources</code>. Nothing is stored — the text is used for this one search and then gone.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">searches.create</span><span class="dl">"</span><span class="p">,</span> <span class="p">{</span>
+  <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">What COP did unit 3 measure at -19 °C?</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">sources</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">documents</span><span class="dl">"</span><span class="p">],</span>
+  <span class="na">documents</span><span class="p">:</span> <span class="p">[{</span> <span class="na">title</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Site log</span><span class="dl">"</span><span class="p">,</span> <span class="na">text</span><span class="p">:</span> <span class="dl">"</span><span class="s2">At -19C the measured COP was 1.9…</span><span class="dl">"</span> <span class="p">}],</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<p>Ask for <code class="language-plaintext highlighter-rouge">["documents", "web"]</code> and both feed one answer, with citations telling them apart.</p>
+
+<h2 id="instant-answers">Instant answers</h2>
+
+<p>When a question is arithmetic, a currency conversion, the weather somewhere, or a crypto price, the result carries a <code class="language-plaintext highlighter-rouge">widgets</code> array with the answer already worked out. These cost no extra model time — the parameters come from the same turn that sorts the question — and the written answer is told not to contradict them.</p>
+
+<p>Share prices are deliberately absent: there is no keyless quote source we trust, and a stale price is worse than none.</p>
+
+<h2 id="follow-up-questions">Follow-up questions</h2>
+
+<p>Set <code class="language-plaintext highlighter-rouge">includeSuggestions: true</code> and the result carries a few follow-ups drawn from what the answer left open — not from the question, so they point at the gaps rather than rephrasing what was asked.</p>
+
+<h2 id="streaming">Streaming</h2>
+
+<p>Set <code class="language-plaintext highlighter-rouge">stream: true</code> to receive the answer as it is written. The response is newline-delimited JSON: one complete object per line.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Frame</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">init</code></td>
+      <td>The stream is open</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">session</code></td>
+      <td>The search’s id, for reconnecting</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">step</code></td>
+      <td>Progress: what is being searched or read right now</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">widget</code></td>
+      <td>An instant answer — arithmetic, currency, weather, a price</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">media</code></td>
+      <td>Images or videos, when asked for</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">sources</code></td>
+      <td>The full source list, sent before the answer text</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">response</code></td>
+      <td>A piece of the answer</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">suggestions</code></td>
+      <td>Follow-up questions, when asked for</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">error</code></td>
+      <td>Something went wrong; the stream still closes cleanly</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">done</code></td>
+      <td>The answer is complete</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Render <code class="language-plaintext highlighter-rouge">step</code> frames if you want to show the work in progress, or ignore them and wait for <code class="language-plaintext highlighter-rouge">response</code>.</p>
+
+<h3 id="if-the-connection-drops">If the connection drops</h3>
+
+<p>A <code class="language-plaintext highlighter-rouge">quality</code> search can run for minutes. The stream’s first frame is <code class="language-plaintext highlighter-rouge">session</code>, carrying the search’s id, and the same id comes back in the <code class="language-plaintext highlighter-rouge">x-hivemindos-answer-session</code> header. If the connection drops, reconnect with it:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">searches.reconnect</span><span class="dl">"</span><span class="p">,</span> <span class="p">{},</span> <span class="p">{</span>
+  <span class="na">pathParameters</span><span class="p">:</span> <span class="p">{</span> <span class="nx">searchId</span> <span class="p">},</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<p>Everything the search has produced replays, then live frames continue. The run does not stop when you disconnect, so the model time you already paid for is not lost. The window stays open for fifteen minutes after the answer finishes.</p>
+
+<h2 id="answer-models">Answer models</h2>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">models</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">models.list</span><span class="dl">"</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>Pass a <code class="language-plaintext highlighter-rouge">chatModel</code> on the request to pick one; leave it out to use the recommended default. Answers are written by managed HivemindOS models and billed to the same Agent Credit balance as the rest of the API — this service adds no separate charge on top of the model it uses.</p>
+
+<div class="plainAnswer">
+  <strong>Want it to stay on your own machine?</strong>
+  <p>The HivemindOS desktop app has the same search under <strong>Search</strong>, and there it can answer with a model running on your own computer, so the question, the pages, and the answer never leave it. The desktop version reads your Notebooks directly rather than needing documents sent with each request.</p>
+</div>
+
+<h2 id="permissions">Permissions</h2>
+
+<p>A key needs <code class="language-plaintext highlighter-rouge">services:read</code> and <code class="language-plaintext highlighter-rouge">services:invoke</code>, and its allowed services must include <code class="language-plaintext highlighter-rouge">answer-engine</code>. Restrict it to <code class="language-plaintext highlighter-rouge">answer-engine.searches.create</code> if that is the only thing the key should be able to do.</p>
+
+<h2 id="what-it-will-not-do">What it will not do</h2>
 
 <ul>
-  <li><strong>Hold</strong> — the price remains comfortably inside the range.</li>
-  <li><strong>Watch</strong> — the price is near or outside an edge, but a safety or economics gate
-has not cleared.</li>
-  <li><strong>Propose rebalance</strong> — a new virtual range is centered on the current tick because
-every configured gate cleared.</li>
+  <li>It will not answer from memory when the sources do not cover the question. It says what is missing instead.</li>
+  <li>It will not cite a page it did not retrieve.</li>
+  <li>It will not show the same story five times because five outlets carried it: near-identical results are folded into one citation.</li>
+  <li>It treats page text as untrusted. Instructions found on a web page are reported as content, never followed.</li>
 </ul>
 
-<p>The explanation shown beside each decision includes the nearest-edge distance,
-estimated fees recovered during the evaluation window, gas and inventory-cost
-assumptions, expected net benefit, and any remaining cooldown.</p>
-
-<h2 id="read-the-paper-ledger">Read the paper ledger</h2>
-
-<p>Each saved monitor also keeps a local paper portfolio. It marks the virtual LP range
-against the observed pool price, accrues fees from the configured fee-APR assumption
-only while that range is active, and deducts the configured gas plus inventory cost
-whenever the policy proposes a virtual rebalance. The ledger reports virtual
-principal, modeled fees, total value, normalized return, a same-start HODL baseline,
-excess return, cumulative costs, and the number of paper rebalances.</p>
-
-<p>Paper returns are deliberately separate from the real NFT snapshot. Real principal
-and uncollected fees remain on-chain evidence; paper fees are scenario output. The
-ledger starts when the upgraded observer first evaluates a USD-priced position, so
-do not compare it with a control measured over a different starting window.</p>
-
-<h2 id="learn-from-history-faster">Learn from history faster</h2>
-
-<p>The research runner can replay many synchronized paper policies over cached Base
-history instead of waiting one day for each new observation. It derives gross fee
-opportunities from the pool’s real Uniswap v3 <code class="language-plaintext highlighter-rouge">Swap</code> events, tests a capital ladder,
-and compares fixed-width, recentering, and volatility-adaptive ranges against the
-same-start passive and HODL baselines.</p>
-
-<p>For a quick first pass, the runner samples 1,000 blocks from each 10,000-block window
-and discloses the fee scaling in its report. Use full resolution to confirm a finalist:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pnpm liquidity-range:research <span class="nt">--</span> <span class="se">\</span>
-  <span class="nt">--experiment-root</span> /path/to/read-only-canary <span class="se">\</span>
-  <span class="nt">--days</span> 30
-
-pnpm liquidity-range:research <span class="nt">--</span> <span class="se">\</span>
-  <span class="nt">--experiment-root</span> /path/to/read-only-canary <span class="se">\</span>
-  <span class="nt">--days</span> 30 <span class="se">\</span>
-  <span class="nt">--full-resolution</span>
-</code></pre></div></div>
-
-<p>Each run uses a chronological train/purge/holdout split and executes a paper decision
-one bar after it is made. It also repeats the baseline/treatment comparison across
-three non-overlapping walk-forward periods. The default capital ladder is $5, $50,
-$500, and $5,000, so
-fixed transaction costs can suppress a policy at tiny size without hiding whether
-the same policy has merit at a realistic notional. Results include HODL excess,
-passive spread, drawdown, time in range, turnover, regime returns, and a deterministic
-bootstrap adjusted for the number of policies tested.</p>
-
-<p>The report separates two decisions: whether adaptive management beats passive LP,
-and whether the LP allocation itself beats holding the starting inventory. A policy
-can have a useful LP-management edge during a trend while LP still trails HODL; only
-a challenger that clears both gates can become a promotion proposal.</p>
-
-<p>Historical winners are challengers, not production settings. The runner writes a
-versioned, review-only proposal with dataset and policy hashes. It never edits the
-saved monitor, reads a wallet credential, or applies a policy automatically. A sampled
-winner must survive full-resolution replay and human review before any paper-policy
-change, and live execution remains a separate authority decision.</p>
-
-<h2 id="set-up-a-shadow-monitor">Set up a shadow monitor</h2>
-
-<ol>
-  <li>Open <strong>Trade</strong>, then choose <strong>Liquidity</strong>.</li>
-  <li>Copy the numeric NFT ID for a Base Uniswap v3 position into <strong>Position NFT ID</strong>.</li>
-  <li>Choose a target range, edge trigger, cooldown, evaluation window, fee APR
-assumption, gas estimate, inventory/impermanent-loss cost, and minimum net benefit.</li>
-  <li>Select <strong>Inspect position</strong>. Check the owner warning, live range, block evidence,
-and decision explanation.</li>
-  <li>Select <strong>Save shadow monitor</strong>, then start it or run one evaluation immediately.</li>
-</ol>
-
-<p>Importing an NFT ID grants no permissions. You can inspect an NFT owned by another
-address, but HivemindOS labels the mismatch and makes no ownership claim.</p>
-
-<h2 id="understand-the-assumptions">Understand the assumptions</h2>
-
-<p>The live shadow manager does not predict fees or impermanent loss. Its fee APR, gas,
-and inventory-cost inputs are your explicit scenario assumptions. The historical
-research runner is different: it reconstructs a gross fee opportunity from real swap
-events, but sampled runs remain estimates and neither mode predicts future order flow.
-A proposed rebalance means its scenario cleared the configured threshold; it does not
-mean a real trade would be profitable.</p>
-
-<p>If a USD position value cannot be estimated, the economics gate fails closed. The
-manager also enforces its cooldown and minimum-net-benefit threshold before changing
-the virtual range. An out-of-range Uniswap v3 position does not earn fees until price
-returns to its range, which is why range distance is shown prominently.</p>
-
-<h2 id="run-it-in-the-background">Run it in the background</h2>
-
-<p>The Trade desk can run one evaluation while it is open. For an always-on observer,
-install the optional user service from the repository:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./scripts/install-liquidity-range-manager.sh
-</code></pre></div></div>
-
-<p>The service heartbeat explicitly reports that it has no signing authority. To stop
-and remove only this managed service and its installed daemon bundle:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./scripts/install-liquidity-range-manager.sh uninstall
-</code></pre></div></div>
-
-<p>Saved policies and shadow history stay local after uninstall, so they can be reviewed
-or removed separately.</p>
-
-<h2 id="safety-boundary">Safety boundary</h2>
-
-<ul>
-  <li>Base and Uniswap v3 only.</li>
-  <li>Public, read-only contract calls only.</li>
-  <li>No private-key lookup, wallet approval, transaction construction, signature, or
-submission path.</li>
-  <li>A “rebalance” event changes only the locally stored virtual range.</li>
-  <li>Paper fee accrual uses the configured APR assumption; it is not a claim about fees
-earned by the real NFT.</li>
-  <li>Historical research is isolated from the observer, enforces a one-bar execution lag,
-and can emit only review-required policy proposals.</li>
-  <li>Estimates are scenario outputs, not financial, accounting, legal, or tax advice.</li>
-</ul>
-
-<p>For protocol details, see Uniswap’s documentation on
-<a href="https://developers.uniswap.org/docs/get-started/concepts/liquidity-providers/concentrated-liquidity">concentrated liquidity</a>
-and its current <a href="https://developers.uniswap.org/docs/protocols/v3/deployments/v3-base-deployments">Base deployments</a>.</p>
+<p>Return to the <a href="../platform-api.html">SuperAgent API quickstart</a>, or open <a href="services.html">service access</a> and <a href="limits.html">endpoint limits</a>.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -758,7 +847,7 @@ and its current <a href="https://developers.uniswap.org/docs/protocols/v3/deploy
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/trading/concentrated-liquidity.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/answer-engine.md">Improve this page ↗</a>
     </aside>
   </div>
 

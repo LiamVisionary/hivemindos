@@ -237,6 +237,8 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/answer-engine.html">AI Web Search</a>
+                    
                       <a class="navLink" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
@@ -744,6 +746,8 @@ the credential values stay in shared env or the relevant backend.</p>
 
   <p>Shared Brain Memory is the vault-native remember, recall, and answer layer. Agents can use the dashboard API directly or run <code class="language-plaintext highlighter-rouge">hive-brain answer "&lt;query&gt;"</code> from any shell. The CLI discovers the running local API and falls back to local vault/index search, so raw or non-managed agents do not need to know the dashboard port. Setup also installs <code class="language-plaintext highlighter-rouge">hive-brain-hook</code> and registers it as a Claude Code <code class="language-plaintext highlighter-rouge">UserPromptSubmit</code> hook, so raw Claude prompts receive relevant shared-brain context before the model answers. By default, recall and answer are tiered: they check typed Agent Memory first, return the distilled layer when the top hit is strong, and otherwise augment with relevant markdown from the full shared vault. Use <code class="language-plaintext highlighter-rouge">scope: "agent-memory"</code> or <code class="language-plaintext highlighter-rouge">--scope agent-memory</code> when a caller needs the strict typed/proven memory layer only, or <code class="language-plaintext highlighter-rouge">scope: "full-vault"</code> / <code class="language-plaintext highlighter-rouge">--scope full-vault</code> to force broad vault recall.</p>
 
+  <p>Two options control how much comes back. <code class="language-plaintext highlighter-rouge">detail</code> sets how much of each memory is returned: <code class="language-plaintext highlighter-rouge">abstract</code> gives identity, ranking, and a short excerpt (about a tenth the size), <code class="language-plaintext highlighter-rouge">overview</code> keeps everything except the memory body, and <code class="language-plaintext highlighter-rouge">full</code> is the default. <code class="language-plaintext highlighter-rouge">mode: "hierarchical"</code> scores vault folders before individual notes, so a note’s neighbours come back with it and the reply names the folders it searched. Neither option changes how memories are ranked or how an answer is grounded — both only change what is returned.</p>
+
   <p>Access paths:</p>
 
   <table>
@@ -784,6 +788,21 @@ the credential values stay in shared env or the relevant backend.</p>
         <td>Pattern proposals</td>
         <td><code class="language-plaintext highlighter-rouge">hive-brain mine-patterns</code></td>
         <td>Dry-run by default; <code class="language-plaintext highlighter-rouge">--enqueue</code> adds deduplicated proposals to Brain Review without applying them.</td>
+      </tr>
+      <tr>
+        <td>Read, correct, or remove one memory</td>
+        <td><code class="language-plaintext highlighter-rouge">hive-brain get</code>, <code class="language-plaintext highlighter-rouge">hive-brain update</code>, <code class="language-plaintext highlighter-rouge">hive-brain delete --confirm</code>, or API actions <code class="language-plaintext highlighter-rouge">get</code>, <code class="language-plaintext highlighter-rouge">update</code>, <code class="language-plaintext highlighter-rouge">delete</code></td>
+        <td><code class="language-plaintext highlighter-rouge">update</code> fixes wording, tags, project, confidence, or archived status in place. When the underlying truth changed, use <code class="language-plaintext highlighter-rouge">evolve</code> instead so the supersession chain still records it. <code class="language-plaintext highlighter-rouge">delete</code> is permanent and needs <code class="language-plaintext highlighter-rouge">--confirm</code>; it refuses to orphan an evolution chain unless you pass <code class="language-plaintext highlighter-rouge">--force</code>.</td>
+      </tr>
+      <tr>
+        <td>Write a set at once</td>
+        <td><code class="language-plaintext highlighter-rouge">hive-brain batch --file memories.json</code> or API action <code class="language-plaintext highlighter-rouge">batch</code></td>
+        <td>Up to 25 records under one write lock and one published generation, instead of one generation per memory. Each record reports its own outcome and passes the same duplicate and sensitive-content gates.</td>
+      </tr>
+      <tr>
+        <td>Survey folders before reading notes</td>
+        <td><code class="language-plaintext highlighter-rouge">hive-brain browse [--path FOLDER] [--detail abstract\|overview]</code> or API action <code class="language-plaintext highlighter-rouge">browse-directories</code></td>
+        <td>Every vault folder carries a short abstract (~100 tokens) and a fuller overview (~2k tokens) built during the index rebuild, so an agent can find the right area without opening a note.</td>
       </tr>
     </tbody>
   </table>
@@ -939,6 +958,21 @@ hive-brain capsule-import <span class="nt">--capsule</span> ~/.hivemindos/brain/
 
   <p>All content searches over the vault and conversations use ripgrep (<code class="language-plaintext highlighter-rouge">rg</code>) first, fall back to plain <code class="language-plaintext highlighter-rouge">grep</code> when <code class="language-plaintext highlighter-rouge">rg</code> is unavailable, and only fall back to a full filesystem walk when neither binary works. Full-vault recall first tries the generated lexical index for ranked candidates, then falls back to <code class="language-plaintext highlighter-rouge">src/lib/services/search/ripgrep-search.ts</code> when the index is unavailable. The <code class="language-plaintext highlighter-rouge">hive-brain</code> CLI implements the same generated-index-first local fallback.</p>
 
+  <h3 id="folder-summaries">Folder summaries</h3>
+
+  <p>A large vault has structure the flat note index throws away: folders. Every rebuild also publishes one summary per folder, at two sizes, built from the note index without reading any extra files or calling a model.</p>
+
+  <ul>
+    <li><strong>Abstract</strong> (about 100 tokens) — what lives in the folder, how many notes, its subfolders, its distinctive topics, and its most recent notes. Enough to judge whether an answer is in there.</li>
+    <li><strong>Overview</strong> (about 2,000 tokens) — the same, plus the subfolder list and the notes that define the folder.</li>
+  </ul>
+
+  <p>An agent can survey an entire vault from these summaries before opening a single note. Folders holding one note are left out, because a single note is not a grouping worth descending into.</p>
+
+  <p>Full-vault recall can use those summaries to pick folders before it picks notes. In that mode the response also carries a <strong>trajectory</strong>: the folders the query descended into, best first, each with its abstract and score, so it is possible to see <em>why</em> a result surfaced rather than only <em>that</em> it did.</p>
+
+  <p>Hierarchy only ever re-ranks. Every note is still scored and still eligible, so choosing the wrong folder can change the order of results but can never hide one. Recall stays flat unless a caller asks for the folder-first mode.</p>
+
   <p>The API supports:</p>
 
   <ul>
@@ -950,6 +984,7 @@ hive-brain capsule-import <span class="nt">--capsule</span> ~/.hivemindos/brain/
     <li><code class="language-plaintext highlighter-rouge">recall</code>: retrieve relevant shared-brain memories and vault notes by query, type, tags, project, optional <code class="language-plaintext highlighter-rouge">scope</code>, optional <code class="language-plaintext highlighter-rouge">temporalMode</code>, optional <code class="language-plaintext highlighter-rouge">asOf</code>, optional <code class="language-plaintext highlighter-rouge">includeOperational</code>, and optional usage tracking.</li>
     <li><code class="language-plaintext highlighter-rouge">answer</code>: return a grounded memory context pack from the matching memories and vault notes.</li>
     <li><code class="language-plaintext highlighter-rouge">rebuild-index</code>: scan existing markdown memory notes, publish a compact verified typed-memory generation, and refresh the generated full-vault lexical index unless <code class="language-plaintext highlighter-rouge">includeFullVault: false</code> is passed.</li>
+    <li><code class="language-plaintext highlighter-rouge">repair-index-conflicts</code>: report Syncthing conflict damage to the generated brain indexes, and repair it when <code class="language-plaintext highlighter-rouge">apply: true</code> is passed. Dry run by default.</li>
     <li><code class="language-plaintext highlighter-rouge">list-generations</code>: list retained verified and invalid typed-memory generations, identify the current pointer, and report retention policy and replay coverage.</li>
     <li><code class="language-plaintext highlighter-rouge">compare-generations</code>: replay one query across two typed-memory generations and return added, removed, unchanged, and rank-changed evidence.</li>
     <li><code class="language-plaintext highlighter-rouge">export-capsule</code>, <code class="language-plaintext highlighter-rouge">open-capsule</code>, and <code class="language-plaintext highlighter-rouge">search-capsule</code>: create or inspect a scoped, verified, read-only portable capsule.</li>
@@ -967,6 +1002,13 @@ hive-brain remember <span class="nt">--type</span> preference <span class="nt">-
 hive-brain evolve <span class="nt">--memory-id</span> mem-... <span class="nt">--content</span> <span class="s2">"Updated durable memory body"</span>
 hive-brain record-operation <span class="nt">--title</span> <span class="s2">"Provider request"</span> <span class="nt">--content</span> <span class="s2">"Request timed out"</span> <span class="nt">--operation-key</span> <span class="s2">"provider/request"</span> <span class="nt">--failure-key</span> <span class="s2">"provider/timeout"</span> <span class="nt">--outcome</span> failure <span class="nt">--task-id</span> task-123
 hive-brain mine-patterns
+hive-brain get <span class="nt">--memory-id</span> mem-...
+hive-brain update <span class="nt">--memory-id</span> mem-... <span class="nt">--title</span> <span class="s2">"Corrected title"</span> <span class="nt">--status</span> archived
+hive-brain delete <span class="nt">--memory-id</span> mem-... <span class="nt">--confirm</span>
+hive-brain batch <span class="nt">--file</span> ./memories.json
+hive-brain browse <span class="nt">--path</span> Projects <span class="nt">--detail</span> overview
+hive-brain recall <span class="s2">"aurora funding"</span> <span class="nt">--mode</span> hierarchical <span class="nt">--detail</span> abstract
+hive-brain repair-conflicts <span class="nt">--confirm</span>
 hive-brain generations
 hive-brain replay <span class="s2">"what did we know about Atlas?"</span> <span class="nt">--generation</span> &lt;generation-id&gt;
 hive-brain compare <span class="s2">"Atlas launch"</span> <span class="nt">--from-generation</span> &lt;generation-id&gt;

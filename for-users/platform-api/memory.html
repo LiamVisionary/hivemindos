@@ -237,6 +237,8 @@
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/services.html">Service Access</a>
                     
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/answer-engine.html">AI Web Search</a>
+                    
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/memory.html">Managed Memory</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
@@ -736,6 +738,47 @@ not-found response and releases the credit reservation. You are not charged.</p>
 
 <p>Every hit includes its memory fields, excerpt, total score, matched signals, and score details. Set <code class="language-plaintext highlighter-rouge">trackUsage: false</code> when a diagnostic lookup should not influence the soft usage signal. <code class="language-plaintext highlighter-rouge">memory.usage</code> can explicitly record retrieved or final-answer use for known memory ids.</p>
 
+<h2 id="ask-for-only-as-much-as-you-need">Ask for only as much as you need</h2>
+
+<p>Recall returns whole memories by default, so a caller that only wants to know <em>which</em> memories are relevant still receives every body it will not read. Pass <code class="language-plaintext highlighter-rouge">detail</code> to choose how much of each hit comes back.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th><code class="language-plaintext highlighter-rouge">detail</code></th>
+      <th>Each hit carries</th>
+      <th>Good for</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">abstract</code></td>
+      <td>Id, title, type, project, status, updated date, score, and a one-line excerpt.</td>
+      <td>Surveying candidates, then re-requesting the few that matter.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">overview</code></td>
+      <td>The full metadata record, ranked excerpt, and score details — no body.</td>
+      <td>Ranking and filtering when the body is not needed yet.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">full</code></td>
+      <td>Everything, including <code class="language-plaintext highlighter-rouge">contentText</code>. <strong>The default.</strong></td>
+      <td>Reading the memory.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">survey</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.recall</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Who pays before an Aurora GPU starts?</span><span class="dl">"</span><span class="p">,</span> <span class="na">mode</span><span class="p">:</span> <span class="dl">"</span><span class="s2">hybrid</span><span class="dl">"</span><span class="p">,</span> <span class="na">detail</span><span class="p">:</span> <span class="dl">"</span><span class="s2">abstract</span><span class="dl">"</span><span class="p">,</span> <span class="na">limit</span><span class="p">:</span> <span class="mi">8</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-memory-survey-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">detail</code> narrows the response only. It never changes which memories rank, their order, the grounding behind <code class="language-plaintext highlighter-rouge">memory.answer</code>, or what a recall costs — a narrowed recall is charged exactly like a full one. The response echoes the <code class="language-plaintext highlighter-rouge">detail</code> it applied.</p>
+
 <h2 id="evolve-instead-of-contradicting">Evolve instead of contradicting</h2>
 
 <p>When reviewed information replaces an active memory, use <code class="language-plaintext highlighter-rouge">memory.evolve</code>. The old record becomes <code class="language-plaintext highlighter-rouge">superseded</code>, the new record becomes the active canonical head, and both remain linked in the evolution chain.</p>
@@ -758,6 +801,42 @@ not-found response and releases the credit reservation. You are not charged.</p>
 
 <details class="advancedDetails">
   <summary>Advanced: history, knowledge graphs, capsules, and the full operation map</summary>
+
+  <h2 id="keep-the-store-clean">Keep the store clean</h2>
+
+  <p>Cloud Superbrain rejects a second active memory on the same <code class="language-plaintext highlighter-rouge">memoryKey</code>, but two memories can still say the same thing under different keys. <code class="language-plaintext highlighter-rouge">memory.consolidate</code> finds them: it groups near-duplicates within a memory type by how much distinctive vocabulary they share, spots memories whose text says they correct an earlier note but were written without <code class="language-plaintext highlighter-rouge">supersedes</code>, and lists aged-out memories that nothing has ever retrieved.</p>
+
+  <p>It reports rather than merges. Merging two memories discards whichever wording loses, so each group comes back with the exact <code class="language-plaintext highlighter-rouge">memory.evolve</code> call that would consolidate it, for you to review. The one change it will make is archiving the aged-out candidates, and only when you pass <code class="language-plaintext highlighter-rouge">applyArchives: true</code> — archiving is reversible and applies only to <code class="language-plaintext highlighter-rouge">context</code>, <code class="language-plaintext highlighter-rouge">event</code>, <code class="language-plaintext highlighter-rouge">observation</code>, and <code class="language-plaintext highlighter-rouge">action</code> memories older than 120 days with no retrieval history.</p>
+
+  <p><code class="language-plaintext highlighter-rouge">memory.health</code> now also reports <code class="language-plaintext highlighter-rouge">duplicatePressure</code>, so a scheduled check can watch the number without running a full consolidation pass.</p>
+
+  <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">report</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.consolidate</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">applyArchives</span><span class="p">:</span> <span class="kc">false</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-consolidate-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="k">for</span> <span class="p">(</span><span class="kd">const</span> <span class="nx">group</span> <span class="k">of</span> <span class="nx">report</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">duplicateGroups</span><span class="p">)</span> <span class="p">{</span>
+  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">group</span><span class="p">.</span><span class="nx">canonicalTitle</span><span class="p">,</span> <span class="nx">group</span><span class="p">.</span><span class="nx">memberIds</span><span class="p">,</span> <span class="nx">group</span><span class="p">.</span><span class="nx">evolveHint</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>  </div>
+
+  <h2 id="learn-from-what-your-agents-actually-did">Learn from what your agents actually did</h2>
+
+  <p><code class="language-plaintext highlighter-rouge">memory.minePatterns</code> reads the account’s operational memories and proposes three things worth a person’s attention: a failure signature that keeps recurring across different tasks, a workflow repeated often enough to be worth turning into a skill, and an operation running on a cadence stable enough to be worth scheduling. Test and fixture traffic is excluded, and repeated retries of one task are not counted as a pattern — only the same thing happening across genuinely different tasks.</p>
+
+  <p>It proposes and never creates. Send a candidate to <code class="language-plaintext highlighter-rouge">memory.create</code> if you want to keep it.</p>
+
+  <h2 id="look-inside-a-capsule-before-importing-it">Look inside a capsule before importing it</h2>
+
+  <p><code class="language-plaintext highlighter-rouge">capsules.open</code> returns a capsule’s manifest, an integrity verdict, and a summary of what is inside. <code class="language-plaintext highlighter-rouge">capsules.search</code> finds a memory within a capsule. <code class="language-plaintext highlighter-rouge">capsules.preview</code> reports exactly what an import would change: which memories are new, which the account already holds, and which would be refused for colliding with an active <code class="language-plaintext highlighter-rouge">memoryKey</code>. None of them write anything.</p>
+
+  <p>A capsule whose contents do not match its declared hash is still shown rather than hidden, with a warning — if a capsule is damaged, seeing what survived is more useful than seeing only an error.</p>
+
+  <h2 id="search-by-path">Search by path</h2>
+
+  <p>Memories carry a <code class="language-plaintext highlighter-rouge">path</code>, and most callers use it as a grouping. <code class="language-plaintext highlighter-rouge">memory.browse</code> summarizes those groups without returning any memory bodies: <code class="language-plaintext highlighter-rouge">detail: "abstract"</code> is about 100 tokens per group, <code class="language-plaintext highlighter-rouge">overview</code> about 2,000. Passing <code class="language-plaintext highlighter-rouge">mode: "hierarchical"</code> to <code class="language-plaintext highlighter-rouge">memory.recall</code> scores those groups before individual memories, so a memory’s neighbours come back with it and the reply names the paths it searched. Every memory stays eligible either way — hierarchy changes the order of results and never hides one.</p>
 
   <h2 id="generations-and-historical-recall">Generations and historical recall</h2>
 
@@ -885,7 +964,22 @@ not-found response and releases the credit reservation. You are not charged.</p>
       <tr>
         <td><code class="language-plaintext highlighter-rouge">memory.health</code></td>
         <td><code class="language-plaintext highlighter-rouge">GET</code></td>
-        <td>Read plan, index, generation, and usage health.</td>
+        <td>Read plan, index, generation, duplicate pressure, and usage health.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.consolidate</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Report duplicate pressure, missed corrections, and aged-out memories.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.minePatterns</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Propose recurring failures, reusable workflows, and routines from operational memories.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.browse</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Survey memory paths at the abstract or overview tier.</td>
       </tr>
       <tr>
         <td><code class="language-plaintext highlighter-rouge">index.rebuild</code></td>
@@ -911,6 +1005,21 @@ not-found response and releases the credit reservation. You are not charged.</p>
         <td><code class="language-plaintext highlighter-rouge">capsules.import</code></td>
         <td><code class="language-plaintext highlighter-rouge">POST</code></td>
         <td>Verify and import a capsule part.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">capsules.open</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Read a capsule’s manifest, integrity, and contents without importing.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">capsules.search</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Search inside a capsule without importing it.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">capsules.preview</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Report what importing a capsule would change.</td>
       </tr>
       <tr>
         <td><code class="language-plaintext highlighter-rouge">knowledge.search</code></td>
