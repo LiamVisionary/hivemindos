@@ -848,6 +848,47 @@
 
 <p>Managed Media chooses the lowest-priced healthy route for the model you requested. If that route becomes unavailable, the same job can continue through another exact route without changing models or reserving credits twice. The quote shows both the expected price and the highest possible reservation inside this fallback plan; anything not spent is returned when the job finishes. A content or safety rejection does not try another route.</p>
 
+<p>GPT Image 2 uses medium quality when <code class="language-plaintext highlighter-rouge">quality</code> is omitted. Use <code class="language-plaintext highlighter-rouge">quality: "low"</code> only when you deliberately want a cheaper draft, or <code class="language-plaintext highlighter-rouge">quality: "high"</code> when the finished image needs maximum detail. Automatic fallback preserves the selected quality instead of silently reducing it.</p>
+
+<p>Here is the shortest safe flow for a balanced GPT Image 2 request:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">request</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="na">model</span><span class="p">:</span> <span class="dl">"</span><span class="s2">gpt-image-2-text-to-image</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">input</span><span class="p">:</span> <span class="p">{</span>
+    <span class="na">prompt</span><span class="p">:</span> <span class="dl">"</span><span class="s2">A polished studio photograph of a black honey jar</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">aspect_ratio</span><span class="p">:</span> <span class="dl">"</span><span class="s2">1:1</span><span class="dl">"</span><span class="p">,</span>
+    <span class="c1">// quality is optional; GPT Image 2 defaults to "medium"</span>
+  <span class="p">},</span>
+<span class="p">};</span>
+
+<span class="kd">const</span> <span class="nx">quoted</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">managed-media</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">quotes.create</span><span class="dl">"</span><span class="p">,</span>
+  <span class="nx">request</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">honey-jar-quote-v1</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+<span class="kd">const</span> <span class="nx">expectedPriceUsd</span> <span class="o">=</span> <span class="nx">quoted</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">quote</span><span class="p">.</span><span class="nx">priceUsd</span><span class="p">;</span>
+
+<span class="kd">const</span> <span class="nx">created</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">managed-media</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">generations.create</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span> <span class="p">...</span><span class="nx">request</span><span class="p">,</span> <span class="na">maximumDebitUsd</span><span class="p">:</span> <span class="nx">quoted</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">quote</span><span class="p">.</span><span class="nx">fallbackMaximumUsd</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">honey-jar-v1</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="kd">const</span> <span class="nx">finished</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">managed-media</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">generations.get</span><span class="dl">"</span><span class="p">,</span>
+  <span class="kc">undefined</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">pathParameters</span><span class="p">:</span> <span class="p">{</span> <span class="na">jobId</span><span class="p">:</span> <span class="nx">created</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">job</span><span class="p">.</span><span class="nx">id</span> <span class="p">},</span>
+    <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">honey-jar-status-v1</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>Poll <code class="language-plaintext highlighter-rouge">generations.get</code> until the job is finalized. <code class="language-plaintext highlighter-rouge">finished.result.job.outputs</code> contains ready-to-use media links. Managed GPT Image 2 files are kept for 30 days, so copy anything you need to retain longer into your own storage.</p>
+
 <h2 id="invoke-a-service-directly">Invoke a service directly</h2>
 
 <p>Generic managed services use one SuperAgent API front door:</p>
