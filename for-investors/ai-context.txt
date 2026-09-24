@@ -3,13 +3,13 @@ format_version: 1
 content_format: Markdown with embedded HTML
 scope: Every public Markdown page under docs/for-investors
 document_count: 11
-generated_at: 2026-09-24T06:01:54+00:00
+generated_at: 2026-09-24T07:48:59+00:00
 usage: Treat each BEGIN/END DOCUMENT block as one source document. Preserve source_path attribution when citing or summarizing claims.
 
 
 === BEGIN DOCUMENT ===
 source_path: docs/for-investors/ecosystem-plan.md
-canonical_path: /hivemindos/for-investors/ecosystem-plan.html
+canonical_path: /docs/for-investors/ecosystem-plan.html
 title: "HivemindOS Commercial Sequence"
 description: "The gated sequence from free local adoption to recurring cloud operations, agent-economy transaction revenue, enterprise, and later marketplaces."
 content:
@@ -156,7 +156,7 @@ product
 
 === BEGIN DOCUMENT ===
 source_path: docs/for-investors/hive-robinhood-bridge-community-review.md
-canonical_path: /hivemindos/for-investors/hive-robinhood-bridge-community-review.html
+canonical_path: /docs/for-investors/hive-robinhood-bridge-community-review.html
 title: "HIVE × Robinhood Chain Bridge — Community Review Draft"
 description: "A plain-English explanation of the proposed HIVE bridge between Base and Robinhood Chain, including liquidity, fees, safeguards, testnet evidence, and open questions."
 content:
@@ -316,7 +316,7 @@ This is an infrastructure review draft, not a mainnet launch announcement, a gua
 
 === BEGIN DOCUMENT ===
 source_path: docs/for-investors/hive-staking-and-community-tiers.md
-canonical_path: /hivemindos/for-investors/hive-staking-and-community-tiers.html
+canonical_path: /docs/for-investors/hive-staking-and-community-tiers.html
 title: "HIVE Staking And Community Tiers"
 description: "Six optional non-custodial HIVE staking tiers with Honey earning, free-agent usage, and member-pricing benefits—without yield, ownership, or required product access."
 content:
@@ -416,7 +416,7 @@ Tier thresholds, member pricing, eligibility, staking benefits, and execution ma
 
 === BEGIN DOCUMENT ===
 source_path: docs/for-investors/hive-token-receipts.md
-canonical_path: /hivemindos/for-investors/hive-token-receipts.html
+canonical_path: /docs/for-investors/hive-token-receipts.html
 title: "HIVE Token Receipts"
 description: "Direct on-chain evidence for the HIVE Base contract, launch distribution, permanent liquidity architecture, contract controls, holder concentration, staking, and confirmed buybacks."
 content:
@@ -502,7 +502,7 @@ This dossier improves transparency; it is not a smart-contract audit or financia
 
 === BEGIN DOCUMENT ===
 source_path: docs/for-investors/honey-hive-treasury.md
-canonical_path: /hivemindos/for-investors/honey-hive-treasury.html
+canonical_path: /docs/for-investors/honey-hive-treasury.html
 title: "Honey, HIVE, And Treasury"
 description: "The separation between contribution records, purchased cloud credits, optional token utility, and company treasury policy."
 content:
@@ -626,7 +626,7 @@ Do not say:
 
 === BEGIN DOCUMENT ===
 source_path: docs/for-investors/index.md
-canonical_path: /hivemindos/for-investors/
+canonical_path: /docs/for-investors/
 title: "For Investors"
 description: "HivemindOS monetizes one proprietary local-first agent-economy platform through recurring cloud operations and transaction revenue."
 content:
@@ -824,7 +824,7 @@ See [HIVE Token Receipts](hive-token-receipts.html), [Honey, HIVE, And Treasury]
 
 === BEGIN DOCUMENT ===
 source_path: docs/for-investors/paid-features/app-builder-hosting.md
-canonical_path: /hivemindos/for-investors/paid-features/app-builder-hosting.html
+canonical_path: /docs/for-investors/paid-features/app-builder-hosting.html
 title: "App Builder And Hosting"
 description: "The local-first app-building funnel, hosted Site revenue streams, and web-hosting unit economics."
 content:
@@ -918,7 +918,7 @@ but it cannot redefine official hosting economics.
 
 === BEGIN DOCUMENT ===
 source_path: docs/for-investors/paid-features/hive-compute-marketplace.md
-canonical_path: /hivemindos/for-investors/paid-features/hive-compute-marketplace.html
+canonical_path: /docs/for-investors/paid-features/hive-compute-marketplace.html
 title: "Hive Compute Marketplace"
 description: "Evidence-gated option for a future HivemindOS compute marketplace, deliberately outside the near-term revenue plan."
 content:
@@ -986,7 +986,7 @@ If the evidence gates pass, Hive Compute can become a second-stage expansion of 
 
 === BEGIN DOCUMENT ===
 source_path: docs/for-investors/paid-features/hivemind-cloud-agent-calls.md
-canonical_path: /hivemindos/for-investors/paid-features/hivemind-cloud-agent-calls.html
+canonical_path: /docs/for-investors/paid-features/hivemind-cloud-agent-calls.html
 title: "HivemindOS Cloud Agent Calls"
 description: "Paid LiveKit/SFU calling for managed multi-party and multi-agent voice rooms."
 content:
@@ -1097,7 +1097,7 @@ In local development, `pnpm tauri:dev` starts the worker when the required envir
 
 === BEGIN DOCUMENT ===
 source_path: docs/for-investors/paid-features/index.md
-canonical_path: /hivemindos/for-investors/paid-features/
+canonical_path: /docs/for-investors/paid-features/
 title: "HivemindOS Paid Capabilities"
 description: "Managed operations capabilities and agent-economy transaction rails sold through one platform relationship."
 content:
@@ -1185,7 +1185,7 @@ These rails are documented in the [Trading guide](../../for-users/trading/) and 
 
 === BEGIN DOCUMENT ===
 source_path: docs/for-investors/treasury-reserve-and-seasonal-programs.md
-canonical_path: /hivemindos/for-investors/treasury-reserve-and-seasonal-programs.html
+canonical_path: /docs/for-investors/treasury-reserve-and-seasonal-programs.html
 title: "Revenue Allocations And Treasury Boundaries"
 description: "The separate 15% HIVE buyback and 15% company treasury allocations, plus the rights and accounting boundaries around both rails."
 content:
