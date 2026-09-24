@@ -600,8 +600,8 @@
 <p>HivemindOS is built to remember the useful parts of work without turning every run receipt, old decision, or vault note into prompt baggage. These benchmarks measure whether that design produces relevant recall, fast local retrieval, cleaner current truth, and smaller model context.</p>
 
 <section class="atlasHero">
-  <strong>Benchmark snapshot: September 23, 2026</strong>
-  <p>On LongMemEval_S, with the same 150 questions, reader model and official judge, HivemindOS's shared brain answered 77.3% correctly against 54.0% for Sibyl-Memory's search, and led in every question type but one, where they tied. The July 10 results below stand: a 1,000-query live memory matrix reached 90% Top-1 and 98% Top-3 recall. Across the full LoCoMo and LongMemEval retrieval suites, HivemindOS placed the annotated evidence session in the Top-50 for 2,032 of 2,036 eligible questions (99.80%). Full GPT-5.4 Mini answer-and-judge runs scored 76.62% on LoCoMo, 53.40% on LongMemEval, 41.12% on BEAM 1M, and 37.04% on BEAM 10M at Top-50.</p>
+  <strong>Benchmark snapshot: September 24, 2026</strong>
+  <p>On LongMemEval Oracle, all 500 questions with Claude Sonnet 4.5 reading, the Superbrain answered 95.1% correctly (excluding preference questions, as Sibyl-Memory reports), against 92.8% for Sibyl-Memory's Sonnet 4.5 plugin and 95.3% for its Opus 4.6 run, every answer graded by the same official judge. The July 10 results below stand: a 1,000-query live memory matrix reached 90% Top-1 and 98% Top-3 recall. Across the full LoCoMo and LongMemEval retrieval suites, HivemindOS placed the annotated evidence session in the Top-50 for 2,032 of 2,036 eligible questions (99.80%). Full GPT-5.4 Mini answer-and-judge runs scored 76.62% on LoCoMo, 53.40% on LongMemEval, 41.12% on BEAM 1M, and 37.04% on BEAM 10M at Top-50.</p>
 </section>
 
 <h2 id="results-at-a-glance">Results At A Glance</h2>
@@ -616,9 +616,9 @@
   </thead>
   <tbody>
     <tr>
-      <td>LongMemEval_S head to head</td>
-      <td style="text-align: right"><strong>77.3% vs 54.0%</strong> (HivemindOS vs Sibyl-Memory)</td>
-      <td>Same 150 questions, reader model and official judge; HivemindOS was right on 43 questions Sibyl-Memory missed, Sibyl-Memory on 8</td>
+      <td>LongMemEval Oracle against Sibyl-Memory</td>
+      <td style="text-align: right"><strong>95.1%</strong> with Claude Sonnet 4.5; Sibyl-Memory 92.8% (Sonnet 4.5 plugin), 91.5% (Sonnet 4.6), 95.3% (Opus 4.6)</td>
+      <td>All 500 questions, excluding preference; one official judge grades every answer, including Sibyl-Memory’s own published ones; every answer is <a href="https://github.com/LiamVisionary/hivemindos-memory-benchmarks">published</a></td>
     </tr>
     <tr>
       <td>Live-memory recall</td>
@@ -715,90 +715,99 @@
 
 <p>Top-1 means the expected memory ranked first. Top-3 means it appeared in the first three results. Mean reciprocal rank, or MRR, rewards putting the correct memory as high as possible.</p>
 
-<h2 id="longmemeval_s-head-to-head-with-sibyl-memory">LongMemEval_S Head To Head With Sibyl-Memory</h2>
+<h2 id="longmemeval-oracle-against-sibyl-memory">LongMemEval Oracle Against Sibyl-Memory</h2>
 
-<p>Sibyl-Memory publishes a 95.6% LongMemEval score and ranks itself next to systems measured on LongMemEval_S. That 95.6% comes from <strong>LongMemEval Oracle</strong>, where the reader is handed only the conversations that contain the answer, so it measures the reading model rather than the memory. <strong>LongMemEval_S</strong> gives each question its whole history, about 50 past conversations and 115,000 tokens, most of it unrelated, and the memory system has to find the evidence. We ran both memory systems on LongMemEval_S with everything else held equal.</p>
+<p>Sibyl-Memory publishes a 95.6% LongMemEval score from <strong>LongMemEval Oracle</strong>: 500 questions, each with the past conversations that hold its answer. We ran the same 500 questions through the Superbrain as an agent asks it a question (<code class="language-plaintext highlighter-rouge">hive-brain answer</code>), with Claude Sonnet 4.5 reading the answer from what the Superbrain returned. Every answer, ours and Sibyl-Memory’s own published ones, was graded by LongMemEval’s official per-type judge prompts with <code class="language-plaintext highlighter-rouge">gpt-4o-2024-08-06</code>.</p>
 
 <ul>
-  <li><strong>Questions:</strong> 150, 25 of each of LongMemEval’s six types, chosen by a hash of the question id before either system ran. Seven are unanswerable by design.</li>
-  <li><strong>Same reader and judge for both:</strong> <code class="language-plaintext highlighter-rouge">gpt-4.1-mini</code> answers with LongMemEval’s official reading prompt, and <code class="language-plaintext highlighter-rouge">gpt-4o</code> grades with LongMemEval’s official per-type judge prompts.</li>
-  <li><strong>HivemindOS:</strong> the prompt-hook recall as it ships. It returns the best-matching exchanges from past conversations under their dates, ordered by TypeSafe’s Jev decision model when Turbo mode is on (its default for cloud use), then the other recalled notes. It is capped at 5,000 characters and averaged 4.6k.</li>
-  <li><strong>Sibyl-Memory:</strong> its default agent search (MCP <code class="language-plaintext highlighter-rouge">memory_search</code>), reconstructed in JavaScript from its MIT-licensed source at <code class="language-plaintext highlighter-rouge">Sibyl-Labs/Sibyl-Memory</code> commit <code class="language-plaintext highlighter-rouge">761bfc6</code>, with conversation turns stored the way its Hermes adapter stores them. It averaged 5.6k characters. The source was read and ported rather than installed.</li>
+  <li><strong>Questions:</strong> all 500 of <code class="language-plaintext highlighter-rouge">longmemeval_oracle.json</code> from the cleaned LongMemEval release. Each question’s conversations are written into a fresh, empty Superbrain, then the question is asked with its own date as today.</li>
+  <li><strong>Reader:</strong> Claude Sonnet 4.5 with LongMemEval’s official reading prompt, unchanged.</li>
+  <li><strong>Sibyl-Memory:</strong> its published answer files from <code class="language-plaintext highlighter-rouge">Sibyl-Labs/memory-bench-kit</code>, graded by the same judge. We did not re-run its system.</li>
+  <li><strong>Headline:</strong> excludes the 30 preference questions, as Sibyl-Memory’s does. Both figures are shown.</li>
 </ul>
 
-<figure class="imagePlate">
-  <img src="../../assets/img/benchmarks/longmemeval-s-accuracy-by-type.svg" alt="Bar chart of LongMemEval_S accuracy by question type. Overall: HivemindOS 77.3%, Sibyl-Memory 54.0%. Updated facts 92% vs 88%; counting across chats 60% vs 32%; what the assistant said 100% vs 76%; preferences 48% vs 20%; user facts 92% vs 92%; dates and time 72% vs 16%." />
-  <figcaption>Percent of questions answered correctly, same questions, reader and judge.</figcaption>
-</figure>
-
-<figure class="imagePlate">
-  <img src="../../assets/img/benchmarks/longmemeval-s-gap-by-type.svg" alt="Dot plot of the gap per question type, HivemindOS minus Sibyl-Memory: overall +23.3 points; dates and time +56; counting across chats +28; preferences +28; what the assistant said +24; updated facts +4; user facts tie." />
-  <figcaption>Each row shows both scores and the gap, ordered by gap.</figcaption>
-</figure>
+<table>
+  <thead>
+    <tr>
+      <th>System</th>
+      <th>Reading model</th>
+      <th style="text-align: right">Correct, excluding preference (470)</th>
+      <th style="text-align: right">Including preference (500)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>HivemindOS Superbrain</strong></td>
+      <td>Claude Sonnet 4.5</td>
+      <td style="text-align: right"><strong>447 (95.1%)</strong></td>
+      <td style="text-align: right"><strong>473 (94.6%)</strong></td>
+    </tr>
+    <tr>
+      <td>Sibyl-Memory plugin</td>
+      <td>Claude Sonnet 4.5</td>
+      <td style="text-align: right">436 (92.8%)</td>
+      <td style="text-align: right">461 (92.2%)</td>
+    </tr>
+    <tr>
+      <td>Sibyl-Memory</td>
+      <td>Claude Sonnet 4.6</td>
+      <td style="text-align: right">430 (91.5%)</td>
+      <td style="text-align: right">452 (90.4%)</td>
+    </tr>
+    <tr>
+      <td>Sibyl-Memory</td>
+      <td>Claude Opus 4.6</td>
+      <td style="text-align: right">448 (95.3%)</td>
+      <td style="text-align: right">475 (95.0%)</td>
+    </tr>
+  </tbody>
+</table>
 
 <table>
   <thead>
     <tr>
       <th>Question type</th>
-      <th style="text-align: right">Sibyl-Memory</th>
-      <th style="text-align: right">HivemindOS</th>
-      <th style="text-align: right">Difference</th>
+      <th style="text-align: right">HivemindOS (Sonnet 4.5)</th>
+      <th style="text-align: right">Sibyl-Memory plugin (Sonnet 4.5)</th>
+      <th style="text-align: right">Sibyl-Memory (Opus 4.6)</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>Overall</strong> (150)</td>
-      <td style="text-align: right"><strong>54.0%</strong></td>
-      <td style="text-align: right"><strong>77.3%</strong></td>
-      <td style="text-align: right"><strong>+23.3</strong></td>
+      <td>User facts (70)</td>
+      <td style="text-align: right">69</td>
+      <td style="text-align: right">68</td>
+      <td style="text-align: right">70</td>
     </tr>
     <tr>
-      <td>Updated facts (25)</td>
-      <td style="text-align: right">88%</td>
-      <td style="text-align: right">92%</td>
-      <td style="text-align: right">+4</td>
+      <td>What the assistant said (56)</td>
+      <td style="text-align: right">56</td>
+      <td style="text-align: right">56</td>
+      <td style="text-align: right">56</td>
     </tr>
     <tr>
-      <td>Counting across chats (25)</td>
-      <td style="text-align: right">32%</td>
-      <td style="text-align: right">60%</td>
-      <td style="text-align: right">+28</td>
+      <td>Updated facts (78)</td>
+      <td style="text-align: right"><strong>77</strong></td>
+      <td style="text-align: right">72</td>
+      <td style="text-align: right">72</td>
     </tr>
     <tr>
-      <td>What the assistant said (25)</td>
-      <td style="text-align: right">76%</td>
-      <td style="text-align: right">100%</td>
-      <td style="text-align: right">+24</td>
+      <td>Counting across chats (133)</td>
+      <td style="text-align: right">117</td>
+      <td style="text-align: right">114</td>
+      <td style="text-align: right"><strong>124</strong></td>
     </tr>
     <tr>
-      <td>Preferences (25)</td>
-      <td style="text-align: right">20%</td>
-      <td style="text-align: right">48%</td>
-      <td style="text-align: right">+28</td>
+      <td>Dates and time (133)</td>
+      <td style="text-align: right"><strong>128</strong></td>
+      <td style="text-align: right">126</td>
+      <td style="text-align: right">126</td>
     </tr>
     <tr>
-      <td>User facts (25)</td>
-      <td style="text-align: right">92%</td>
-      <td style="text-align: right">92%</td>
-      <td style="text-align: right">0</td>
-    </tr>
-    <tr>
-      <td>Dates and time (25)</td>
-      <td style="text-align: right">16%</td>
-      <td style="text-align: right">72%</td>
-      <td style="text-align: right">+56</td>
-    </tr>
-    <tr>
-      <td>Unanswerable (7)</td>
-      <td style="text-align: right">7 of 7</td>
-      <td style="text-align: right">7 of 7</td>
-      <td style="text-align: right">0</td>
-    </tr>
-    <tr>
-      <td>Context the reader received</td>
-      <td style="text-align: right">5.6k characters</td>
-      <td style="text-align: right">4.6k characters</td>
-      <td style="text-align: right"> </td>
+      <td>Preferences (30)</td>
+      <td style="text-align: right">26</td>
+      <td style="text-align: right">25</td>
+      <td style="text-align: right">27</td>
     </tr>
   </tbody>
 </table>
@@ -806,15 +815,12 @@
 <p>What the comparison shows:</p>
 
 <ul>
-  <li><strong>The difference holds question by question.</strong> HivemindOS answered 43 questions that Sibyl-Memory missed, and Sibyl-Memory answered 8 that HivemindOS missed (exact sign test, p &lt; 0.0001).</li>
-  <li><strong>The gap is widest where memory has to work.</strong> Dates and time, counting across conversations, and preferences all need evidence that shares few words with the question. On a single stated fact both systems do well.</li>
-  <li><strong>Sibyl-Memory’s search refuses often.</strong> It returns nothing when any content word of a question is missing from memory. On the full 500 questions it abstained or gated 114 times. Returning nothing is also right on an unanswerable question: three of its 7 of 7 there came that way.</li>
-  <li><strong>The evidence reaches the reader more often.</strong> Across all 470 answerable questions, HivemindOS’s hook put every labelled evidence turn in context for 57.2% of questions at 4.6k characters, without the decision model. Sibyl-Memory’s search managed 42.3% at 5.6k.</li>
-  <li><strong>The Oracle setting measures the reader.</strong> The same reader with no memory system at all, handed only each answer’s own conversations, scored 93.3% here. That is the setting behind the published 95.6%.</li>
-  <li><strong>HivemindOS still leads without the decision model.</strong> With Turbo mode off it scored 68.7%, and it answered 32 questions Sibyl-Memory missed against 10 the other way.</li>
+  <li><strong>Against the same reading model, HivemindOS leads.</strong> On the same 470 questions it answered 21 that Sibyl-Memory’s Sonnet 4.5 plugin missed, and the plugin answered 10 that it missed (exact McNemar test, p = 0.07). Against Sibyl-Memory’s Sonnet 4.6 run the counts were 27 and 10 (p = 0.008).</li>
+  <li><strong>With a smaller reading model, it matches Sibyl-Memory’s Opus result.</strong> Sonnet 4.5 on the Superbrain scored 447 against 448 for Opus 4.6 on Sibyl-Memory, 18 questions against 19 either way. Opus 4.6 still counts across conversations better.</li>
+  <li><strong>What moved it.</strong> The same run scored 91.1% before three changes to how the Superbrain answers a question. It finds conversations by the days a question names (“two weeks ago”, “last Saturday”) even when no word matches. It labels every session with how long before today it was. It hands over the conversations it found whole when they fit, instead of repeating an excerpt of each above it.</li>
 </ul>
 
-<p>Limitations: one reader model, so absolute scores move with the reader while the comparison between systems is the result. On 150 questions one system’s score is within about 4 points; the paired counts are the test of the difference. The Sibyl-Memory arm is a reconstruction of its search from source, not its package, and a different way of storing conversations in it could score differently. LongMemEval measures memory of past conversations, while typed memories and vault notes are measured separately on this page. The machine-readable result, including every per-type count, is <a href="/docs/assets/benchmarks/longmemeval-s-head-to-head-2026-09-23.json">available as JSON</a>.</p>
+<p>Limitations: one run with one reading model. HivemindOS was not run with Opus 4.6 on all 500, so there is no same-model comparison with Sibyl-Memory’s Opus row. Sibyl-Memory’s own 95.6% comes from its string-matching scorer, which on step-by-step answers accepts almost any answer containing the right number anywhere; graded by the official judge, its Opus run scores 95.3%. Oracle hands each question only the conversations that hold its answer, so it tests reading and recall within them, not search through a large history. Every answer, every verdict and a script that recomputes these numbers are <a href="https://github.com/LiamVisionary/hivemindos-memory-benchmarks/tree/main/longmemeval-oracle-2026-09-24">published</a>.</p>
 
 <h2 id="public-long-conversation-suites">Public Long-Conversation Suites</h2>
 
@@ -1425,10 +1431,10 @@
 </blockquote>
 
 <blockquote>
-  <p>On LongMemEval_S, with the same 150 questions, reader model and official judge, HivemindOS’s shared-brain recall answered 77.3% of questions correctly and Sibyl-Memory’s search 54.0%. HivemindOS was right on 43 questions Sibyl-Memory missed and wrong on 8 it got.</p>
+  <p>On LongMemEval Oracle, all 500 questions with Claude Sonnet 4.5 reading and LongMemEval’s official judge grading every answer, the HivemindOS Superbrain answered 95.1% correctly excluding preference questions, against 92.8% for Sibyl-Memory’s Sonnet 4.5 plugin and 95.3% for its Opus 4.6 run.</p>
 </blockquote>
 
-<p>The Sibyl-Memory comparison is measured. Quote it with its setup: LongMemEval_S, 150 questions, the same reader and judge, and Sibyl-Memory’s search reconstructed from its source. Do not turn these results into an unmeasured competitor comparison, a hosted latency SLA, a universal token-savings guarantee, or a claim that pattern proposals are production-perfect. The benchmarks deliberately publish their corpus, route, sample size, and limitations so the claims can stay useful as the product evolves.</p>
+<p>The Sibyl-Memory comparison is measured. Quote it with its setup: LongMemEval Oracle, all 500 questions, Claude Sonnet 4.5 reading for HivemindOS, the official <code class="language-plaintext highlighter-rouge">gpt-4o-2024-08-06</code> judge for both, and Sibyl-Memory’s own published answers. Do not describe HivemindOS as beating Sibyl-Memory’s Opus 4.6 result: it matches it with a smaller reading model. Do not turn these results into an unmeasured competitor comparison, a hosted latency SLA, a universal token-savings guarantee, or a claim that pattern proposals are production-perfect. The benchmarks deliberately publish their corpus, route, sample size, and limitations so the claims can stay useful as the product evolves.</p>
 
 <h2 id="reproduce-the-benchmarks">Reproduce The Benchmarks</h2>
 
@@ -1446,13 +1452,14 @@ pnpm benchmark:context-savings
 
 <p>The standard public suites use the development-only harness documented under <code class="language-plaintext highlighter-rouge">benchmarks/memory/</code>. Datasets, temporary vaults, model clients, OAuth bridges, checkpoints, and raw outputs remain outside the production application and are not shipped to users.</p>
 
-<p>The LongMemEval_S head to head uses the public <code class="language-plaintext highlighter-rouge">longmemeval_s_cleaned.json</code> from the LongMemEval Hugging Face dataset. Retrieval for both systems needs no model; the decision-model ordering, the reader and the judge call OpenRouter and cost about $1 for the two systems on 150 questions:</p>
+<p>The LongMemEval Oracle comparison uses the public <code class="language-plaintext highlighter-rouge">longmemeval_oracle.json</code> from the LongMemEval Hugging Face dataset. Building each question’s Superbrain needs no model; the reader and the judge call OpenRouter and cost about $20 for all 500 questions:</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">OPENROUTER_API_KEY</span><span class="o">=</span>&lt;key&gt; node scripts/benchmark-longmemeval-arms.mjs retrieve <span class="nt">--dataset</span> &lt;longmemeval_s_cleaned.json&gt; <span class="nt">--out</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span> <span class="nt">--arms</span> sibyl-mcp,product-hook-v2-jev <span class="nt">--per-type</span> 25
-<span class="nv">OPENROUTER_API_KEY</span><span class="o">=</span>&lt;key&gt; node scripts/benchmark-longmemeval-arms.mjs answer <span class="nt">--out</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span> <span class="nt">--arms</span> sibyl-mcp,product-hook-v2-jev <span class="nt">--per-type</span> 25 <span class="nt">--reader</span> openai/gpt-4.1-mini <span class="nt">--judge</span> openai/gpt-4o-2024-08-06 <span class="nt">--budget-usd</span> 3
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">OPENROUTER_API_KEY</span><span class="o">=</span>&lt;key&gt; node scripts/benchmark-longmemeval-arms.mjs retrieve <span class="nt">--dataset</span> &lt;longmemeval_oracle.json&gt; <span class="nt">--out</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span> <span class="nt">--arms</span> product-answer-jev
+<span class="nv">OPENROUTER_API_KEY</span><span class="o">=</span>&lt;key&gt; node scripts/benchmark-longmemeval-arms.mjs answer <span class="nt">--out</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span> <span class="nt">--arms</span> product-answer-jev <span class="nt">--reader</span> anthropic/claude-sonnet-4.5 <span class="nt">--judge</span> openai/gpt-4o-2024-08-06 <span class="nt">--reader-max-tokens</span> 1500 <span class="nt">--budget-usd</span> 25
 node scripts/benchmark-longmemeval-arms.mjs summarize <span class="nt">--out</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span>
-node scripts/render-longmemeval-benchmark-charts.mjs
 </code></pre></div></div>
+
+<p>The published answers and a script that recomputes the scores are in <a href="https://github.com/LiamVisionary/hivemindos-memory-benchmarks">hivemindos-memory-benchmarks</a>.</p>
 
 <p>The live token benchmark calls the selected provider and may incur provider charges:</p>
 
