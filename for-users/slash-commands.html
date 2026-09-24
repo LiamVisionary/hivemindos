@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -702,10 +704,30 @@
     <tr>
       <td><code class="language-plaintext highlighter-rouge">/image-gen &lt;prompt&gt;</code></td>
       <td><code class="language-plaintext highlighter-rouge">/imagine</code>, <code class="language-plaintext highlighter-rouge">/txt2img</code></td>
-      <td>Generate an image through a connected Image Studio, ComfyUI, or Z-Image app and show the result as a native chat card.</td>
+      <td>Generate an image and show the result as a native chat card. Picking the command from the composer menu opens the media picker first (see below); a typed prompt runs on Automatic.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">/video-gen &lt;prompt&gt;</code></td>
+      <td><code class="language-plaintext highlighter-rouge">/txt2vid</code>, <code class="language-plaintext highlighter-rouge">/animate</code></td>
+      <td>Generate a video and show the result as a native chat card. Picking the command from the composer menu opens the media picker first; an attached picture becomes the start frame.</td>
     </tr>
   </tbody>
 </table>
+
+<h3 id="the-media-picker">The media picker</h3>
+
+<p>Choosing <code class="language-plaintext highlighter-rouge">/image-gen</code> or <code class="language-plaintext highlighter-rouge">/video-gen</code> from the composer’s slash menu opens a picker before anything runs. It lists every place a generation can land, grouped by where it runs:</p>
+
+<ul>
+  <li><strong>This machine</strong> — free lanes on this machine (a Media Studio lane, ComfyUI, Z-Image, Image Studio). Nothing leaves the machine.</li>
+  <li><strong>Other machines</strong> — free lanes on your other connected machines; the prompt goes to that machine.</li>
+  <li><strong>HivemindOS credits</strong> — hosted models billed to the shared credit balance, with the credits shown on the row.</li>
+  <li><strong>Your accounts</strong> — models billed to an account you already pay for, as shared by Hivemind Content Studio.</li>
+</ul>
+
+<p><strong>Automatic</strong> stays at the top and prefers free and local, then credits, then your accounts, and says why. Your last pick is remembered per kind; a pick that is not available right now falls back to Automatic and says so. A model that starts from a picture asks you to attach one to the message first; a picture attached before you open the picker travels with the pick. Hosted models that start from a picture are listed but cannot run from chat yet. Rows that can only run inside Hivemind Content Studio say so and, while the studio is running, offer to open it. If the studio is not installed, the picker says what it would add.</p>
+
+<p>The list is one shared inventory: HivemindOS and Hivemind Content Studio each publish what they discover and read each other’s copy, so a model is visible from either app even when the other is closed. Agents read the same list through the <code class="language-plaintext highlighter-rouge">media_model_catalog</code> tool or <code class="language-plaintext highlighter-rouge">GET /api/chat/media-catalog</code>.</p>
 
 <h2 id="hermes-and-gateway-commands">Hermes And Gateway Commands</h2>
 

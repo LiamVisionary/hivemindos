@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -593,19 +595,71 @@
         </div>
         <h1 id="agents-runtimes-and-chat">Agents, Runtimes, And Chat</h1>
 
-<p>An agent is a reusable AI teammate with a name, a machine, a model, instructions, capabilities, and its own conversation history. Chat is where you work with that agent directly.</p>
+<p>An agent is a reusable AI teammate with its own instructions, capabilities, and conversation history. A new installation prepares an assistant for everyday work; you can add specialists when you want a separate responsibility or way of working.</p>
 
 <p>HivemindOS keeps the chosen agent, workspace, files, model, and earlier messages attached to the conversation. That means you can continue a real piece of work instead of rebuilding the context every time you send a prompt.</p>
 
 <h2 id="start-a-conversation">Start A Conversation</h2>
 
 <ol>
-  <li>Open <strong>Chat</strong>.</li>
-  <li>Choose an agent. If the agent lives on another machine, make sure that machine is online in Fleet.</li>
-  <li>Choose a model when you want something different from the agent’s default.</li>
-  <li>Attach files, images, or a project folder when the work needs them.</li>
-  <li>Ask normally. HivemindOS shows live progress, capability setup, approvals, results, and generated artifacts in the conversation.</li>
+  <li>Start from <strong>Home</strong>, or open <strong>Chat</strong> to continue a conversation.</li>
+  <li>Use your prepared assistant, or choose another agent when the task needs it. If it lives on another device, that device needs to be online.</li>
+  <li>Add files, images, or a project folder when the work needs them.</li>
+  <li>Ask normally. HivemindOS shows progress, setup, approvals, and results in the conversation.</li>
 </ol>
+
+<p>Model selection is optional. Open <strong>Advanced</strong> when you want to change it or adjust the other detailed controls. The model picker uses a scrolling glass menu with search. <strong>Keep visible</strong> pins those controls across app restarts. Your existing agent and model choices are preserved.</p>
+
+<!-- Superseded: the primary starting sequence put agent/model selection before every prompt, making optional setup look necessary. The prepared assistant and optional Advanced controls replace that sequence. -->
+
+<h2 id="try-sphere-view">Try Sphere View</h2>
+
+<p>Turn on <strong>Sphere view</strong> at the top of Home to try a larger honey-colored sphere with a floating glass input and compact task shortcuts. This experimental view is off by default, and your choice is remembered.</p>
+
+<p>Leave <strong>Chat here</strong> on to keep the sphere around tasks you start or reopen from Home. Your conversation still has the usual progress, attachments, approvals, results, and task modes. <strong>Focused view</strong>, in the top-right controls, keeps the glass interface with a quiet background. <strong>Return to sphere</strong> brings the sphere back with the same conversation and unsent draft. Turn off <strong>Chat here</strong> to open tasks in the focused layout instead.</p>
+
+<p>Sending from Home keeps the sphere in place while the conversation opens. If opening takes a moment, Home stays visible and editable; any new text you type while waiting is saved for your next task.</p>
+
+<p>Chat history and details live in rounded floating panels. Use <strong>Show chat history</strong> on the left or <strong>Show chat details</strong> on the right to open them. Each panel’s minus button shrinks it back to a floating button. Opening and closing them preserves your message draft; on small screens, they open one at a time and soften the conversation behind them. Moving keyboard focus back into the conversation closes the panel. With Reduce Motion enabled, the panels switch without the stretching animation.</p>
+
+<p><strong>Show app preview</strong> and <strong>Show terminal</strong> in the top-right controls open matching glass panels. Their minus buttons minimize them with the same motion. Restoring a preview keeps its selected tab and device size. Restoring the terminal keeps its output and unfinished command; minimizing it does not stop a running command.</p>
+
+<p>The terminal shows where your commands will run. When a conversation has no computer selected, choose one directly in the terminal. <strong>Connect a computer</strong> opens setup while keeping your conversation in place.</p>
+
+<p>Select the <strong>voice icon</strong> to open the same voice conversation available in My Hive, with the sphere responding to spoken replies when visible. The call’s messages appear in a short, scrolling glass panel above your input in both sphere and focused chat. Type there to reply during the call, or use the camera button to share what you see. Switching between the two views keeps the call and your unsent reply. Your unsent task text returns when the call ends. Outside a call, the microphone inside a task’s input still dictates into that task. With Reduce Motion enabled, the sphere stays in place and responds through light instead of movement.</p>
+
+<h2 id="auto-chat-do-and-create">Auto, Chat, Do, and Create</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Mode</th>
+      <th>What to expect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Auto</strong></td>
+      <td>Start without choosing a mode; your assistant follows the request and your existing permissions.</td>
+    </tr>
+    <tr>
+      <td><strong>Chat</strong></td>
+      <td>Discuss, explain, and research without changing files or taking external actions.</td>
+    </tr>
+    <tr>
+      <td><strong>Do</strong></td>
+      <td>Complete a task using your apps, files, or computer.</td>
+    </tr>
+    <tr>
+      <td><strong>Create</strong></td>
+      <td>Make something you can preview, revise, and use.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Changing modes keeps the same conversation and attachments. Do and Create can take time to reason through a difficult task; neither mode grants extra permission to act or spend.</p>
+
+<p>Chat mode blocks changes. To turn a discussion into an action, choose Do or Create yourself. If your chosen agent cannot provide Chat’s no-changes boundary, that option is unavailable and the conversation explains how to choose a supported assistant.</p>
 
 <p>Use <strong>Work</strong> instead when the request should be assigned, tracked through stages, reviewed independently, or kept with formal deliverables. A conversation can also create or continue an app workspace without losing the project between messages.</p>
 
@@ -619,6 +673,14 @@
 </ul>
 
 <p>If setup is missing, Chat shows the relevant connection or runtime setup in place. Completing it refreshes the conversation without throwing away your prompt.</p>
+
+<h2 id="models-running-on-this-computer">Models Running On This Computer</h2>
+
+<p>Your first assistant, and new assistants that keep the default model, use a model running on this computer when one is loaded in LM Studio, Ollama, or another local model app. Otherwise they use the free online model. Choosing a model for an assistant turns this off, and it then uses the model you chose.</p>
+
+<p>When the online model can’t answer because it can’t be reached or today’s free allowance is used up, a model loaded on this computer answers instead, if there is one. A reply that needs payment still asks for it.</p>
+
+<p>Either way, the line under the reply names the model on this computer that answered, and says why when it stood in for the online model. Incognito conversations always stay on the private online model.</p>
 
 <h2 id="source-grounded-work">Source-Grounded Work</h2>
 
@@ -746,6 +808,18 @@ generation may still use their documented API credentials.</p>
   <li>Capability-search preflight can record redacted Context X-Ray manifests for a runtime session. The Memory workbench uses those manifests to show which skills, tools, API routes, connected apps, runtimes, docs, or workspace files were visible to the agent.</li>
   <li>Runtime-specific powers such as deterministic connector queries and artifact authoring are declared in the runtime capability matrix. Hermes is the first runtime enabled for these PromptQL-style work-product flows; other runtimes opt in through the same matrix instead of separate branches.</li>
   <li>Explicit Teach Hive phrasing in chat creates a Brain Review proposal, not an immediate memory write. The normal Brain Review approval/apply path still decides what becomes durable Shared Brain Memory.</li>
+</ul>
+
+<h3 id="know-what-an-answer-rests-on">Know What An Answer Rests On</h3>
+
+<p>A model answers from a compressed memory of what it read during training. That memory is good for common, stable facts and unreliable for anything recent, niche, or numeric. Chat shows you which kind of answer you are getting and gives you the tools to change it.</p>
+
+<ul>
+  <li><strong>Model badges.</strong> The model picker marks what each model can do: <strong>Tools</strong> (search, files, commands, connected apps), <strong>Images</strong> (it can look at attachments), and <strong>Thinking</strong> (it can work longer on hard problems). A model with no badge may still do these things; the badge only appears when it is certain. If the model you picked definitely cannot use tools, the picker says so, and the agent answers from memory instead of pretending to look something up.</li>
+  <li><strong>Where the answer came from.</strong> Under every reply, a small note reads either <strong>From memory</strong> or <strong>Used tools</strong>, with a count of any files or images it read. Treat “from memory” answers about recent events, exact numbers, or obscure topics as a first draft to confirm.</li>
+  <li><strong>Start a fresh chat when the topic changes.</strong> Everything in a conversation rides along with each new message. When a chat grows heavy or the last few messages have drifted to a new subject, a suggestion appears above the message box with a <strong>Start a fresh chat</strong> button. Dismiss it to keep going; it stays quiet until the chat has grown a good deal more.</li>
+  <li><strong>Read images as text first.</strong> Under <strong>Advanced</strong> in the message box, switch <strong>Images</strong> from <em>as-is</em> to <em>read as text</em>. Each attached image is first written out word for word as a step in the conversation you can check, then the agent works from that text. Use it for labels, receipts, test results, and anything with numbers, so a misread digit is caught at the transcription rather than the conclusion.</li>
+  <li><strong>Show, don’t tell.</strong> In Agent settings, <strong>Custom instructions</strong> now has an <strong>Examples</strong> section: pairs of <em>when I ask something like…</em> and <em>answer it like this</em>. One concrete example steers format and tone better than a paragraph of rules, and it applies to every agent and model in chat.</li>
 </ul>
 
 <h3 id="local-model-runtimes">Local Model Runtimes</h3>

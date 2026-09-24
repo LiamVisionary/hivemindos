@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -593,9 +595,9 @@
         </div>
         <h1 id="generated-media-signing">Generated Media Signing</h1>
 
-<p>How generated images reach phone clients privately: hub-side caching plus
-short-lived signed URLs, so media only ever travels hub → client over the
-tailnet.</p>
+<p>How generated images and videos reach phone clients privately: hub-side
+caching plus short-lived signed URLs, so media only ever travels hub → client
+over the tailnet.</p>
 
 <h2 id="why-this-exists">Why this exists</h2>
 
@@ -614,7 +616,12 @@ pulls each result onto hub disk at
 <code class="language-plaintext highlighter-rouge">~/.hivemindos/cache/generated-media/&lt;sha256 of source&gt;.&lt;ext&gt;</code>. Accepts
 hub-local <code class="language-plaintext highlighter-rouge">generated-media</code> paths, <code class="language-plaintext highlighter-rouge">data:image/…</code> payloads, and HTTP(S)
 URLs (fetched by the hub, which <em>can</em> reach them). Validates by magic
-number, caps at 64 MB.</li>
+number, caps at 64 MB. <code class="language-plaintext highlighter-rouge">cacheGeneratedVideoForPhone(url)</code> does the same for
+a clip, with two differences that follow from its size: it is streamed to
+disk under a 1 GB cap rather than held in memory (a partial download is
+never servable and is removed on failure), and the container is checked
+here, from the file’s first bytes (MP4/M4V/MOV or WebM), so a file that is
+only <em>named</em> like a video is never signed for a phone.</li>
   <li><strong>Signing</strong> (<code class="language-plaintext highlighter-rouge">generated-media-signing.ts</code>) — mints and verifies
 path-scoped, expiring HMAC capabilities for <code class="language-plaintext highlighter-rouge">/api/chat/generated-media</code>.</li>
 </ol>
@@ -640,33 +647,58 @@ per-install random secret at <code class="language-plaintext highlighter-rouge">
 <p><code class="language-plaintext highlighter-rouge">/api/chat/generated-media</code> accepts a valid signature <strong>or</strong> normal dashboard
 auth (session cookie / device token) — the signature path is an alternative
 for native loaders, never a replacement. Either way the route keeps its own
-safety checks: image extensions only, magic-number validation, size cap. The
-route authenticates itself, so it belongs to the self-authenticating
-allowlist in <code class="language-plaintext highlighter-rouge">src/proxy.ts</code>.</p>
+safety checks: image and video extensions only, and a size cap for each
+(64 MB for an image, 1 GB for a video). An image’s magic number is validated
+when it is served. A video is streamed by its extension, with byte-range
+support, and its bytes are <strong>not</strong> inspected by the route; that is why the
+phone cache checks a clip’s container before anything is signed. The route
+authenticates itself, so it belongs to the self-authenticating allowlist in
+<code class="language-plaintext highlighter-rouge">src/proxy.ts</code>.</p>
 
-<h2 id="phone-image-generation-flow">Phone image generation flow</h2>
+<h2 id="phone-generation-flow">Phone generation flow</h2>
 
-<p><code class="language-plaintext highlighter-rouge">POST /api/phone</code> with <code class="language-plaintext highlighter-rouge">action: "image-generation"</code> (used by HivemindOS
-Mobile’s <code class="language-plaintext highlighter-rouge">/image-gen</code> command):</p>
+<p><code class="language-plaintext highlighter-rouge">POST /api/phone</code> with <code class="language-plaintext highlighter-rouge">action: "image-generation"</code> or
+<code class="language-plaintext highlighter-rouge">action: "video-generation"</code> (used by HivemindOS Mobile’s <code class="language-plaintext highlighter-rouge">/image-gen</code> command
+and its Generate menu). Both live in <code class="language-plaintext highlighter-rouge">src/lib/services/phone/media-generation.ts</code>:</p>
 
 <ol>
+  <li>Reads the request (<code class="language-plaintext highlighter-rouge">media-rail.ts</code>). A prompt is required. A model picked
+in the phone’s menu arrives as <code class="language-plaintext highlighter-rouge">selection</code>, the same shape the dashboard’s
+composer sends; the older <code class="language-plaintext highlighter-rouge">appId</code> / <code class="language-plaintext highlighter-rouge">model</code> fields still work by
+themselves. Anything present but unreadable is <strong>refused</strong>, never dropped:
+a selection that does not parse would otherwise run the automatic path,
+which is a place nobody picked. A start picture is accepted inline only,
+never as a file path.</li>
+  <li>Resolves the selection with the same resolver the dashboard routes use, so
+Automatic is decided against the live model list, and a model picked for a
+published privacy claim is refused if that claim is gone.</li>
   <li>Runs the same orchestration as the dashboard’s
-<code class="language-plaintext highlighter-rouge">/api/chat/image-generation</code> — both are thin wrappers over
-<code class="language-plaintext highlighter-rouge">runChatImageGeneration()</code> in <code class="language-plaintext highlighter-rouge">src/lib/services/chat/image-generation.ts</code>
-(connected-app discovery, scoring, endpoint probing, job polling,
-generation metrics).</li>
-  <li>Caches every result image onto hub disk (piece 1 above).</li>
-  <li>Answers with signed relative URLs (piece 2), plus app/model/machine
-metadata.</li>
+<code class="language-plaintext highlighter-rouge">/api/chat/image-generation</code> and <code class="language-plaintext highlighter-rouge">/api/chat/video-generation</code>
+(<code class="language-plaintext highlighter-rouge">runChatImageGeneration()</code> / <code class="language-plaintext highlighter-rouge">runChatVideoGeneration()</code>): connected-app
+discovery, the picked place, job polling, generation metrics. Spending
+rules are decided there and only there, so they are identical from a phone
+and from the dashboard. An agent’s own image or video tool runs under the
+agent as this hub knows it; the request names the agent and nothing else
+about it.</li>
+  <li>Caches the result onto hub disk (piece 1 above): every image, or one clip.</li>
+  <li>Answers with signed relative URLs (piece 2), app/model/machine metadata,
+and an echo of the selection that ran.</li>
 </ol>
 
-<p>The client is expected to download each image <strong>once</strong>, promptly, and store
+<p>What a hub’s rail accepts is published as <code class="language-plaintext highlighter-rouge">phoneRail</code> beside the model list
+(<code class="language-plaintext highlighter-rouge">GET /api/chat/media-catalog</code>). A phone offers a hub’s models only when the
+hub says its rail runs them. That is deliberate: a hub older than selections
+does not refuse one, it ignores the field and chooses for itself, so trying
+and failing is not a safe way to find out.</p>
+
+<p>The client is expected to download each file <strong>once</strong>, promptly, and store
 it locally — signed URLs are transport, not storage. Expiry is deliberately
 short; history should render from the client’s own copy.</p>
 
-<p>Net effect: the image crosses exactly one client-visible network boundary —
-hub → phone, inside the WireGuard-encrypted tailnet. The phone never talks to
-the image app, and no media transits any third-party service.</p>
+<p>Net effect: the image or clip crosses exactly one client-visible network
+boundary — hub → phone, inside the WireGuard-encrypted tailnet. The phone
+never talks to the app that made it, and the result transits no third-party
+service on its way to the phone.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

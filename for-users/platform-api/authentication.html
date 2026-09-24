@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -741,6 +743,7 @@
     <li>Every child operation must be covered by its full ancestor chain.</li>
     <li>A project-bound key cannot change projects or create an account-level descendant.</li>
     <li>A child expiry cannot be later than the earliest ancestor expiry.</li>
+    <li>A child keeps its ancestors’ privacy tier and cannot loosen it. See <a href="privacy.html">private and confidential access</a>.</li>
     <li>A child limit cannot exceed a covering ancestor limit.</li>
     <li>Every ancestor limit continues to apply even when the child does not repeat it.</li>
     <li>Delegation is limited to eight total levels.</li>

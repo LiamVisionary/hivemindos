@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -614,6 +616,12 @@
 <p>Comment finder reads through the selected account’s local X session. Discovery does not spend managed-X read credits. Reviewed replies and optional quote posts are delivered through that same session so X receives the real reply or quote relationship; HivemindOS checks that the resolved Agent Reach identity matches the connected Socials account and fails closed on a mismatch. It checks the X accounts named in the account context and selected posting voice, asks the drafting model for bounded topic searches, filters the account’s own posts, reposts, stale results, and any target already used in queue history, then ranks the remaining conversations. If the account’s credential pair is missing, unavailable, or belongs to another handle, the card names the setup problem and does not pretend a scan ran.</p>
 
 <p>Every reply or quote suggestion keeps an exact snapshot of the source post, its author, public metrics, discovery path, and a direct <strong>Open target</strong> link. The queue shows the source beside the proposed text so the reviewer can evaluate the response in context. Editing the draft cannot silently retarget it. Replies and quotes always remain review-only—even when standalone posts are in auto mode—and each <strong>Send now</strong> action names the target and asks for human confirmation. Discovery never likes, reposts, replies, quotes, or publishes by itself.</p>
+
+<h2 id="works-across-your-devices">Works Across Your Devices</h2>
+
+<p>Connect an account once and it follows you. The account, its drafts, approvals, scheduled posts, drafting receipts, and the pause switch all live in your shared brain, so opening HivemindOS on another device shows the same review queue in the same state. Approve on a laptop, watch it publish from the desktop: exactly one of your devices runs the publishing sweep at a time, and every other device names which one on the worker pill. <strong>Send now</strong> always works from the device you press it on.</p>
+
+<p>Sign in with X once and the connection is verified on every device. A local browser session used by Comment finder stays with the browser it was picked in; another device uses its own signed-in session or the account’s X connection instead, and never opens a browser profile that belongs to a different machine.</p>
 
 <h2 id="connect-an-account">Connect An Account</h2>
 

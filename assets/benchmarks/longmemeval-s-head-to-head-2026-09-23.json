@@ -1,0 +1,68 @@
+{
+  "schema": "hivemindos.longmemeval-head-to-head.v1",
+  "date": "2026-09-23",
+  "dataset": {
+    "name": "LongMemEval_S (cleaned)",
+    "source": "https://huggingface.co/datasets/xiaowu0162/longmemeval-cleaned",
+    "file": "longmemeval_s_cleaned.json",
+    "sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+    "setting": "S: each question comes with its whole chat history, about 50 sessions and 115k tokens, most of it unrelated"
+  },
+  "sample": {
+    "questions": 150,
+    "perType": 25,
+    "unanswerable": 7,
+    "selection": "25 questions of each of the six types, chosen by a hash of the question id before any system was run"
+  },
+  "reader": {
+    "model": "openai/gpt-4.1-mini",
+    "prompt": "the official LongMemEval chain-of-thought reading prompt, with the question date"
+  },
+  "judge": {
+    "model": "openai/gpt-4o-2024-08-06",
+    "prompt": "the official LongMemEval per-type judge prompts"
+  },
+  "systems": {
+    "hive": {
+      "label": "HivemindOS shared brain",
+      "configuration": "The prompt-hook recall as shipped: dated past-conversation exchanges ordered by TypeSafe's Jev decision model (Turbo mode, on by default for cloud turns), then the other recalled notes, 5,000 characters at most.",
+      "meanContextChars": 4600,
+      "correct": 116,
+      "accuracy": 77.3
+    },
+    "sibyl": {
+      "label": "Sibyl-Memory",
+      "configuration": "The MCP memory_search default (multi_record_search, 10 results, 1,500 characters each), reconstructed in JavaScript from the MIT-licensed source at Sibyl-Labs/Sibyl-Memory 761bfc6, with conversation turns stored the way its Hermes adapter journals them.",
+      "meanContextChars": 5600,
+      "correct": 81,
+      "accuracy": 54.0
+    }
+  },
+  "byType": [
+    { "id": "knowledge-update", "label": "Updated facts", "questions": 25, "hive": 92, "sibyl": 88 },
+    { "id": "multi-session", "label": "Counting across chats", "questions": 25, "hive": 60, "sibyl": 32 },
+    { "id": "single-session-assistant", "label": "What the assistant said", "questions": 25, "hive": 100, "sibyl": 76 },
+    { "id": "single-session-preference", "label": "Preferences", "questions": 25, "hive": 48, "sibyl": 20 },
+    { "id": "single-session-user", "label": "User facts", "questions": 25, "hive": 92, "sibyl": 92 },
+    { "id": "temporal-reasoning", "label": "Dates and time", "questions": 25, "hive": 72, "sibyl": 16 }
+  ],
+  "unanswerable": { "questions": 7, "hive": 7, "sibyl": 7 },
+  "paired": {
+    "hiveOnly": 43,
+    "sibylOnly": 8,
+    "both": 73,
+    "neither": 26,
+    "signTestP": "< 0.0001"
+  },
+  "references": {
+    "hiveWithoutDecisionModel": 68.7,
+    "evidenceOnlyNoMemorySystem": 93.3,
+    "evidenceOnlyNote": "The same reader handed only the sessions that contain the answer, with no memory system: the Oracle setting behind Sibyl-Memory's published 95.6%."
+  },
+  "limitations": [
+    "One reader model; absolute scores move with the reader, the comparison between systems is the result.",
+    "150 questions: about plus or minus 4 points on one system; the paired counts are the test of the difference.",
+    "The Sibyl-Memory arm is a reconstruction of its search from source, not its package; a different way of storing conversations in it could score differently.",
+    "LongMemEval measures memory of past conversations; typed memories and vault notes are measured separately on this page."
+  ]
+}

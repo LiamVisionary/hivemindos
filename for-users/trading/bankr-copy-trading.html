@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -602,14 +604,13 @@
 <p>There is no card subscription and no separate x402 payer wallet.</p>
 
 <ul>
-  <li>Bankr pays a <strong>$1 Base USDC usage minimum</strong> when a monitor activates and every 30 days while it stays active.</li>
-  <li>The $1 becomes fee credit. It is not added on top of the percentage fees.</li>
-  <li>Each successful copied trade costs an <strong>uncapped 0.5% of its actual verified copied notional</strong>.</li>
-  <li>Remaining credit is used first; Bankr sends only any excess fee.</li>
+  <li>Bankr pays a <strong>$1 Base USDC monitoring minimum</strong> when a monitor activates and every 30 days while it stays active.</li>
+  <li>The $1 pays for monitoring. It is not fee credit, and it is not deducted from trade fees.</li>
+  <li>Each successful copied trade costs an <strong>uncapped 0.5% of its actual verified copied notional</strong>, which Bankr sends in full.</li>
   <li>The minimum executed copy is <strong>$5</strong>. Skipped and failed trades cost $0.</li>
 </ul>
 
-<p>For example, a verified $1,000 copy has a $5 gross fee. If the full $1 credit remains, HivemindOS applies it and Bankr sends $4. A $100 copy has a $0.50 gross fee and can be fully covered by the credit. A monitor with no trades still costs the $1 usage minimum for that active period.</p>
+<p>For example, a verified $1,000 copy has a $5 fee, and Bankr sends $5. A $100 copy has a $0.50 fee. A monitor with no trades still costs the $1 monitoring minimum for that active period.</p>
 
 <p>The hosted pricing response is authoritative and is shown again before consent. Existing monitors that already accepted older direct-fee or prepaid terms keep those terms instead of being silently migrated.</p>
 
@@ -636,7 +637,7 @@
 
 <p>The first scan establishes a cursor, so older transactions are not copied. For each eligible new target swap, the hosted service applies scale and hard risk limits, asks Bankr for a quote, enforces slippage and the USD ceiling, then submits the copy. A transaction hash alone is not treated as success: HivemindOS verifies the matching Base swap from the configured Bankr wallet before recording it as executed.</p>
 
-<p>Only then does the service calculate 0.5% of actual verified notional. It atomically uses remaining period credit. If credit covers the gross fee, no second payment is sent. Otherwise Bankr sends the exact excess in Base USDC, and HivemindOS verifies token, amount, sender, recipient, and successful settlement independently.</p>
+<p>Only then does the service calculate 0.5% of actual verified notional, and Bankr sends that fee in Base USDC. HivemindOS verifies token, amount, sender, recipient, and successful settlement independently. A period paid under older credited terms uses its remaining credit first and sends only any excess.</p>
 
 <p>Many users following the same target can share one hosted watcher, while each monitor keeps separate Bankr credentials, limits, usage credit, daily reservations, and outcomes. One Bankr wallet can run up to three active target monitors.</p>
 
@@ -708,7 +709,7 @@
     </tr>
     <tr>
       <td>Usage collected</td>
-      <td>The $1 payment is independently verified and its remaining amount is fee credit.</td>
+      <td>The $1 payment is independently verified and the monitor is active for its 30-day period.</td>
     </tr>
     <tr>
       <td>Executing</td>
@@ -724,15 +725,15 @@
     </tr>
     <tr>
       <td>Fee included</td>
-      <td>The trade’s gross fee was fully covered by usage credit.</td>
+      <td>The trade’s fee was fully covered by credit left from a period paid under older terms.</td>
     </tr>
     <tr>
       <td>Fee charging or verifying</td>
-      <td>Bankr submitted an excess fee that is still settling.</td>
+      <td>Bankr submitted the trade’s fee and it is still settling.</td>
     </tr>
     <tr>
       <td>Fee collected</td>
-      <td>The exact excess Base USDC payment was independently verified.</td>
+      <td>The exact Base USDC fee payment was independently verified.</td>
     </tr>
     <tr>
       <td>Uncertain or verification failed</td>

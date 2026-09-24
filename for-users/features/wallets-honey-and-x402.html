@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -597,6 +599,20 @@
 
 <p>Open <strong>Wallets</strong> to create or import a wallet, review balances and usage, set limits, freeze spending, back up recovery material, and respond to approval requests.</p>
 
+<h2 id="your-first-wallet">Your First Wallet</h2>
+
+<p>A new installation prepares an empty wallet and links it to your assistant. Home’s daily brief shows <strong>Agent wallet</strong>, its balance, and <strong>Open wallet</strong>. If setup needs another attempt, use <strong>Try again</strong> in that same place.</p>
+
+<p>Spending starts off. Creating or linking a wallet does not deposit money, enable spending, or grant an agent unlimited access to funds. Add funds when you need to pay for something, then choose the spending permissions and limits you want. An existing wallet keeps its current permissions.</p>
+
+<p>Additional agents use the shared wallet by default. During agent setup, use <strong>Choose a wallet</strong> to select or create another wallet, <strong>Use shared wallet</strong> to return to the default, or <strong>No wallet</strong> to leave the agent unlinked. Sharing a wallet keeps each agent’s spending permission separate. An explicit choice to leave an agent unlinked is remembered.</p>
+
+<p>HivemindOS services use your single HivemindOS account balance. Choosing an agent wallet does not choose a different account to pay those service charges.</p>
+
+<h3 id="banking-and-payment-cards">Banking and Payment Cards</h3>
+
+<p>Open <strong>Wallets</strong> and use <strong>Set up ClawBank</strong> to start the account connection steps. Connecting an account lets you see the banking services available to you. Creating a wallet does not issue a payment card; card creation is not available through this setup.</p>
+
 <p>For the separation between Honey, Hivemind Cloud credits, HIVE, and treasury policy, see <a href="../../for-investors/honey-hive-treasury.html">Honey, HIVE, And Treasury</a>.</p>
 
 <figure class="imagePlate">
@@ -675,6 +691,12 @@
 
 <p>Customer-facing billing shows ordinary dollar-denominated managed usage. This prevents a funding/cash-out loop and avoids presenting service credit as a token reward.</p>
 
+<p>Honey follows your HivemindOS account. Every install has one: it is created the first time the app runs, with nothing to type, and it is what your username, your Honey total, your Rewards choice and every linked account hang off. Each computer earns Honey for the work its agents do, and every device signed into the same account, including the phone app, shows the same total. Backing the account up with an email address is what carries it to another device or through a reinstall.</p>
+
+<p>If two of your computers each made an account before they were connected — each showing its own name and balance — HivemindOS combines them on its own the next time either computer checks in. Credits add up, Honey from every computer counts toward one total, and every linked account, backup and device comes along; nothing is lost. When both accounts carry a name you chose, Settings → Account asks which name to keep, and that is the only question it needs answered.</p>
+
+<p>Settings → Account shows a linked-accounts meter with four parts: backup, Telegram, X and wallet. Each link binds to your account once, from whichever device you link it on, so linking on a second computer never moves anything. Telegram brings recognition Honey and the stakers’ clubs; X brings engagement Honey for posts about HivemindOS; wallets that stake HIVE boost every Honey the account earns. You can link as many wallets as you like — a staking wallet and the wallet that holds your HivePunks, say — and the best boost among them applies on every computer on the account.</p>
+
 <p>Lifetime Honey unlocks a larger daily allowance for HivemindOS free agents. The benefit starts at 10 Honey and grows through six levels to a maximum 2× request-and-token allowance. Honey from verified work, bounded peer recognition, verified Community Hive Brain outcomes, and the documented historical launch seed all advances the same total and levels. A distinct shared copy-trading outcome earns 0.1 Honey only after hosted verification; retries and duplicates earn nothing. Raw activity and ordinary chat volume do not earn Honey. If a workspace also has a HIVE staking benefit, HivemindOS uses whichever allowance multiplier is higher instead of stacking them. The allowance is an in-kind service benefit, not a spendable or withdrawable balance.</p>
 
 <table>
@@ -723,9 +745,11 @@
 
 <p>Communities can publish bounded missions in Telegram for documentation, code, testing, support, tutorials, research, moderation, and similar useful work. Each mission states its Honey amount and required evidence. A contributor submits evidence, and an independent community reviewer must approve it before Honey is recorded. GitHub pull-request missions also wait for confirmation that the pull request merged.</p>
 
-<p>To connect an account, first link and verify a wallet in HivemindOS. Then send <code class="language-plaintext highlighter-rouge">/linkhoney</code> to the community bot and tap its private “Connect the HivemindOS app” button — the app opens and confirms the link in one tap (the same message offers a Sign in with X button, and typing the one-time code into Wallets → Honey remains available as a manual fallback). <code class="language-plaintext highlighter-rouge">/missions</code> lists available work, <code class="language-plaintext highlighter-rouge">/honey</code> or <code class="language-plaintext highlighter-rouge">/honey balance</code> shows a private contribution summary, and <code class="language-plaintext highlighter-rouge">/honeyboard</code> shows the current seasonal leaderboard.</p>
+<p>To connect Telegram, press Link beside Telegram in Settings → Account (or Connect Telegram in Wallets → Honey) and then Start in Telegram. Your HivemindOS account is the proof, so no wallet is needed. Sending <code class="language-plaintext highlighter-rouge">/linkhoney</code> to the community bot and tapping its private “Connect the HivemindOS app” button does the same from the Telegram side, and typing the one-time code into the app remains available as a manual fallback. <code class="language-plaintext highlighter-rouge">/missions</code> lists available work, <code class="language-plaintext highlighter-rouge">/honey</code> or <code class="language-plaintext highlighter-rouge">/honey balance</code> shows a private contribution summary, and <code class="language-plaintext highlighter-rouge">/honeyboard</code> shows the current seasonal leaderboard.</p>
 
-<p>Any group member can recognize a specific useful contribution by replying with <code class="language-plaintext highlighter-rouge">/honey &lt;why&gt;</code>, using <code class="language-plaintext highlighter-rouge">/honey @name &lt;why&gt;</code>, or reacting to the message with 🏆 from Telegram’s reaction menu. The bot never places the trophy itself, so a 🏆 on a message always means a member chose to give recognition. Each accepted member recognition gives the recipient exactly 1 Honey. If a reaction award is rejected, the bot removes that member’s trophy and replies under the original group message with the reason. A private message is used only if the group reply fails; if Telegram cannot remove the reaction automatically, the reply asks the member to remove it manually. No HivemindOS connection is needed to give or receive: Honey banks to the recipient’s Telegram account right away, <code class="language-plaintext highlighter-rouge">/honey balance</code> shows it, and it transfers to their HivemindOS workspace automatically when they later connect. Connecting is one tap — Wallets → Honey → Connect Telegram opens the bot and pressing Start completes the link; sending <code class="language-plaintext highlighter-rouge">/linkhoney</code> for a one-time code remains available as a fallback. A giver can give up to three recognitions per UTC day—not 3 Honey of their own. Those recognitions reset daily and do not accumulate. The same pair can exchange only once per day in either direction, and a recipient can receive at most 5 Honey per day.</p>
+<p>X does not need Telegram. Press Link beside X in Settings → Account, sign in with X in your browser, and posts that tag @TheHivemindOS or @0xLiamVisionary, replies in their threads, and quote posts earn Honey to your account from then on; anything that X account already earned arrives at the same time. Several X accounts can be linked to one HivemindOS account.</p>
+
+<p>Any group member can recognize a specific useful contribution by replying with <code class="language-plaintext highlighter-rouge">/honey &lt;why&gt;</code>, using <code class="language-plaintext highlighter-rouge">/honey @name &lt;why&gt;</code>, or reacting to the message with 🏆 from Telegram’s reaction menu. The bot never places the trophy itself, so a 🏆 on a message always means a member chose to give recognition. Each accepted member recognition gives the recipient exactly 1 Honey. If a reaction award is rejected, the bot removes that member’s trophy and replies under the original group message with the reason. A private message is used only if the group reply fails; if Telegram cannot remove the reaction automatically, the reply asks the member to remove it manually. No HivemindOS connection is needed to give or receive: Honey banks to the recipient’s Telegram account right away, <code class="language-plaintext highlighter-rouge">/honey balance</code> shows it, and it transfers to their HivemindOS workspace automatically when they later connect. Connecting is one tap — Link beside Telegram in Settings → Account, or Connect Telegram in Wallets → Honey, opens the bot and pressing Start completes the link; sending <code class="language-plaintext highlighter-rouge">/linkhoney</code> for a one-time code remains available as a fallback. A giver can give up to three recognitions per UTC day—not 3 Honey of their own. Those recognitions reset daily and do not accumulate. The same pair can exchange only once per day in either direction, and a recipient can receive at most 5 Honey per day.</p>
 
 <p>The 🏆 reaction uses the same hosted identity, cooldown, daily quota, pair, recipient, and replay checks as the typed command. Removing a trophy, adding an ordinary reaction, reacting anonymously, or reacting to a message whose author the bot cannot identify awards nothing. The bot does not send the message text to the hosted service. To use this shortcut, the bot must be a group administrator with permission to delete messages, Group Privacy must be disabled, and the group’s reaction settings must allow 🏆 (or all emoji). Telegram bots cannot change that group-wide reaction setting, so a group admin enables it once; <code class="language-plaintext highlighter-rouge">/honey &lt;why&gt;</code> remains the fallback.</p>
 
@@ -894,6 +918,8 @@
 </ul>
 
 <p>That hosted policy returns source-specific rates, minimums, caps, supported rails, and recipients. Ordinary wallet transfers and externally sourced company revenue carry <strong>no HivemindOS platform fee</strong>. Current default rates are 0.20% for DEX swaps, 0.10% for supported live stock/tokenized-stock execution, and 0.50% for ordinary paid x402 or private-payment execution, with a $0.01 minimum and $10 maximum where a fee applies. The fee is quoted before confirmation and collected as a separate stablecoin transfer only after the main action succeeds. Paper trades, read-only checks, rejected actions, and no-payment x402 calls do not charge a platform fee. A hosted MiroShark run can use the same HivemindOS balance as Models and Mini apps instead of requiring a crypto wallet; its displayed $1.20 price is complete, and local MiroShark remains free.</p>
+
+<p>Paying for HivemindOS credits with a token other than USDC is the one exception to those limits. The wallet you choose sells just enough of that token for USDC, and a 5% conversion fee is taken inside that same swap, so the amount quoted is the amount that arrives. One top-up can convert up to $250 of a token, and the fee maximum for this case is $25 rather than $10, so the rate stays 5% at every size. Every other swap keeps the $10 per-swap limit.</p>
 
 <p>Zero Human Company revenue events are recorded through <code class="language-plaintext highlighter-rouge">/api/company-revenue</code> and shown in the company Treasury tab. Revenue earned outside HivemindOS is not charged. A future marketplace-sourced or HivemindOS-billed sale may include a disclosed fee from the hosted settlement policy, but local revenue recording itself does not create a company claim.</p>
 

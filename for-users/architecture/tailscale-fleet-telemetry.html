@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -664,7 +666,7 @@
 
 <p>Remote machines that never open the dashboard locally (agent hosts, small VPSes)
 should run in collector-only mode. It installs the telemetry collector and its
-single npm dependency (<code class="language-plaintext highlighter-rouge">bonjour-service</code>, fetched by
+two npm dependencies (<code class="language-plaintext highlighter-rouge">zod</code> and <code class="language-plaintext highlighter-rouge">bonjour-service</code>, fetched by
 <code class="language-plaintext highlighter-rouge">scripts/ensure-collector-deps.sh</code>) and skips the workspace <code class="language-plaintext highlighter-rouge">pnpm install</code>,
 Next.js build, and dashboard dev server — the steps that OOM small hosts.</p>
 

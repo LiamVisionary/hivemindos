@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -711,6 +713,28 @@ port from the runner tag to the brain-peer tag:</p>
 </code></pre></div></div>
 
 <p>Each HivemindOS brain peer should set the same <code class="language-plaintext highlighter-rouge">HIVE_AEON_BRAIN_OIDC_AUDIENCE</code> expected from the workflow token. If it is not set, the endpoint expects <code class="language-plaintext highlighter-rouge">hivemindos-aeon-brain</code>. The endpoint uses <code class="language-plaintext highlighter-rouge">GITHUB_TOKEN</code>, <code class="language-plaintext highlighter-rouge">GH_TOKEN</code>, or <code class="language-plaintext highlighter-rouge">GH_GLOBAL</code> only to verify private repository visibility through GitHub’s repository API.</p>
+
+<h2 id="run-receipts">Run Receipts</h2>
+
+<p>A workflow can also report its finished run back to HivemindOS, so the automation’s row in the Automations view shows the result the moment the run ends instead of waiting for the next dashboard sweep:</p>
+
+<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>POST /api/runtimes/aeon/runs/report
+</code></pre></div></div>
+
+<p>Authentication is identical to the brain endpoint: the GitHub Actions OIDC token with the same audience, plus the repository visibility check. Only finished runs are accepted (<code class="language-plaintext highlighter-rouge">status</code> of <code class="language-plaintext highlighter-rouge">ok</code>/<code class="language-plaintext highlighter-rouge">success</code> or <code class="language-plaintext highlighter-rouge">failed</code>/<code class="language-plaintext highlighter-rouge">failure</code>), and receipts are keyed by the workflow run id, so reporting the same run twice — or a receipt racing the dashboard’s own run sweep — never duplicates history.</p>
+
+<div class="language-yaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code>      <span class="pi">-</span> <span class="na">name</span><span class="pi">:</span> <span class="s">Report the finished run</span>
+        <span class="na">if</span><span class="pi">:</span> <span class="s">always()</span>
+        <span class="na">run</span><span class="pi">:</span> <span class="pi">|</span>
+          <span class="s">token="$(curl -fsSL "${ACTIONS_ID_TOKEN_REQUEST_URL}&amp;audience=${HIVE_AEON_BRAIN_OIDC_AUDIENCE}" \</span>
+            <span class="s">-H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" | jq -r .value)"</span>
+          <span class="s">curl -fsSL "https://${HIVE_BRAIN_HOST}/api/runtimes/aeon/runs/report" \</span>
+            <span class="s">-H "Authorization: Bearer ${token}" \</span>
+            <span class="s">-H "content-type: application/json" \</span>
+            <span class="s">-d "{\"skill\":\"${AEON_SKILL}\",\"status\":\"$\",\"summary\":\"$(cat output/summary.txt 2&gt;/dev/null | head -c 1500)\",\"url\":\"$/$/actions/runs/$\"}"</span>
+</code></pre></div></div>
+
+<p>The receipt matches the automation by its skill name, records the outcome, summary, and run-log link into the automation’s shared history, and updates the row’s last-run status. A skill that is not saved as an automation in the Automations view yet is reported back as not found.</p>
 
 <p>The dashboard can populate <code class="language-plaintext highlighter-rouge">GH_GLOBAL</code> through the GitHub OAuth fallback routes
 under <code class="language-plaintext highlighter-rouge">/api/integrations/github/oauth/*</code>. That path is useful when AEON needs

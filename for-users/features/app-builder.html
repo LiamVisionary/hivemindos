@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -633,6 +635,23 @@ the capability plan includes the built-in App workspace. Approving it creates
 one durable project before the agent starts coding and assigns that exact
 directory to the run. The project identity stays on the conversation across
 restarts, so later messages continue in the same source folder.</p>
+
+<p>The app card beside the conversation tells you where the build stands. It
+says <strong>Building</strong> while the agent writes files, and it only switches to
+<strong>Running · Open app</strong> once HivemindOS has checked that the files are complete
+and the preview has actually started. That check includes opening the finished
+page and using it. HivemindOS presses every control the page offers and
+watches what changes, so an app whose buttons are wired to nothing — a todo
+list that will not add an item, a calculator whose keys do nothing — is sent
+back to the agent instead of being handed to you as finished. For a game it
+also watches what the page draws while it plays, so obstacles that never move,
+a gap too small to fly through, or a score that nothing ever increases are
+caught the same way. If a build does not finish, or you press
+Stop, the card says <strong>Needs attention</strong> with the reason in plain words, and you
+can ask the agent to continue. Later requests in the same conversation edit the
+app in place, and reloading the page mid-build does not lose the result: the
+card catches up as soon as the build ends. A file that is too long for one
+reply is continued where it stopped rather than started over.</p>
 
 <p>The Preview button resolves that conversation’s project, installs dependencies
 when the selected template needs them, starts its loopback-only runtime, and

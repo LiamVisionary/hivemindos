@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
   <title>Shared Env Values | HivemindOS Docs</title>
-  <meta name="description" content="Add credentials without putting plaintext secrets in notes or projects.">
+  <meta name="description" content="Connect PassBook, save secure keys, and approve their use across tasks and machines.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -593,209 +595,134 @@
         </div>
         <h1 id="shared-env-values">Shared env values</h1>
 
-<p>API keys and other credentials need a different home from ordinary notes. Hive Superbrain keeps their values in Shared Env, outside the Obsidian vault, while safe key-name and set/missing references can remain searchable in <code class="language-plaintext highlighter-rouge">Operations/Secure/</code>.</p>
+<p>Save credentials in PassBook so HivemindOS can use them for connected services and approved agent tasks. Values stay outside the Obsidian vault and chat. Notes in <code class="language-plaintext highlighter-rouge">Operations/Secure/</code> may describe key names and availability, but must never contain the values.</p>
 
 <h2 id="add-a-credential-in-hivemindos">Add a credential in HivemindOS</h2>
 
 <ol>
-  <li>Open <strong>Brain</strong>, then <strong>Shared Env</strong>.</li>
-  <li>Add the key name requested by the provider or agent, such as <code class="language-plaintext highlighter-rouge">OPENAI_API_KEY</code>.</li>
-  <li>Paste the value and save it. HivemindOS stores the value without adding it to a note or chat.</li>
-  <li>If you use more than one trusted machine, choose whether Hivemind Sync should copy the credential to those machines.</li>
+  <li>Open <strong>Brain</strong>, choose <strong>Settings</strong>, then <strong>Secrets</strong>, and select <strong>Set up secure keys</strong>. A task that needs a key can also open setup where you are working.</li>
+  <li>Choose a workspace. <strong>HivemindOS (your existing keys)</strong> secures keys already saved on a fresh installation. With an existing PassBook setup, choose its workspace or <strong>Create a HivemindOS workspace</strong> to keep these keys separate.</li>
+  <li>Confirm with your PassBook password, or create and confirm a password for a new vault. Keep this password safe for future unlocking and recovery.</li>
+  <li>Review <strong>Keep approved tasks running in the background</strong>, then choose <strong>Connect PassBook</strong>. Background access is selected when this device supports it; setup explains when it is unavailable. Connecting authorizes HivemindOS and its connected services. Agent operations still need their own permission.</li>
+  <li>Under <strong>Workspace keys</strong>, choose <strong>Add key</strong>, enter the requested name and value, confirm your PassBook password, and choose <strong>Save key</strong>. Saving alone does not grant an agent access. <strong>Replace key</strong> requires an explicit replacement confirmation.</li>
 </ol>
 
-<p>Missing-credential messages can also open the same setup in place. After you save the key, the current task can continue without sending the secret back through the conversation.</p>
+<p>On a local browser or the desktop app, you can instead choose <strong>Authorize in PassBook app</strong>, then <strong>Prepare app authorization</strong> and <strong>Open PassBook to authorize</strong>. Match the displayed code in both windows before choosing the workspace and approving in PassBook. Your password stays in that app. If it cannot open, use the password form in HivemindOS. This handoff authorizes the displayed connection; its application label is not proof of a publisher’s identity.</p>
 
-<h2 id="safe-handling">Safe handling</h2>
+<h2 id="approve-an-agents-work">Approve an agent’s work</h2>
+
+<p>Key requests appear under <strong>Needs your approval</strong> in the Inbox and can open in a review popup. These surfaces show the same request. Check the agent, workspace, device, requested keys, operation, destination, and expiry before choosing <strong>Review access</strong>.</p>
 
 <ul>
-  <li>Never put a plaintext secret in an Obsidian note, project file, prompt, or screenshot.</li>
-  <li>Check whether a key exists by name. A normal status check should not print its value.</li>
-  <li>Give a machine Shared Env access only when agents on that machine should use the stored credentials.</li>
-  <li>Use one shared value as the default, then override it inside a project only when that project genuinely needs a different account or provider key.</li>
+  <li><strong>For this task</strong> is the default. <strong>Once</strong> permits one use of the displayed operation.</li>
+  <li><strong>Remember for … and this key</strong> keeps permission for that agent and the selected keys. It starts unchecked.</li>
+  <li><strong>More access options</strong> includes <strong>Allow this agent to use all keys in this workspace</strong>. This also starts unchecked and includes future keys. Service and action restrictions still apply; other agents and workspaces are excluded.</li>
 </ul>
 
-<h2 id="which-value-wins">Which value wins</h2>
+<p>Confirm the chosen decision with your PassBook password, or an available enrolled passkey in a supported browser. Initial vault setup still needs a password. If a key is absent, <strong>Add key and review</strong> opens a secure input; <strong>Save key and allow</strong> saves it and approves the reviewed operation without sending the value to chat.</p>
 
-<p>A value set by the current project or shell wins over Shared Env. If the project does not define the key, HivemindOS falls back to the shared value. This lets most projects reuse one credential while a specific project keeps its own override.</p>
+<p>The waiting task can then resume the same operation. Denied, expired, or cancelled requests do not grant access; an expired request needs a new review. Closing a popup does not approve it, and marking a notification read does not resolve the request.</p>
+
+<h2 id="understand-a-keys-state">Understand a key’s state</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>State</th>
+      <th>What to do</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Missing</td>
+      <td>Add the requested key through secure key entry.</td>
+    </tr>
+    <tr>
+      <td>Locked</td>
+      <td>Unlock the connected workspace. The key already exists; do not add another copy.</td>
+    </tr>
+    <tr>
+      <td>Waiting for approval</td>
+      <td>Review the agent’s requested operation.</td>
+    </tr>
+    <tr>
+      <td>Refused</td>
+      <td>Review the applicable permission or policy. Re-entering the same key will not help.</td>
+    </tr>
+    <tr>
+      <td>Paused</td>
+      <td>Open <strong>Review connection</strong> and choose <strong>Resume background access</strong> when you want access to continue.</td>
+    </tr>
+    <tr>
+      <td>Disconnected</td>
+      <td>Reconnect PassBook. Saved keys remain protected; disconnecting does not restore legacy access.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>A key whose value cannot be displayed may still be usable through an approved operation. If setup offers <strong>Finish PassBook update</strong>, use that repair and retry any interrupted credential operation.</p>
+
+<h2 id="keep-approved-tasks-running">Keep approved tasks running</h2>
+
+<p>Background access lets this device use already approved keys while you are away, without a separate terminal sign-in for every task. It requires supported secure storage on the device and working background startup. A connection warning means startup needs attention; it is not a ready background connection.</p>
+
+<p>Open <strong>Review connection</strong> to <strong>Pause background access</strong>, inspect <strong>Agent permissions</strong>, or <strong>Revoke access</strong>. <strong>Disconnect this application</strong> stops new HivemindOS access on this installation while leaving saved keys in PassBook. These controls cannot undo a completed operation or erase a value already received by another machine.</p>
+
+<h2 id="use-keys-on-another-machine">Use keys on another machine</h2>
+
+<p>On the receiving device, choose <strong>Use keys from another machine</strong>. Select a linked source machine and the destination workspace, then choose <strong>Review keys</strong>. The source’s connected workspace is shown for review; choosing it does not switch that machine to another workspace.</p>
+
+<p>Select the keys, confirm the source and receiving PassBook passwords, and review background access. <strong>Keep these keys updated from this machine</strong> is selected by default and covers only the chosen names, never new keys added later. Confirm <strong>Connect HivemindOS to this workspace and receive these keys</strong>, then choose <strong>Connect and receive keys</strong>. Values transfer encrypted without copying credentials or transfer documents through chat.</p>
+
+<p>If this device has encrypted keys but has lost the profile needed to open them, setup requires all listed recovery keys from a usable source. It reports a missing source key rather than silently creating an empty replacement workspace.</p>
+
+<p>Ongoing updates have these limits:</p>
+
+<ul>
+  <li>Updates flow one way from the chosen source, about every 10 minutes while both devices are available and their PassBook access is ready.</li>
+  <li>Permission lasts <strong>30 days</strong> and needs fresh approval after expiry. <strong>Connected key sources</strong> shows its status and expiry; use <strong>Review connection</strong> to approve it again or <strong>Stop updates</strong> to end updates.</li>
+  <li>Existing usable local keys are kept during receipt. Later local edits are preserved rather than overwritten automatically.</li>
+  <li>Removing a key at the source keeps the receiving copy. Stopping updates, expiry, or disconnecting also leaves already received keys in place. Remove an unwanted receiving copy separately through PassBook.</li>
+  <li>Receiving a key does not approve an agent to use it. Machine updates and agent permissions are separate decisions.</li>
+</ul>
+
+<h2 id="supported-credential-use">Supported credential use</h2>
+
+<p>HivemindOS-managed agents use credential tools for approved HTTPS operations; they do not receive the shared secret as a shell variable. Supported HivemindOS launches of Hermes and JCode can also use the selected catalog model through a protected connection without inheriting its provider key. Provider account sign-in and external runtimes still follow their supported setup paths; connecting PassBook does not make every arbitrary runtime compatible.</p>
+
+<p>Managed workspaces refuse plaintext exports and arbitrary commands that would hand credentials to an agent process. Do not repair a refusal by reading the store, copying keys into runtime files, or falling back to an older helper. These controls govern supported operations; they do not isolate unrestricted code running under your operating-system account.</p>
 
 <details>
-  <summary>Open the terminal, sync, and storage reference</summary>
+  <summary>Open the credential tools and legacy helper reference</summary>
 
-  <h2 id="storage-and-permissions">Storage and permissions</h2>
+  <h2 id="credential-tools-for-managed-agents">Credential tools for managed agents</h2>
 
-  <p>The canonical file is:</p>
+  <p>HivemindOS provides <code class="language-plaintext highlighter-rouge">credential_request</code>, <code class="language-plaintext highlighter-rouge">credential_status</code>, and <code class="language-plaintext highlighter-rouge">credential_use</code>. They identify the requesting agent and route approval to the owner. Resume an operation with the same <code class="language-plaintext highlighter-rouge">idempotencyKey</code> after approval instead of creating duplicate requests. <code class="language-plaintext highlighter-rouge">passbook mcp</code> uses the installed agent connection when available and exposes managed use and status tools. Neither path requires the owner to paste a key into chat.</p>
 
-  <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>~/.hivemindos/.env
-</code></pre></div>  </div>
+  <p>Legacy tools such as <code class="language-plaintext highlighter-rouge">passbook get</code>, <code class="language-plaintext highlighter-rouge">passbook run</code>, <code class="language-plaintext highlighter-rouge">run_with_credentials</code>, and the old <code class="language-plaintext highlighter-rouge">proxy_request</code> are not substitutes for managed credential use. A managed refusal applies even if a legacy command worked before connection.</p>
 
-  <p>Agents, scripts, and app services should load from that file at runtime when they need shared credentials.</p>
+  <h2 id="storage-and-unconnected-stores">Storage and unconnected stores</h2>
 
-  <p>Agent runtimes have Shared env permission by default. Fleet operators can restrict an individual machine to <code class="language-plaintext highlighter-rouge">Ask</code> or <code class="language-plaintext highlighter-rouge">Deny</code>; when restricted, HivemindOS leaves the stored values untouched and stops before starting a runtime that requested them.</p>
+  <p>The default store remains <code class="language-plaintext highlighter-rouge">~/.hivemindos/.env</code>, or the configured <code class="language-plaintext highlighter-rouge">HIVE_HOME</code> location. PassBook owns encryption and access to a connected workspace. The Obsidian vault holds searchable knowledge, not plaintext credentials. Agents and app integrations should use credential tools rather than read the store file.</p>
 
-  <h2 id="why-it-exists">Why It Exists</h2>
-
-  <p>The Hive Superbrain has two different storage layers:</p>
-
-  <ul>
-    <li>The Obsidian vault stores durable knowledge, work state, skills, and service notes.</li>
-    <li>Shared env stores secrets and runtime credentials.</li>
-  </ul>
-
-  <p>That split matters. The vault is meant to be read by agents. Secrets are not.</p>
-
-  <h2 id="precedence-project-first-hive-env-fallback">Precedence: Project First, Hive Env Fallback</h2>
-
-  <p>The shared file is a <em>default</em>, not an override. When something inside a project needs a variable, it reads the project’s own value first — the project’s <code class="language-plaintext highlighter-rouge">.env</code>/<code class="language-plaintext highlighter-rouge">.env.local</code>, its config, or an explicit shell export — and falls back to <code class="language-plaintext highlighter-rouge">~/.hivemindos/.env</code> only for keys the project does not set itself.</p>
-
-  <p>That gives you easy per-project overrides: set a key inside the project to override the shared value for that project alone, and leave it unset to inherit the fleet-wide default. Nothing shared changes.</p>
-
-  <p><code class="language-plaintext highlighter-rouge">hive-env-run -- &lt;command&gt;</code> already follows this order — it loads <code class="language-plaintext highlighter-rouge">~/.hivemindos/.env</code> as a base, then overlays the current process environment, so anything the project or shell already set wins on top. HivemindOS-managed agents get the same rule in their instructions.</p>
-
-  <h2 id="the-helpers">The Helpers</h2>
-
-  <p>Setup installs these helpers into <code class="language-plaintext highlighter-rouge">~/.local/bin</code>:</p>
-
-  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-env-add
-hive-env-remove
-hive-env-delete
-hive-env-check
-hive-env-run
-</code></pre></div>  </div>
-
-  <p>Use them like this:</p>
+  <p>An installation that has not connected its store to managed PassBook retains the legacy Shared Env workflow. The following reference applies only to those unconnected stores and trusted programs:</p>
 
   <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-env-add OPENAI_API_KEY
-hive-env-add <span class="nv">ANTHROPIC_API_KEY</span><span class="o">=</span>...
-hive-env-remove OPENAI_API_KEY
-hive-env-delete ANTHROPIC_API_KEY
-hive-env-add <span class="nt">--import-env</span>
 hive-env-check OPENAI_API_KEY
+hive-env-remove OPENAI_API_KEY
+hive-env-delete OPENAI_API_KEY
 hive-env-run <span class="nt">--</span> pnpm dev
 </code></pre></div>  </div>
 
-  <p><code class="language-plaintext highlighter-rouge">hive-env-add KEY</code> prompts for the value without putting it in shell history. <code class="language-plaintext highlighter-rouge">hive-env-add KEY=value</code> is useful when the value is already coming from a safe command or paste flow.</p>
+  <p><code class="language-plaintext highlighter-rouge">hive-env-add KEY</code> prompts for a value without putting it in command history. <code class="language-plaintext highlighter-rouge">hive-env-check KEY</code> checks status without printing a value. <code class="language-plaintext highlighter-rouge">hive-env-remove</code> and its alias <code class="language-plaintext highlighter-rouge">hive-env-delete</code> remove a named key. <code class="language-plaintext highlighter-rouge">hive-env-run</code> supplies credentials to a trusted child program, subject to PassBook policy when installed. Giving a program the real value does not prevent that program from disclosing it.</p>
 
-  <p><code class="language-plaintext highlighter-rouge">hive-env-remove KEY</code> removes a key from the same store and syncs that removal through the same machinery. <code class="language-plaintext highlighter-rouge">hive-env-delete KEY</code> is the same command under the other obvious verb.</p>
+  <p>In the legacy workflow, a value already set by the project or shell takes precedence over the shared default. This is not permission for a managed agent to create a plaintext project override. Legacy runtime-file integration, private AEON repository secret publishing, and Hivemind Sync do not bypass managed workspace restrictions.</p>
 
-  <p><code class="language-plaintext highlighter-rouge">hive-env-check KEY</code> tells you whether a key exists without printing the value.</p>
+  <p>Legacy sync-enabled stores retain their configured push/retry and periodic reconciliation behavior. Operators can use <code class="language-plaintext highlighter-rouge">hive-env-add --retry-pending</code> or <code class="language-plaintext highlighter-rouge">hive-env-add --pull-reconcile --dry-run</code> to inspect that workflow. For a managed workspace, use <strong>Use keys from another machine</strong> and <strong>Connected key sources</strong> instead; the legacy mutation and replication helpers refuse access.</p>
 
-  <p><code class="language-plaintext highlighter-rouge">hive-env-run -- command</code> runs a command with the shared env loaded into the child process.</p>
+  <h2 id="encrypted-backup">Encrypted backup</h2>
 
-  <h2 id="runtime-compatibility">Runtime Compatibility</h2>
-
-  <p>Some runtimes still need their own native env files. That is a compatibility layer, not the source of truth.</p>
-
-  <p>Use explicit runtime writes when needed:</p>
-
-  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-env-add <span class="nt">--runtime</span> hermes ANTHROPIC_API_KEY
-hive-env-add <span class="nt">--runtime</span> aeon OPENAI_API_KEY
-hive-env-add <span class="nt">--runtime</span> openclaw TAVILY_API_KEY
-hive-env-remove <span class="nt">--runtime</span> aeon OPENAI_API_KEY
-</code></pre></div>  </div>
-
-  <p>The default should still be the shared file at <code class="language-plaintext highlighter-rouge">~/.hivemindos/.env</code>.</p>
-
-  <h2 id="sync-to-machines">Sync To Machines</h2>
-
-  <p>When Hivemind Sync is enabled, HivemindOS can push shared env keys and removals to trusted peer machines.</p>
-
-  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-env-add <span class="nt">--reconcile</span>
-hive-env-add <span class="nt">--pull-from</span> USER@HOST
-</code></pre></div>  </div>
-
-  <p>Pushes use ready collector <code class="language-plaintext highlighter-rouge">/env</code> endpoints on trusted machine links. Pulls from a peer still use Tailscale SSH because the remote machine has to export its local shared env set.</p>
-
-  <p>Secret values should not appear in command arguments, logs, shared notes, or chat transcripts.</p>
-
-  <h3 id="retry-queue">Retry Queue</h3>
-
-  <p>Push replication is no longer fire-and-forget. When a peer cannot take an update — its collector is down, unreachable, or the push fails — the key name, scope, runtime, and per-machine delivery receipts (never values) are queued in:</p>
-
-  <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>~/.hivemindos/env-sync-pending.json
-</code></pre></div>  </div>
-
-  <p>Every later sync-enabled <code class="language-plaintext highlighter-rouge">hive-env-add</code> run drains the queue automatically, and the telemetry collector retries it on a timer. Queued removals propagate too. Entries clear once every enumerated ready peer has acknowledged, and expire after 14 days. Manual drain:</p>
-
-  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-env-add <span class="nt">--retry-pending</span>
-</code></pre></div>  </div>
-
-  <h3 id="periodic-pull-reconcile">Periodic Pull-Reconcile</h3>
-
-  <p>Each machine’s telemetry collector also runs <code class="language-plaintext highlighter-rouge">hive-env-add --sync-maintenance</code> every 10 minutes (configurable with <code class="language-plaintext highlighter-rouge">AGENT_TELEMETRY_ENV_SYNC_INTERVAL_MS</code>, disable with <code class="language-plaintext highlighter-rouge">AGENT_TELEMETRY_ENV_SYNC_DISABLED=1</code>). That retries the queue, then pulls shared keys from every ready peer collector and merges them newest-wins using the per-key <code class="language-plaintext highlighter-rouge">updatedAt</code> metadata stored next to each env file. A machine that was offline when a key was added converges on its own. Keys removed locally keep a meta timestamp tombstone, so peers holding older copies cannot resurrect them. Manual runs:</p>
-
-  <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>hive-env-add <span class="nt">--pull-reconcile</span> <span class="nt">--dry-run</span>   <span class="c"># report what would be merged</span>
-hive-env-add <span class="nt">--pull-reconcile</span>             <span class="c"># merge newer/missing peer keys</span>
-curl <span class="nt">-X</span> POST http://127.0.0.1:8787/env/sync-maintenance   <span class="c"># collector-driven run now</span>
-</code></pre></div>  </div>
-
-  <p>Maintenance status (last run, last summary, errors) is reported in the collector <code class="language-plaintext highlighter-rouge">/health</code> payload under <code class="language-plaintext highlighter-rouge">envSync.maintenance</code>. Reconcile assumes tailnet machines keep reasonable NTP clock sync.</p>
-
-  <p>Advanced targeting uses:</p>
-
-  <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>HIVE_ENV_TAILNET_TARGETS
-HIVE_ENV_TAILNET_USER
-HIVE_ENV_TAILNET_SYNC
-HIVE_ENV_COLLECTOR_PORTS
-</code></pre></div>  </div>
-
-  <p>Peers are auto-discovered from <code class="language-plaintext highlighter-rouge">tailscale status</code> and probed for a ready collector; machines that appear under two tailnet nodes (system tailscaled plus embedded link node) are deduplicated by machine id. Prefer auto-discovery: pinning <code class="language-plaintext highlighter-rouge">HIVE_ENV_TAILNET_TARGETS</code> to raw IPs silently blackholes pushes when a node’s address changes. When <code class="language-plaintext highlighter-rouge">HIVE_ENV_COLLECTOR_PORTS</code> is set explicitly it is authoritative — default ports are not appended.</p>
-
-  <h2 id="aeon-github-secrets">AEON GitHub Secrets</h2>
-
-  <p>Managed private AEON repos can receive changed shared env values as GitHub Actions secrets.</p>
-
-  <p>HivemindOS tracks sync state with fingerprints, not secret values:</p>
-
-  <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>~/.hivemindos/aeon-env-sync-repos.json
-~/.hivemindos/aeon-env-sync-state.json
-</code></pre></div>  </div>
-
-  <p>Public AEON repos are skipped. If a managed repo becomes public, HivemindOS removes the secrets it managed.</p>
-
-  <h2 id="encrypted-backup">Encrypted Backup</h2>
-
-  <p>If GPG is configured, <code class="language-plaintext highlighter-rouge">hive-env-add</code> can refresh an encrypted backup:</p>
-
-  <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Operations/Secure/hive.env.gpg
-</code></pre></div>  </div>
-
-  <p>That file can live in the vault because it is encrypted. Plaintext env files cannot.</p>
-
-  <p>Backup settings use:</p>
-
-  <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>HIVE_ENV_BACKUP_DIR
-HIVE_ENV_GPG_RECIPIENT
-HIVE_ENV_PUBLIC_KEY
-</code></pre></div>  </div>
-
-  <h2 id="hard-rules">Hard Rules</h2>
-
-  <ul>
-    <li>Do not put plaintext secrets in Obsidian notes.</li>
-    <li>Do not print secret values during checks.</li>
-    <li>Do not copy shared env values into project files just because it is convenient.</li>
-    <li>Prefer <code class="language-plaintext highlighter-rouge">hive-env-check KEY</code> when you only need to prove a key exists.</li>
-    <li>Prefer <code class="language-plaintext highlighter-rouge">hive-env-remove KEY</code> when a shared key should stop being available.</li>
-    <li>Prefer <code class="language-plaintext highlighter-rouge">hive-env-run -- command</code> when a tool needs the shared env for one run.</li>
-    <li>If a project needs shared credentials, load <code class="language-plaintext highlighter-rouge">~/.hivemindos/.env</code> at runtime instead of persisting secrets into the repo.</li>
-    <li>Resolve project-first: use the project’s own env value when it is set, and fall back to <code class="language-plaintext highlighter-rouge">~/.hivemindos/.env</code> only for keys the project does not define.</li>
-  </ul>
-
-  <h2 id="main-code-paths">Main Code Paths</h2>
-
-  <ul>
-    <li><code class="language-plaintext highlighter-rouge">scripts/hive-env-add</code></li>
-    <li><code class="language-plaintext highlighter-rouge">scripts/hive-env-remove</code></li>
-    <li><code class="language-plaintext highlighter-rouge">scripts/hive-env-delete</code></li>
-    <li><code class="language-plaintext highlighter-rouge">scripts/hive-env-check</code></li>
-    <li><code class="language-plaintext highlighter-rouge">scripts/hive-env-run</code></li>
-    <li><code class="language-plaintext highlighter-rouge">src/app/api/env/route.ts</code></li>
-    <li><code class="language-plaintext highlighter-rouge">scripts/agent-telemetry-collector.mjs</code></li>
-    <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/views/UtilityPanels.tsx</code></li>
-    <li><code class="language-plaintext highlighter-rouge">src/lib/services/runtime-integrations.ts</code></li>
-    <li><code class="language-plaintext highlighter-rouge">src/lib/services/runtime-adapters/aeon.ts</code></li>
-  </ul>
+  <p>For a managed workspace that cannot open its encrypted keys, use the verified machine recovery flow described above when a usable source is available. Legacy backup commands do not bypass managed access restrictions. In the legacy workflow, configured GPG backups may be stored as <code class="language-plaintext highlighter-rouge">Operations/Secure/hive.env.gpg</code>. Only the encrypted backup belongs in the vault; plaintext exports, secrets in notes, and credentials in screenshots or logs do not.</p>
 
 </details>
 

@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -605,7 +607,15 @@
 
 <p>The ordinary and agent-analyzed copies divide one configured trade amount and one daily copy limit when both are running. The default pair assigns half to each side, so a $10 copy becomes two $5 entries instead of two $10 entries. If either side is stopped, the running side receives the full configured amount and daily limit again. Existing ordinary/agent pairs receive the same shared-budget behavior automatically.</p>
 
-<p>Each side keeps its own positions and results, so the comparison remains clear. A verified source signal that is more than 90 seconds old is not copied. If a live submission cannot be confirmed, that copy pauses before any later trade can run; check the wallet, then stop and start the copy to continue.</p>
+<p>Each side keeps its own positions and results. New buys must fall within the copy’s age limit and happen after its current Live run starts. Source sells and direct token exchanges follow the existing copied position instead of using this new-buy limit. An unconfirmed trade stays under review before another trade can proceed; starting the copy again does not turn an unknown result into a new order.</p>
+
+<h2 id="promote-a-desktop-copy-to-live">Promote a desktop copy to Live</h2>
+
+<p>New desktop copies start in <strong>Paper</strong>, using simulated money. On a regular Basic or Agent copy, choose <strong>Promote to Live</strong> to review the saved wallet, trader, sizing, limits, and whether trader sells are followed. Confirm the real-money risk to start, or choose <strong>Keep Paper</strong> to leave it unchanged. Experimental comparisons remain Paper only.</p>
+
+<p>Promotion starts a separate Live run and stops the original Paper copy. Its Paper results remain available as history; simulated holdings and older Paper trades do not become real holdings or new Live orders. The other side of a pair stays in its chosen mode, and each side retains its own history. Starting Live does not guarantee the Paper result will be repeated.</p>
+
+<p>Keep the desktop and copy trading running for local copies to follow new eligible trades. Live copying uses the selected copy’s saved wallet and includes trading and network fees.</p>
 
 <h2 id="matching-paper-and-live-timing">Matching paper and live timing</h2>
 
@@ -650,7 +660,7 @@
 
 <p>Open <strong>Show data</strong> to read the latest calibrated confidence, raw model confidence, close threshold, decision path, review summary, and source links.</p>
 
-<p>Start in dry-run. A live pair divides the configured amount across two real buys before analysis and the agent side may perform a real closing sale afterward. The total copied buy amount stays within the shared limit, while the extra transaction can still use additional gas and research. Creating a twin from a live source leaves the twin stopped until you explicitly start it.</p>
+<p>Start in Paper. A Live pair divides the configured amount across two real buys before analysis and the Agent side may perform a real closing sale afterward. The total copied buy amount stays within the shared limit, while the extra transaction can still use additional fees. Creating an Agent twin from a Live copy leaves the new twin stopped in Paper. Starting that twin starts a simulation; choose <strong>Promote to Live</strong> and confirm separately to use real money.</p>
 
 <h2 id="how-evo-uses-the-results">How EVO uses the results</h2>
 

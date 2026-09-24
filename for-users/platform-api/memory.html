@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -627,7 +629,7 @@
       <td>Memory Answer</td>
       <td><code class="language-plaintext highlighter-rouge">memory.answer</code></td>
       <td>A concise answer grounded in returned memories, plus cited memory ids.</td>
-      <td style="text-align: right">5 credits</td>
+      <td style="text-align: right">5 credits with the default reader</td>
     </tr>
   </tbody>
 </table>
@@ -648,6 +650,64 @@
   <p>Hosted recall is not as fast as the local vault path. Across the three hosted trials, the median trial p50 was about 0.53 seconds for lexical search, 4.89 seconds for semantic recall, and 5.93 seconds for grounded answers. The corresponding local lexical/API behavior trials had a median p50 of 7.85 milliseconds. A separate 48-distractor diagnostic kept every quality check passing and measured 0.43 seconds lexical p50, 1.67 seconds semantic p50, and 2.59 seconds answer p50, which also shows that hosted latency varies with request and service state.</p>
 
   <p>These are measured product-path snapshots, not an availability or latency promise. The result supports quality parity on the published cases, not universal parity with every private vault. See <a href="../features/shared-brain-benchmarks.html">Shared Brain Memory Benchmarks</a> for corpus sizes, repetition counts, and limitations.</p>
+
+  <p>On September 23, 2026, recall of past conversations was measured on LongMemEval_S, where each question comes with about 50 past chats. Memory Answer’s reader received every piece of evidence for 85.1% of 470 answerable questions in keyword order, up from 9.6%, and answered 81.9% of a 150-question sample correctly, up from 16.7%. Memory Answer now reads with a larger model that reasons before it answers, which added about three seconds to the reader’s median time in that test.</p>
+
+  <p>In a second run, other models read the same 150 questions with the same evidence; the default reader scored 80.7% in that run. Share answered correctly, and the reader’s median time:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Reader</th>
+        <th style="text-align: right">Correct</th>
+        <th style="text-align: right">Median time</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/deepseek-ai/deepseek-v4-flash-0731</code></td>
+        <td style="text-align: right">82.1%</td>
+        <td style="text-align: right">4.0 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/qwen/qwen3-30b-a3b-fp8</code> (default)</td>
+        <td style="text-align: right">80.7%</td>
+        <td style="text-align: right">4.0 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/zai-org/glm-4.7-flash</code></td>
+        <td style="text-align: right">80.3%</td>
+        <td style="text-align: right">18.7 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/google/gemma-4-26b-a4b-it</code></td>
+        <td style="text-align: right">78.7%</td>
+        <td style="text-align: right">23.0 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/openai/gpt-oss-120b</code>, low effort</td>
+        <td style="text-align: right">78.0%</td>
+        <td style="text-align: right">2.2 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/openai/gpt-oss-20b</code>, low effort</td>
+        <td style="text-align: right">69.3%</td>
+        <td style="text-align: right">1.3 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/meta/llama-4-scout-17b-16e-instruct</code></td>
+        <td style="text-align: right">68.7%</td>
+        <td style="text-align: right">2.0 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/mistralai/mistral-small-3.1-24b-instruct</code></td>
+        <td style="text-align: right">54.0%</td>
+        <td style="text-align: right">1.6 s</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>DeepSeek V4 Flash and GLM 4.7 Flash returned no answer for 5 and 3 questions; their shares count the questions they answered (119 of 145 and 118 of 147), and over all 150 they are 79.3% and 78.7%. Scores within a few points of each other are within this sample’s noise.</p>
 
 </details>
 
@@ -734,9 +794,96 @@
 </code></pre></div></div>
 
 <p>If no relevant managed memory can support an answer, the request returns a
-not-found response and releases the credit reservation. You are not charged.</p>
+not-found response and releases the credit reservation. You are not charged.
+For a question of four or more words, a memory counts as support when it
+matches at least two of the question’s words, the exact phrase, or its
+meaning; one shared word is not enough.</p>
 
-<p>Every hit includes its memory fields, excerpt, total score, matched signals, and score details. Set <code class="language-plaintext highlighter-rouge">trackUsage: false</code> when a diagnostic lookup should not influence the soft usage signal. <code class="language-plaintext highlighter-rouge">memory.usage</code> can explicitly record retrieved or final-answer use for known memory ids.</p>
+<p>Every hit includes its memory fields, excerpt, total score, matched signals, and score details. The excerpt is the part of the memory that holds the most words of the question. Search matches word forms, so <code class="language-plaintext highlighter-rouge">weddings</code> finds <code class="language-plaintext highlighter-rouge">wedding</code>, and a word that few of the account’s memories contain counts for more than one most of them share. Set <code class="language-plaintext highlighter-rouge">trackUsage: false</code> when a diagnostic lookup should not influence the soft usage signal. <code class="language-plaintext highlighter-rouge">memory.usage</code> can explicitly record retrieved or final-answer use for known memory ids.</p>
+
+<h2 id="choose-who-reads-the-answer">Choose who reads the answer</h2>
+
+<p>Memory Answer has a default reader, and you can name another. <code class="language-plaintext highlighter-rouge">memory.models</code> lists every model that can read an answer, with its privacy tier, the reasoning settings it takes, its per-token price, and the most one answer with it can cost. The default is marked <code class="language-plaintext highlighter-rouge">default: true</code>. It needs no key.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">readers</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.models</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">memory-readers-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>Pass a reader’s <code class="language-plaintext highlighter-rouge">id</code> as <code class="language-plaintext highlighter-rouge">model</code>, and <code class="language-plaintext highlighter-rouge">reasoningEffort</code> (<code class="language-plaintext highlighter-rouge">none</code>, <code class="language-plaintext highlighter-rouge">low</code>, <code class="language-plaintext highlighter-rouge">medium</code> or <code class="language-plaintext highlighter-rouge">high</code>) when that reader lists it:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">answered</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.answer</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">What is the Aurora compute funding policy?</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">model</span><span class="p">:</span> <span class="dl">"</span><span class="s2">@cf/openai/gpt-oss-120b</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">reasoningEffort</span><span class="p">:</span> <span class="dl">"</span><span class="s2">medium</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-memory-answer-002</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">answered</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">reader</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>A setting a reader does not take is refused before anything is charged, never quietly changed. The response’s <code class="language-plaintext highlighter-rouge">reader</code> names the model that answered.</p>
+
+<p><strong>Price.</strong> With the default reader, an answer costs 5 credits. Another reader adds what it costs above the default for the same question, at HivemindOS rates, rounded up to a whole credit. A reader that costs less than the default still costs 5 credits. When the answer starts, the account is reserved the reader’s <code class="language-plaintext highlighter-rouge">maximumCredits</code>; it is then charged for the question that was actually sent, and the rest is released.</p>
+
+<p><strong>Private and confidential answers.</strong> Pass <code class="language-plaintext highlighter-rouge">private: true</code>, or call through the private base URL, to have the answer read only by a model that keeps nothing it is sent. Under the confidential base, name a reader that runs in an attested enclave as <code class="language-plaintext highlighter-rouge">model</code>: the default reader is private but not attested, so there is no default there. Either way the answer never uses Turbo ordering, and passing <code class="language-plaintext highlighter-rouge">turbo: true</code> with it is refused. <code class="language-plaintext highlighter-rouge">memory.models</code> under a tier’s base, or with <code class="language-plaintext highlighter-rouge">privacy</code> in its query, lists the readers that qualify.</p>
+
+<p>Each memory keeps the strictest tier it was written in, and an answer reads it only with a reader that meets that tier. A memory written under the confidential base is never sent to an embedding model, so recall finds it by keyword. See <a href="privacy.html">private and confidential access</a>.</p>
+
+<h2 id="past-conversations">Past conversations</h2>
+
+<p>Save a chat transcript as a memory and recall reads it by exchange: a user message and the replies that follow it. A memory is read as a transcript when its turns are marked <code class="language-plaintext highlighter-rouge">**User:**</code> and <code class="language-plaintext highlighter-rouge">**Assistant:**</code> (or an agent’s name), as conversation notes synced from the desktop brain are, or when its lines start with <code class="language-plaintext highlighter-rouge">User:</code> and <code class="language-plaintext highlighter-rouge">Assistant:</code>. Give the conversation’s date as <code class="language-plaintext highlighter-rouge">startedAt</code> or <code class="language-plaintext highlighter-rouge">date</code> in the memory’s frontmatter; without one, the date the memory was saved is used.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.create</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">title</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Support chat with Dana</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">path</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Conversations/2026-09-14-dana.md</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">contentText</span><span class="p">:</span> <span class="p">[</span>
+      <span class="dl">"</span><span class="s2">---</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">startedAt: 2026-09-14T15:02:00Z</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">---</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">User: The replacement blender arrived cracked, same as the first one.</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">Assistant: Sorry about that. I've refunded the second order to the original card.</span><span class="dl">"</span><span class="p">,</span>
+    <span class="p">].</span><span class="nx">join</span><span class="p">(</span><span class="dl">"</span><span class="se">\n</span><span class="dl">"</span><span class="p">),</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">support-chat-dana-0914</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>When a search or recall returns a transcript among its hits, the response also carries <code class="language-plaintext highlighter-rouge">conversationEvidence</code>: the exchanges across the account’s transcripts that best match the question, laid out oldest first under each conversation’s date. <code class="language-plaintext highlighter-rouge">conversationEvidenceMemoryIds</code> names the memories they came from. A question about one detail of a long conversation gets the exchange that states it, not the transcript’s opening lines.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Default</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">evidenceChars</code></td>
+      <td>4,200</td>
+      <td>The size of <code class="language-plaintext highlighter-rouge">conversationEvidence</code>, from 1,000 to 24,000 characters.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">evidence</code></td>
+      <td>On, except at <code class="language-plaintext highlighter-rouge">detail: "abstract"</code></td>
+      <td><code class="language-plaintext highlighter-rouge">false</code> leaves the exchanges out; <code class="language-plaintext highlighter-rouge">true</code> adds them at any detail tier.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Memory Answer reads the same exchanges, together with the best-matching part of every other supporting memory, and is told today’s date, so questions like “how long ago” and “which came first” can be answered. When exchanges are involved, the Turbo decision model first orders them by how likely each one is to hold the answer, and the answer reads the best 12,000 characters. It receives short excerpts of those exchanges, not whole memories. It is not a private model, so it orders exchanges only when every one of them was written in the standard tier, and a private answer never uses it. Pass <code class="language-plaintext highlighter-rouge">turbo: false</code> to keep keyword order; the response’s <code class="language-plaintext highlighter-rouge">evidenceOrder</code> says which order was used. Neither choice changes the price.</p>
 
 <h2 id="ask-for-only-as-much-as-you-need">Ask for only as much as you need</h2>
 
@@ -955,6 +1102,11 @@ not-found response and releases the credit reservation. You are not charged.</p>
         <td><code class="language-plaintext highlighter-rouge">memory.answer</code></td>
         <td><code class="language-plaintext highlighter-rouge">POST</code></td>
         <td>Return a paid grounded answer with citations.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.models</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>List the models that can read a Memory Answer, with prices.</td>
       </tr>
       <tr>
         <td><code class="language-plaintext highlighter-rouge">memory.usage</code></td>

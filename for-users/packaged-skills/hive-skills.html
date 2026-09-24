@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -642,6 +644,10 @@
       <td>Built-in last-30-days signal briefs across Reddit, X, YouTube, TikTok, Hacker News, Polymarket, GitHub, and web sources, powered by a pinned MIT licensed <code class="language-plaintext highlighter-rouge">last30days</code> engine.</td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">reddit-thread-reader</code></td>
+      <td>Pulls up any Reddit post or thread you share, then shows it, summarizes it, reads the overall sentiment, or answers questions about it, on the desktop and in the phone app.</td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">hive-quant-research</code></td>
       <td>Runs research-only typed strategy families through lagged Rust simulation, independent Python statistics, overfitting controls, regime and factor audits, durable lineage, and approved scheduled runs.</td>
     </tr>
@@ -742,6 +748,18 @@ hive-capability-search <span class="nt">--live</span> <span class="s2">"task or 
 <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>packaged-skills/auto-install/hive-pulse/.hivemind-skill-source.json
 </code></pre></div></div>
 
+<h2 id="reddit-thread-reader">Reddit Thread Reader</h2>
+
+<p><code class="language-plaintext highlighter-rouge">reddit-thread-reader</code> lets any agent read a Reddit link for you. Paste a link from reddit.com, old.reddit.com, redd.it, or the Reddit app’s share button, and ask for what you want:</p>
+
+<ul>
+  <li>A link on its own, or “pull this thread”, shows the post and its comments with authors, points, and reply structure.</li>
+  <li>“Pull this post” shows just the post, then offers the full thread, a summary of the key points, or the overall sentiment.</li>
+  <li>“Summarize this thread”, “what’s the sentiment?”, or “what do you think of this thread?” gets a natural answer grounded in the comments.</li>
+</ul>
+
+<p>In the phone app the thread is attached to your message automatically, so it works with whichever model you chat with. Very large threads keep their highest-scored comment branches and say how much was included. Points settle about a day and a half after posting, and posts in private communities cannot be read.</p>
+
 <h2 id="bankr-skill-deployment">Bankr Skill Deployment</h2>
 
 <p><code class="language-plaintext highlighter-rouge">bankr-skill-deployment</code> is the default delivery playbook when a capability should run with Bankr. It distinguishes a per-wallet skill, a request-time paid x402 endpoint, a wallet-aware Bankr app, and a separately hosted always-on backend before implementation begins.</p>
@@ -764,6 +782,7 @@ packaged-skills/auto-install/photo-library-keyworder/SKILL.md
 packaged-skills/auto-install/create-zero-human-company/SKILL.md
 packaged-skills/auto-install/hive-assimilate/SKILL.md
 packaged-skills/auto-install/hive-pulse/SKILL.md
+packaged-skills/auto-install/reddit-thread-reader/SKILL.md
 packaged-skills/auto-install/hive-quant-research/SKILL.md
 packaged-skills/auto-install/hive-capability-search/SKILL.md
 packaged-skills/auto-install/hive-remote-capability-use/SKILL.md
@@ -784,6 +803,7 @@ Skills/photo-library-keyworder/SKILL.md
 Skills/create-zero-human-company/SKILL.md
 Skills/hive-assimilate/SKILL.md
 Skills/hive-pulse/SKILL.md
+Skills/reddit-thread-reader/SKILL.md
 Skills/hive-quant-research/SKILL.md
 Skills/hive-capability-search/SKILL.md
 Skills/hive-remote-capability-use/SKILL.md

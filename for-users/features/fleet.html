@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Fleet | HivemindOS Docs</title>
+  <title>My Hive | HivemindOS Docs</title>
   <meta name="description" content="See and manage the computers, agents, apps, and services in your HivemindOS hive.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink isActive" aria-current="page" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -591,9 +593,9 @@
             </button>
           </div>
         </div>
-        <h1 id="fleet">Fleet</h1>
+        <h1 id="my-hive">My Hive</h1>
 
-<p>Fleet is the home screen for your hive. It shows the computers you have connected, the agents available on each one, what is online now, and what needs your attention.</p>
+<p>My Hive is the home screen for your hive. It shows the computers you have connected, the agents available on each one, what is online now, and what needs your attention.</p>
 
 <p>Start here when an agent is missing, work needs to run on a particular machine, or you want to use an app or service hosted elsewhere in your hive.</p>
 
@@ -610,9 +612,20 @@
   <li>See active work and important alerts without opening each machine separately.</li>
 </ul>
 
+<h2 id="choose-a-view">Choose A View</h2>
+
+<p>My Hive opens in <strong>Cards</strong>. Use the view buttons above your devices to change how it lays them out:</p>
+
+<ul>
+  <li><strong>Cards</strong> shows one card per device in a grid, starting with the computer you are using. A card shows whether the device is online, how busy it is once it reports its usage, and its first few agents, with <strong>Add agent</strong> and <strong>Settings</strong>. Select a card to open that device’s details beside the grid.</li>
+  <li><strong>Devices</strong> shows each computer as a large hexagon with its agents inside.</li>
+</ul>
+
+<p>The other views show the same devices and agents in different layouts. My Hive remembers the view you choose.</p>
+
 <figure class="imagePlate">
-  <img src="../../assets/img/diagrams/fleet-tailnet-topology.jpg" alt="Fleet diagram showing one HivemindOS dashboard connected privately to local and remote machines, agents, apps, and services." />
-  <figcaption>Fleet brings trusted machines into one private view. A remote machine must be connected and running its HivemindOS helper before the dashboard can use it.</figcaption>
+  <img src="../../assets/img/diagrams/fleet-tailnet-topology.jpg" alt="My Hive diagram showing one HivemindOS dashboard connected privately to local and remote machines, agents, apps, and services." />
+  <figcaption>My Hive brings trusted machines into one private view. A remote machine must be connected and running HivemindOS before the dashboard can use it.</figcaption>
 </figure>
 
 <h2 id="read-a-machine-card">Read A Machine Card</h2>
@@ -621,16 +634,16 @@
 
 <ol>
   <li><strong>Is the machine online?</strong> An offline machine cannot accept new work until it reconnects.</li>
-  <li><strong>Is HivemindOS ready there?</strong> A computer can be online while its local HivemindOS helper still needs setup or repair.</li>
+  <li><strong>Is HivemindOS ready there?</strong> A computer can be online while HivemindOS on it still needs setup or repair.</li>
   <li><strong>Which agents are available?</strong> Agents belong to a machine and may use different runtimes or models.</li>
   <li><strong>What can this machine do?</strong> File access, app discovery, model hosting, and remote actions depend on the permissions and services enabled for that machine.</li>
 </ol>
 
-<p>If a card says <strong>Needs setup</strong> or <strong>Needs attention</strong>, use the action on that card. HivemindOS opens the relevant setup or repair flow without making you leave Fleet.</p>
+<p>If a card says <strong>Needs setup</strong> or <strong>Needs attention</strong>, use the action on that card. HivemindOS opens the relevant setup or repair flow without making you leave My Hive.</p>
 
 <h2 id="add-another-computer">Add Another Computer</h2>
 
-<p>Use the add-machine action in Fleet and follow the guided setup on the target computer. The new machine appears once its connection is approved and its HivemindOS helper reports ready.</p>
+<p>Use the add-machine action in My Hive and follow the guided setup on the target computer. The new machine appears once its connection is approved and HivemindOS on it reports ready.</p>
 
 <p>HivemindOS supports private connections between your machines. You do not need to expose a dashboard or machine service to the public internet. If the new machine appears but stays unreachable, see <a href="../troubleshooting-cookbook.html#machine-or-agent-is-offline">Troubleshooting</a>.</p>
 
@@ -645,7 +658,7 @@
   <li>Use a managed cloud agent when the work must continue while your computers are off.</li>
 </ul>
 
-<p>Machine permissions can limit what an agent may do remotely. A task may therefore ask for approval even when the same action is allowed locally. See <a href="fleet-machine-permissions.html">Fleet machine permissions</a> for advanced controls.</p>
+<p>Machine permissions can limit what an agent may do remotely. A task may therefore ask for approval even when the same action is allowed locally. See <a href="fleet-machine-permissions.html">My Hive machine permissions</a> for advanced controls.</p>
 
 <h2 id="apps-and-services-in-your-hive">Apps And Services In Your Hive</h2>
 

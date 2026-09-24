@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -624,6 +626,8 @@
 
 <p>Finished HivemindOS conversations can also be mirrored into the vault when shared-vault history is enabled. This lets a later agent find a past discussion without making every line of every chat a permanent typed memory.</p>
 
+<p>When a follow-up refers to a project you named earlier, HivemindOS can use that name to find the relevant notes. If several projects could fit, name the one you mean. Agents are instructed to search for missing facts and say when the evidence is still missing or unclear. Your latest correction takes precedence over older notes.</p>
+
 <h2 id="built-in-and-optional">Built in and optional</h2>
 
 <table>
@@ -806,6 +810,8 @@ the credential values stay in shared env or the relevant backend.</p>
       </tr>
     </tbody>
   </table>
+
+  <p>The <code class="language-plaintext highlighter-rouge">hive-brain</code> command can save a memory while the desktop app is closed. It starts a local writer for that operation and exits when the save finishes. If a server request times out or the local writer cannot complete, the command keeps the write pending and reports that status.</p>
 
   <p>The raw-agent rule is deliberate: agents should not need to know which port the dashboard is using, and they should still recall when the dashboard is not running.</p>
 

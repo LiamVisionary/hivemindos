@@ -133,7 +133,7 @@
               
 
               
-                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">Fleet</a>
+                <a class="navLink" href="/hivemindos/for-users/features/fleet.html">My Hive</a>
               
             
               
@@ -232,6 +232,8 @@
                       <a class="navLink" href="/hivemindos/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/hivemindos/for-users/platform-api/privacy.html">Private And Confidential Access</a>
                     
                       <a class="navLink" href="/hivemindos/for-users/platform-api/projects-security.html">Projects And Isolation</a>
                     
@@ -596,8 +598,8 @@
 <p>HivemindOS is built to remember the useful parts of work without turning every run receipt, old decision, or vault note into prompt baggage. These benchmarks measure whether that design produces relevant recall, fast local retrieval, cleaner current truth, and smaller model context.</p>
 
 <section class="atlasHero">
-  <strong>Benchmark snapshot: July 10, 2026</strong>
-  <p>A 1,000-query live memory matrix reached 90% Top-1 and 98% Top-3 recall. Across the full LoCoMo and LongMemEval retrieval suites, HivemindOS placed the annotated evidence session in the Top-50 for 2,032 of 2,036 eligible questions (99.80%). Full GPT-5.4 Mini answer-and-judge runs scored 76.62% on LoCoMo, 53.40% on LongMemEval, 41.12% on BEAM 1M, and 37.04% on BEAM 10M at Top-50.</p>
+  <strong>Benchmark snapshot: September 23, 2026</strong>
+  <p>On LongMemEval_S, with the same 150 questions, reader model and official judge, HivemindOS's shared brain answered 77.3% correctly against 54.0% for Sibyl-Memory's search, and led in every question type but one, where they tied. The July 10 results below stand: a 1,000-query live memory matrix reached 90% Top-1 and 98% Top-3 recall. Across the full LoCoMo and LongMemEval retrieval suites, HivemindOS placed the annotated evidence session in the Top-50 for 2,032 of 2,036 eligible questions (99.80%). Full GPT-5.4 Mini answer-and-judge runs scored 76.62% on LoCoMo, 53.40% on LongMemEval, 41.12% on BEAM 1M, and 37.04% on BEAM 10M at Top-50.</p>
 </section>
 
 <h2 id="results-at-a-glance">Results At A Glance</h2>
@@ -611,6 +613,11 @@
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td>LongMemEval_S head to head</td>
+      <td style="text-align: right"><strong>77.3% vs 54.0%</strong> (HivemindOS vs Sibyl-Memory)</td>
+      <td>Same 150 questions, reader model and official judge; HivemindOS was right on 43 questions Sibyl-Memory missed, Sibyl-Memory on 8</td>
+    </tr>
     <tr>
       <td>Live-memory recall</td>
       <td style="text-align: right"><strong>90% Top-1, 98% Top-3, 0.94 MRR</strong></td>
@@ -645,6 +652,11 @@
       <td>Hosted SuperAgent API memory</td>
       <td style="text-align: right"><strong>8/8 lexical, 6/6 semantic, 3/3 grounded answers</strong></td>
       <td>Three fresh hosted accounts; median trial p50 was 0.53s lexical, 4.89s semantic, and 5.93s answer</td>
+    </tr>
+    <tr>
+      <td>Hosted memory on LongMemEval_S</td>
+      <td style="text-align: right"><strong>81.9% of answers correct</strong> (was 16.7%)</td>
+      <td>150 questions through the hosted routes, graded by a smaller judge than LongMemEval’s own; the evidence reached the answer model for 85.1% of all 470 answerable questions in keyword order (was 9.6%)</td>
     </tr>
     <tr>
       <td>Indexed typed memory at 1,500 records</td>
@@ -700,6 +712,107 @@
 </table>
 
 <p>Top-1 means the expected memory ranked first. Top-3 means it appeared in the first three results. Mean reciprocal rank, or MRR, rewards putting the correct memory as high as possible.</p>
+
+<h2 id="longmemeval_s-head-to-head-with-sibyl-memory">LongMemEval_S Head To Head With Sibyl-Memory</h2>
+
+<p>Sibyl-Memory publishes a 95.6% LongMemEval score and ranks itself next to systems measured on LongMemEval_S. That 95.6% comes from <strong>LongMemEval Oracle</strong>, where the reader is handed only the conversations that contain the answer, so it measures the reading model rather than the memory. <strong>LongMemEval_S</strong> gives each question its whole history, about 50 past conversations and 115,000 tokens, most of it unrelated, and the memory system has to find the evidence. We ran both memory systems on LongMemEval_S with everything else held equal.</p>
+
+<ul>
+  <li><strong>Questions:</strong> 150, 25 of each of LongMemEval’s six types, chosen by a hash of the question id before either system ran. Seven are unanswerable by design.</li>
+  <li><strong>Same reader and judge for both:</strong> <code class="language-plaintext highlighter-rouge">gpt-4.1-mini</code> answers with LongMemEval’s official reading prompt, and <code class="language-plaintext highlighter-rouge">gpt-4o</code> grades with LongMemEval’s official per-type judge prompts.</li>
+  <li><strong>HivemindOS:</strong> the prompt-hook recall as it ships. It returns the best-matching exchanges from past conversations under their dates, ordered by TypeSafe’s Jev decision model when Turbo mode is on (its default for cloud use), then the other recalled notes. It is capped at 5,000 characters and averaged 4.6k.</li>
+  <li><strong>Sibyl-Memory:</strong> its default agent search (MCP <code class="language-plaintext highlighter-rouge">memory_search</code>), reconstructed in JavaScript from its MIT-licensed source at <code class="language-plaintext highlighter-rouge">Sibyl-Labs/Sibyl-Memory</code> commit <code class="language-plaintext highlighter-rouge">761bfc6</code>, with conversation turns stored the way its Hermes adapter stores them. It averaged 5.6k characters. The source was read and ported rather than installed.</li>
+</ul>
+
+<figure class="imagePlate">
+  <img src="../../assets/img/benchmarks/longmemeval-s-accuracy-by-type.svg" alt="Bar chart of LongMemEval_S accuracy by question type. Overall: HivemindOS 77.3%, Sibyl-Memory 54.0%. Updated facts 92% vs 88%; counting across chats 60% vs 32%; what the assistant said 100% vs 76%; preferences 48% vs 20%; user facts 92% vs 92%; dates and time 72% vs 16%." />
+  <figcaption>Percent of questions answered correctly, same questions, reader and judge.</figcaption>
+</figure>
+
+<figure class="imagePlate">
+  <img src="../../assets/img/benchmarks/longmemeval-s-gap-by-type.svg" alt="Dot plot of the gap per question type, HivemindOS minus Sibyl-Memory: overall +23.3 points; dates and time +56; counting across chats +28; preferences +28; what the assistant said +24; updated facts +4; user facts tie." />
+  <figcaption>Each row shows both scores and the gap, ordered by gap.</figcaption>
+</figure>
+
+<table>
+  <thead>
+    <tr>
+      <th>Question type</th>
+      <th style="text-align: right">Sibyl-Memory</th>
+      <th style="text-align: right">HivemindOS</th>
+      <th style="text-align: right">Difference</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Overall</strong> (150)</td>
+      <td style="text-align: right"><strong>54.0%</strong></td>
+      <td style="text-align: right"><strong>77.3%</strong></td>
+      <td style="text-align: right"><strong>+23.3</strong></td>
+    </tr>
+    <tr>
+      <td>Updated facts (25)</td>
+      <td style="text-align: right">88%</td>
+      <td style="text-align: right">92%</td>
+      <td style="text-align: right">+4</td>
+    </tr>
+    <tr>
+      <td>Counting across chats (25)</td>
+      <td style="text-align: right">32%</td>
+      <td style="text-align: right">60%</td>
+      <td style="text-align: right">+28</td>
+    </tr>
+    <tr>
+      <td>What the assistant said (25)</td>
+      <td style="text-align: right">76%</td>
+      <td style="text-align: right">100%</td>
+      <td style="text-align: right">+24</td>
+    </tr>
+    <tr>
+      <td>Preferences (25)</td>
+      <td style="text-align: right">20%</td>
+      <td style="text-align: right">48%</td>
+      <td style="text-align: right">+28</td>
+    </tr>
+    <tr>
+      <td>User facts (25)</td>
+      <td style="text-align: right">92%</td>
+      <td style="text-align: right">92%</td>
+      <td style="text-align: right">0</td>
+    </tr>
+    <tr>
+      <td>Dates and time (25)</td>
+      <td style="text-align: right">16%</td>
+      <td style="text-align: right">72%</td>
+      <td style="text-align: right">+56</td>
+    </tr>
+    <tr>
+      <td>Unanswerable (7)</td>
+      <td style="text-align: right">7 of 7</td>
+      <td style="text-align: right">7 of 7</td>
+      <td style="text-align: right">0</td>
+    </tr>
+    <tr>
+      <td>Context the reader received</td>
+      <td style="text-align: right">5.6k characters</td>
+      <td style="text-align: right">4.6k characters</td>
+      <td style="text-align: right"> </td>
+    </tr>
+  </tbody>
+</table>
+
+<p>What the comparison shows:</p>
+
+<ul>
+  <li><strong>The difference holds question by question.</strong> HivemindOS answered 43 questions that Sibyl-Memory missed, and Sibyl-Memory answered 8 that HivemindOS missed (exact sign test, p &lt; 0.0001).</li>
+  <li><strong>The gap is widest where memory has to work.</strong> Dates and time, counting across conversations, and preferences all need evidence that shares few words with the question. On a single stated fact both systems do well.</li>
+  <li><strong>Sibyl-Memory’s search refuses often.</strong> It returns nothing when any content word of a question is missing from memory. On the full 500 questions it abstained or gated 114 times. Returning nothing is also right on an unanswerable question: three of its 7 of 7 there came that way.</li>
+  <li><strong>The evidence reaches the reader more often.</strong> Across all 470 answerable questions, HivemindOS’s hook put every labelled evidence turn in context for 57.2% of questions at 4.6k characters, without the decision model. Sibyl-Memory’s search managed 42.3% at 5.6k.</li>
+  <li><strong>The Oracle setting measures the reader.</strong> The same reader with no memory system at all, handed only each answer’s own conversations, scored 93.3% here. That is the setting behind the published 95.6%.</li>
+  <li><strong>HivemindOS still leads without the decision model.</strong> With Turbo mode off it scored 68.7%, and it answered 32 questions Sibyl-Memory missed against 10 the other way.</li>
+</ul>
+
+<p>Limitations: one reader model, so absolute scores move with the reader while the comparison between systems is the result. On 150 questions one system’s score is within about 4 points; the paired counts are the test of the difference. The Sibyl-Memory arm is a reconstruction of its search from source, not its package, and a different way of storing conversations in it could score differently. LongMemEval measures memory of past conversations, while typed memories and vault notes are measured separately on this page. The machine-readable result, including every per-type count, is <a href="/hivemindos/assets/benchmarks/longmemeval-s-head-to-head-2026-09-23.json">available as JSON</a>.</p>
 
 <h2 id="public-long-conversation-suites">Public Long-Conversation Suites</h2>
 
@@ -833,7 +946,7 @@
   </tbody>
 </table>
 
-<p>These model-judge results are a reproducible HivemindOS snapshot, not a direct competitor comparison. Scores produced with a different answering model, judge, prompt revision, or retrieval cutoff—including GPT-5/Top-200 configurations—are not apples-to-apples. ChatGPT OAuth did not expose token-usage counters, so the benchmark publishes latency and completion counts but does not estimate tokens or model cost.</p>
+<p>These model-judge results are a reproducible HivemindOS snapshot, not a direct competitor comparison. They predate the conversation-exchange recall used in the September head to head above, and use a different reader, judge and cutoff, so the two LongMemEval numbers are not comparable with each other. Scores produced with a different answering model, judge, prompt revision, or retrieval cutoff—including GPT-5/Top-200 configurations—are not apples-to-apples. ChatGPT OAuth did not expose token-usage counters, so the benchmark publishes latency and completion counts but does not estimate tokens or model cost.</p>
 
 <p>The long-conversation run also validated the cache optimization that made BEAM 10M fit within the normal Node heap. Re-running 2,440 LoCoMo, BEAM 1M, and BEAM 10M questions preserved the same ranked context after excluding regenerated file timestamps, while median retrieval improved:</p>
 
@@ -1034,6 +1147,50 @@
 <p>A separate scale diagnostic added 48 adversarial archive memories that reused coordinator, proof, and release terminology. The hosted corpus contained 57 memories and the local corpus contained 55 because the hosted test also carried two knowledge nodes for semantic-answer grading. Both paths kept every published behavior case correct. The single hosted run measured 431.67ms lexical p50, 1,674.67ms semantic p50, and 2,594.36ms answer p50; the repetition-matched local lexical run measured 14.48ms p50. This one scaled run is evidence that the distractors did not displace the expected memories, not a statistically powered scale or speed comparison.</p>
 
 <p>The hosted quality cases cover entity and alias lookup, canonical evolution heads, explicit history, usage-signal ranking, operational-memory isolation, semantic paraphrases, grounded citations, and negative abstention. They do not upload or reproduce a private Obsidian vault, and they do not establish universal recall parity across arbitrary customer data. Hosted timings include internet transit, account isolation, metering, durable storage, and any paid semantic or answer work; local timings stay on the machine.</p>
+
+<h4 id="past-conversations-on-longmemeval_s">Past conversations on LongMemEval_S</h4>
+
+<p>On September 23, 2026, the hosted memory gained the shared brain’s recall of past conversations: the best-matching exchanges under each conversation’s date, ordered by the Turbo decision model for Memory Answer. It was measured before and after on LongMemEval_S through the hosted memory’s own search, recall, and answer code. Each question’s 50 or so past chats were saved to a fresh account as transcripts, and semantic recall was left off.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Hosted result</th>
+      <th style="text-align: right">Before</th>
+      <th style="text-align: right">After</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Memory Answer’s reader received every piece of evidence, keyword order (470 answerable questions)</td>
+      <td style="text-align: right">9.6%</td>
+      <td style="text-align: right"><strong>85.1%</strong></td>
+    </tr>
+    <tr>
+      <td>Recall’s 4,200-character <code class="language-plaintext highlighter-rouge">conversationEvidence</code> held every piece of evidence</td>
+      <td style="text-align: right">not available</td>
+      <td style="text-align: right"><strong>56.4%</strong></td>
+    </tr>
+    <tr>
+      <td>Every evidence conversation was among the top 50 search results</td>
+      <td style="text-align: right">82.3%</td>
+      <td style="text-align: right"><strong>98.5%</strong></td>
+    </tr>
+    <tr>
+      <td>Memory Answer was correct (150 questions, 25 of each type)</td>
+      <td style="text-align: right">16.7%</td>
+      <td style="text-align: right"><strong>81.9%</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<ul>
+  <li><strong>Question by question,</strong> the new Memory Answer was right on 98 questions the old one missed, and the old one on 1.</li>
+  <li><strong>Retrieval and reader both mattered.</strong> With the old answer model, the new recall alone lifted correct answers from 16.7% to 45.3%. Given the evidence, that small model often replied that it had no information. Memory Answer now uses a larger model at the same price per token, which reached 81.9%. It reasons before answering, which added about three seconds to the reader’s median time in this test.</li>
+  <li><strong>The decision model helped in a smaller space.</strong> Ordered by it, the evidence fit in 12,000 characters for 81.1% of questions, against 74.8% in keyword order at the same size, and the reader did better with those 12,000 characters than with 24,000 in keyword order.</li>
+</ul>
+
+<p>Limitations: answers were graded with LongMemEval’s official judge instructions but by <code class="language-plaintext highlighter-rouge">gpt-4o-mini</code> rather than its <code class="language-plaintext highlighter-rouge">gpt-4o</code>, so compare these rows with each other rather than with the head-to-head above. With semantic recall on, as in paid plans, recall can only gain candidates. LongMemEval measures memory of past conversations; typed memories are covered by the hosted behavior cases above.</p>
 
 <h2 id="typed-memory-at-scale">Typed Memory At Scale</h2>
 
@@ -1265,7 +1422,11 @@
   <p>On the complete BEAM runs, HivemindOS averaged 41.12% rubric compliance at 1M context and 37.04% at 10M context, with 44.29% and 43.00% of questions meeting the 0.5 pass threshold.</p>
 </blockquote>
 
-<p>Do not turn these results into an unmeasured competitor comparison, a hosted latency SLA, a universal token-savings guarantee, or a claim that pattern proposals are production-perfect. The benchmarks deliberately publish their corpus, route, sample size, and limitations so the claims can stay useful as the product evolves.</p>
+<blockquote>
+  <p>On LongMemEval_S, with the same 150 questions, reader model and official judge, HivemindOS’s shared-brain recall answered 77.3% of questions correctly and Sibyl-Memory’s search 54.0%. HivemindOS was right on 43 questions Sibyl-Memory missed and wrong on 8 it got.</p>
+</blockquote>
+
+<p>The Sibyl-Memory comparison is measured. Quote it with its setup: LongMemEval_S, 150 questions, the same reader and judge, and Sibyl-Memory’s search reconstructed from its source. Do not turn these results into an unmeasured competitor comparison, a hosted latency SLA, a universal token-savings guarantee, or a claim that pattern proposals are production-perfect. The benchmarks deliberately publish their corpus, route, sample size, and limitations so the claims can stay useful as the product evolves.</p>
 
 <h2 id="reproduce-the-benchmarks">Reproduce The Benchmarks</h2>
 
@@ -1282,6 +1443,14 @@ pnpm benchmark:context-savings
 <p>The authenticated API benchmark expects a running HivemindOS dashboard. The full-vault and live-memory benchmarks are read only. The scale, API behavior, and pattern benchmarks use isolated synthetic fixtures.</p>
 
 <p>The standard public suites use the development-only harness documented under <code class="language-plaintext highlighter-rouge">benchmarks/memory/</code>. Datasets, temporary vaults, model clients, OAuth bridges, checkpoints, and raw outputs remain outside the production application and are not shipped to users.</p>
+
+<p>The LongMemEval_S head to head uses the public <code class="language-plaintext highlighter-rouge">longmemeval_s_cleaned.json</code> from the LongMemEval Hugging Face dataset. Retrieval for both systems needs no model; the decision-model ordering, the reader and the judge call OpenRouter and cost about $1 for the two systems on 150 questions:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">OPENROUTER_API_KEY</span><span class="o">=</span>&lt;key&gt; node scripts/benchmark-longmemeval-arms.mjs retrieve <span class="nt">--dataset</span> &lt;longmemeval_s_cleaned.json&gt; <span class="nt">--out</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span> <span class="nt">--arms</span> sibyl-mcp,product-hook-v2-jev <span class="nt">--per-type</span> 25
+<span class="nv">OPENROUTER_API_KEY</span><span class="o">=</span>&lt;key&gt; node scripts/benchmark-longmemeval-arms.mjs answer <span class="nt">--out</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span> <span class="nt">--arms</span> sibyl-mcp,product-hook-v2-jev <span class="nt">--per-type</span> 25 <span class="nt">--reader</span> openai/gpt-4.1-mini <span class="nt">--judge</span> openai/gpt-4o-2024-08-06 <span class="nt">--budget-usd</span> 3
+node scripts/benchmark-longmemeval-arms.mjs summarize <span class="nt">--out</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span>
+node scripts/render-longmemeval-benchmark-charts.mjs
+</code></pre></div></div>
 
 <p>The live token benchmark calls the selected provider and may incur provider charges:</p>
 
