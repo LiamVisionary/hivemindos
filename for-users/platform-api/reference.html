@@ -638,7 +638,7 @@ Content type: application/json
     <tr>
       <td><code class="language-plaintext highlighter-rouge">GET</code></td>
       <td><code class="language-plaintext highlighter-rouge">/pricing</code></td>
-      <td>Server-owned price and availability catalog. Optional <code class="language-plaintext highlighter-rouge">service</code> query: <code class="language-plaintext highlighter-rouge">platform-api</code>, <code class="language-plaintext highlighter-rouge">managed-wallets</code>, <code class="language-plaintext highlighter-rouge">managed-trading</code>, <code class="language-plaintext highlighter-rouge">managed-agents</code>, or <code class="language-plaintext highlighter-rouge">managed-workflows</code>.</td>
+      <td>Server-owned price and availability catalog. Optional <code class="language-plaintext highlighter-rouge">service</code> query: <code class="language-plaintext highlighter-rouge">platform-api</code>, <code class="language-plaintext highlighter-rouge">managed-wallets</code>, <code class="language-plaintext highlighter-rouge">managed-trading</code>, <code class="language-plaintext highlighter-rouge">universal-swaps</code>, <code class="language-plaintext highlighter-rouge">managed-agents</code>, or <code class="language-plaintext highlighter-rouge">managed-workflows</code>.</td>
     </tr>
   </tbody>
 </table>
@@ -713,7 +713,7 @@ Content type: application/json
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
-      <td>List wallets, read one wallet, and read balances.</td>
+      <td>List wallets, read one wallet, and read balances. List swap tokens, read swaps, build unsigned swaps for your own wallet, and follow their fills.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">wallets:create</code></td>
@@ -725,7 +725,7 @@ Content type: application/json
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">wallets:transact</code></td>
-      <td>Quote and execute wallet sends and swaps.</td>
+      <td>Quote and execute wallet sends and swaps, including universal swaps from HivemindOS wallets.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">trading:read</code></td>
@@ -1158,6 +1158,65 @@ Content type: application/json
   </tbody>
 </table>
 
+<h3 id="universal-swaps">Universal swaps</h3>
+
+<p>Swap endpoints require service access to <code class="language-plaintext highlighter-rouge">universal-swaps</code>. See <a href="wallets-trading.html#universal-swaps">universal swaps</a> for the flows.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Method and path</th>
+      <th>Scope</th>
+      <th style="text-align: center">Idem</th>
+      <th>Limit operation</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /swaps/tokens</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">swaps.tokens.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /swaps/quote</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:transact</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">swaps.quote</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /swaps</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:transact</code></td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">swaps.execute</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /swaps</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">swaps.list</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /swaps/{swapId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">swaps.read</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /swaps/prepare</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">swaps.prepare</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /swaps/routes/{routeId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">swaps.routes.read</code></td>
+    </tr>
+  </tbody>
+</table>
+
 <h3 id="runs-approvals-artifacts-and-webhooks">Runs, approvals, artifacts, and webhooks</h3>
 
 <p>Run and artifact reads also require service access to the resource’s source service.</p>
@@ -1326,6 +1385,13 @@ trading.orders.create
 trading.orders.list
 trading.orders.read
 trading.positions.list
+swaps.tokens.list
+swaps.quote
+swaps.prepare
+swaps.execute
+swaps.list
+swaps.read
+swaps.routes.read
 runs.list
 runs.create
 runs.read
@@ -1352,7 +1418,7 @@ services.invoke.&lt;serviceId&gt;.&lt;operationId&gt;
 runs.create.&lt;serviceId&gt;.&lt;operationId&gt;
 </code></pre></div></div>
 
-<p>The SDK exports the expanded list as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_OPERATION_IDS</code> and exports the four operations that accept <code class="language-plaintext highlighter-rouge">creditsPerDay</code> as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_CREDIT_METERED_OPERATION_IDS</code>.</p>
+<p>The SDK exports the expanded list as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_OPERATION_IDS</code> and exports the five operations that accept <code class="language-plaintext highlighter-rouge">creditsPerDay</code> as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_CREDIT_METERED_OPERATION_IDS</code>.</p>
 
 <h2 id="request-headers">Request headers</h2>
 

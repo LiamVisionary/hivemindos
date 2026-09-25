@@ -684,6 +684,8 @@
 
 <p>Either way, the line under the reply names the model on this computer that answered, and says why when it stood in for the online model. Incognito conversations always stay on the private online model.</p>
 
+<p>A model on this computer answers only when the whole conversation fits in the context it was loaded with, so it never answers with part of your assistant’s instructions missing. Assistants need more than the 4,096 tokens many local model apps start with: load the model with a context of 16,384 or more. In Ollama, set <code class="language-plaintext highlighter-rouge">OLLAMA_CONTEXT_LENGTH=16384</code> before starting it.</p>
+
 <h2 id="source-grounded-work">Source-Grounded Work</h2>
 
 <p>Attach a document for a one-conversation task, or add files to Hive Superbrain when agents should be able to find and reuse them later. Source material remains clearly separated from your instructions, so text inside a document or webpage does not silently become an agent command.</p>

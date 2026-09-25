@@ -7,7 +7,7 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
   <title>Wallets, Approvals, And Trading | HivemindOS Docs</title>
-  <meta name="description" content="Create policy-controlled managed wallets and execute approved transfers, signatures, and spot trades.">
+  <meta name="description" content="Create policy-controlled managed wallets and execute approved transfers, signatures, spot trades, and any-token swaps from HivemindOS wallets or your own.">
   <link rel="canonical" href="https://hivemindos.app/docs/for-users/platform-api/wallets-trading.html">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -639,6 +639,14 @@
       <td><code class="language-plaintext highlighter-rouge">wallets:read</code>, <code class="language-plaintext highlighter-rouge">trading:read</code>, <code class="language-plaintext highlighter-rouge">trading:execute</code></td>
     </tr>
     <tr>
+      <td>Swap worker</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code>, <code class="language-plaintext highlighter-rouge">wallets:transact</code></td>
+    </tr>
+    <tr>
+      <td>Own-wallet swap builder</td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+    </tr>
+    <tr>
       <td>Reviewer</td>
       <td><code class="language-plaintext highlighter-rouge">approvals:read</code>, <code class="language-plaintext highlighter-rouge">approvals:write</code></td>
     </tr>
@@ -649,7 +657,7 @@
   </tbody>
 </table>
 
-<p>Add <code class="language-plaintext highlighter-rouge">managed-wallets</code> or <code class="language-plaintext highlighter-rouge">managed-trading</code> to each key’s service allowlist as appropriate. A key that can execute an action should not also approve it.</p>
+<p>Add <code class="language-plaintext highlighter-rouge">managed-wallets</code>, <code class="language-plaintext highlighter-rouge">managed-trading</code>, or <code class="language-plaintext highlighter-rouge">universal-swaps</code> to each key’s service allowlist as appropriate. A key that can execute an action should not also approve it.</p>
 
 <h2 id="supported-networks">Supported networks</h2>
 
@@ -823,14 +831,316 @@
 
 <p>Copy-trading strategies remain a separate managed service. They do not turn a SuperAgent API spot order into a limit, recurring, leveraged, or copy-trading order.</p>
 
+<h2 id="universal-swaps">Universal swaps</h2>
+
+<p>Universal swaps turn any token into any other token, on one chain or across chains. Add <code class="language-plaintext highlighter-rouge">universal-swaps</code> to the key’s service allowlist. There are two ways to use it:</p>
+
+<ul>
+  <li><strong>From a HivemindOS wallet</strong>: quote, approve if the wallet’s policy asks for it, then execute. HivemindOS signs and sends.</li>
+  <li><strong>From your own wallet</strong>: ask for a checked, unsigned route and sign it yourself. HivemindOS never holds the key.</li>
+</ul>
+
+<table>
+  <thead>
+    <tr>
+      <th>Method and path</th>
+      <th>Scope</th>
+      <th>What it does</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /v1/swaps/tokens</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td>Chains you can swap on and the official token contract each symbol means. Optional <code class="language-plaintext highlighter-rouge">chainId</code> query.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /v1/swaps/quote</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:transact</code></td>
+      <td>Quote a swap from a HivemindOS wallet. Needs an <code class="language-plaintext highlighter-rouge">Idempotency-Key</code>.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /v1/swaps</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:transact</code></td>
+      <td>Execute an approved quote. Needs an <code class="language-plaintext highlighter-rouge">Idempotency-Key</code>.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /v1/swaps</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td>List swaps.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /v1/swaps/{swapId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td>Read one swap, with cross-chain fill status.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">POST /v1/swaps/prepare</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td>Build an unsigned route for your own wallet. No credits.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /v1/swaps/routes/{routeId}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">wallets:read</code></td>
+      <td>Follow a route your own wallet sent until it fills.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><code class="language-plaintext highlighter-rouge">GET /v1/swaps/tokens</code> lists every chain with <code class="language-plaintext highlighter-rouge">canSwapFrom</code> and <code class="language-plaintext highlighter-rouge">canSwapTo</code>. <code class="language-plaintext highlighter-rouge">canSwapFrom</code> is about HivemindOS wallets, which can start a swap on Base, Ethereum, and Solana. Your own wallet can start on any listed chain. A symbol such as <code class="language-plaintext highlighter-rouge">usdc</code> resolves only to the official contract listed for that chain. Any other token works when you pass its contract or mint address, and the response flags it as unverified.</p>
+
+<h3 id="say-what-to-swap">Say what to swap</h3>
+
+<p>Name the tokens as <code class="language-plaintext highlighter-rouge">chain:symbol</code>, such as <code class="language-plaintext highlighter-rouge">base:usdc</code> or <code class="language-plaintext highlighter-rouge">solana:sol</code>, or as a contract or mint address. Then give one amount:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">amount</code></td>
+      <td>Decimal amount of <code class="language-plaintext highlighter-rouge">from</code> to spend, such as <code class="language-plaintext highlighter-rouge">"50"</code>.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">amountAtomic</code></td>
+      <td>The same, in the token’s smallest unit.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">amountOut</code></td>
+      <td>Decimal amount of <code class="language-plaintext highlighter-rouge">to</code> to receive exactly, such as <code class="language-plaintext highlighter-rouge">"0.8"</code>.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">amountOutAtomic</code></td>
+      <td>The same, in the token’s smallest unit.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Give an amount to spend or an amount to receive, not both. With <code class="language-plaintext highlighter-rouge">amountOut</code>, the route prices what it costs to receive at least that amount, and <code class="language-plaintext highlighter-rouge">tradeType</code> comes back as <code class="language-plaintext highlighter-rouge">EXACT_OUTPUT</code>. Otherwise it is <code class="language-plaintext highlighter-rouge">EXACT_INPUT</code>.</p>
+
+<p>You can also describe the swap in plain words in <code class="language-plaintext highlighter-rouge">request</code> and leave the fields out:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">"swap 50 USDC on Base to SOL"</code></li>
+  <li><code class="language-plaintext highlighter-rouge">"i need 0.8 sol"</code></li>
+  <li><code class="language-plaintext highlighter-rouge">"swap usdc to 0.8sol"</code></li>
+  <li><code class="language-plaintext highlighter-rouge">"move 20 usdc from solana to base"</code></li>
+</ul>
+
+<p>A short, exact sentence like the first one is read directly. Anything looser is read the same way Ask Scout on the hivemindos.app Trade desk reads it. That uses managed decisions and is billed like any other decision call. A key without <code class="language-plaintext highlighter-rouge">services.invoke.managed-models.decisions.create</code> gets HTTP 403 with a clear message; use <code class="language-plaintext highlighter-rouge">from</code>, <code class="language-plaintext highlighter-rouge">to</code> and an amount instead. When the words name no chain, funds start on <code class="language-plaintext highlighter-rouge">defaultChain</code> (a chain slug, default <code class="language-plaintext highlighter-rouge">base</code>). When they name nothing to pay with, a HivemindOS wallet pays from what it holds, dollars first.</p>
+
+<p>Every quote and route returns <code class="language-plaintext highlighter-rouge">interpretation</code>: the swap as HivemindOS read it. Show it to the person before anything is spent.</p>
+
+<p>Other optional fields: <code class="language-plaintext highlighter-rouge">slippageBps</code> (0 to 10,000; the router sets it when omitted), <code class="language-plaintext highlighter-rouge">fromWalletId</code>, <code class="language-plaintext highlighter-rouge">toWalletId</code>, <code class="language-plaintext highlighter-rouge">recipient</code>, and <code class="language-plaintext highlighter-rouge">provisionMissingWallets</code> (create a receiving HivemindOS wallet on the destination chain if the account has none there; needs <code class="language-plaintext highlighter-rouge">wallets:create</code>).</p>
+
+<h3 id="swap-from-a-hivemindos-wallet">Swap from a HivemindOS wallet</h3>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">quoted</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">worker</span><span class="p">.</span><span class="nx">swaps</span><span class="p">.</span><span class="nx">quote</span><span class="p">(</span>
+  <span class="p">{</span> <span class="na">from</span><span class="p">:</span> <span class="dl">"</span><span class="s2">base:usdc</span><span class="dl">"</span><span class="p">,</span> <span class="na">to</span><span class="p">:</span> <span class="dl">"</span><span class="s2">solana:sol</span><span class="dl">"</span><span class="p">,</span> <span class="na">amountOut</span><span class="p">:</span> <span class="dl">"</span><span class="s2">0.8</span><span class="dl">"</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">treasury-sol-quote-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">quoted</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">quoted</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+
+<span class="kd">const</span> <span class="p">{</span> <span class="nx">quote</span> <span class="p">}</span> <span class="o">=</span> <span class="nx">quoted</span><span class="p">;</span>
+<span class="c1">// Show this before approving: what was understood, what it costs, what arrives.</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">quote</span><span class="p">.</span><span class="nx">interpretation</span><span class="p">,</span> <span class="nx">quote</span><span class="p">.</span><span class="nx">tradeType</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="s2">`Pay </span><span class="p">${</span><span class="nx">quote</span><span class="p">.</span><span class="k">from</span><span class="p">.</span><span class="nx">amount</span><span class="p">}</span><span class="s2"> </span><span class="p">${</span><span class="nx">quote</span><span class="p">.</span><span class="k">from</span><span class="p">.</span><span class="nx">symbol</span><span class="p">}</span><span class="s2"> on </span><span class="p">${</span><span class="nx">quote</span><span class="p">.</span><span class="k">from</span><span class="p">.</span><span class="nx">chainName</span><span class="p">}</span><span class="s2">, receive </span><span class="p">${</span><span class="nx">quote</span><span class="p">.</span><span class="nx">to</span><span class="p">.</span><span class="nx">amount</span><span class="p">}</span><span class="s2"> </span><span class="p">${</span><span class="nx">quote</span><span class="p">.</span><span class="nx">to</span><span class="p">.</span><span class="nx">symbol</span><span class="p">}</span><span class="s2"> on </span><span class="p">${</span><span class="nx">quote</span><span class="p">.</span><span class="nx">to</span><span class="p">.</span><span class="nx">chainName</span><span class="p">}</span><span class="s2">`</span><span class="p">);</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="nx">quote</span><span class="p">.</span><span class="nx">approvalRequired</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">await</span> <span class="nx">reviewer</span><span class="p">.</span><span class="nx">approvals</span><span class="p">.</span><span class="nx">decide</span><span class="p">(</span><span class="nx">quote</span><span class="p">.</span><span class="nx">approvalId</span><span class="o">!</span><span class="p">,</span> <span class="dl">"</span><span class="s2">approve</span><span class="dl">"</span><span class="p">,</span> <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">treasury-sol-approve-001</span><span class="dl">"</span> <span class="p">});</span>
+<span class="p">}</span>
+
+<span class="kd">const</span> <span class="nx">executed</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">worker</span><span class="p">.</span><span class="nx">swaps</span><span class="p">.</span><span class="nx">execute</span><span class="p">(</span>
+  <span class="p">{</span> <span class="na">quoteId</span><span class="p">:</span> <span class="nx">quote</span><span class="p">.</span><span class="nx">id</span><span class="p">,</span> <span class="na">approvalId</span><span class="p">:</span> <span class="nx">quote</span><span class="p">.</span><span class="nx">approvalId</span> <span class="o">??</span> <span class="kc">undefined</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">treasury-sol-execute-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">executed</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">executed</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+
+<span class="kd">const</span> <span class="nx">swap</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">worker</span><span class="p">.</span><span class="nx">swaps</span><span class="p">.</span><span class="kd">get</span><span class="p">(</span><span class="nx">executed</span><span class="p">.</span><span class="nx">swap</span><span class="p">.</span><span class="nx">id</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>Or with curl:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl https://api.hivemindos.app/v1/swaps/quote <span class="se">\</span>
+  <span class="nt">-H</span> <span class="s2">"Authorization: Bearer </span><span class="nv">$HIVEMINDOS_API_KEY</span><span class="s2">"</span> <span class="se">\</span>
+  <span class="nt">-H</span> <span class="s2">"Content-Type: application/json"</span> <span class="se">\</span>
+  <span class="nt">-H</span> <span class="s2">"Idempotency-Key: treasury-sol-quote-001"</span> <span class="se">\</span>
+  <span class="nt">-d</span> <span class="s1">'{"request":"i need 0.8 sol"}'</span>
+
+curl https://api.hivemindos.app/v1/swaps <span class="se">\</span>
+  <span class="nt">-H</span> <span class="s2">"Authorization: Bearer </span><span class="nv">$HIVEMINDOS_API_KEY</span><span class="s2">"</span> <span class="se">\</span>
+  <span class="nt">-H</span> <span class="s2">"Content-Type: application/json"</span> <span class="se">\</span>
+  <span class="nt">-H</span> <span class="s2">"Idempotency-Key: treasury-sol-execute-001"</span> <span class="se">\</span>
+  <span class="nt">-d</span> <span class="s1">'{"quoteId":"swap_quote_...","approvalId":"approval_..."}'</span>
+</code></pre></div></div>
+
+<p>The quote includes the <code class="language-plaintext highlighter-rouge">from</code> and <code class="language-plaintext highlighter-rouge">to</code> amounts, <code class="language-plaintext highlighter-rouge">minimumOutputAmount</code>, the price impact, estimated dollar values and network fee, the route’s <code class="language-plaintext highlighter-rouge">steps</code>, <code class="language-plaintext highlighter-rouge">warnings</code>, <code class="language-plaintext highlighter-rouge">maximumDebitCredits</code>, <code class="language-plaintext highlighter-rouge">expiresAt</code>, <code class="language-plaintext highlighter-rouge">approvalRequired</code>, and <code class="language-plaintext highlighter-rouge">approvalId</code>. It lasts five minutes. A quote may also create a receiving wallet and report it as <code class="language-plaintext highlighter-rouge">walletProvisioned</code>.</p>
+
+<p>Executing fetches a fresh route rather than replaying the old one, then checks it against what was approved. It refuses a route that would deliver less than <code class="language-plaintext highlighter-rouge">minimumOutputAmount</code>. For an exact receive amount, it asks for the same amount again and refuses a cost above the approved one plus slippage (1% when you set none). A refused execution spends nothing; ask for a new quote.</p>
+
+<p>An executed swap charges 20 Agent Credits, and only when it runs. A 0.45% platform fee is inside the route’s price. The quote’s <code class="language-plaintext highlighter-rouge">maximumDebitCredits</code> is the authoritative charge.</p>
+
+<p>A same-chain swap is done when its transaction lands (<code class="language-plaintext highlighter-rouge">status: "broadcast"</code>). A cross-chain swap starts as <code class="language-plaintext highlighter-rouge">filling</code>. Read it with <code class="language-plaintext highlighter-rouge">GET /v1/swaps/{swapId}</code> until it becomes <code class="language-plaintext highlighter-rouge">filled</code>, <code class="language-plaintext highlighter-rouge">refunded</code>, or <code class="language-plaintext highlighter-rouge">failed</code>; the read includes <code class="language-plaintext highlighter-rouge">routeStatus</code> and, once filled, <code class="language-plaintext highlighter-rouge">destinationTransactionHash</code>. Once the source transaction confirms, a cross-chain fill cannot be cancelled.</p>
+
+<h3 id="swap-from-your-own-wallet">Swap from your own wallet</h3>
+
+<p><code class="language-plaintext highlighter-rouge">POST /v1/swaps/prepare</code> returns the route for a wallet HivemindOS does not hold. You sign and send it. Nothing is stored, nothing is spent, and no credits are charged; the 0.45% platform fee is inside the route (<code class="language-plaintext highlighter-rouge">feeBps: 45</code>).</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">sender</code></td>
+      <td>Required. The address on the source chain that signs and pays.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">recipient</code></td>
+      <td>Required when the swap arrives on the other kind of chain (EVM and Solana). Otherwise it defaults to <code class="language-plaintext highlighter-rouge">sender</code>.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">from</code>, <code class="language-plaintext highlighter-rouge">to</code>, amount fields, <code class="language-plaintext highlighter-rouge">request</code>, <code class="language-plaintext highlighter-rouge">slippageBps</code>, <code class="language-plaintext highlighter-rouge">defaultChain</code></td>
+      <td>As above.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Because this route does not read your balance, it refuses “all” or a share of a balance: name an amount to spend or to receive. It can start on any chain the router serves, not only the three HivemindOS wallets start on.</p>
+
+<p>The response:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"custody"</span><span class="p">:</span><span class="w"> </span><span class="s2">"self"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"expiresInSeconds"</span><span class="p">:</span><span class="w"> </span><span class="mi">30</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"route"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
+    </span><span class="nl">"from"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nl">"symbol"</span><span class="p">:</span><span class="w"> </span><span class="s2">"USDC"</span><span class="p">,</span><span class="w"> </span><span class="nl">"chain"</span><span class="p">:</span><span class="w"> </span><span class="s2">"base"</span><span class="p">,</span><span class="w"> </span><span class="nl">"amount"</span><span class="p">:</span><span class="w"> </span><span class="s2">"50"</span><span class="p">,</span><span class="w"> </span><span class="nl">"amountAtomic"</span><span class="p">:</span><span class="w"> </span><span class="s2">"50000000"</span><span class="w"> </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"to"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nl">"symbol"</span><span class="p">:</span><span class="w"> </span><span class="s2">"SOL"</span><span class="p">,</span><span class="w"> </span><span class="nl">"chain"</span><span class="p">:</span><span class="w"> </span><span class="s2">"solana"</span><span class="p">,</span><span class="w"> </span><span class="nl">"amount"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0.31"</span><span class="p">,</span><span class="w"> </span><span class="nl">"amountAtomic"</span><span class="p">:</span><span class="w"> </span><span class="s2">"310000000"</span><span class="w"> </span><span class="p">},</span><span class="w">
+    </span><span class="nl">"sender"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0x…"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"recipient"</span><span class="p">:</span><span class="w"> </span><span class="s2">"So1…"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"tradeType"</span><span class="p">:</span><span class="w"> </span><span class="s2">"EXACT_INPUT"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"crossChain"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"minimumOutputAmount"</span><span class="p">:</span><span class="w"> </span><span class="s2">"306900000"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"priceImpactPercent"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.62</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"estimatedInputUsd"</span><span class="p">:</span><span class="w"> </span><span class="mi">50</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"estimatedOutputUsd"</span><span class="p">:</span><span class="w"> </span><span class="mf">49.69</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"estimatedNetworkFeeUsd"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.02</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"estimatedSeconds"</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"feeBps"</span><span class="p">:</span><span class="w"> </span><span class="mi">45</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"routeId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0x…"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"interpretation"</span><span class="p">:</span><span class="w"> </span><span class="s2">"50 USDC on Base → SOL on Solana"</span><span class="p">,</span><span class="w">
+    </span><span class="nl">"transactions"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+      </span><span class="p">{</span><span class="w"> </span><span class="nl">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"evm"</span><span class="p">,</span><span class="w"> </span><span class="nl">"chainId"</span><span class="p">:</span><span class="w"> </span><span class="mi">8453</span><span class="p">,</span><span class="w"> </span><span class="nl">"step"</span><span class="p">:</span><span class="w"> </span><span class="s2">"approve"</span><span class="p">,</span><span class="w"> </span><span class="nl">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Approve USDC"</span><span class="p">,</span><span class="w"> </span><span class="nl">"to"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0x…"</span><span class="p">,</span><span class="w"> </span><span class="nl">"data"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0x…"</span><span class="p">,</span><span class="w"> </span><span class="nl">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0"</span><span class="w"> </span><span class="p">},</span><span class="w">
+      </span><span class="p">{</span><span class="w"> </span><span class="nl">"kind"</span><span class="p">:</span><span class="w"> </span><span class="s2">"evm"</span><span class="p">,</span><span class="w"> </span><span class="nl">"chainId"</span><span class="p">:</span><span class="w"> </span><span class="mi">8453</span><span class="p">,</span><span class="w"> </span><span class="nl">"step"</span><span class="p">:</span><span class="w"> </span><span class="s2">"deposit"</span><span class="p">,</span><span class="w"> </span><span class="nl">"description"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Deposit"</span><span class="p">,</span><span class="w"> </span><span class="nl">"to"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0x…"</span><span class="p">,</span><span class="w"> </span><span class="nl">"data"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0x…"</span><span class="p">,</span><span class="w"> </span><span class="nl">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"0"</span><span class="w"> </span><span class="p">}</span><span class="w">
+    </span><span class="p">],</span><span class="w">
+    </span><span class="nl">"warnings"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="w">
+  </span><span class="p">}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>The values above are illustrative. Sign and send <code class="language-plaintext highlighter-rouge">transactions</code> in order, and wait for each to confirm before sending the next. An EVM route is often an approval followed by the swap itself.</p>
+
+<p>HivemindOS checks every transaction before returning it:</p>
+
+<ul>
+  <li>EVM calls only reach contracts the router publishes, or approve or transfer the token you pay with to one of them, for no more than the amount.</li>
+  <li>A Solana transaction is signed only by <code class="language-plaintext highlighter-rouge">sender</code>, calls only the router’s published programs and standard Solana programs, sends SOL only to <code class="language-plaintext highlighter-rouge">sender</code> or a published solver, and never approves a delegate.</li>
+</ul>
+
+<p>Prices hold for about 30 seconds. Sign promptly, or prepare again.</p>
+
+<h4 id="evm-wallet">EVM wallet</h4>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">prepared</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">swaps</span><span class="p">.</span><span class="nx">prepare</span><span class="p">({</span>
+  <span class="na">from</span><span class="p">:</span> <span class="dl">"</span><span class="s2">base:usdc</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">to</span><span class="p">:</span> <span class="dl">"</span><span class="s2">arbitrum:eth</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">amount</span><span class="p">:</span> <span class="dl">"</span><span class="s2">50</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">sender</span><span class="p">:</span> <span class="nx">account</span><span class="p">,</span>
+<span class="p">});</span>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">prepared</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">prepared</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+
+<span class="kd">const</span> <span class="nx">hex</span> <span class="o">=</span> <span class="p">(</span><span class="nx">value</span><span class="p">:</span> <span class="kr">string</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="s2">`0x</span><span class="p">${</span><span class="nx">BigInt</span><span class="p">(</span><span class="nx">value</span><span class="p">).</span><span class="nx">toString</span><span class="p">(</span><span class="mi">16</span><span class="p">)}</span><span class="s2">`</span><span class="p">;</span>
+<span class="k">for</span> <span class="p">(</span><span class="kd">const</span> <span class="nx">tx</span> <span class="k">of</span> <span class="nx">prepared</span><span class="p">.</span><span class="nx">route</span><span class="p">.</span><span class="nx">transactions</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">if</span> <span class="p">(</span><span class="nx">tx</span><span class="p">.</span><span class="nx">kind</span> <span class="o">!==</span> <span class="dl">"</span><span class="s2">evm</span><span class="dl">"</span><span class="p">)</span> <span class="k">continue</span><span class="p">;</span>
+  <span class="k">await</span> <span class="nx">ethereum</span><span class="p">.</span><span class="nx">request</span><span class="p">({</span> <span class="na">method</span><span class="p">:</span> <span class="dl">"</span><span class="s2">wallet_switchEthereumChain</span><span class="dl">"</span><span class="p">,</span> <span class="na">params</span><span class="p">:</span> <span class="p">[{</span> <span class="na">chainId</span><span class="p">:</span> <span class="nx">hex</span><span class="p">(</span><span class="nb">String</span><span class="p">(</span><span class="nx">tx</span><span class="p">.</span><span class="nx">chainId</span><span class="p">))</span> <span class="p">}]</span> <span class="p">});</span>
+  <span class="kd">const</span> <span class="nx">hash</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">ethereum</span><span class="p">.</span><span class="nx">request</span><span class="p">({</span>
+    <span class="na">method</span><span class="p">:</span> <span class="dl">"</span><span class="s2">eth_sendTransaction</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">params</span><span class="p">:</span> <span class="p">[{</span> <span class="na">from</span><span class="p">:</span> <span class="nx">account</span><span class="p">,</span> <span class="na">to</span><span class="p">:</span> <span class="nx">tx</span><span class="p">.</span><span class="nx">to</span><span class="p">,</span> <span class="na">data</span><span class="p">:</span> <span class="nx">tx</span><span class="p">.</span><span class="nx">data</span><span class="p">,</span> <span class="na">value</span><span class="p">:</span> <span class="nx">hex</span><span class="p">(</span><span class="nx">tx</span><span class="p">.</span><span class="nx">value</span><span class="p">),</span> <span class="p">...(</span><span class="nx">tx</span><span class="p">.</span><span class="nx">gas</span> <span class="p">?</span> <span class="p">{</span> <span class="na">gas</span><span class="p">:</span> <span class="nx">hex</span><span class="p">(</span><span class="nx">tx</span><span class="p">.</span><span class="nx">gas</span><span class="p">)</span> <span class="p">}</span> <span class="p">:</span> <span class="p">{})</span> <span class="p">}],</span>
+  <span class="p">});</span>
+  <span class="k">await</span> <span class="nx">waitForReceipt</span><span class="p">(</span><span class="nx">hash</span><span class="p">);</span> <span class="c1">// your provider's receipt wait</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="solana-wallet">Solana wallet</h4>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">Connection</span><span class="p">,</span> <span class="nx">PublicKey</span><span class="p">,</span> <span class="nx">TransactionInstruction</span><span class="p">,</span> <span class="nx">TransactionMessage</span><span class="p">,</span> <span class="nx">VersionedTransaction</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@solana/web3.js</span><span class="dl">"</span><span class="p">;</span>
+
+<span class="kd">const</span> <span class="nx">prepared</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">swaps</span><span class="p">.</span><span class="nx">prepare</span><span class="p">({</span>
+  <span class="na">request</span><span class="p">:</span> <span class="dl">"</span><span class="s2">swap 2 sol to usdc on base</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">sender</span><span class="p">:</span> <span class="nx">wallet</span><span class="p">.</span><span class="nx">publicKey</span><span class="p">.</span><span class="nx">toBase58</span><span class="p">(),</span>
+  <span class="na">recipient</span><span class="p">:</span> <span class="dl">"</span><span class="s2">0x1111111111111111111111111111111111111111</span><span class="dl">"</span><span class="p">,</span>
+<span class="p">});</span>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">prepared</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">prepared</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+
+<span class="kd">const</span> <span class="nx">connection</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">Connection</span><span class="p">(</span><span class="dl">"</span><span class="s2">https://api.mainnet-beta.solana.com</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">confirmed</span><span class="dl">"</span><span class="p">);</span>
+<span class="k">for</span> <span class="p">(</span><span class="kd">const</span> <span class="nx">tx</span> <span class="k">of</span> <span class="nx">prepared</span><span class="p">.</span><span class="nx">route</span><span class="p">.</span><span class="nx">transactions</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">if</span> <span class="p">(</span><span class="nx">tx</span><span class="p">.</span><span class="nx">kind</span> <span class="o">!==</span> <span class="dl">"</span><span class="s2">svm</span><span class="dl">"</span><span class="p">)</span> <span class="k">continue</span><span class="p">;</span>
+  <span class="kd">let</span> <span class="nx">transaction</span><span class="p">:</span> <span class="nx">VersionedTransaction</span><span class="p">;</span>
+  <span class="k">if</span> <span class="p">(</span><span class="nx">tx</span><span class="p">.</span><span class="nx">transaction</span><span class="p">)</span> <span class="p">{</span>
+    <span class="nx">transaction</span> <span class="o">=</span> <span class="nx">VersionedTransaction</span><span class="p">.</span><span class="nx">deserialize</span><span class="p">(</span><span class="nx">Buffer</span><span class="p">.</span><span class="k">from</span><span class="p">(</span><span class="nx">tx</span><span class="p">.</span><span class="nx">transaction</span><span class="p">,</span> <span class="dl">"</span><span class="s2">base64</span><span class="dl">"</span><span class="p">));</span>
+  <span class="p">}</span> <span class="k">else</span> <span class="p">{</span>
+    <span class="c1">// Solana couldn't be reached when the route was built: rebuild it with a fresh blockhash.</span>
+    <span class="kd">const</span> <span class="nx">tables</span> <span class="o">=</span> <span class="k">await</span> <span class="nb">Promise</span><span class="p">.</span><span class="nx">all</span><span class="p">(</span><span class="nx">tx</span><span class="p">.</span><span class="nx">addressLookupTableAddresses</span><span class="p">.</span><span class="nx">map</span><span class="p">(</span><span class="k">async</span> <span class="p">(</span><span class="nx">address</span><span class="p">)</span> <span class="o">=&gt;</span>
+      <span class="p">(</span><span class="k">await</span> <span class="nx">connection</span><span class="p">.</span><span class="nx">getAddressLookupTable</span><span class="p">(</span><span class="k">new</span> <span class="nx">PublicKey</span><span class="p">(</span><span class="nx">address</span><span class="p">))).</span><span class="nx">value</span><span class="o">!</span><span class="p">));</span>
+    <span class="kd">const</span> <span class="p">{</span> <span class="nx">blockhash</span> <span class="p">}</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">connection</span><span class="p">.</span><span class="nx">getLatestBlockhash</span><span class="p">(</span><span class="dl">"</span><span class="s2">confirmed</span><span class="dl">"</span><span class="p">);</span>
+    <span class="kd">const</span> <span class="nx">instructions</span> <span class="o">=</span> <span class="p">(</span><span class="nx">tx</span><span class="p">.</span><span class="nx">instructions</span> <span class="k">as</span> <span class="kr">any</span><span class="p">[]).</span><span class="nx">map</span><span class="p">((</span><span class="nx">ix</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="k">new</span> <span class="nx">TransactionInstruction</span><span class="p">({</span>
+      <span class="na">programId</span><span class="p">:</span> <span class="k">new</span> <span class="nx">PublicKey</span><span class="p">(</span><span class="nx">ix</span><span class="p">.</span><span class="nx">programId</span><span class="p">),</span>
+      <span class="na">keys</span><span class="p">:</span> <span class="nx">ix</span><span class="p">.</span><span class="nx">keys</span><span class="p">.</span><span class="nx">map</span><span class="p">((</span><span class="na">key</span><span class="p">:</span> <span class="kr">any</span><span class="p">)</span> <span class="o">=&gt;</span> <span class="p">({</span> <span class="na">pubkey</span><span class="p">:</span> <span class="k">new</span> <span class="nx">PublicKey</span><span class="p">(</span><span class="nx">key</span><span class="p">.</span><span class="nx">pubkey</span><span class="p">),</span> <span class="na">isSigner</span><span class="p">:</span> <span class="nx">key</span><span class="p">.</span><span class="nx">isSigner</span><span class="p">,</span> <span class="na">isWritable</span><span class="p">:</span> <span class="nx">key</span><span class="p">.</span><span class="nx">isWritable</span> <span class="p">})),</span>
+      <span class="na">data</span><span class="p">:</span> <span class="nx">Buffer</span><span class="p">.</span><span class="k">from</span><span class="p">(</span><span class="nx">ix</span><span class="p">.</span><span class="nx">data</span><span class="p">,</span> <span class="dl">"</span><span class="s2">hex</span><span class="dl">"</span><span class="p">),</span> <span class="c1">// instruction data is hex, not base64</span>
+    <span class="p">}));</span>
+    <span class="nx">transaction</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">VersionedTransaction</span><span class="p">(</span><span class="k">new</span> <span class="nx">TransactionMessage</span><span class="p">({</span>
+      <span class="na">payerKey</span><span class="p">:</span> <span class="nx">wallet</span><span class="p">.</span><span class="nx">publicKey</span><span class="p">,</span>
+      <span class="na">recentBlockhash</span><span class="p">:</span> <span class="nx">blockhash</span><span class="p">,</span>
+      <span class="nx">instructions</span><span class="p">,</span>
+    <span class="p">}).</span><span class="nx">compileToV0Message</span><span class="p">(</span><span class="nx">tables</span><span class="p">));</span>
+  <span class="p">}</span>
+  <span class="kd">const</span> <span class="nx">signed</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">wallet</span><span class="p">.</span><span class="nx">signTransaction</span><span class="p">(</span><span class="nx">transaction</span><span class="p">);</span>
+  <span class="kd">const</span> <span class="nx">signature</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">connection</span><span class="p">.</span><span class="nx">sendRawTransaction</span><span class="p">(</span><span class="nx">signed</span><span class="p">.</span><span class="nx">serialize</span><span class="p">());</span>
+  <span class="k">await</span> <span class="nx">connection</span><span class="p">.</span><span class="nx">confirmTransaction</span><span class="p">(</span><span class="nx">signature</span><span class="p">,</span> <span class="dl">"</span><span class="s2">confirmed</span><span class="dl">"</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></div>
+
+<h4 id="follow-the-fill">Follow the fill</h4>
+
+<p>A same-chain route is done when its last transaction confirms. For a cross-chain route, poll with the <code class="language-plaintext highlighter-rouge">routeId</code>:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>curl https://api.hivemindos.app/v1/swaps/routes/<span class="nv">$ROUTE_ID</span> <span class="se">\</span>
+  <span class="nt">-H</span> <span class="s2">"Authorization: Bearer </span><span class="nv">$HIVEMINDOS_API_KEY</span><span class="s2">"</span>
+<span class="c"># {"ok":true,"routeId":"0x…","status":"success","filled":true,"destinationTransactionHash":"…"}</span>
+</code></pre></div></div>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">fill</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">swaps</span><span class="p">.</span><span class="nx">routeStatus</span><span class="p">(</span><span class="nx">prepared</span><span class="p">.</span><span class="nx">route</span><span class="p">.</span><span class="nx">routeId</span><span class="o">!</span><span class="p">);</span>
+<span class="k">if</span> <span class="p">(</span><span class="nx">fill</span><span class="p">.</span><span class="nx">ok</span> <span class="o">&amp;&amp;</span> <span class="nx">fill</span><span class="p">.</span><span class="nx">filled</span><span class="p">)</span> <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">fill</span><span class="p">.</span><span class="nx">destinationTransactionHash</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>A key made from an Agent Credit token cannot hold <code class="language-plaintext highlighter-rouge">wallets:transact</code>, so it cannot quote or execute swaps from HivemindOS wallets. It can use <code class="language-plaintext highlighter-rouge">POST /v1/swaps/prepare</code> and <code class="language-plaintext highlighter-rouge">GET /v1/swaps/routes/{routeId}</code> with <code class="language-plaintext highlighter-rouge">wallets:read</code>.</p>
+
 <h2 id="credit-and-asset-boundaries">Credit and asset boundaries</h2>
 
 <ul>
-  <li>HivemindOS credits pay for wallet creation, execution, signing, and managed trading work.</li>
+  <li>HivemindOS credits pay for wallet creation, execution, signing, managed trading, and executed swaps from HivemindOS wallets.</li>
   <li>Wallet assets pay the transfer or trade amount and its network fee.</li>
   <li>The server-owned pricing response defines the maximum HivemindOS credit charge.</li>
   <li>Wallet policy defines the permitted asset action.</li>
-  <li><code class="language-plaintext highlighter-rouge">creditsPerDay</code> can add a key-level daily ceiling to wallet creation, transaction execution, signature execution, and trading-order execution.</li>
+  <li><code class="language-plaintext highlighter-rouge">creditsPerDay</code> can add a key-level daily ceiling to wallet creation, transaction execution, signature execution, trading-order execution, and swap execution.</li>
 </ul>
 
 <p>HTTP 402 means the HivemindOS account balance is too low for the managed API charge. It does not mean the wallet has enough assets for the transfer or trade. Check both balances separately and present the appropriate next action.</p>

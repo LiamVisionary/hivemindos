@@ -962,6 +962,22 @@ hive-brain capsule-import <span class="nt">--capsule</span> ~/.hivemindos/brain/
 
   <p>Each note carries <code class="language-plaintext highlighter-rouge">type: conversation</code> frontmatter (session, agent, runtime, chat storage key, timestamps, keywords), a summary block with a <code class="language-plaintext highlighter-rouge">[[Agent Name]]</code> wikilink, and the redacted transcript. Index readers dedupe by <code class="language-plaintext highlighter-rouge">sessionId</code>; the last entry wins. The writer runs best-effort on session finish when the shared vault is enabled, applies the security-proxy secret redaction (<code class="language-plaintext highlighter-rouge">redactSecretText</code>) to every message before it touches the vault, and skips automation/cron transcripts and sessions without an assistant reply. Because the notes live in the vault, “check our conversations about x” works through normal tiered/full-vault recall for every agent — managed runtimes, <code class="language-plaintext highlighter-rouge">hive-brain</code>, and the Claude prompt hook alike — with no per-agent changes.</p>
 
+  <h3 id="asking-about-past-conversations">Asking about past conversations</h3>
+
+  <p>A question asked of memory on purpose (<code class="language-plaintext highlighter-rouge">hive-brain answer</code>, the <code class="language-plaintext highlighter-rouge">brain_answer_memory</code> MCP tool, or the recall action) reads past conversations differently from the context attached to every prompt:</p>
+
+  <ul>
+    <li><strong>Whole conversations when they fit.</strong> The conversations it finds come back in full, oldest first, up to 60,000 characters. Longer histories are cut to their best exchanges.</li>
+    <li><strong>Dates it names.</strong> “Two weeks ago”, “last Saturday”, “yesterday” and “in the past three months” find the conversations from those days, even when no word matches.</li>
+    <li><strong>How long ago.</strong> Every conversation is headed with its date and how many days before today it was.</li>
+  </ul>
+
+  <h3 id="conversation-facts-optional">Conversation facts (optional)</h3>
+
+  <p>Settings → Privacy &amp; security → <strong>Conversation facts for memory</strong> is off by default. When it is on, each saved conversation is read once, after it goes quiet, by a hosted HivemindOS model. The model lists the dated facts and events about your own life that it records: what you did, bought, own, spent, attended, or changed, with relative dates such as “last Saturday” resolved. A question asked of memory then lists those facts above the conversations, which is what makes questions that count or order things across many chats come out right.</p>
+
+  <p>The conversation leaves your computer for that one read and uses a small amount of credits, about a fifth of a cent per conversation. A conversation is read again only if it changes. The facts are stored beside your vault’s brain services, not in the conversation note, and the prompt-attached context does not include them.</p>
+
   <h3 id="search-policy">Search policy</h3>
 
   <p>All content searches over the vault and conversations use ripgrep (<code class="language-plaintext highlighter-rouge">rg</code>) first, fall back to plain <code class="language-plaintext highlighter-rouge">grep</code> when <code class="language-plaintext highlighter-rouge">rg</code> is unavailable, and only fall back to a full filesystem walk when neither binary works. Full-vault recall first tries the generated lexical index for ranked candidates, then falls back to <code class="language-plaintext highlighter-rouge">src/lib/services/search/ripgrep-search.ts</code> when the index is unavailable. The <code class="language-plaintext highlighter-rouge">hive-brain</code> CLI implements the same generated-index-first local fallback.</p>
