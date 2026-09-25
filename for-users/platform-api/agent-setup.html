@@ -6,8 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Configure The SuperAgent API With An Agent | HivemindOS Docs</title>
-  <meta name="description" content="Give your coding agent one setup file so it can add a secure HivemindOS SuperAgent API integration and prove it works.">
+  <title>Set Up The SuperAgent API With Your Agent | HivemindOS Docs</title>
+  <meta name="description" content="Paste one message into your coding agent. You sign in, add credits and approve on one link; the agent collects the key, saves it and proves it works.">
   <link rel="canonical" href="https://hivemindos.app/docs/for-users/platform-api/agent-setup.html">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -595,26 +595,59 @@
             </button>
           </div>
         </div>
-        <h1 id="configure-the-superagent-api-with-an-agent">Configure the SuperAgent API with an agent</h1>
+        <h1 id="set-up-the-superagent-api-with-your-agent">Set up the SuperAgent API with your agent</h1>
 
-<p>You can give a coding agent one file and let it handle the technical setup in your project.</p>
+<p>Your agent can set up the SuperAgent API in your project for you. You never copy a key: you open one link, sign in, add credits and approve, and the agent collects the key and saves it where your project keeps secrets.</p>
 
-<h2 id="copy-the-setup-file">Copy the setup file</h2>
+<h2 id="set-it-up-in-three-steps">Set it up in three steps</h2>
 
 <ol>
-  <li>Open <a href="https://hivemindos.app/superagent-api/llms.txt">hivemindos.app/superagent-api/llms.txt</a>.</li>
-  <li>Copy the whole file.</li>
-  <li>Paste it into the agent that is working in your project.</li>
-  <li>Tell the agent which HivemindOS features your product needs.</li>
+  <li>On <a href="https://hivemindos.app/superagent-api/#setup">hivemindos.app/superagent-api</a>, press <strong>Copy</strong> in “Set it up with your agent”.</li>
+  <li>Paste it into the agent working in your project: Claude Code, Codex, Cursor, Hermes or any agent that can run commands.</li>
+  <li>Send it.</li>
 </ol>
 
-<p>The file is written as an agent task. It tells the agent to inspect your project, follow its existing conventions, use the live OpenAPI contract, create the smallest useful key, store secrets privately, add the client, and run live read-only checks.</p>
+<p>The agent gives you a link and a short code. Open the link, check the code matches, then:</p>
+
+<ul>
+  <li><strong>Sign in or make an account</strong> with your email. One code does both, and the account works on any device. A passkey works too, or you can continue without an email and add one later.</li>
+  <li><strong>Add credits</strong> by card or crypto, from $5, or choose Later.</li>
+  <li><strong>Approve.</strong> The page then says the account is ready, and switches to “your agent has your key” as soon as the agent collects it.</li>
+</ul>
+
+<p>The agent saves the key as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_API_KEY</code> in your project’s <code class="language-plaintext highlighter-rouge">.env.local</code> or <code class="language-plaintext highlighter-rouge">.env</code>, makes sure git ignores that file, checks the key works, and tells you how many credits the account has.</p>
+
+<h2 id="if-your-agent-cant-run-commands">If your agent can’t run commands</h2>
+
+<p>Chat apps such as ChatGPT and Claude on the web can’t collect the key themselves. You have two options:</p>
+
+<ul>
+  <li>On the setup link, after approving, open <strong>Using a chat that can’t save files?</strong> and press <strong>Show my key</strong>. The page shows the key and the exact line to add to your <code class="language-plaintext highlighter-rouge">.env</code> file.</li>
+  <li>Or make a key yourself in the <a href="https://hivemindos.app/superagent-api/console/#keys">console</a>.</li>
+</ul>
+
+<h2 id="what-the-agent-does">What the agent does</h2>
+
+<p>The setup message points the agent at <a href="https://hivemindos.app/superagent-api/llms.txt">hivemindos.app/superagent-api/llms.txt</a>. With Node.js 18 or newer it runs a small setup script with no dependencies, <a href="https://hivemindos.app/superagent-api/setup.mjs">setup.mjs</a>, which does every step below and never prints the key. If the agent’s command times out, running it again continues the same setup.</p>
+
+<p>Without Node, the agent uses the API directly:</p>
+
+<ol>
+  <li><code class="language-plaintext highlighter-rouge">POST https://api.hivemindos.app/v1/setup-sessions</code> with a label and its name. No key is needed. The response has the link for you (<code class="language-plaintext highlighter-rouge">setupUrl</code>), the code (<code class="language-plaintext highlighter-rouge">confirmCode</code>) and a <code class="language-plaintext highlighter-rouge">claimToken</code> the agent keeps secret. Use <code class="language-plaintext highlighter-rouge">/v1/private/setup-sessions</code> to pin the key to the <a href="privacy.html">private tier</a>.</li>
+  <li>It shows you the link and the code.</li>
+  <li>It calls <code class="language-plaintext highlighter-rouge">POST https://api.hivemindos.app/v1/setup-sessions/claim</code> with <code class="language-plaintext highlighter-rouge">Authorization: Bearer &lt;claimToken&gt;</code> every 5 seconds. The answer is <code class="language-plaintext highlighter-rouge">202</code> until you approve, then <code class="language-plaintext highlighter-rouge">200</code> with the key. If that reply is lost, the same claim token gets the same key again for 10 minutes.</li>
+  <li>It saves the key and checks it with <code class="language-plaintext highlighter-rouge">GET /v1/services</code> and <code class="language-plaintext highlighter-rouge">GET /v1/credits/balance</code>.</li>
+</ol>
+
+<p>A setup link lasts 60 minutes and can be approved once. The key it makes can use every service but can never move funds: it can’t sign, send or trade from a wallet, approve actions, or manage other keys. Those stay with you.</p>
+
+<h3 id="let-the-agent-pay">Let the agent pay</h3>
+
+<p>An agent that holds an x402 wallet on Base can pay for the account itself, after you approve the exact amount. It calls <code class="language-plaintext highlighter-rouge">POST /v1/setup-sessions/fund</code> with its claim token and an <code class="language-plaintext highlighter-rouge">Idempotency-Key</code>, answers the payment challenge, and gets the key straight away. You then open the same link to take over the account the agent paid for and add your email to keep it.</p>
 
 <h2 id="keep-it-as-a-reusable-skill">Keep it as a reusable skill</h2>
 
-<p>If your agent supports skills, download <a href="https://hivemindos.app/superagent-api/SKILL.md">hivemindos.app/superagent-api/SKILL.md</a> and install it using that agent’s normal skill folder or skill manager.</p>
-
-<p>Use the prompt for a one-time setup. Use the skill when you want the agent to keep managing access, endpoint limits, MCP, capabilities, Agent Credits, tests, and audits for the project.</p>
+<p>If your agent supports skills, download <a href="https://hivemindos.app/superagent-api/SKILL.md">hivemindos.app/superagent-api/SKILL.md</a> and install it using that agent’s normal skill folder or skill manager. Use the skill when you want the agent to keep managing access, endpoint limits, MCP, capabilities, Agent Credits, tests, and audits for the project.</p>
 
 <h2 id="connect-without-writing-a-client">Connect without writing a client</h2>
 
@@ -622,13 +655,11 @@
 
 <p>See <a href="mcp.html">Connect an agent with MCP</a> for the ready-to-copy configuration and tool behavior.</p>
 
-<h2 id="what-you-may-need-to-provide">What you may need to provide</h2>
+<h2 id="manage-keys-usage-and-billing">Manage keys, usage and billing</h2>
 
-<p>The agent first looks for <code class="language-plaintext highlighter-rouge">HIVEMINDOS_API_KEY</code> in your project’s private runtime settings. If it is missing, it can create the first key with an existing <code class="language-plaintext highlighter-rouge">HIVEMINDOS_CREDIT_TOKEN</code>.</p>
+<p>The <a href="https://hivemindos.app/superagent-api/console/">console</a> shows your balance, keys, usage, request history, limits, projects and privacy tiers. Make or revoke keys there, and add credits to the one balance every service draws on.</p>
 
-<p>Add either credential directly to the secret manager or private environment used by your project. Do not paste it into chat, source code, an example env file, a public issue, or a screenshot.</p>
-
-<p>The agent should never show the secret value back to you. It should report only whether the named credential is set and whether the live checks passed.</p>
+<p>The key belongs on your server. Never put it in code that runs in a browser or a mobile app.</p>
 
 <h2 id="what-the-agent-should-finish">What the agent should finish</h2>
 

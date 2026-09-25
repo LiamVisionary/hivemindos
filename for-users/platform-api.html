@@ -702,7 +702,7 @@
 
 <h3 id="let-your-agent-configure-it">Let your agent configure it</h3>
 
-<p>Open <a href="https://hivemindos.app/superagent-api/llms.txt">the copy-paste agent setup file</a>, copy the whole page, and paste it into the coding agent working on your project. It tells the agent how to inspect your project, create a restricted key, add the client, protect secrets, discover live capabilities, and verify the integration.</p>
+<p>On <a href="https://hivemindos.app/superagent-api/#setup">hivemindos.app/superagent-api</a>, press <strong>Copy</strong> under “Set it up with your agent”, paste it into the coding agent working on your project, and send. The agent gives you one link: sign in, add credits and approve there, and the agent collects the key, saves it in your project’s env file and checks it works. You never copy a key. See <a href="platform-api/agent-setup.html">Set up the SuperAgent API with your agent</a>.</p>
 
 <p>If the agent supports reusable skills, download <a href="https://hivemindos.app/superagent-api/SKILL.md">the SuperAgent API <code class="language-plaintext highlighter-rouge">SKILL.md</code></a>. It teaches the agent how to keep managing keys, limits, capabilities, funding, tests, and audits after the first setup.</p>
 
@@ -710,8 +710,10 @@
 
 <h3 id="install-the-typescript-sdk">Install the TypeScript SDK</h3>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>npm <span class="nb">install</span> @hivemindos/sdk
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>npm <span class="nb">install </span>https://github.com/LiamVisionary/hivemindos-sdk/releases/download/v1.5.0/hivemindos-sdk-1.5.0.tgz
 </code></pre></div></div>
+
+<p>This installs the built SDK from its GitHub release and works with npm, pnpm and yarn. It is imported as <code class="language-plaintext highlighter-rouge">@hivemindos/sdk</code>.</p>
 
 <p>The API also works with any HTTPS client. All examples use JSON unless a database archive is being uploaded or downloaded.</p>
 
