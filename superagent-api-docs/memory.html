@@ -1,0 +1,1264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <script>if (location.hostname === "liamvisionary.github.io") location.replace("https://hivemindos.app/superagent-api/docs" + location.pathname.replace(/^\/hivemindos\/superagent-api-docs/, "") + location.search + location.hash);</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c0d11">
+  <title>Managed Memory And Knowledge | SuperAgent API Docs</title>
+  <meta name="description" content="Give an application typed, evolving, searchable memory through the HivemindOS SuperAgent API.">
+  <link rel="canonical" href="https://hivemindos.app/superagent-api/docs/memory.html">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/superagent-api/docs/assets/img/app-icon-1024.png">
+  <link rel="apple-touch-icon" href="/superagent-api/docs/assets/img/app-icon-1024.png">
+  <link rel="stylesheet" href="/superagent-api/docs/assets/css/site.css">
+</head>
+<body>
+  <a class="skipLink" href="#content">Skip to content</a>
+
+  <header class="siteHeader">
+    <nav class="topNav" aria-label="Primary">
+      <button class="mobileNavButton" type="button" aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-navigation" data-nav-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brandMark" href="/superagent-api/docs/" aria-label="SuperAgent API Docs home">
+        <img class="brandIcon" src="/superagent-api/docs/assets/img/app-icon-1024.png" alt="" width="40" height="40" aria-hidden="true">
+        <span class="brandName">HivemindOS</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+        <span class="brandEdition">SuperAgent API</span>
+      </a>
+      <div class="topLinks">
+        
+          <a href="/superagent-api/docs/">Overview</a>
+        
+          <a href="/superagent-api/docs/explorer.html">Interactive Reference</a>
+        
+          <a href="https://hivemindos.app/superagent-api/console/">Console</a>
+        
+          <a href="https://hivemindos.app/docs/">HivemindOS Docs</a>
+        
+      </div>
+      <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
+        <span>GitHub</span>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 .2a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.49c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.08-1.88 3.75-3.66 3.95.29.25.54.74.54 1.5l-.01 2.22c0 .21.14.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <button class="navBackdrop" type="button" aria-label="Close documentation menu" data-nav-backdrop></button>
+
+  <div class="docFrame">
+    <aside id="docs-navigation" class="docSidebar" aria-label="Documentation navigation">
+      <div class="sidebarHeader">
+        <span class="sidebarKicker">Explore the docs</span>
+        <button class="sidebarClose" type="button" aria-label="Close documentation menu" data-nav-close>Close</button>
+      </div>
+      <label class="searchShell" for="navSearch">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter pages" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <p class="searchEmpty" role="status" hidden>No matching pages.</p>
+      <nav class="sideNav">
+        
+          <section class="navSection">
+            <h2>Start</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/">Overview</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/agent-setup.html">Agent Setup</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/authentication.html">Authentication And Keys</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/pay-per-call.html">Pay Per Call With x402</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/mcp.html">Connect With MCP</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/limits.html">Endpoint Limits</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Build</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/services.html">Service Access</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/answer-engine.html">AI Web Search</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink isActive" aria-current="page" href="/superagent-api/docs/memory.html">Managed Memory</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/benchmarks.html">Memory Benchmarks</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/capabilities-agents.html">Capabilities And Agents</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/compute-faucet.html">Compute, MCP, And Testnet</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/files-connections.html">Files And Connections</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/databases.html">Managed Databases</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/wallets-trading.html">Wallets And Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/runs-webhooks.html">Runs And Webhooks</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Operate</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/privacy.html">Private And Confidential Access</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/projects-security.html">Projects And Isolation</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/usage-audit.html">Usage And Audit</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Reference</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/reference.html">API Reference</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/explorer.html">Interactive Reference</a>
+              
+            
+          </section>
+        
+      </nav>
+    </aside>
+
+    <main id="content" class="docMain" tabindex="-1">
+      <article class="docContent">
+        <div class="pageTools">
+          <p class="pageKicker">SuperAgent API</p>
+          <div class="pageToolActions">
+            
+            <button class="copyPageButton" type="button" data-copy-page>
+              <span aria-hidden="true">⧉</span> Copy link
+            </button>
+          </div>
+        </div>
+        <h1 id="managed-memory-and-knowledge">Managed memory and knowledge</h1>
+
+<p>Cloud Superbrain lets a hosted app remember useful context between calls. It can save facts and decisions, find them by words or meaning, answer from them with citations, and keep earlier versions when something changes.</p>
+
+<p>It does not need a desktop session or an Obsidian vault. Each HivemindOS account receives an isolated memory store.</p>
+
+<p>Use <code class="language-plaintext highlighter-rouge">cloud-superbrain</code> when your hosted product needs durable memory. Use the local Hive Superbrain when the user’s Obsidian vault should remain the editable source of truth.</p>
+
+<h2 id="choose-a-recall-mode">Choose a recall mode</h2>
+
+<table>
+  <thead>
+    <tr>
+      <th>Mode</th>
+      <th>Operation</th>
+      <th>Result</th>
+      <th style="text-align: right">Charge</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Lexical search</td>
+      <td><code class="language-plaintext highlighter-rouge">memory.search</code></td>
+      <td>Fast matches from titles, content, tags, projects, entities, aliases, and usage.</td>
+      <td style="text-align: right">0 credits</td>
+    </tr>
+    <tr>
+      <td>Semantic recall</td>
+      <td><code class="language-plaintext highlighter-rouge">memory.recall</code></td>
+      <td>Hybrid meaning and keyword matches, with the evidence used for ranking.</td>
+      <td style="text-align: right">1 credit</td>
+    </tr>
+    <tr>
+      <td>Memory Answer</td>
+      <td><code class="language-plaintext highlighter-rouge">memory.answer</code></td>
+      <td>A concise answer grounded in returned memories, plus cited memory ids.</td>
+      <td style="text-align: right">5 credits with the default reader</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Semantic Recall and Memory Answer require a paid Cloud Superbrain plan. Lexical search, storage within the account’s plan, history, graph reads, capsules, and health checks do not consume agent credits. Read <code class="language-plaintext highlighter-rouge">catalog.get</code> before onboarding an account so your product can show its current plan, storage limits, and availability.</p>
+
+<p>Semantic indexing runs when memory changes, so there is no idle compute charge to keep a model running. A newly written memory is immediately available to lexical search and becomes eligible for Semantic Recall after its index status is ready. Use <code class="language-plaintext highlighter-rouge">memory.health</code> when a workflow must confirm that state.</p>
+
+<p>Operational memories such as action and handoff receipts stay out of default recall so routine execution history does not crowd durable facts, preferences, and decisions. Request a specific operational <code class="language-plaintext highlighter-rouge">memoryType</code> or set <code class="language-plaintext highlighter-rouge">includeOperational: true</code> when that history is the subject of the lookup.</p>
+
+<details class="advancedDetails">
+  <summary>Advanced: measured hosted and local recall results</summary>
+
+  <h2 id="measured-quality-and-latency">Measured quality and latency</h2>
+
+  <p>The August 27, 2026 authenticated API benchmark used three fresh isolated hosted accounts. Every account passed all eight lexical behavior cases, all six semantic Top-1 cases, and all three grounded-answer cases, including aliases, current and historical evolution, usage ranking, operational isolation, paraphrases, and unsupported-question abstention. The equivalent local typed-memory cases also passed in every fresh run.</p>
+
+  <p>Hosted recall is not as fast as the local vault path. Across the three hosted trials, the median trial p50 was about 0.53 seconds for lexical search, 4.89 seconds for semantic recall, and 5.93 seconds for grounded answers. The corresponding local lexical/API behavior trials had a median p50 of 7.85 milliseconds. A separate 48-distractor diagnostic kept every quality check passing and measured 0.43 seconds lexical p50, 1.67 seconds semantic p50, and 2.59 seconds answer p50, which also shows that hosted latency varies with request and service state.</p>
+
+  <p>These are measured product-path snapshots, not an availability or latency promise. The result supports quality parity on the published cases, not universal parity with every private vault. See <a href="https://hivemindos.app/docs/for-users/features/shared-brain-benchmarks.html">Shared Brain Memory Benchmarks</a> for corpus sizes, repetition counts, and limitations.</p>
+
+  <p>On September 23, 2026, recall of past conversations was measured on LongMemEval_S, where each question comes with about 50 past chats. Memory Answer’s reader received every piece of evidence for 85.1% of 470 answerable questions in keyword order, up from 9.6%, and answered 81.9% of a 150-question sample correctly, up from 16.7%. Memory Answer now reads with a larger model that reasons before it answers, which added about three seconds to the reader’s median time in that test.</p>
+
+  <p>In a second run, other models read the same 150 questions with the same evidence; the default reader scored 80.7% in that run. Share answered correctly, and the reader’s median time:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Reader</th>
+        <th style="text-align: right">Correct</th>
+        <th style="text-align: right">Median time</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/deepseek-ai/deepseek-v4-flash-0731</code></td>
+        <td style="text-align: right">82.1%</td>
+        <td style="text-align: right">4.0 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/qwen/qwen3-30b-a3b-fp8</code> (default)</td>
+        <td style="text-align: right">80.7%</td>
+        <td style="text-align: right">4.0 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/zai-org/glm-4.7-flash</code></td>
+        <td style="text-align: right">80.3%</td>
+        <td style="text-align: right">18.7 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/google/gemma-4-26b-a4b-it</code></td>
+        <td style="text-align: right">78.7%</td>
+        <td style="text-align: right">23.0 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/openai/gpt-oss-120b</code>, low effort</td>
+        <td style="text-align: right">78.0%</td>
+        <td style="text-align: right">2.2 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/openai/gpt-oss-20b</code>, low effort</td>
+        <td style="text-align: right">69.3%</td>
+        <td style="text-align: right">1.3 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/meta/llama-4-scout-17b-16e-instruct</code></td>
+        <td style="text-align: right">68.7%</td>
+        <td style="text-align: right">2.0 s</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">@cf/mistralai/mistral-small-3.1-24b-instruct</code></td>
+        <td style="text-align: right">54.0%</td>
+        <td style="text-align: right">1.6 s</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>DeepSeek V4 Flash and GLM 4.7 Flash returned no answer for 5 and 3 questions; their shares count the questions they answered (119 of 145 and 118 of 147), and over all 150 they are 79.3% and 78.7%. Scores within a few points of each other are within this sample’s noise.</p>
+
+</details>
+
+<h2 id="create-typed-memory">Create typed memory</h2>
+
+<p>Only <code class="language-plaintext highlighter-rouge">title</code> and <code class="language-plaintext highlighter-rouge">contentText</code> are needed for a basic Markdown memory. Add a stable <code class="language-plaintext highlighter-rouge">memoryKey</code> when later calls should update one canonical subject instead of creating unrelated records.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">saved</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.create</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">title</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Aurora compute funding decision</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">contentText</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Compute capacity starts only after the customer-funded job is accepted.</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">memoryKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">decision:aurora-compute-funding</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">memoryType</span><span class="p">:</span> <span class="dl">"</span><span class="s2">decision</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">project</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Aurora</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">confidence</span><span class="p">:</span> <span class="mf">0.96</span><span class="p">,</span>
+    <span class="na">tags</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">compute</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">commercial</span><span class="dl">"</span><span class="p">],</span>
+    <span class="na">entities</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">Project Aurora</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">Hive Compute</span><span class="dl">"</span><span class="p">],</span>
+    <span class="na">evidenceCount</span><span class="p">:</span> <span class="mi">3</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-compute-decision-v1</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">saved</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">saved</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+<span class="kd">const</span> <span class="nx">memoryId</span> <span class="o">=</span> <span class="nx">saved</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">memory</span><span class="p">.</span><span class="nx">id</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>Supported memory types are <code class="language-plaintext highlighter-rouge">instruction</code>, <code class="language-plaintext highlighter-rouge">fact</code>, <code class="language-plaintext highlighter-rouge">decision</code>, <code class="language-plaintext highlighter-rouge">goal</code>, <code class="language-plaintext highlighter-rouge">commitment</code>, <code class="language-plaintext highlighter-rouge">preference</code>, <code class="language-plaintext highlighter-rouge">relationship</code>, <code class="language-plaintext highlighter-rouge">context</code>, <code class="language-plaintext highlighter-rouge">event</code>, <code class="language-plaintext highlighter-rouge">learning</code>, <code class="language-plaintext highlighter-rouge">observation</code>, <code class="language-plaintext highlighter-rouge">artifact</code>, <code class="language-plaintext highlighter-rouge">error</code>, <code class="language-plaintext highlighter-rouge">action</code>, and <code class="language-plaintext highlighter-rouge">knowledge</code>. Optional fields include <code class="language-plaintext highlighter-rouge">path</code>, <code class="language-plaintext highlighter-rouge">kind</code>, <code class="language-plaintext highlighter-rouge">mimeType</code>, <code class="language-plaintext highlighter-rouge">mediaUrl</code>, <code class="language-plaintext highlighter-rouge">links</code>, <code class="language-plaintext highlighter-rouge">metaTags</code>, <code class="language-plaintext highlighter-rouge">aliases</code>, <code class="language-plaintext highlighter-rouge">sourceType</code>, <code class="language-plaintext highlighter-rouge">actorRole</code>, <code class="language-plaintext highlighter-rouge">memoryOrigin</code>, and <code class="language-plaintext highlighter-rouge">cognitiveStage</code>.</p>
+
+<p>Cloud Superbrain rejects content that appears to contain a credential, private key, bearer token, seed phrase, or mnemonic. Store only the credential name and safe set/missing status; keep the value in a secret manager.</p>
+
+<p>Use <code class="language-plaintext highlighter-rouge">memory.batch</code> for up to 25 already-bounded records. Each accepted record returns its own id and immutable generation receipt.</p>
+
+<h2 id="search-and-answer">Search and answer</h2>
+
+<p>Lexical search is useful for autocomplete, retrieval before a model call, and predictable no-charge lookups:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">search</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.search</span><span class="dl">"</span><span class="p">,</span>
+  <span class="kc">undefined</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">query</span><span class="p">:</span> <span class="p">{</span>
+      <span class="na">q</span><span class="p">:</span> <span class="dl">"</span><span class="s2">customer-funded compute</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">project</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Aurora</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">memoryType</span><span class="p">:</span> <span class="dl">"</span><span class="s2">decision</span><span class="dl">"</span><span class="p">,</span>
+      <span class="na">limit</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-memory-search-001</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>Use semantic recall when wording may differ from the saved memory:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">recalled</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.recall</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Who pays before an Aurora GPU starts?</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">mode</span><span class="p">:</span> <span class="dl">"</span><span class="s2">hybrid</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">project</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Aurora</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">limit</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-memory-recall-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>Use Memory Answer when the caller wants a finished, grounded response:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">answered</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.answer</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">What is the Aurora compute funding policy?</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">limit</span><span class="p">:</span> <span class="mi">8</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-memory-answer-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">answered</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">answer</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">answered</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">citedMemoryIds</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>If no relevant managed memory can support an answer, the request returns a
+not-found response and releases the credit reservation. You are not charged.
+For a question of four or more words, a memory counts as support when it
+matches at least two of the question’s words, the exact phrase, or its
+meaning; one shared word is not enough.</p>
+
+<p>Every hit includes its memory fields, excerpt, total score, matched signals, and score details. The excerpt is the part of the memory that holds the most words of the question. Search matches word forms, so <code class="language-plaintext highlighter-rouge">weddings</code> finds <code class="language-plaintext highlighter-rouge">wedding</code>, and a word that few of the account’s memories contain counts for more than one most of them share. Set <code class="language-plaintext highlighter-rouge">trackUsage: false</code> when a diagnostic lookup should not influence the soft usage signal. <code class="language-plaintext highlighter-rouge">memory.usage</code> can explicitly record retrieved or final-answer use for known memory ids.</p>
+
+<h2 id="choose-who-reads-the-answer">Choose who reads the answer</h2>
+
+<p>Memory Answer has a default reader, and you can name another. <code class="language-plaintext highlighter-rouge">memory.models</code> lists every model that can read an answer, with its privacy tier, the reasoning settings it takes, its per-token price, and the most one answer with it can cost. The default is marked <code class="language-plaintext highlighter-rouge">default: true</code>. It needs no key.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">readers</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.models</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">memory-readers-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>Pass a reader’s <code class="language-plaintext highlighter-rouge">id</code> as <code class="language-plaintext highlighter-rouge">model</code>, and <code class="language-plaintext highlighter-rouge">reasoningEffort</code> (<code class="language-plaintext highlighter-rouge">none</code>, <code class="language-plaintext highlighter-rouge">low</code>, <code class="language-plaintext highlighter-rouge">medium</code> or <code class="language-plaintext highlighter-rouge">high</code>) when that reader lists it:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">answered</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.answer</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">What is the Aurora compute funding policy?</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">model</span><span class="p">:</span> <span class="dl">"</span><span class="s2">@cf/openai/gpt-oss-120b</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">reasoningEffort</span><span class="p">:</span> <span class="dl">"</span><span class="s2">medium</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-memory-answer-002</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">answered</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">reader</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>A setting a reader does not take is refused before anything is charged, never quietly changed. The response’s <code class="language-plaintext highlighter-rouge">reader</code> names the model that answered.</p>
+
+<p><strong>Price.</strong> With the default reader, an answer costs 5 credits. Another reader adds what it costs above the default for the same question, at HivemindOS rates, rounded up to a whole credit. A reader that costs less than the default still costs 5 credits. When the answer starts, the account is reserved the reader’s <code class="language-plaintext highlighter-rouge">maximumCredits</code>; it is then charged for the question that was actually sent, and the rest is released.</p>
+
+<p><strong>Private and confidential answers.</strong> Pass <code class="language-plaintext highlighter-rouge">private: true</code>, or call through the private base URL, to have the answer read only by a model that keeps nothing it is sent. Under the confidential base, name a reader that runs in an attested enclave as <code class="language-plaintext highlighter-rouge">model</code>: the default reader is private but not attested, so there is no default there. Either way the answer never uses Turbo ordering, and passing <code class="language-plaintext highlighter-rouge">turbo: true</code> with it is refused. <code class="language-plaintext highlighter-rouge">memory.models</code> under a tier’s base, or with <code class="language-plaintext highlighter-rouge">privacy</code> in its query, lists the readers that qualify.</p>
+
+<p>Each memory keeps the strictest tier it was written in, and an answer reads it only with a reader that meets that tier. A memory written under the confidential base is never sent to an embedding model, so recall finds it by keyword. See <a href="privacy.html">private and confidential access</a>.</p>
+
+<h2 id="past-conversations">Past conversations</h2>
+
+<p>Save a chat transcript as a memory and recall reads it by exchange: a user message and the replies that follow it. A memory is read as a transcript when its turns are marked <code class="language-plaintext highlighter-rouge">**User:**</code> and <code class="language-plaintext highlighter-rouge">**Assistant:**</code> (or an agent’s name), as conversation notes synced from the desktop brain are, or when its lines start with <code class="language-plaintext highlighter-rouge">User:</code> and <code class="language-plaintext highlighter-rouge">Assistant:</code>. Give the conversation’s date as <code class="language-plaintext highlighter-rouge">startedAt</code> or <code class="language-plaintext highlighter-rouge">date</code> in the memory’s frontmatter; without one, the date the memory was saved is used.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.create</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">title</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Support chat with Dana</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">path</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Conversations/2026-09-14-dana.md</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">contentText</span><span class="p">:</span> <span class="p">[</span>
+      <span class="dl">"</span><span class="s2">---</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">startedAt: 2026-09-14T15:02:00Z</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">---</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">User: The replacement blender arrived cracked, same as the first one.</span><span class="dl">"</span><span class="p">,</span>
+      <span class="dl">"</span><span class="s2">Assistant: Sorry about that. I've refunded the second order to the original card.</span><span class="dl">"</span><span class="p">,</span>
+    <span class="p">].</span><span class="nx">join</span><span class="p">(</span><span class="dl">"</span><span class="se">\n</span><span class="dl">"</span><span class="p">),</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">support-chat-dana-0914</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>When a search or recall returns a transcript among its hits, the response also carries <code class="language-plaintext highlighter-rouge">conversationEvidence</code>: the exchanges across the account’s transcripts that best match the question, laid out oldest first under each conversation’s date. <code class="language-plaintext highlighter-rouge">conversationEvidenceMemoryIds</code> names the memories they came from. A question about one detail of a long conversation gets the exchange that states it, not the transcript’s opening lines.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Default</th>
+      <th>Effect</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">evidenceChars</code></td>
+      <td>4,200</td>
+      <td>The size of <code class="language-plaintext highlighter-rouge">conversationEvidence</code>, from 1,000 to 24,000 characters.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">evidence</code></td>
+      <td>On, except at <code class="language-plaintext highlighter-rouge">detail: "abstract"</code></td>
+      <td><code class="language-plaintext highlighter-rouge">false</code> leaves the exchanges out; <code class="language-plaintext highlighter-rouge">true</code> adds them at any detail tier.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Memory Answer reads the same exchanges, together with the best-matching part of every other supporting memory, and is told today’s date, so questions like “how long ago” and “which came first” can be answered. When the conversations it found fit in the answer’s context whole, it reads every exchange of them in full, oldest first. When they are longer, the Turbo decision model first orders the exchanges by how likely each one is to hold the answer, and the answer reads short excerpts of the best 12,000 characters. The decision model is not a private model, so it orders exchanges only when every one of them was written in the standard tier, and a private answer never uses it. Pass <code class="language-plaintext highlighter-rouge">turbo: false</code> to keep keyword order; the response’s <code class="language-plaintext highlighter-rouge">evidenceOrder</code> says which order was used (<code class="language-plaintext highlighter-rouge">keyword</code> when the conversations were read whole). Neither choice changes the price.</p>
+
+<p><code class="language-plaintext highlighter-rouge">memory.search</code> responses carry a <code class="language-plaintext highlighter-rouge">Server-Timing: memory;dur=&lt;ms&gt;</code> header: the time the search itself took, apart from the network between you and the service.</p>
+
+<h2 id="ask-for-only-as-much-as-you-need">Ask for only as much as you need</h2>
+
+<p>Recall returns whole memories by default, so a caller that only wants to know <em>which</em> memories are relevant still receives every body it will not read. Pass <code class="language-plaintext highlighter-rouge">detail</code> to choose how much of each hit comes back.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th><code class="language-plaintext highlighter-rouge">detail</code></th>
+      <th>Each hit carries</th>
+      <th>Good for</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">abstract</code></td>
+      <td>Id, title, type, project, status, updated date, score, and a one-line excerpt.</td>
+      <td>Surveying candidates, then re-requesting the few that matter.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">overview</code></td>
+      <td>The full metadata record, ranked excerpt, and score details — no body.</td>
+      <td>Ranking and filtering when the body is not needed yet.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">full</code></td>
+      <td>Everything, including <code class="language-plaintext highlighter-rouge">contentText</code>. <strong>The default.</strong></td>
+      <td>Reading the memory.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">survey</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.recall</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Who pays before an Aurora GPU starts?</span><span class="dl">"</span><span class="p">,</span> <span class="na">mode</span><span class="p">:</span> <span class="dl">"</span><span class="s2">hybrid</span><span class="dl">"</span><span class="p">,</span> <span class="na">detail</span><span class="p">:</span> <span class="dl">"</span><span class="s2">abstract</span><span class="dl">"</span><span class="p">,</span> <span class="na">limit</span><span class="p">:</span> <span class="mi">8</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-memory-survey-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">detail</code> narrows the response only. It never changes which memories rank, their order, the grounding behind <code class="language-plaintext highlighter-rouge">memory.answer</code>, or what a recall costs — a narrowed recall is charged exactly like a full one. The response echoes the <code class="language-plaintext highlighter-rouge">detail</code> it applied.</p>
+
+<h2 id="evolve-instead-of-contradicting">Evolve instead of contradicting</h2>
+
+<p>When reviewed information replaces an active memory, use <code class="language-plaintext highlighter-rouge">memory.evolve</code>. The old record becomes <code class="language-plaintext highlighter-rouge">superseded</code>, the new record becomes the active canonical head, and both remain linked in the evolution chain.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">evolved</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.evolve</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span>
+    <span class="na">contentText</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Aurora capacity starts only after the customer's maximum charge is reserved.</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">evolutionReason</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Clarified when funding is secured.</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+  <span class="p">{</span>
+    <span class="na">pathParameters</span><span class="p">:</span> <span class="p">{</span> <span class="nx">memoryId</span> <span class="p">},</span>
+    <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-compute-decision-v2</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">memory.update</code> changes the current record in place. Use it for metadata or wording fixes that do not replace the underlying truth. <code class="language-plaintext highlighter-rouge">memory.delete</code> permanently removes a non-starter memory and requires an exact SuperAgent approval. An operation-only deletion key therefore needs <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.delete</code>, <code class="language-plaintext highlighter-rouge">approvals.create</code>, and <code class="language-plaintext highlighter-rouge">approvals.decide</code> in <code class="language-plaintext highlighter-rouge">allowedOperations</code>; include <code class="language-plaintext highlighter-rouge">apiKeys.revoke</code> only when the worker must also revoke its own key. Prefer <code class="language-plaintext highlighter-rouge">archived</code> or evolution when history still matters.</p>
+
+<details class="advancedDetails">
+  <summary>Advanced: history, knowledge graphs, capsules, and the full operation map</summary>
+
+  <h2 id="keep-the-store-clean">Keep the store clean</h2>
+
+  <p>Cloud Superbrain rejects a second active memory on the same <code class="language-plaintext highlighter-rouge">memoryKey</code>, but two memories can still say the same thing under different keys. <code class="language-plaintext highlighter-rouge">memory.consolidate</code> finds them: it groups near-duplicates within a memory type by how much distinctive vocabulary they share, spots memories whose text says they correct an earlier note but were written without <code class="language-plaintext highlighter-rouge">supersedes</code>, and lists aged-out memories that nothing has ever retrieved.</p>
+
+  <p>It reports rather than merges. Merging two memories discards whichever wording loses, so each group comes back with the exact <code class="language-plaintext highlighter-rouge">memory.evolve</code> call that would consolidate it, for you to review. The one change it will make is archiving the aged-out candidates, and only when you pass <code class="language-plaintext highlighter-rouge">applyArchives: true</code> — archiving is reversible and applies only to <code class="language-plaintext highlighter-rouge">context</code>, <code class="language-plaintext highlighter-rouge">event</code>, <code class="language-plaintext highlighter-rouge">observation</code>, and <code class="language-plaintext highlighter-rouge">action</code> memories older than 120 days with no retrieval history.</p>
+
+  <p><code class="language-plaintext highlighter-rouge">memory.health</code> now also reports <code class="language-plaintext highlighter-rouge">duplicatePressure</code>, so a scheduled check can watch the number without running a full consolidation pass.</p>
+
+  <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">report</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">memory.consolidate</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">applyArchives</span><span class="p">:</span> <span class="kc">false</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-consolidate-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="k">for</span> <span class="p">(</span><span class="kd">const</span> <span class="nx">group</span> <span class="k">of</span> <span class="nx">report</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">duplicateGroups</span><span class="p">)</span> <span class="p">{</span>
+  <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">group</span><span class="p">.</span><span class="nx">canonicalTitle</span><span class="p">,</span> <span class="nx">group</span><span class="p">.</span><span class="nx">memberIds</span><span class="p">,</span> <span class="nx">group</span><span class="p">.</span><span class="nx">evolveHint</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>  </div>
+
+  <h2 id="learn-from-what-your-agents-actually-did">Learn from what your agents actually did</h2>
+
+  <p><code class="language-plaintext highlighter-rouge">memory.minePatterns</code> reads the account’s operational memories and proposes three things worth a person’s attention: a failure signature that keeps recurring across different tasks, a workflow repeated often enough to be worth turning into a skill, and an operation running on a cadence stable enough to be worth scheduling. Test and fixture traffic is excluded, and repeated retries of one task are not counted as a pattern — only the same thing happening across genuinely different tasks.</p>
+
+  <p>It proposes and never creates. Send a candidate to <code class="language-plaintext highlighter-rouge">memory.create</code> if you want to keep it.</p>
+
+  <h2 id="look-inside-a-capsule-before-importing-it">Look inside a capsule before importing it</h2>
+
+  <p><code class="language-plaintext highlighter-rouge">capsules.open</code> returns a capsule’s manifest, an integrity verdict, and a summary of what is inside. <code class="language-plaintext highlighter-rouge">capsules.search</code> finds a memory within a capsule. <code class="language-plaintext highlighter-rouge">capsules.preview</code> reports exactly what an import would change: which memories are new, which the account already holds, and which would be refused for colliding with an active <code class="language-plaintext highlighter-rouge">memoryKey</code>. None of them write anything.</p>
+
+  <p>A capsule whose contents do not match its declared hash is still shown rather than hidden, with a warning — if a capsule is damaged, seeing what survived is more useful than seeing only an error.</p>
+
+  <h2 id="search-by-path">Search by path</h2>
+
+  <p>Memories carry a <code class="language-plaintext highlighter-rouge">path</code>, and most callers use it as a grouping. <code class="language-plaintext highlighter-rouge">memory.browse</code> summarizes those groups without returning any memory bodies: <code class="language-plaintext highlighter-rouge">detail: "abstract"</code> is about 100 tokens per group, <code class="language-plaintext highlighter-rouge">overview</code> about 2,000. Passing <code class="language-plaintext highlighter-rouge">mode: "hierarchical"</code> to <code class="language-plaintext highlighter-rouge">memory.recall</code> scores those groups before individual memories, so a memory’s neighbours come back with it and the reply names the paths it searched. Every memory stays eligible either way — hierarchy changes the order of results and never hides one.</p>
+
+  <h2 id="generations-and-historical-recall">Generations and historical recall</h2>
+
+  <p>Each write publishes an immutable generation receipt. Use:</p>
+
+  <ul>
+    <li><code class="language-plaintext highlighter-rouge">generations.list</code> to read retained generations and the visible replay boundary.</li>
+    <li><code class="language-plaintext highlighter-rouge">generations.compare</code> to find added, removed, and changed memory ids between two retained generations.</li>
+    <li><code class="language-plaintext highlighter-rouge">memory.recall</code> with <code class="language-plaintext highlighter-rouge">generationId</code> to replay a lexical question against a retained historical state.</li>
+    <li><code class="language-plaintext highlighter-rouge">temporalMode: "historical"</code> to include superseded and archived records, or <code class="language-plaintext highlighter-rouge">temporalMode: "as-of"</code> with <code class="language-plaintext highlighter-rouge">asOf</code> for a time cutoff.</li>
+  </ul>
+
+  <p>Cloud Superbrain retains up to 256 generations per account. A request outside the reported replay boundary fails instead of silently substituting newer memory.</p>
+
+  <h2 id="knowledge-nodes-and-backlinks">Knowledge nodes and backlinks</h2>
+
+  <p>Memories with type <code class="language-plaintext highlighter-rouge">knowledge</code>, a <code class="language-plaintext highlighter-rouge">knowledge</code> tag, or a path under <code class="language-plaintext highlighter-rouge">Synthesis/</code> become knowledge nodes. The registered operations are:</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Operation</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.search</code></td>
+        <td>Search knowledge-only records.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.get</code></td>
+        <td>Read one knowledge node.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.backlinks</code></td>
+        <td>Find memories connected through entities, aliases, and links.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.graph</code></td>
+        <td>Read a bounded node-and-edge overview.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>Use <code class="language-plaintext highlighter-rouge">entities</code>, <code class="language-plaintext highlighter-rouge">aliases</code>, and <code class="language-plaintext highlighter-rouge">links</code> consistently when another product needs dependable graph navigation.</p>
+
+  <h2 id="portable-capsules">Portable capsules</h2>
+
+  <p><code class="language-plaintext highlighter-rouge">capsules.export</code> returns a bounded, checksummed capsule for selected memory ids or the next page of the account. <code class="language-plaintext highlighter-rouge">capsules.import</code> verifies the schema and content hash before adding the records to the authenticated account. A capsule never grants access to its source account, and an import cannot overwrite another account’s memory.</p>
+
+  <p>Export no more than 100 memories per capsule part. Follow <code class="language-plaintext highlighter-rouge">hasMore</code> and <code class="language-plaintext highlighter-rouge">nextCursor</code> until the export is complete. Keep the capsule private when its memories are private; its checksum detects corruption but is not encryption.</p>
+
+  <h2 id="registered-operations">Registered operations</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Operation</th>
+        <th>Method</th>
+        <th>Purpose</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">catalog.get</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read plans, limits, features, and current charges.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.snapshot</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read the account’s current managed-memory snapshot.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.get</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read one memory by id.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.create</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Create or upsert one memory.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.update</code></td>
+        <td><code class="language-plaintext highlighter-rouge">PATCH</code></td>
+        <td>Update one current memory.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.delete</code></td>
+        <td><code class="language-plaintext highlighter-rouge">DELETE</code></td>
+        <td>Permanently delete one memory after approval.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.batch</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Create up to 25 memories.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.evolve</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Create a new canonical head and supersede the old one.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.search</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Run lexical search.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.recall</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Run paid hybrid semantic recall.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.answer</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Return a paid grounded answer with citations.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.models</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>List the models that can read a Memory Answer, with prices.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.usage</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Record retrieved or final-answer use.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.health</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read plan, index, generation, duplicate pressure, and usage health.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.consolidate</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Report duplicate pressure, missed corrections, and aged-out memories.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.minePatterns</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Propose recurring failures, reusable workflows, and routines from operational memories.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">memory.browse</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Survey memory paths at the abstract or overview tier.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">index.rebuild</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Rebuild indexes after an import or repair.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">generations.list</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>List retained immutable generations.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">generations.compare</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Compare two retained generations.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">capsules.export</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Export a checksummed capsule part.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">capsules.import</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Verify and import a capsule part.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">capsules.open</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Read a capsule’s manifest, integrity, and contents without importing.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">capsules.search</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Search inside a capsule without importing it.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">capsules.preview</code></td>
+        <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+        <td>Report what importing a capsule would change.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.search</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Search knowledge nodes.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.get</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read one knowledge node.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.backlinks</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read backlinks for a knowledge node.</td>
+      </tr>
+      <tr>
+        <td><code class="language-plaintext highlighter-rouge">knowledge.graph</code></td>
+        <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+        <td>Read a bounded knowledge graph.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>Restrict a worker key to only the operations it needs. For example, an answer-only service can allow <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.answer</code> and set a separate request limit on that exact selector.</p>
+
+</details>
+
+<p>Next: <a href="authentication.html">create narrow API keys</a>, <a href="limits.html">set per-operation limits</a>, or <a href="https://hivemindos.app/docs/for-users/whole-brain/brain-services.html">use the local Hive Superbrain</a>.</p>
+
+        <nav class="pageNav" aria-label="Previous and next pages" hidden>
+          <a class="pageNavCard pageNavPrev" data-page-prev href="#">
+            <span>Previous</span>
+            <strong></strong>
+          </a>
+          <a class="pageNavCard pageNavNext" data-page-next href="#">
+            <span>Next</span>
+            <strong></strong>
+          </a>
+        </nav>
+      </article>
+    </main>
+
+    <aside class="pageOutline" aria-label="On this page" hidden>
+      <p>On this page</p>
+      <nav data-page-outline></nav>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/memory.md">Improve this page ↗</a>
+    </aside>
+  </div>
+
+  <footer class="siteFooter">
+    <div>
+      <strong>HivemindOS</strong>
+      <span>The HivemindOS backend for your product.</span>
+    </div>
+    <div class="footerLinks">
+      <a href="https://hivemindos.app/superagent-api/">SuperAgent API</a>
+      <a href="https://api.hivemindos.app/openapi.json">OpenAPI</a>
+      <a href="https://hivemindos.app/docs/">HivemindOS Docs</a>
+    </div>
+  </footer>
+
+  <dialog class="imageViewer" aria-label="Expanded media viewer" data-image-viewer>
+    <header class="imageViewerBar">
+      <div class="imageViewerHeading">
+        <strong data-viewer-title>Expanded image</strong>
+        <span>Scroll to pan · Esc to close</span>
+      </div>
+      <div class="imageViewerControls" aria-label="Image zoom controls">
+        <button type="button" data-viewer-fit>Fit</button>
+        <div class="imageViewerZoomGroup">
+          <button type="button" aria-label="Zoom out" data-viewer-zoom-out>−</button>
+          <output aria-live="polite" data-viewer-zoom>100%</output>
+          <button type="button" aria-label="Zoom in" data-viewer-zoom-in>+</button>
+        </div>
+        <button class="imageViewerClose" type="button" data-viewer-close>Close <span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="imageViewerViewport" tabindex="0" data-viewer-viewport>
+      <div class="imageViewerCanvas" data-viewer-canvas></div>
+    </div>
+    <p class="imageViewerCaption" data-viewer-caption hidden></p>
+  </dialog>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const normalizePath = (href) => {
+      const url = new URL(href, window.location.href);
+      const pathname = url.pathname.replace(/index\.html$/, "");
+      return pathname.endsWith("/") ? pathname : pathname.replace(/\.html$/, "");
+    };
+
+    const currentPath = normalizePath(window.location.href);
+    const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
+    const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
+
+    if (currentIndex >= 0) {
+      navLinks[currentIndex].classList.add("isActive");
+      navLinks[currentIndex].setAttribute("aria-current", "page");
+      navLinks[currentIndex].closest("details")?.setAttribute("open", "");
+
+      const pageNav = document.querySelector(".pageNav");
+      const previous = navLinks[currentIndex - 1];
+      const next = navLinks[currentIndex + 1];
+      const wireCard = (card, link) => {
+        if (!card || !link) {
+          card?.remove();
+          return;
+        }
+        card.href = link.href;
+        card.querySelector("strong").textContent = link.textContent.trim();
+      };
+
+      wireCard(document.querySelector("[data-page-prev]"), previous);
+      wireCard(document.querySelector("[data-page-next]"), next);
+      if (pageNav && (previous || next)) pageNav.hidden = false;
+    }
+
+    const navSearch = document.querySelector("#navSearch");
+    const searchEmpty = document.querySelector(".searchEmpty");
+    navSearch?.addEventListener("input", () => {
+      const query = navSearch.value.trim().toLowerCase();
+      let visibleSections = 0;
+      document.querySelectorAll(".navSection").forEach((section) => {
+        let sectionHasMatch = false;
+        section.querySelectorAll(":scope > .navLink").forEach((link) => {
+          const matches = !query || link.textContent.toLowerCase().includes(query);
+          link.hidden = !matches;
+          sectionHasMatch ||= matches;
+        });
+        section.querySelectorAll(".navGroup").forEach((group) => {
+          const summary = group.querySelector("summary")?.textContent.toLowerCase() || "";
+          const groupMatches = !query || summary.includes(query);
+          let childMatches = false;
+          group.querySelectorAll(".navLink").forEach((link) => {
+            const matches = groupMatches || link.textContent.toLowerCase().includes(query);
+            link.hidden = !matches;
+            childMatches ||= matches;
+          });
+          group.hidden = !(groupMatches || childMatches);
+          sectionHasMatch ||= groupMatches || childMatches;
+          if (query && childMatches) group.setAttribute("open", "");
+        });
+        section.hidden = !sectionHasMatch;
+        if (sectionHasMatch) visibleSections += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visibleSections > 0;
+    });
+
+    window.addEventListener("keydown", (event) => {
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.matches("input, textarea, select") || activeElement?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        navSearch?.focus();
+      }
+      if (event.key === "Escape") closeNavigation();
+    });
+
+    const navToggle = document.querySelector("[data-nav-toggle]");
+    const closeNavigation = () => {
+      document.body.classList.remove("navOpen");
+      navToggle?.setAttribute("aria-expanded", "false");
+    };
+    navToggle?.addEventListener("click", () => {
+      const isOpen = document.body.classList.toggle("navOpen");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelector("[data-nav-close]")?.addEventListener("click", closeNavigation);
+    document.querySelector("[data-nav-backdrop]")?.addEventListener("click", closeNavigation);
+    document.querySelectorAll(".sideNav a").forEach((link) => link.addEventListener("click", closeNavigation));
+
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fall through for embedded or permission-restricted browsers.
+        }
+      }
+      const copyField = document.createElement("textarea");
+      copyField.value = text;
+      copyField.setAttribute("readonly", "");
+      copyField.className = "clipboardCopyField";
+      document.body.appendChild(copyField);
+      copyField.select();
+      const copied = document.execCommand("copy");
+      copyField.remove();
+      if (!copied) throw new Error("Browser clipboard access is unavailable");
+    };
+
+    document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const original = button.innerHTML;
+      try {
+        await copyTextToClipboard(window.location.href);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+      window.setTimeout(() => { button.innerHTML = original; }, 1400);
+    });
+
+    document.querySelector("[data-copy-ai]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const label = button.querySelector("[data-copy-ai-label]");
+      const originalLabel = label.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(button.dataset.copyAiUrl, { headers: { Accept: "text/plain" } });
+        if (!response.ok) throw new Error(`Investor context request failed with ${response.status}`);
+        const investorContext = await response.text();
+        if (!investorContext.includes("HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE") || !investorContext.includes("=== BEGIN DOCUMENT ===")) {
+          throw new Error("Investor context bundle is malformed");
+        }
+        await copyTextToClipboard(investorContext);
+        label.textContent = "Investor docs copied";
+      } catch {
+        label.textContent = "Copy failed";
+      } finally {
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        window.setTimeout(() => { label.textContent = originalLabel; }, 1800);
+      }
+    });
+
+    const outline = document.querySelector(".pageOutline");
+    const outlineNav = document.querySelector("[data-page-outline]");
+    const headings = Array.from(document.querySelectorAll(".docContent h2"));
+    const usedIds = new Set();
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const baseId = heading.textContent.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
+        let id = baseId;
+        let suffix = 2;
+        while (usedIds.has(id) || document.getElementById(id)) id = `${baseId}-${suffix++}`;
+        heading.id = id;
+      }
+      usedIds.add(heading.id);
+      const link = document.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent;
+      outlineNav?.appendChild(link);
+    });
+    if (outline && headings.length > 1) outline.hidden = false;
+
+    const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.id = `mermaid-${index}`;
+      diagram.textContent = code.textContent;
+      const wrapper = code.closest(".highlighter-rouge") || code.closest("pre") || code;
+      wrapper.replaceWith(diagram);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        background: "#14161c",
+        primaryColor: "#211d16",
+        primaryTextColor: "#f3f0e9",
+        primaryBorderColor: "#e7b45c",
+        lineColor: "#a7a39a",
+        secondaryColor: "#15221f",
+        tertiaryColor: "#1b1e25",
+        fontFamily: "Geist, system-ui, sans-serif"
+      }
+    });
+
+    for (const node of document.querySelectorAll(".mermaid")) {
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch (error) {
+        node.classList.add("mermaidError");
+        node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
+      }
+    }
+
+    const imageViewer = document.querySelector("[data-image-viewer]");
+    const viewerCanvas = document.querySelector("[data-viewer-canvas]");
+    const viewerViewport = document.querySelector("[data-viewer-viewport]");
+    const viewerTitle = document.querySelector("[data-viewer-title]");
+    const viewerCaption = document.querySelector("[data-viewer-caption]");
+    const viewerZoomLabel = document.querySelector("[data-viewer-zoom]");
+    const viewerZoomOut = document.querySelector("[data-viewer-zoom-out]");
+    const viewerZoomIn = document.querySelector("[data-viewer-zoom-in]");
+    let viewerScale = 1;
+    let viewerBaseWidth = 1;
+    let viewerBaseHeight = 1;
+    let viewerMedia = null;
+    let viewerSource = null;
+    let restoreViewerMedia = null;
+
+    const setViewerScale = (nextScale) => {
+      viewerScale = Math.min(4, Math.max(0.25, nextScale));
+      if (viewerMedia) viewerMedia.style.width = `${Math.round(viewerBaseWidth * viewerScale)}px`;
+      if (viewerZoomLabel) viewerZoomLabel.textContent = `${Math.round(viewerScale * 100)}%`;
+      if (viewerZoomOut) viewerZoomOut.disabled = viewerScale <= 0.25;
+      if (viewerZoomIn) viewerZoomIn.disabled = viewerScale >= 4;
+    };
+
+    const fitViewerMedia = () => {
+      if (!viewerViewport) return;
+      const availableWidth = Math.max(160, viewerViewport.clientWidth - 64);
+      const availableHeight = Math.max(120, viewerViewport.clientHeight - 64);
+      setViewerScale(Math.min(1, availableWidth / viewerBaseWidth, availableHeight / viewerBaseHeight));
+    };
+
+    const mediaSectionTitle = (source) => {
+      const headings = Array.from(document.querySelectorAll(".docContent h2, .docContent h3"));
+      const preceding = headings.filter((heading) => heading.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.at(-1)?.textContent.trim() || "Expanded image";
+    };
+
+    const openMediaViewer = (source) => {
+      if (!imageViewer || !viewerCanvas || !viewerViewport) return;
+      restoreViewerMedia?.();
+      viewerCanvas.replaceChildren();
+      viewerSource = source;
+      viewerTitle.textContent = mediaSectionTitle(source);
+      const figureCaption = source.closest("figure")?.querySelector("figcaption")?.textContent.trim();
+      const imageAlt = source instanceof HTMLImageElement ? source.alt.trim() : "";
+      const caption = figureCaption || imageAlt;
+      viewerCaption.textContent = caption;
+      viewerCaption.hidden = !caption;
+
+      if (source instanceof HTMLImageElement) {
+        viewerMedia = source.cloneNode();
+        viewerMedia.removeAttribute("width");
+        viewerMedia.removeAttribute("height");
+        viewerMedia.className = "imageViewerMedia";
+        viewerMedia.alt = source.alt;
+        viewerBaseWidth = source.naturalWidth || source.getBoundingClientRect().width;
+        viewerBaseHeight = source.naturalHeight || source.getBoundingClientRect().height;
+        restoreViewerMedia = null;
+      } else {
+        const svg = source.querySelector("svg");
+        if (!svg) return;
+        const placeholder = document.createComment("diagram viewer placeholder");
+        const originalStyle = svg.getAttribute("style");
+        const originalClass = svg.getAttribute("class");
+        const renderedBounds = svg.getBoundingClientRect();
+        const viewBox = svg.viewBox?.baseVal;
+        viewerBaseWidth = viewBox?.width || renderedBounds.width;
+        viewerBaseHeight = viewBox?.height || renderedBounds.height;
+        svg.replaceWith(placeholder);
+        viewerMedia = svg;
+        viewerMedia.setAttribute("class", `${originalClass || ""} imageViewerMedia`.trim());
+        restoreViewerMedia = () => {
+          if (originalStyle === null) svg.removeAttribute("style");
+          else svg.setAttribute("style", originalStyle);
+          if (originalClass === null) svg.removeAttribute("class");
+          else svg.setAttribute("class", originalClass);
+          placeholder.replaceWith(svg);
+        };
+      }
+
+      viewerCanvas.appendChild(viewerMedia);
+      setViewerScale(1);
+      document.body.classList.add("mediaViewerOpen");
+      if (typeof imageViewer.showModal === "function") imageViewer.showModal();
+      else imageViewer.setAttribute("open", "");
+      requestAnimationFrame(() => {
+        viewerViewport.scrollLeft = Math.max(0, (viewerCanvas.scrollWidth - viewerViewport.clientWidth) / 2);
+        viewerViewport.scrollTop = Math.max(0, (viewerCanvas.scrollHeight - viewerViewport.clientHeight) / 2);
+        viewerViewport.focus({ preventScroll: true });
+      });
+    };
+
+    const registerZoomableMedia = (source, label) => {
+      if (source.closest("a")) return;
+      source.classList.add("zoomableMedia");
+      source.tabIndex = 0;
+      source.setAttribute("role", "button");
+      source.setAttribute("aria-label", label);
+      source.addEventListener("click", () => openMediaViewer(source));
+      source.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openMediaViewer(source);
+      });
+    };
+
+    document.querySelectorAll(".docContent img").forEach((image) => {
+      registerZoomableMedia(image, `Open image full screen${image.alt ? `: ${image.alt}` : ""}`);
+    });
+    document.querySelectorAll(".docContent .mermaid:not(.mermaidError)").forEach((diagram) => {
+      registerZoomableMedia(diagram, `Open ${mediaSectionTitle(diagram)} diagram full screen`);
+    });
+
+    viewerZoomOut?.addEventListener("click", () => setViewerScale(viewerScale - 0.25));
+    viewerZoomIn?.addEventListener("click", () => setViewerScale(viewerScale + 0.25));
+    document.querySelector("[data-viewer-fit]")?.addEventListener("click", fitViewerMedia);
+    document.querySelector("[data-viewer-close]")?.addEventListener("click", () => imageViewer?.close());
+    viewerViewport?.addEventListener("click", (event) => {
+      if (event.target === viewerViewport || event.target === viewerCanvas) imageViewer?.close();
+    });
+    imageViewer?.addEventListener("close", () => {
+      restoreViewerMedia?.();
+      restoreViewerMedia = null;
+      viewerCanvas?.replaceChildren();
+      document.body.classList.remove("mediaViewerOpen");
+      viewerSource?.focus({ preventScroll: true });
+      viewerSource = null;
+      viewerMedia = null;
+    });
+  </script>
+</body>
+</html>

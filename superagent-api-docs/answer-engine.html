@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <script>if (location.hostname === "liamvisionary.github.io") location.replace("https://hivemindos.app/superagent-api/docs" + location.pathname.replace(/^\/hivemindos\/superagent-api-docs/, "") + location.search + location.hash);</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c0d11">
+  <title>AI Web Search | SuperAgent API Docs</title>
+  <meta name="description" content="Ask the web a question through the HivemindOS SuperAgent API and get an answer with cited sources.">
+  <link rel="canonical" href="https://hivemindos.app/superagent-api/docs/answer-engine.html">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/superagent-api/docs/assets/img/app-icon-1024.png">
+  <link rel="apple-touch-icon" href="/superagent-api/docs/assets/img/app-icon-1024.png">
+  <link rel="stylesheet" href="/superagent-api/docs/assets/css/site.css">
+</head>
+<body>
+  <a class="skipLink" href="#content">Skip to content</a>
+
+  <header class="siteHeader">
+    <nav class="topNav" aria-label="Primary">
+      <button class="mobileNavButton" type="button" aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-navigation" data-nav-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brandMark" href="/superagent-api/docs/" aria-label="SuperAgent API Docs home">
+        <img class="brandIcon" src="/superagent-api/docs/assets/img/app-icon-1024.png" alt="" width="40" height="40" aria-hidden="true">
+        <span class="brandName">HivemindOS</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+        <span class="brandEdition">SuperAgent API</span>
+      </a>
+      <div class="topLinks">
+        
+          <a href="/superagent-api/docs/">Overview</a>
+        
+          <a href="/superagent-api/docs/explorer.html">Interactive Reference</a>
+        
+          <a href="https://hivemindos.app/superagent-api/console/">Console</a>
+        
+          <a href="https://hivemindos.app/docs/">HivemindOS Docs</a>
+        
+      </div>
+      <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
+        <span>GitHub</span>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 .2a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.49c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.08-1.88 3.75-3.66 3.95.29.25.54.74.54 1.5l-.01 2.22c0 .21.14.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <button class="navBackdrop" type="button" aria-label="Close documentation menu" data-nav-backdrop></button>
+
+  <div class="docFrame">
+    <aside id="docs-navigation" class="docSidebar" aria-label="Documentation navigation">
+      <div class="sidebarHeader">
+        <span class="sidebarKicker">Explore the docs</span>
+        <button class="sidebarClose" type="button" aria-label="Close documentation menu" data-nav-close>Close</button>
+      </div>
+      <label class="searchShell" for="navSearch">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter pages" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <p class="searchEmpty" role="status" hidden>No matching pages.</p>
+      <nav class="sideNav">
+        
+          <section class="navSection">
+            <h2>Start</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/">Overview</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/agent-setup.html">Agent Setup</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/authentication.html">Authentication And Keys</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/pay-per-call.html">Pay Per Call With x402</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/mcp.html">Connect With MCP</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/limits.html">Endpoint Limits</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Build</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/services.html">Service Access</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink isActive" aria-current="page" href="/superagent-api/docs/answer-engine.html">AI Web Search</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/memory.html">Managed Memory</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/benchmarks.html">Memory Benchmarks</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/capabilities-agents.html">Capabilities And Agents</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/compute-faucet.html">Compute, MCP, And Testnet</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/files-connections.html">Files And Connections</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/databases.html">Managed Databases</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/wallets-trading.html">Wallets And Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/runs-webhooks.html">Runs And Webhooks</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Operate</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/privacy.html">Private And Confidential Access</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/projects-security.html">Projects And Isolation</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/usage-audit.html">Usage And Audit</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Reference</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/reference.html">API Reference</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/explorer.html">Interactive Reference</a>
+              
+            
+          </section>
+        
+      </nav>
+    </aside>
+
+    <main id="content" class="docMain" tabindex="-1">
+      <article class="docContent">
+        <div class="pageTools">
+          <p class="pageKicker">SuperAgent API</p>
+          <div class="pageToolActions">
+            
+            <button class="copyPageButton" type="button" data-copy-page>
+              <span aria-hidden="true">⧉</span> Copy link
+            </button>
+          </div>
+        </div>
+        <h1 id="ai-web-search">AI web search</h1>
+
+<p>The <code class="language-plaintext highlighter-rouge">answer-engine</code> service searches the web, reads the pages that matter, and writes an answer with numbered citations. Your app sends a question and gets back the answer text plus the list of sources it was built from.</p>
+
+<div class="plainAnswer">
+  <strong>In plain English</strong>
+  <p>You ask a question. HivemindOS does the searching and reading, then writes the answer and shows you exactly which pages it came from.</p>
+</div>
+
+<p>The request and response shapes match the open-source <a href="https://github.com/ItzCrazyKns/Vane">Vane</a> search API, so a client written for Vane works here with only the address and the authorization header changed.</p>
+
+<h2 id="ask-a-question">Ask a question</h2>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">searches.create</span><span class="dl">"</span><span class="p">,</span> <span class="p">{</span>
+  <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">How well do heat pumps work below freezing?</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">optimizationMode</span><span class="p">:</span> <span class="dl">"</span><span class="s2">balanced</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">sources</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">web</span><span class="dl">"</span><span class="p">],</span>
+<span class="p">});</span>
+
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">message</span><span class="p">);</span>   <span class="c1">// the answer, with [1] style citations</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">sources</span><span class="p">);</span>   <span class="c1">// what each citation number points to</span>
+</code></pre></div></div>
+
+<p>Every source carries the page title and address, so your app can render citations as links:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Modern cold-climate units keep working near -25 °C [1], though their efficiency falls as it gets colder [2]."</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"sources"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+    </span><span class="p">{</span><span class="w"> </span><span class="nl">"content"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nl">"metadata"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nl">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Cold climate heat pumps"</span><span class="p">,</span><span class="w"> </span><span class="nl">"url"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://example.com/a"</span><span class="p">,</span><span class="w"> </span><span class="nl">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"web"</span><span class="p">,</span><span class="w"> </span><span class="nl">"read"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">},</span><span class="w">
+    </span><span class="p">{</span><span class="w"> </span><span class="nl">"content"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nl">"metadata"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nl">"title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Efficiency in winter"</span><span class="p">,</span><span class="w"> </span><span class="nl">"url"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://example.org/b"</span><span class="p">,</span><span class="w"> </span><span class="nl">"source"</span><span class="p">:</span><span class="w"> </span><span class="s2">"web"</span><span class="p">,</span><span class="w"> </span><span class="nl">"read"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span><span class="w">
+  </span><span class="p">]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>A source with <code class="language-plaintext highlighter-rouge">read: true</code> was opened and read in full; the rest are search results with their summary text.</p>
+
+<h2 id="how-hard-it-should-look">How hard it should look</h2>
+
+<p><code class="language-plaintext highlighter-rouge">optimizationMode</code> sets how much work goes into one answer.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Mode</th>
+      <th>What it does</th>
+      <th>Use it for</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">speed</code></td>
+      <td>One search pass, answers from search results</td>
+      <td>Quick lookups where you need an answer now</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">balanced</code></td>
+      <td>A few search passes, reads the best pages</td>
+      <td>The everyday default</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">quality</code></td>
+      <td>Many search passes, reads more pages, writes a report</td>
+      <td>Research questions worth the extra time and credits</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="only-certain-sites">Only certain sites</h2>
+
+<p>Pass <code class="language-plaintext highlighter-rouge">includeDomains</code> to search nothing else, and <code class="language-plaintext highlighter-rouge">excludeDomains</code> to keep sites out. Both take plain site addresses; a pasted address with <code class="language-plaintext highlighter-rouge">https://</code> and a trailing slash is accepted and tidied.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">searches.create</span><span class="dl">"</span><span class="p">,</span> <span class="p">{</span>
+  <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">transformer scaling laws</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">includeDomains</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">arxiv.org</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">nature.com</span><span class="dl">"</span><span class="p">],</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<p>The restriction is applied twice — in the query, and again on the results — because search engines treat a site restriction as a hint rather than a rule.</p>
+
+<h2 id="where-to-look">Where to look</h2>
+
+<p><code class="language-plaintext highlighter-rouge">sources</code> chooses which parts of the web are searched. Ask for more than one when the question needs both.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Lane</th>
+      <th>Covers</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">web</code></td>
+      <td>The open web</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">discussions</code></td>
+      <td>Forums and community answers</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">academic</code></td>
+      <td>Papers, preprints, and journals</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">documents</code></td>
+      <td>Text you sent with the request</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>A lane is only used when the question actually calls for it, so asking for all three costs nothing extra on a question that needs none of them.</p>
+
+<h2 id="images-and-videos">Images and videos</h2>
+
+<p>Set <code class="language-plaintext highlighter-rouge">includeMedia: true</code> and pictures or clips come back alongside the answer, but only when the question is one they actually help with — “what does a heat pump look like” gets images, “what does a heat pump cost” does not.</p>
+
+<p>Images carry their licence and the page they came from, so they can be credited. You can also search either on its own:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">images</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">images.search</span><span class="dl">"</span><span class="p">,</span> <span class="p">{</span> <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">cold climate heat pump</span><span class="dl">"</span> <span class="p">});</span>
+<span class="kd">const</span> <span class="nx">videos</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">videos.search</span><span class="dl">"</span><span class="p">,</span> <span class="p">{</span> <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">how to install a heat pump</span><span class="dl">"</span> <span class="p">});</span>
+</code></pre></div></div>
+
+<h2 id="answer-from-your-own-documents">Answer from your own documents</h2>
+
+<p>Send the text with the request and add <code class="language-plaintext highlighter-rouge">documents</code> to <code class="language-plaintext highlighter-rouge">sources</code>. Nothing is stored — the text is used for this one search and then gone.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">searches.create</span><span class="dl">"</span><span class="p">,</span> <span class="p">{</span>
+  <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">What COP did unit 3 measure at -19 °C?</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">sources</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">documents</span><span class="dl">"</span><span class="p">],</span>
+  <span class="na">documents</span><span class="p">:</span> <span class="p">[{</span> <span class="na">title</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Site log</span><span class="dl">"</span><span class="p">,</span> <span class="na">text</span><span class="p">:</span> <span class="dl">"</span><span class="s2">At -19C the measured COP was 1.9…</span><span class="dl">"</span> <span class="p">}],</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<p>Ask for <code class="language-plaintext highlighter-rouge">["documents", "web"]</code> and both feed one answer, with citations telling them apart.</p>
+
+<h2 id="instant-answers">Instant answers</h2>
+
+<p>When a question is arithmetic, a currency conversion, the weather somewhere, or a crypto price, the result carries a <code class="language-plaintext highlighter-rouge">widgets</code> array with the answer already worked out. These cost no extra model time — the parameters come from the same turn that sorts the question — and the written answer is told not to contradict them.</p>
+
+<p>Share prices are deliberately absent: there is no keyless quote source we trust, and a stale price is worse than none.</p>
+
+<h2 id="follow-up-questions">Follow-up questions</h2>
+
+<p>Set <code class="language-plaintext highlighter-rouge">includeSuggestions: true</code> and the result carries a few follow-ups drawn from what the answer left open — not from the question, so they point at the gaps rather than rephrasing what was asked.</p>
+
+<h2 id="streaming">Streaming</h2>
+
+<p>Set <code class="language-plaintext highlighter-rouge">stream: true</code> to receive the answer as it is written. The response is newline-delimited JSON: one complete object per line.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Frame</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">init</code></td>
+      <td>The stream is open</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">session</code></td>
+      <td>The search’s id, for reconnecting</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">step</code></td>
+      <td>Progress: what is being searched or read right now</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">widget</code></td>
+      <td>An instant answer — arithmetic, currency, weather, a price</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">media</code></td>
+      <td>Images or videos, when asked for</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">sources</code></td>
+      <td>The full source list, sent before the answer text</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">response</code></td>
+      <td>A piece of the answer</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">suggestions</code></td>
+      <td>Follow-up questions, when asked for</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">error</code></td>
+      <td>Something went wrong; the stream still closes cleanly</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">done</code></td>
+      <td>The answer is complete</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Render <code class="language-plaintext highlighter-rouge">step</code> frames if you want to show the work in progress, or ignore them and wait for <code class="language-plaintext highlighter-rouge">response</code>.</p>
+
+<h3 id="if-the-connection-drops">If the connection drops</h3>
+
+<p>A <code class="language-plaintext highlighter-rouge">quality</code> search can run for minutes. The stream’s first frame is <code class="language-plaintext highlighter-rouge">session</code>, carrying the search’s id, and the same id comes back in the <code class="language-plaintext highlighter-rouge">x-hivemindos-answer-session</code> header. If the connection drops, reconnect with it:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">searches.reconnect</span><span class="dl">"</span><span class="p">,</span> <span class="p">{},</span> <span class="p">{</span>
+  <span class="na">pathParameters</span><span class="p">:</span> <span class="p">{</span> <span class="nx">searchId</span> <span class="p">},</span>
+<span class="p">});</span>
+</code></pre></div></div>
+
+<p>Everything the search has produced replays, then live frames continue. The run does not stop when you disconnect, so the model time you already paid for is not lost. The window stays open for fifteen minutes after the answer finishes.</p>
+
+<h2 id="answer-models">Answer models</h2>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">models</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span><span class="dl">"</span><span class="s2">answer-engine</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">models.list</span><span class="dl">"</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>Pass a <code class="language-plaintext highlighter-rouge">chatModel</code> on the request to pick one; leave it out to use the recommended default. Answers are written by managed HivemindOS models and billed to the same Agent Credit balance as the rest of the API — this service adds no separate charge on top of the model it uses.</p>
+
+<div class="plainAnswer">
+  <strong>Want it to stay on your own machine?</strong>
+  <p>The HivemindOS desktop app has the same search under <strong>Search</strong>, and there it can answer with a model running on your own computer, so the question, the pages, and the answer never leave it. The desktop version reads your Notebooks directly rather than needing documents sent with each request.</p>
+</div>
+
+<h2 id="permissions">Permissions</h2>
+
+<p>A key needs <code class="language-plaintext highlighter-rouge">services:read</code> and <code class="language-plaintext highlighter-rouge">services:invoke</code>, and its allowed services must include <code class="language-plaintext highlighter-rouge">answer-engine</code>. Restrict it to <code class="language-plaintext highlighter-rouge">answer-engine.searches.create</code> if that is the only thing the key should be able to do.</p>
+
+<h2 id="what-it-will-not-do">What it will not do</h2>
+
+<ul>
+  <li>It will not answer from memory when the sources do not cover the question. It says what is missing instead.</li>
+  <li>It will not cite a page it did not retrieve.</li>
+  <li>It will not show the same story five times because five outlets carried it: near-identical results are folded into one citation.</li>
+  <li>It treats page text as untrusted. Instructions found on a web page are reported as content, never followed.</li>
+</ul>
+
+<p>Return to the <a href="./">SuperAgent API quickstart</a>, or open <a href="services.html">service access</a> and <a href="limits.html">endpoint limits</a>.</p>
+
+        <nav class="pageNav" aria-label="Previous and next pages" hidden>
+          <a class="pageNavCard pageNavPrev" data-page-prev href="#">
+            <span>Previous</span>
+            <strong></strong>
+          </a>
+          <a class="pageNavCard pageNavNext" data-page-next href="#">
+            <span>Next</span>
+            <strong></strong>
+          </a>
+        </nav>
+      </article>
+    </main>
+
+    <aside class="pageOutline" aria-label="On this page" hidden>
+      <p>On this page</p>
+      <nav data-page-outline></nav>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/answer-engine.md">Improve this page ↗</a>
+    </aside>
+  </div>
+
+  <footer class="siteFooter">
+    <div>
+      <strong>HivemindOS</strong>
+      <span>The HivemindOS backend for your product.</span>
+    </div>
+    <div class="footerLinks">
+      <a href="https://hivemindos.app/superagent-api/">SuperAgent API</a>
+      <a href="https://api.hivemindos.app/openapi.json">OpenAPI</a>
+      <a href="https://hivemindos.app/docs/">HivemindOS Docs</a>
+    </div>
+  </footer>
+
+  <dialog class="imageViewer" aria-label="Expanded media viewer" data-image-viewer>
+    <header class="imageViewerBar">
+      <div class="imageViewerHeading">
+        <strong data-viewer-title>Expanded image</strong>
+        <span>Scroll to pan · Esc to close</span>
+      </div>
+      <div class="imageViewerControls" aria-label="Image zoom controls">
+        <button type="button" data-viewer-fit>Fit</button>
+        <div class="imageViewerZoomGroup">
+          <button type="button" aria-label="Zoom out" data-viewer-zoom-out>−</button>
+          <output aria-live="polite" data-viewer-zoom>100%</output>
+          <button type="button" aria-label="Zoom in" data-viewer-zoom-in>+</button>
+        </div>
+        <button class="imageViewerClose" type="button" data-viewer-close>Close <span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="imageViewerViewport" tabindex="0" data-viewer-viewport>
+      <div class="imageViewerCanvas" data-viewer-canvas></div>
+    </div>
+    <p class="imageViewerCaption" data-viewer-caption hidden></p>
+  </dialog>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const normalizePath = (href) => {
+      const url = new URL(href, window.location.href);
+      const pathname = url.pathname.replace(/index\.html$/, "");
+      return pathname.endsWith("/") ? pathname : pathname.replace(/\.html$/, "");
+    };
+
+    const currentPath = normalizePath(window.location.href);
+    const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
+    const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
+
+    if (currentIndex >= 0) {
+      navLinks[currentIndex].classList.add("isActive");
+      navLinks[currentIndex].setAttribute("aria-current", "page");
+      navLinks[currentIndex].closest("details")?.setAttribute("open", "");
+
+      const pageNav = document.querySelector(".pageNav");
+      const previous = navLinks[currentIndex - 1];
+      const next = navLinks[currentIndex + 1];
+      const wireCard = (card, link) => {
+        if (!card || !link) {
+          card?.remove();
+          return;
+        }
+        card.href = link.href;
+        card.querySelector("strong").textContent = link.textContent.trim();
+      };
+
+      wireCard(document.querySelector("[data-page-prev]"), previous);
+      wireCard(document.querySelector("[data-page-next]"), next);
+      if (pageNav && (previous || next)) pageNav.hidden = false;
+    }
+
+    const navSearch = document.querySelector("#navSearch");
+    const searchEmpty = document.querySelector(".searchEmpty");
+    navSearch?.addEventListener("input", () => {
+      const query = navSearch.value.trim().toLowerCase();
+      let visibleSections = 0;
+      document.querySelectorAll(".navSection").forEach((section) => {
+        let sectionHasMatch = false;
+        section.querySelectorAll(":scope > .navLink").forEach((link) => {
+          const matches = !query || link.textContent.toLowerCase().includes(query);
+          link.hidden = !matches;
+          sectionHasMatch ||= matches;
+        });
+        section.querySelectorAll(".navGroup").forEach((group) => {
+          const summary = group.querySelector("summary")?.textContent.toLowerCase() || "";
+          const groupMatches = !query || summary.includes(query);
+          let childMatches = false;
+          group.querySelectorAll(".navLink").forEach((link) => {
+            const matches = groupMatches || link.textContent.toLowerCase().includes(query);
+            link.hidden = !matches;
+            childMatches ||= matches;
+          });
+          group.hidden = !(groupMatches || childMatches);
+          sectionHasMatch ||= groupMatches || childMatches;
+          if (query && childMatches) group.setAttribute("open", "");
+        });
+        section.hidden = !sectionHasMatch;
+        if (sectionHasMatch) visibleSections += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visibleSections > 0;
+    });
+
+    window.addEventListener("keydown", (event) => {
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.matches("input, textarea, select") || activeElement?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        navSearch?.focus();
+      }
+      if (event.key === "Escape") closeNavigation();
+    });
+
+    const navToggle = document.querySelector("[data-nav-toggle]");
+    const closeNavigation = () => {
+      document.body.classList.remove("navOpen");
+      navToggle?.setAttribute("aria-expanded", "false");
+    };
+    navToggle?.addEventListener("click", () => {
+      const isOpen = document.body.classList.toggle("navOpen");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelector("[data-nav-close]")?.addEventListener("click", closeNavigation);
+    document.querySelector("[data-nav-backdrop]")?.addEventListener("click", closeNavigation);
+    document.querySelectorAll(".sideNav a").forEach((link) => link.addEventListener("click", closeNavigation));
+
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fall through for embedded or permission-restricted browsers.
+        }
+      }
+      const copyField = document.createElement("textarea");
+      copyField.value = text;
+      copyField.setAttribute("readonly", "");
+      copyField.className = "clipboardCopyField";
+      document.body.appendChild(copyField);
+      copyField.select();
+      const copied = document.execCommand("copy");
+      copyField.remove();
+      if (!copied) throw new Error("Browser clipboard access is unavailable");
+    };
+
+    document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const original = button.innerHTML;
+      try {
+        await copyTextToClipboard(window.location.href);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+      window.setTimeout(() => { button.innerHTML = original; }, 1400);
+    });
+
+    document.querySelector("[data-copy-ai]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const label = button.querySelector("[data-copy-ai-label]");
+      const originalLabel = label.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(button.dataset.copyAiUrl, { headers: { Accept: "text/plain" } });
+        if (!response.ok) throw new Error(`Investor context request failed with ${response.status}`);
+        const investorContext = await response.text();
+        if (!investorContext.includes("HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE") || !investorContext.includes("=== BEGIN DOCUMENT ===")) {
+          throw new Error("Investor context bundle is malformed");
+        }
+        await copyTextToClipboard(investorContext);
+        label.textContent = "Investor docs copied";
+      } catch {
+        label.textContent = "Copy failed";
+      } finally {
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        window.setTimeout(() => { label.textContent = originalLabel; }, 1800);
+      }
+    });
+
+    const outline = document.querySelector(".pageOutline");
+    const outlineNav = document.querySelector("[data-page-outline]");
+    const headings = Array.from(document.querySelectorAll(".docContent h2"));
+    const usedIds = new Set();
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const baseId = heading.textContent.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
+        let id = baseId;
+        let suffix = 2;
+        while (usedIds.has(id) || document.getElementById(id)) id = `${baseId}-${suffix++}`;
+        heading.id = id;
+      }
+      usedIds.add(heading.id);
+      const link = document.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent;
+      outlineNav?.appendChild(link);
+    });
+    if (outline && headings.length > 1) outline.hidden = false;
+
+    const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.id = `mermaid-${index}`;
+      diagram.textContent = code.textContent;
+      const wrapper = code.closest(".highlighter-rouge") || code.closest("pre") || code;
+      wrapper.replaceWith(diagram);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        background: "#14161c",
+        primaryColor: "#211d16",
+        primaryTextColor: "#f3f0e9",
+        primaryBorderColor: "#e7b45c",
+        lineColor: "#a7a39a",
+        secondaryColor: "#15221f",
+        tertiaryColor: "#1b1e25",
+        fontFamily: "Geist, system-ui, sans-serif"
+      }
+    });
+
+    for (const node of document.querySelectorAll(".mermaid")) {
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch (error) {
+        node.classList.add("mermaidError");
+        node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
+      }
+    }
+
+    const imageViewer = document.querySelector("[data-image-viewer]");
+    const viewerCanvas = document.querySelector("[data-viewer-canvas]");
+    const viewerViewport = document.querySelector("[data-viewer-viewport]");
+    const viewerTitle = document.querySelector("[data-viewer-title]");
+    const viewerCaption = document.querySelector("[data-viewer-caption]");
+    const viewerZoomLabel = document.querySelector("[data-viewer-zoom]");
+    const viewerZoomOut = document.querySelector("[data-viewer-zoom-out]");
+    const viewerZoomIn = document.querySelector("[data-viewer-zoom-in]");
+    let viewerScale = 1;
+    let viewerBaseWidth = 1;
+    let viewerBaseHeight = 1;
+    let viewerMedia = null;
+    let viewerSource = null;
+    let restoreViewerMedia = null;
+
+    const setViewerScale = (nextScale) => {
+      viewerScale = Math.min(4, Math.max(0.25, nextScale));
+      if (viewerMedia) viewerMedia.style.width = `${Math.round(viewerBaseWidth * viewerScale)}px`;
+      if (viewerZoomLabel) viewerZoomLabel.textContent = `${Math.round(viewerScale * 100)}%`;
+      if (viewerZoomOut) viewerZoomOut.disabled = viewerScale <= 0.25;
+      if (viewerZoomIn) viewerZoomIn.disabled = viewerScale >= 4;
+    };
+
+    const fitViewerMedia = () => {
+      if (!viewerViewport) return;
+      const availableWidth = Math.max(160, viewerViewport.clientWidth - 64);
+      const availableHeight = Math.max(120, viewerViewport.clientHeight - 64);
+      setViewerScale(Math.min(1, availableWidth / viewerBaseWidth, availableHeight / viewerBaseHeight));
+    };
+
+    const mediaSectionTitle = (source) => {
+      const headings = Array.from(document.querySelectorAll(".docContent h2, .docContent h3"));
+      const preceding = headings.filter((heading) => heading.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.at(-1)?.textContent.trim() || "Expanded image";
+    };
+
+    const openMediaViewer = (source) => {
+      if (!imageViewer || !viewerCanvas || !viewerViewport) return;
+      restoreViewerMedia?.();
+      viewerCanvas.replaceChildren();
+      viewerSource = source;
+      viewerTitle.textContent = mediaSectionTitle(source);
+      const figureCaption = source.closest("figure")?.querySelector("figcaption")?.textContent.trim();
+      const imageAlt = source instanceof HTMLImageElement ? source.alt.trim() : "";
+      const caption = figureCaption || imageAlt;
+      viewerCaption.textContent = caption;
+      viewerCaption.hidden = !caption;
+
+      if (source instanceof HTMLImageElement) {
+        viewerMedia = source.cloneNode();
+        viewerMedia.removeAttribute("width");
+        viewerMedia.removeAttribute("height");
+        viewerMedia.className = "imageViewerMedia";
+        viewerMedia.alt = source.alt;
+        viewerBaseWidth = source.naturalWidth || source.getBoundingClientRect().width;
+        viewerBaseHeight = source.naturalHeight || source.getBoundingClientRect().height;
+        restoreViewerMedia = null;
+      } else {
+        const svg = source.querySelector("svg");
+        if (!svg) return;
+        const placeholder = document.createComment("diagram viewer placeholder");
+        const originalStyle = svg.getAttribute("style");
+        const originalClass = svg.getAttribute("class");
+        const renderedBounds = svg.getBoundingClientRect();
+        const viewBox = svg.viewBox?.baseVal;
+        viewerBaseWidth = viewBox?.width || renderedBounds.width;
+        viewerBaseHeight = viewBox?.height || renderedBounds.height;
+        svg.replaceWith(placeholder);
+        viewerMedia = svg;
+        viewerMedia.setAttribute("class", `${originalClass || ""} imageViewerMedia`.trim());
+        restoreViewerMedia = () => {
+          if (originalStyle === null) svg.removeAttribute("style");
+          else svg.setAttribute("style", originalStyle);
+          if (originalClass === null) svg.removeAttribute("class");
+          else svg.setAttribute("class", originalClass);
+          placeholder.replaceWith(svg);
+        };
+      }
+
+      viewerCanvas.appendChild(viewerMedia);
+      setViewerScale(1);
+      document.body.classList.add("mediaViewerOpen");
+      if (typeof imageViewer.showModal === "function") imageViewer.showModal();
+      else imageViewer.setAttribute("open", "");
+      requestAnimationFrame(() => {
+        viewerViewport.scrollLeft = Math.max(0, (viewerCanvas.scrollWidth - viewerViewport.clientWidth) / 2);
+        viewerViewport.scrollTop = Math.max(0, (viewerCanvas.scrollHeight - viewerViewport.clientHeight) / 2);
+        viewerViewport.focus({ preventScroll: true });
+      });
+    };
+
+    const registerZoomableMedia = (source, label) => {
+      if (source.closest("a")) return;
+      source.classList.add("zoomableMedia");
+      source.tabIndex = 0;
+      source.setAttribute("role", "button");
+      source.setAttribute("aria-label", label);
+      source.addEventListener("click", () => openMediaViewer(source));
+      source.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openMediaViewer(source);
+      });
+    };
+
+    document.querySelectorAll(".docContent img").forEach((image) => {
+      registerZoomableMedia(image, `Open image full screen${image.alt ? `: ${image.alt}` : ""}`);
+    });
+    document.querySelectorAll(".docContent .mermaid:not(.mermaidError)").forEach((diagram) => {
+      registerZoomableMedia(diagram, `Open ${mediaSectionTitle(diagram)} diagram full screen`);
+    });
+
+    viewerZoomOut?.addEventListener("click", () => setViewerScale(viewerScale - 0.25));
+    viewerZoomIn?.addEventListener("click", () => setViewerScale(viewerScale + 0.25));
+    document.querySelector("[data-viewer-fit]")?.addEventListener("click", fitViewerMedia);
+    document.querySelector("[data-viewer-close]")?.addEventListener("click", () => imageViewer?.close());
+    viewerViewport?.addEventListener("click", (event) => {
+      if (event.target === viewerViewport || event.target === viewerCanvas) imageViewer?.close();
+    });
+    imageViewer?.addEventListener("close", () => {
+      restoreViewerMedia?.();
+      restoreViewerMedia = null;
+      viewerCanvas?.replaceChildren();
+      document.body.classList.remove("mediaViewerOpen");
+      viewerSource?.focus({ preventScroll: true });
+      viewerSource = null;
+      viewerMedia = null;
+    });
+  </script>
+</body>
+</html>

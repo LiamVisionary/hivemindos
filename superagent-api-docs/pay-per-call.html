@@ -1,0 +1,784 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <script>if (location.hostname === "liamvisionary.github.io") location.replace("https://hivemindos.app/superagent-api/docs" + location.pathname.replace(/^\/hivemindos\/superagent-api-docs/, "") + location.search + location.hash);</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c0d11">
+  <title>Pay Per Call With x402 | SuperAgent API Docs</title>
+  <meta name="description" content="An agent with an x402 wallet can buy a single SuperAgent API call, or an account, in USDC on Base. No API key, no sign-up, and no charge if the call fails.">
+  <link rel="canonical" href="https://hivemindos.app/superagent-api/docs/pay-per-call.html">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/superagent-api/docs/assets/img/app-icon-1024.png">
+  <link rel="apple-touch-icon" href="/superagent-api/docs/assets/img/app-icon-1024.png">
+  <link rel="stylesheet" href="/superagent-api/docs/assets/css/site.css">
+</head>
+<body>
+  <a class="skipLink" href="#content">Skip to content</a>
+
+  <header class="siteHeader">
+    <nav class="topNav" aria-label="Primary">
+      <button class="mobileNavButton" type="button" aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-navigation" data-nav-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brandMark" href="/superagent-api/docs/" aria-label="SuperAgent API Docs home">
+        <img class="brandIcon" src="/superagent-api/docs/assets/img/app-icon-1024.png" alt="" width="40" height="40" aria-hidden="true">
+        <span class="brandName">HivemindOS</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+        <span class="brandEdition">SuperAgent API</span>
+      </a>
+      <div class="topLinks">
+        
+          <a href="/superagent-api/docs/">Overview</a>
+        
+          <a href="/superagent-api/docs/explorer.html">Interactive Reference</a>
+        
+          <a href="https://hivemindos.app/superagent-api/console/">Console</a>
+        
+          <a href="https://hivemindos.app/docs/">HivemindOS Docs</a>
+        
+      </div>
+      <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
+        <span>GitHub</span>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 .2a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.49c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.08-1.88 3.75-3.66 3.95.29.25.54.74.54 1.5l-.01 2.22c0 .21.14.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <button class="navBackdrop" type="button" aria-label="Close documentation menu" data-nav-backdrop></button>
+
+  <div class="docFrame">
+    <aside id="docs-navigation" class="docSidebar" aria-label="Documentation navigation">
+      <div class="sidebarHeader">
+        <span class="sidebarKicker">Explore the docs</span>
+        <button class="sidebarClose" type="button" aria-label="Close documentation menu" data-nav-close>Close</button>
+      </div>
+      <label class="searchShell" for="navSearch">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter pages" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <p class="searchEmpty" role="status" hidden>No matching pages.</p>
+      <nav class="sideNav">
+        
+          <section class="navSection">
+            <h2>Start</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/">Overview</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/agent-setup.html">Agent Setup</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/authentication.html">Authentication And Keys</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink isActive" aria-current="page" href="/superagent-api/docs/pay-per-call.html">Pay Per Call With x402</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/mcp.html">Connect With MCP</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/limits.html">Endpoint Limits</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Build</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/services.html">Service Access</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/answer-engine.html">AI Web Search</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/memory.html">Managed Memory</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/benchmarks.html">Memory Benchmarks</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/capabilities-agents.html">Capabilities And Agents</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/compute-faucet.html">Compute, MCP, And Testnet</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/files-connections.html">Files And Connections</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/databases.html">Managed Databases</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/wallets-trading.html">Wallets And Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/runs-webhooks.html">Runs And Webhooks</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Operate</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/privacy.html">Private And Confidential Access</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/projects-security.html">Projects And Isolation</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/usage-audit.html">Usage And Audit</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Reference</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/reference.html">API Reference</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/explorer.html">Interactive Reference</a>
+              
+            
+          </section>
+        
+      </nav>
+    </aside>
+
+    <main id="content" class="docMain" tabindex="-1">
+      <article class="docContent">
+        <div class="pageTools">
+          <p class="pageKicker">SuperAgent API</p>
+          <div class="pageToolActions">
+            
+            <button class="copyPageButton" type="button" data-copy-page>
+              <span aria-hidden="true">⧉</span> Copy link
+            </button>
+          </div>
+        </div>
+        <h1 id="pay-per-call-with-x402">Pay per call with x402</h1>
+
+<p>An agent that holds an x402 wallet on Base can use the SuperAgent API without an account or an API key. It pays for one call at a time, in USDC, and pays only when the call succeeds. It can also pay once for an account and get an API key holding the credits.</p>
+
+<h2 id="what-you-can-buy-per-call">What you can buy per call</h2>
+
+<p><code class="language-plaintext highlighter-rouge">GET https://api.hivemindos.app/v1/x402</code> lists every operation for sale, with its price, address, an example input and the input’s schema. No key is needed to read it. Today it covers:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Service</th>
+      <th>Operations</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Hive Research</td>
+      <td>Token research at Scout, Swarm or Superbrain depth</td>
+    </tr>
+    <tr>
+      <td>Token Autopsy</td>
+      <td>Standard and panel token reports</td>
+    </tr>
+    <tr>
+      <td>Wallet Risk</td>
+      <td>A risk snapshot of a wallet</td>
+    </tr>
+    <tr>
+      <td>Reddit VOC</td>
+      <td>Snapshot and deep voice-of-customer reports</td>
+    </tr>
+    <tr>
+      <td>Swarm</td>
+      <td>Quick and Theater scenario runs</td>
+    </tr>
+    <tr>
+      <td>X Studio</td>
+      <td>Style skills and engagement audits of an X account</td>
+    </tr>
+    <tr>
+      <td>MiroShark</td>
+      <td>Crowd simulations</td>
+    </tr>
+    <tr>
+      <td>Testnet faucet</td>
+      <td>Testnet gas and test stablecoins</td>
+    </tr>
+    <tr>
+      <td>Media Studio</td>
+      <td>Images and video</td>
+    </tr>
+    <tr>
+      <td>Photo Keyworder</td>
+      <td>Keywords, title and description for a photo</td>
+    </tr>
+    <tr>
+      <td>SVG Studio</td>
+      <td>Vectorize, generate, edit and animate SVGs</td>
+    </tr>
+    <tr>
+      <td>Lead-gen data</td>
+      <td>Find local businesses, and enrich them</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>A call costs what the same operation costs an account with no HIVE stake. The price comes from the service itself when you call, so it is never out of date.</p>
+
+<h2 id="make-a-call">Make a call</h2>
+
+<p>Send the operation’s input as the body:</p>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST https://api.hivemindos.app/v1/x402/svg-studio/svgs.generate
+Content-Type: application/json
+
+{ "prompt": "Minimal flat bee logo, black and honey-yellow" }
+</span></code></pre></div></div>
+
+<ol>
+  <li>The first answer is HTTP 402 with a <code class="language-plaintext highlighter-rouge">Payment-Required</code> header, priced from your input. If the input is wrong, you get HTTP 400 instead, before any payment is asked for.</li>
+  <li>Show the person the exact amount and get their approval. Then send the same request again with <code class="language-plaintext highlighter-rouge">Payment-Signature</code>. Any x402 v2 client does this step for you.</li>
+  <li>The call runs. If it succeeds, the payment settles and you get the result, with an <code class="language-plaintext highlighter-rouge">x402</code> block holding the receipt id and the transaction. If it fails, you get <code class="language-plaintext highlighter-rouge">x402.charged: false</code> and the payment is never taken, so you can try the same payment again.</li>
+</ol>
+
+<p>Sending the same signed payment again within 30 minutes returns the same answer. The call does not run a second time and you are not charged twice.</p>
+
+<h2 id="collect-a-background-job">Collect a background job</h2>
+
+<p>Research, reports, swarms, simulations and media run in the background. Their answer includes <code class="language-plaintext highlighter-rouge">followUp.apiKey</code>, an API key that can use only that service and can never move funds. Store it like any secret, and use it to read the result, for example:</p>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST https://api.hivemindos.app/v1/services/token-autopsy/invoke
+Authorization: Bearer &lt;followUp.apiKey&gt;
+Idempotency-Key: &lt;unique&gt;
+Content-Type: application/json
+
+{ "operationId": "reports.get", "pathParameters": { "reportId": "&lt;the id in the first answer&gt;" } }
+</span></code></pre></div></div>
+
+<p>If a call uses less than it was priced at, the difference stays on the same key as Agent Credits.</p>
+
+<h2 id="buy-an-account-instead">Buy an account instead</h2>
+
+<p>Some things are not sold per call, because they keep running or belong to an account: sites, agents, workflows, databases, wallets, trading, subscriptions and connected accounts. For those, buy an account:</p>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST https://api.hivemindos.app/v1/x402/accounts
+Content-Type: application/json
+
+{ "amountUsd": 5 }
+</span></code></pre></div></div>
+
+<p>After the same 402 and <code class="language-plaintext highlighter-rouge">Payment-Signature</code> steps, the answer is an API key holding that many Agent Credits (500 per dollar, from $1 to $500) for every service. Save it as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_API_KEY</code>. It can never move funds. To manage the account in a browser later, use the <a href="https://hivemindos.app/superagent-api/console/">console</a>.</p>
+
+<h2 id="private-tiers">Private tiers</h2>
+
+<p>The same routes work under <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/private/x402</code> and <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/confidential/x402</code>. There, only operations that meet the tier are sold. See <a href="privacy.html">privacy tiers</a>.</p>
+
+<h2 id="safety-rules-for-agents">Safety rules for agents</h2>
+
+<ul>
+  <li>A 402 answer is a price, not permission. Ask the person to approve the exact amount before a wallet signs.</li>
+  <li>Never send a wallet’s private key or recovery phrase to HivemindOS. The payment is a signature the wallet makes itself.</li>
+  <li>HivemindOS sets the recipient, network, asset and price on its server. Do not try to change them.</li>
+</ul>
+
+<h2 id="find-it-in-the-x402-bazaar">Find it in the x402 Bazaar</h2>
+
+<p>Every route here describes its input and output for the Coinbase x402 Bazaar, so agents that search the Bazaar can find it. A route shows up there after its first paid call.</p>
+
+<p>Continue with <a href="agent-setup.html">agent setup</a>, <a href="mcp.html">connect with MCP</a>, or the <a href="reference.html">complete API reference</a>.</p>
+
+        <nav class="pageNav" aria-label="Previous and next pages" hidden>
+          <a class="pageNavCard pageNavPrev" data-page-prev href="#">
+            <span>Previous</span>
+            <strong></strong>
+          </a>
+          <a class="pageNavCard pageNavNext" data-page-next href="#">
+            <span>Next</span>
+            <strong></strong>
+          </a>
+        </nav>
+      </article>
+    </main>
+
+    <aside class="pageOutline" aria-label="On this page" hidden>
+      <p>On this page</p>
+      <nav data-page-outline></nav>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/pay-per-call.md">Improve this page ↗</a>
+    </aside>
+  </div>
+
+  <footer class="siteFooter">
+    <div>
+      <strong>HivemindOS</strong>
+      <span>The HivemindOS backend for your product.</span>
+    </div>
+    <div class="footerLinks">
+      <a href="https://hivemindos.app/superagent-api/">SuperAgent API</a>
+      <a href="https://api.hivemindos.app/openapi.json">OpenAPI</a>
+      <a href="https://hivemindos.app/docs/">HivemindOS Docs</a>
+    </div>
+  </footer>
+
+  <dialog class="imageViewer" aria-label="Expanded media viewer" data-image-viewer>
+    <header class="imageViewerBar">
+      <div class="imageViewerHeading">
+        <strong data-viewer-title>Expanded image</strong>
+        <span>Scroll to pan · Esc to close</span>
+      </div>
+      <div class="imageViewerControls" aria-label="Image zoom controls">
+        <button type="button" data-viewer-fit>Fit</button>
+        <div class="imageViewerZoomGroup">
+          <button type="button" aria-label="Zoom out" data-viewer-zoom-out>−</button>
+          <output aria-live="polite" data-viewer-zoom>100%</output>
+          <button type="button" aria-label="Zoom in" data-viewer-zoom-in>+</button>
+        </div>
+        <button class="imageViewerClose" type="button" data-viewer-close>Close <span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="imageViewerViewport" tabindex="0" data-viewer-viewport>
+      <div class="imageViewerCanvas" data-viewer-canvas></div>
+    </div>
+    <p class="imageViewerCaption" data-viewer-caption hidden></p>
+  </dialog>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const normalizePath = (href) => {
+      const url = new URL(href, window.location.href);
+      const pathname = url.pathname.replace(/index\.html$/, "");
+      return pathname.endsWith("/") ? pathname : pathname.replace(/\.html$/, "");
+    };
+
+    const currentPath = normalizePath(window.location.href);
+    const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
+    const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
+
+    if (currentIndex >= 0) {
+      navLinks[currentIndex].classList.add("isActive");
+      navLinks[currentIndex].setAttribute("aria-current", "page");
+      navLinks[currentIndex].closest("details")?.setAttribute("open", "");
+
+      const pageNav = document.querySelector(".pageNav");
+      const previous = navLinks[currentIndex - 1];
+      const next = navLinks[currentIndex + 1];
+      const wireCard = (card, link) => {
+        if (!card || !link) {
+          card?.remove();
+          return;
+        }
+        card.href = link.href;
+        card.querySelector("strong").textContent = link.textContent.trim();
+      };
+
+      wireCard(document.querySelector("[data-page-prev]"), previous);
+      wireCard(document.querySelector("[data-page-next]"), next);
+      if (pageNav && (previous || next)) pageNav.hidden = false;
+    }
+
+    const navSearch = document.querySelector("#navSearch");
+    const searchEmpty = document.querySelector(".searchEmpty");
+    navSearch?.addEventListener("input", () => {
+      const query = navSearch.value.trim().toLowerCase();
+      let visibleSections = 0;
+      document.querySelectorAll(".navSection").forEach((section) => {
+        let sectionHasMatch = false;
+        section.querySelectorAll(":scope > .navLink").forEach((link) => {
+          const matches = !query || link.textContent.toLowerCase().includes(query);
+          link.hidden = !matches;
+          sectionHasMatch ||= matches;
+        });
+        section.querySelectorAll(".navGroup").forEach((group) => {
+          const summary = group.querySelector("summary")?.textContent.toLowerCase() || "";
+          const groupMatches = !query || summary.includes(query);
+          let childMatches = false;
+          group.querySelectorAll(".navLink").forEach((link) => {
+            const matches = groupMatches || link.textContent.toLowerCase().includes(query);
+            link.hidden = !matches;
+            childMatches ||= matches;
+          });
+          group.hidden = !(groupMatches || childMatches);
+          sectionHasMatch ||= groupMatches || childMatches;
+          if (query && childMatches) group.setAttribute("open", "");
+        });
+        section.hidden = !sectionHasMatch;
+        if (sectionHasMatch) visibleSections += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visibleSections > 0;
+    });
+
+    window.addEventListener("keydown", (event) => {
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.matches("input, textarea, select") || activeElement?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        navSearch?.focus();
+      }
+      if (event.key === "Escape") closeNavigation();
+    });
+
+    const navToggle = document.querySelector("[data-nav-toggle]");
+    const closeNavigation = () => {
+      document.body.classList.remove("navOpen");
+      navToggle?.setAttribute("aria-expanded", "false");
+    };
+    navToggle?.addEventListener("click", () => {
+      const isOpen = document.body.classList.toggle("navOpen");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelector("[data-nav-close]")?.addEventListener("click", closeNavigation);
+    document.querySelector("[data-nav-backdrop]")?.addEventListener("click", closeNavigation);
+    document.querySelectorAll(".sideNav a").forEach((link) => link.addEventListener("click", closeNavigation));
+
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fall through for embedded or permission-restricted browsers.
+        }
+      }
+      const copyField = document.createElement("textarea");
+      copyField.value = text;
+      copyField.setAttribute("readonly", "");
+      copyField.className = "clipboardCopyField";
+      document.body.appendChild(copyField);
+      copyField.select();
+      const copied = document.execCommand("copy");
+      copyField.remove();
+      if (!copied) throw new Error("Browser clipboard access is unavailable");
+    };
+
+    document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const original = button.innerHTML;
+      try {
+        await copyTextToClipboard(window.location.href);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+      window.setTimeout(() => { button.innerHTML = original; }, 1400);
+    });
+
+    document.querySelector("[data-copy-ai]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const label = button.querySelector("[data-copy-ai-label]");
+      const originalLabel = label.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(button.dataset.copyAiUrl, { headers: { Accept: "text/plain" } });
+        if (!response.ok) throw new Error(`Investor context request failed with ${response.status}`);
+        const investorContext = await response.text();
+        if (!investorContext.includes("HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE") || !investorContext.includes("=== BEGIN DOCUMENT ===")) {
+          throw new Error("Investor context bundle is malformed");
+        }
+        await copyTextToClipboard(investorContext);
+        label.textContent = "Investor docs copied";
+      } catch {
+        label.textContent = "Copy failed";
+      } finally {
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        window.setTimeout(() => { label.textContent = originalLabel; }, 1800);
+      }
+    });
+
+    const outline = document.querySelector(".pageOutline");
+    const outlineNav = document.querySelector("[data-page-outline]");
+    const headings = Array.from(document.querySelectorAll(".docContent h2"));
+    const usedIds = new Set();
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const baseId = heading.textContent.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
+        let id = baseId;
+        let suffix = 2;
+        while (usedIds.has(id) || document.getElementById(id)) id = `${baseId}-${suffix++}`;
+        heading.id = id;
+      }
+      usedIds.add(heading.id);
+      const link = document.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent;
+      outlineNav?.appendChild(link);
+    });
+    if (outline && headings.length > 1) outline.hidden = false;
+
+    const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.id = `mermaid-${index}`;
+      diagram.textContent = code.textContent;
+      const wrapper = code.closest(".highlighter-rouge") || code.closest("pre") || code;
+      wrapper.replaceWith(diagram);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        background: "#14161c",
+        primaryColor: "#211d16",
+        primaryTextColor: "#f3f0e9",
+        primaryBorderColor: "#e7b45c",
+        lineColor: "#a7a39a",
+        secondaryColor: "#15221f",
+        tertiaryColor: "#1b1e25",
+        fontFamily: "Geist, system-ui, sans-serif"
+      }
+    });
+
+    for (const node of document.querySelectorAll(".mermaid")) {
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch (error) {
+        node.classList.add("mermaidError");
+        node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
+      }
+    }
+
+    const imageViewer = document.querySelector("[data-image-viewer]");
+    const viewerCanvas = document.querySelector("[data-viewer-canvas]");
+    const viewerViewport = document.querySelector("[data-viewer-viewport]");
+    const viewerTitle = document.querySelector("[data-viewer-title]");
+    const viewerCaption = document.querySelector("[data-viewer-caption]");
+    const viewerZoomLabel = document.querySelector("[data-viewer-zoom]");
+    const viewerZoomOut = document.querySelector("[data-viewer-zoom-out]");
+    const viewerZoomIn = document.querySelector("[data-viewer-zoom-in]");
+    let viewerScale = 1;
+    let viewerBaseWidth = 1;
+    let viewerBaseHeight = 1;
+    let viewerMedia = null;
+    let viewerSource = null;
+    let restoreViewerMedia = null;
+
+    const setViewerScale = (nextScale) => {
+      viewerScale = Math.min(4, Math.max(0.25, nextScale));
+      if (viewerMedia) viewerMedia.style.width = `${Math.round(viewerBaseWidth * viewerScale)}px`;
+      if (viewerZoomLabel) viewerZoomLabel.textContent = `${Math.round(viewerScale * 100)}%`;
+      if (viewerZoomOut) viewerZoomOut.disabled = viewerScale <= 0.25;
+      if (viewerZoomIn) viewerZoomIn.disabled = viewerScale >= 4;
+    };
+
+    const fitViewerMedia = () => {
+      if (!viewerViewport) return;
+      const availableWidth = Math.max(160, viewerViewport.clientWidth - 64);
+      const availableHeight = Math.max(120, viewerViewport.clientHeight - 64);
+      setViewerScale(Math.min(1, availableWidth / viewerBaseWidth, availableHeight / viewerBaseHeight));
+    };
+
+    const mediaSectionTitle = (source) => {
+      const headings = Array.from(document.querySelectorAll(".docContent h2, .docContent h3"));
+      const preceding = headings.filter((heading) => heading.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.at(-1)?.textContent.trim() || "Expanded image";
+    };
+
+    const openMediaViewer = (source) => {
+      if (!imageViewer || !viewerCanvas || !viewerViewport) return;
+      restoreViewerMedia?.();
+      viewerCanvas.replaceChildren();
+      viewerSource = source;
+      viewerTitle.textContent = mediaSectionTitle(source);
+      const figureCaption = source.closest("figure")?.querySelector("figcaption")?.textContent.trim();
+      const imageAlt = source instanceof HTMLImageElement ? source.alt.trim() : "";
+      const caption = figureCaption || imageAlt;
+      viewerCaption.textContent = caption;
+      viewerCaption.hidden = !caption;
+
+      if (source instanceof HTMLImageElement) {
+        viewerMedia = source.cloneNode();
+        viewerMedia.removeAttribute("width");
+        viewerMedia.removeAttribute("height");
+        viewerMedia.className = "imageViewerMedia";
+        viewerMedia.alt = source.alt;
+        viewerBaseWidth = source.naturalWidth || source.getBoundingClientRect().width;
+        viewerBaseHeight = source.naturalHeight || source.getBoundingClientRect().height;
+        restoreViewerMedia = null;
+      } else {
+        const svg = source.querySelector("svg");
+        if (!svg) return;
+        const placeholder = document.createComment("diagram viewer placeholder");
+        const originalStyle = svg.getAttribute("style");
+        const originalClass = svg.getAttribute("class");
+        const renderedBounds = svg.getBoundingClientRect();
+        const viewBox = svg.viewBox?.baseVal;
+        viewerBaseWidth = viewBox?.width || renderedBounds.width;
+        viewerBaseHeight = viewBox?.height || renderedBounds.height;
+        svg.replaceWith(placeholder);
+        viewerMedia = svg;
+        viewerMedia.setAttribute("class", `${originalClass || ""} imageViewerMedia`.trim());
+        restoreViewerMedia = () => {
+          if (originalStyle === null) svg.removeAttribute("style");
+          else svg.setAttribute("style", originalStyle);
+          if (originalClass === null) svg.removeAttribute("class");
+          else svg.setAttribute("class", originalClass);
+          placeholder.replaceWith(svg);
+        };
+      }
+
+      viewerCanvas.appendChild(viewerMedia);
+      setViewerScale(1);
+      document.body.classList.add("mediaViewerOpen");
+      if (typeof imageViewer.showModal === "function") imageViewer.showModal();
+      else imageViewer.setAttribute("open", "");
+      requestAnimationFrame(() => {
+        viewerViewport.scrollLeft = Math.max(0, (viewerCanvas.scrollWidth - viewerViewport.clientWidth) / 2);
+        viewerViewport.scrollTop = Math.max(0, (viewerCanvas.scrollHeight - viewerViewport.clientHeight) / 2);
+        viewerViewport.focus({ preventScroll: true });
+      });
+    };
+
+    const registerZoomableMedia = (source, label) => {
+      if (source.closest("a")) return;
+      source.classList.add("zoomableMedia");
+      source.tabIndex = 0;
+      source.setAttribute("role", "button");
+      source.setAttribute("aria-label", label);
+      source.addEventListener("click", () => openMediaViewer(source));
+      source.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openMediaViewer(source);
+      });
+    };
+
+    document.querySelectorAll(".docContent img").forEach((image) => {
+      registerZoomableMedia(image, `Open image full screen${image.alt ? `: ${image.alt}` : ""}`);
+    });
+    document.querySelectorAll(".docContent .mermaid:not(.mermaidError)").forEach((diagram) => {
+      registerZoomableMedia(diagram, `Open ${mediaSectionTitle(diagram)} diagram full screen`);
+    });
+
+    viewerZoomOut?.addEventListener("click", () => setViewerScale(viewerScale - 0.25));
+    viewerZoomIn?.addEventListener("click", () => setViewerScale(viewerScale + 0.25));
+    document.querySelector("[data-viewer-fit]")?.addEventListener("click", fitViewerMedia);
+    document.querySelector("[data-viewer-close]")?.addEventListener("click", () => imageViewer?.close());
+    viewerViewport?.addEventListener("click", (event) => {
+      if (event.target === viewerViewport || event.target === viewerCanvas) imageViewer?.close();
+    });
+    imageViewer?.addEventListener("close", () => {
+      restoreViewerMedia?.();
+      restoreViewerMedia = null;
+      viewerCanvas?.replaceChildren();
+      document.body.classList.remove("mediaViewerOpen");
+      viewerSource?.focus({ preventScroll: true });
+      viewerSource = null;
+      viewerMedia = null;
+    });
+  </script>
+</body>
+</html>

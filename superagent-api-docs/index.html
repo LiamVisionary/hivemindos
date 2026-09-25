@@ -1,0 +1,904 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <script>if (location.hostname === "liamvisionary.github.io") location.replace("https://hivemindos.app/superagent-api/docs" + location.pathname.replace(/^\/hivemindos\/superagent-api-docs/, "") + location.search + location.hash);</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c0d11">
+  <title>HivemindOS SuperAgent API | SuperAgent API Docs</title>
+  <meta name="description" content="Use HivemindOS managed agents, apps, data, wallets, trading, and workflows as the backend for another product.">
+  <link rel="canonical" href="https://hivemindos.app/superagent-api/docs/">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/superagent-api/docs/assets/img/app-icon-1024.png">
+  <link rel="apple-touch-icon" href="/superagent-api/docs/assets/img/app-icon-1024.png">
+  <link rel="stylesheet" href="/superagent-api/docs/assets/css/site.css">
+</head>
+<body>
+  <a class="skipLink" href="#content">Skip to content</a>
+
+  <header class="siteHeader">
+    <nav class="topNav" aria-label="Primary">
+      <button class="mobileNavButton" type="button" aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-navigation" data-nav-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brandMark" href="/superagent-api/docs/" aria-label="SuperAgent API Docs home">
+        <img class="brandIcon" src="/superagent-api/docs/assets/img/app-icon-1024.png" alt="" width="40" height="40" aria-hidden="true">
+        <span class="brandName">HivemindOS</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+        <span class="brandEdition">SuperAgent API</span>
+      </a>
+      <div class="topLinks">
+        
+          <a aria-current="page" href="/superagent-api/docs/">Overview</a>
+        
+          <a href="/superagent-api/docs/explorer.html">Interactive Reference</a>
+        
+          <a href="https://hivemindos.app/superagent-api/console/">Console</a>
+        
+          <a href="https://hivemindos.app/docs/">HivemindOS Docs</a>
+        
+      </div>
+      <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
+        <span>GitHub</span>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 .2a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.49c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.08-1.88 3.75-3.66 3.95.29.25.54.74.54 1.5l-.01 2.22c0 .21.14.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <button class="navBackdrop" type="button" aria-label="Close documentation menu" data-nav-backdrop></button>
+
+  <div class="docFrame">
+    <aside id="docs-navigation" class="docSidebar" aria-label="Documentation navigation">
+      <div class="sidebarHeader">
+        <span class="sidebarKicker">Explore the docs</span>
+        <button class="sidebarClose" type="button" aria-label="Close documentation menu" data-nav-close>Close</button>
+      </div>
+      <label class="searchShell" for="navSearch">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter pages" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <p class="searchEmpty" role="status" hidden>No matching pages.</p>
+      <nav class="sideNav">
+        
+          <section class="navSection">
+            <h2>Start</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink isActive" aria-current="page" href="/superagent-api/docs/">Overview</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/agent-setup.html">Agent Setup</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/authentication.html">Authentication And Keys</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/pay-per-call.html">Pay Per Call With x402</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/mcp.html">Connect With MCP</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/limits.html">Endpoint Limits</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Build</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/services.html">Service Access</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/answer-engine.html">AI Web Search</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/memory.html">Managed Memory</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/benchmarks.html">Memory Benchmarks</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/capabilities-agents.html">Capabilities And Agents</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/compute-faucet.html">Compute, MCP, And Testnet</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/files-connections.html">Files And Connections</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/databases.html">Managed Databases</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/wallets-trading.html">Wallets And Trading</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/runs-webhooks.html">Runs And Webhooks</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Operate</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/privacy.html">Private And Confidential Access</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/projects-security.html">Projects And Isolation</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/usage-audit.html">Usage And Audit</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Reference</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/reference.html">API Reference</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/superagent-api/docs/explorer.html">Interactive Reference</a>
+              
+            
+          </section>
+        
+      </nav>
+    </aside>
+
+    <main id="content" class="docMain" tabindex="-1">
+      <article class="docContent">
+        <div class="pageTools">
+          <p class="pageKicker">SuperAgent API</p>
+          <div class="pageToolActions">
+            
+            <button class="copyPageButton" type="button" data-copy-page>
+              <span aria-hidden="true">⧉</span> Copy link
+            </button>
+          </div>
+        </div>
+        <div class="heroPanel">
+  <div>
+    <p class="eyebrow">SuperAgent API</p>
+
+    <h1 id="build-with-the-hivemindos-backend">Build with the HivemindOS backend</h1>
+
+    <p class="lede">Add agents, memory, data, wallets, trading, media, and workflows to your own product.</p>
+
+    <div class="actionRow">
+  <a href="#quickstart">Make your first call</a>
+  <a href="explorer.html">Open the API reference</a>
+</div>
+  </div>
+</div>
+
+<p>The HivemindOS SuperAgent API lets your server use managed HivemindOS features. It does <strong>not</strong> control a user’s computer or open a desktop session.</p>
+
+<div class="plainAnswer">
+  <strong>In plain English</strong>
+  <p>Your app sends a request, HivemindOS does the managed work, and your app receives the result. Paid work uses the same Agent Credit balance as the rest of HivemindOS.</p>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Resource</th>
+      <th>Address</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>API base</td>
+      <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1</code></td>
+    </tr>
+    <tr>
+      <td>Private and confidential bases</td>
+      <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/private</code> and <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/confidential</code> (<a href="privacy.html">what they include</a>)</td>
+    </tr>
+    <tr>
+      <td>Remote MCP</td>
+      <td><a href="https://api.hivemindos.app/mcp"><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/mcp</code></a></td>
+    </tr>
+    <tr>
+      <td>OpenAPI 3.1 contract</td>
+      <td><a href="https://api.hivemindos.app/openapi.json"><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/openapi.json</code></a></td>
+    </tr>
+    <tr>
+      <td>TypeScript package</td>
+      <td><code class="language-plaintext highlighter-rouge">@hivemindos/sdk</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h2 id="choose-what-you-want-to-build">Choose what you want to build</h2>
+
+<div class="docGrid">
+  <div class="docCard">
+    <h3>Give your app an agent</h3>
+    <p>Run research, swarms, mini apps, media work, publishing, analytics, and scheduled workflows.</p>
+    <a href="services.html">Browse managed services</a>
+  </div>
+  <div class="docCard">
+    <h3>Add long-term memory</h3>
+    <p>Save facts and decisions, find them later, answer from them, and keep a clear history.</p>
+    <a href="memory.html">Use managed memory</a>
+  </div>
+  <div class="docCard">
+    <h3>Store application data</h3>
+    <p>Provision a managed database, read and change records, and move a portable copy when needed.</p>
+    <a href="databases.html">Use managed databases</a>
+  </div>
+  <div class="docCard">
+    <h3>Build safer money flows</h3>
+    <p>Create managed wallets, ask for approvals, and submit bounded transfers, signatures, spot trades, and any-token swaps, including unsigned swaps for your own wallet.</p>
+    <a href="wallets-trading.html">Use wallets and trading</a>
+  </div>
+  <div class="docCard">
+    <h3>Run work in the background</h3>
+    <p>Give long jobs a durable status, save their results, and notify your app with signed webhooks.</p>
+    <a href="runs-webhooks.html">Use runs and webhooks</a>
+  </div>
+  <div class="docCard">
+    <h3>Control exactly what a key can do</h3>
+    <p>Allow only selected services and actions, then set request and spending limits for each endpoint.</p>
+    <a href="authentication.html">Create a restricted key</a>
+  </div>
+</div>
+
+<details class="advancedDetails">
+  <summary>Advanced: how the complete catalog stays predictable</summary>
+
+  <p>The managed catalog currently spans 33 stable service ids across agents, mini apps, data, media, integrations, finance, and platform services. API-key policy, projects, endpoint limits, retry safety, usage history, and Agent Credits work consistently across the suite.</p>
+
+  <p>The authenticated service catalog and capability registry are the source of truth. Each service entry includes its status and capability URL. Each capability has a stable operation id, exact access selector, request method, path template, approval mode, and run support.</p>
+
+</details>
+
+<h2 id="quickstart">Quickstart</h2>
+
+<h3 id="connect-an-mcp-compatible-agent">Connect an MCP-compatible agent</h3>
+
+<p>Add <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/mcp</code> as a remote Streamable HTTP server and send your restricted SuperAgent API key in the protected <code class="language-plaintext highlighter-rouge">Authorization</code> header. The agent receives four tools: list services, search allowed actions, read, and act. Your key’s scopes, service and operation boundaries, project, endpoint limits, approvals, and Agent Credit balance apply unchanged.</p>
+
+<p>See <a href="mcp.html">Connect an agent with MCP</a> for a ready-to-copy configuration and a least-privilege key example.</p>
+
+<h3 id="let-your-agent-configure-it">Let your agent configure it</h3>
+
+<p>On <a href="https://hivemindos.app/superagent-api/#setup">hivemindos.app/superagent-api</a>, press <strong>Copy</strong> under “Set it up with your agent”, paste it into the coding agent working on your project, and send. The agent gives you one link: sign in, add credits and approve there, and the agent collects the key, saves it in your project’s env file and checks it works. You never copy a key. See <a href="agent-setup.html">Set up the SuperAgent API with your agent</a>.</p>
+
+<p>If the agent supports reusable skills, download <a href="https://hivemindos.app/superagent-api/SKILL.md">the SuperAgent API <code class="language-plaintext highlighter-rouge">SKILL.md</code></a>. It teaches the agent how to keep managing keys, limits, capabilities, funding, tests, and audits after the first setup.</p>
+
+<p>The agent must still ask before signing or sending an x402 payment. See the <a href="agent-setup.html">agent setup guide</a> if you want to review the steps first.</p>
+
+<p>An agent with an x402 wallet can also skip the account: it can <a href="pay-per-call.html">pay for a single call</a>, such as a token report or an image, and is charged only if the call succeeds.</p>
+
+<h3 id="install-the-typescript-sdk">Install the TypeScript SDK</h3>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>npm <span class="nb">install </span>https://github.com/LiamVisionary/hivemindos-sdk/releases/download/v1.5.0/hivemindos-sdk-1.5.0.tgz
+</code></pre></div></div>
+
+<p>This installs the built SDK from its GitHub release and works with npm, pnpm and yarn. It is imported as <code class="language-plaintext highlighter-rouge">@hivemindos/sdk</code>.</p>
+
+<p>The API also works with any HTTPS client. All examples use JSON unless a database archive is being uploaded or downloaded.</p>
+
+<h3 id="create-the-first-api-key">Create the first API key</h3>
+
+<p>Use an existing HivemindOS credit token once to create a SuperAgent API key. The key below can use research and managed databases, but nothing else.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">createHivemindOSApiKey</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@hivemindos/sdk</span><span class="dl">"</span><span class="p">;</span>
+
+<span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">createHivemindOSApiKey</span><span class="p">({</span>
+  <span class="na">creditToken</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_CREDIT_TOKEN</span><span class="o">!</span><span class="p">,</span>
+  <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">my-backend-root-key-v1</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">label</span><span class="p">:</span> <span class="dl">"</span><span class="s2">My backend</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">scopes</span><span class="p">:</span> <span class="p">[</span>
+    <span class="dl">"</span><span class="s2">services:read</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services:invoke</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">databases:read</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">databases:write</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">credits:read</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">api_keys:manage</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">],</span>
+  <span class="na">allowedServices</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">hivemind-database</span><span class="dl">"</span><span class="p">],</span>
+  <span class="na">allowedOperations</span><span class="p">:</span> <span class="p">[</span>
+    <span class="dl">"</span><span class="s2">services.list</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">capabilities.list</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">actions.list</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">databases.account.read</span><span class="dl">"</span><span class="p">,</span>
+    <span class="dl">"</span><span class="s2">databases.query</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">],</span>
+  <span class="na">limits</span><span class="p">:</span> <span class="p">{</span>
+    <span class="dl">"</span><span class="s2">*</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span> <span class="na">requestsPerHour</span><span class="p">:</span> <span class="mi">1</span><span class="nx">_000</span><span class="p">,</span> <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">10</span> <span class="p">},</span>
+    <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
+      <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">60</span><span class="p">,</span>
+      <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="p">},</span>
+    <span class="dl">"</span><span class="s2">databases.actions</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span> <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">500</span> <span class="p">},</span>
+  <span class="p">},</span>
+<span class="p">});</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">result</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+
+<span class="c1">// The complete secret is returned only when the key is created.</span>
+<span class="c1">// Save it in your server-side secret manager.</span>
+<span class="kd">const</span> <span class="nx">apiKey</span> <span class="o">=</span> <span class="nx">result</span><span class="p">.</span><span class="nx">secret</span><span class="p">;</span>
+</code></pre></div></div>
+
+<p>Keys begin with <code class="language-plaintext highlighter-rouge">hmos_live_</code>. Never place one in a browser bundle, mobile binary, public repository, log, or analytics event.</p>
+
+<h3 id="call-the-api">Call the API</h3>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">HivemindOSClient</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@hivemindos/sdk</span><span class="dl">"</span><span class="p">;</span>
+
+<span class="kd">const</span> <span class="nx">hive</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">HivemindOSClient</span><span class="p">({</span>
+  <span class="na">apiKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_API_KEY</span><span class="o">!</span><span class="p">,</span>
+  <span class="na">projectId</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_PROJECT_ID</span><span class="p">,</span>
+<span class="p">});</span>
+
+<span class="kd">const</span> <span class="nx">catalog</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">list</span><span class="p">();</span>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">catalog</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">catalog</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+
+<span class="kd">const</span> <span class="nx">research</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">analyses.create</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">question</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Summarize the strongest evidence for this thesis.</span><span class="dl">"</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">research-thesis-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">research</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">research</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+</code></pre></div></div>
+
+<p>The equivalent authentication header is:</p>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">Authorization: Bearer hmos_live_...
+</span></code></pre></div></div>
+
+<p>Every mutation and spending action also requires a unique <code class="language-plaintext highlighter-rouge">Idempotency-Key</code> header.</p>
+
+<h2 id="read-the-result">Read the result</h2>
+
+<p>JSON endpoints return a stable success or failure envelope:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"services"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"This API key does not have access to that managed service."</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>Check <code class="language-plaintext highlighter-rouge">ok</code> before reading the result. Failures may also include <code class="language-plaintext highlighter-rouge">code</code>, <code class="language-plaintext highlighter-rouge">operationId</code>, <code class="language-plaintext highlighter-rouge">metric</code>, and <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code> so your app can choose the right next action.</p>
+
+<h2 id="understand-payment">Understand payment</h2>
+
+<p>Every API key belongs to one HivemindOS account. Paid API work uses that account’s Agent Credits. A request cannot charge a different account or choose its own price.</p>
+
+<p>Managed database capacity follows the account’s eligible plan. Wallet assets are separate: Agent Credits pay for managed work, while wallet assets pay transfer amounts, network fees, and trades.</p>
+
+<p>Use <code class="language-plaintext highlighter-rouge">GET /pricing</code> for the current price and <code class="language-plaintext highlighter-rouge">GET /credits/balance</code> for the current balance. Show the returned final or maximum price before paid work starts.</p>
+
+<p>An API key with <code class="language-plaintext highlighter-rouge">credits:write</code> can buy more Agent Credits through <code class="language-plaintext highlighter-rouge">POST /credits/x402/top-up</code>. The API returns a standard x402 challenge, accepts a signed Base payment, and adds the purchased credits to that key’s existing HivemindOS account. HivemindOS fixes the official revenue recipient, network, asset, price, and credited account on the server, so the caller cannot redirect a payment or fund another account.</p>
+
+<h2 id="continue">Continue</h2>
+
+<ul>
+  <li><a href="authentication.html">Authentication and API keys</a></li>
+  <li><a href="agent-setup.html">Copy-paste agent setup</a></li>
+  <li><a href="pay-per-call.html">Pay per call with x402, no key</a></li>
+  <li><a href="mcp.html">Connect an agent with MCP</a></li>
+  <li><a href="projects-security.html">Projects, isolation, and service accounts</a></li>
+  <li><a href="services.html">Service access and catalog</a></li>
+  <li><a href="memory.html">Managed memory and knowledge</a></li>
+  <li><a href="privacy.html">Private and confidential access</a></li>
+  <li><a href="capabilities-agents.html">Capabilities, agents, workflows, and mini apps</a></li>
+  <li><a href="compute-faucet.html">Hive Compute marketplace, privacy tiers, MCP, and testnet assets</a></li>
+  <li><a href="limits.html">Per-endpoint limits</a></li>
+  <li><a href="files-connections.html">Files, connections, and integrations</a></li>
+  <li><a href="databases.html">Managed databases</a></li>
+  <li><a href="wallets-trading.html">Wallets, approvals, and trading</a></li>
+  <li><a href="runs-webhooks.html">Runs, artifacts, webhooks, and errors</a></li>
+  <li><a href="usage-audit.html">Usage and audit events</a></li>
+  <li><a href="reference.html">Endpoint and scope reference</a></li>
+</ul>
+
+<p>The <a href="https://api.hivemindos.app/openapi.json">OpenAPI contract</a> remains authoritative for request and response schemas.</p>
+
+        <nav class="pageNav" aria-label="Previous and next pages" hidden>
+          <a class="pageNavCard pageNavPrev" data-page-prev href="#">
+            <span>Previous</span>
+            <strong></strong>
+          </a>
+          <a class="pageNavCard pageNavNext" data-page-next href="#">
+            <span>Next</span>
+            <strong></strong>
+          </a>
+        </nav>
+      </article>
+    </main>
+
+    <aside class="pageOutline" aria-label="On this page" hidden>
+      <p>On this page</p>
+      <nav data-page-outline></nav>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api.md">Improve this page ↗</a>
+    </aside>
+  </div>
+
+  <footer class="siteFooter">
+    <div>
+      <strong>HivemindOS</strong>
+      <span>The HivemindOS backend for your product.</span>
+    </div>
+    <div class="footerLinks">
+      <a href="https://hivemindos.app/superagent-api/">SuperAgent API</a>
+      <a href="https://api.hivemindos.app/openapi.json">OpenAPI</a>
+      <a href="https://hivemindos.app/docs/">HivemindOS Docs</a>
+    </div>
+  </footer>
+
+  <dialog class="imageViewer" aria-label="Expanded media viewer" data-image-viewer>
+    <header class="imageViewerBar">
+      <div class="imageViewerHeading">
+        <strong data-viewer-title>Expanded image</strong>
+        <span>Scroll to pan · Esc to close</span>
+      </div>
+      <div class="imageViewerControls" aria-label="Image zoom controls">
+        <button type="button" data-viewer-fit>Fit</button>
+        <div class="imageViewerZoomGroup">
+          <button type="button" aria-label="Zoom out" data-viewer-zoom-out>−</button>
+          <output aria-live="polite" data-viewer-zoom>100%</output>
+          <button type="button" aria-label="Zoom in" data-viewer-zoom-in>+</button>
+        </div>
+        <button class="imageViewerClose" type="button" data-viewer-close>Close <span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="imageViewerViewport" tabindex="0" data-viewer-viewport>
+      <div class="imageViewerCanvas" data-viewer-canvas></div>
+    </div>
+    <p class="imageViewerCaption" data-viewer-caption hidden></p>
+  </dialog>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const normalizePath = (href) => {
+      const url = new URL(href, window.location.href);
+      const pathname = url.pathname.replace(/index\.html$/, "");
+      return pathname.endsWith("/") ? pathname : pathname.replace(/\.html$/, "");
+    };
+
+    const currentPath = normalizePath(window.location.href);
+    const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
+    const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
+
+    if (currentIndex >= 0) {
+      navLinks[currentIndex].classList.add("isActive");
+      navLinks[currentIndex].setAttribute("aria-current", "page");
+      navLinks[currentIndex].closest("details")?.setAttribute("open", "");
+
+      const pageNav = document.querySelector(".pageNav");
+      const previous = navLinks[currentIndex - 1];
+      const next = navLinks[currentIndex + 1];
+      const wireCard = (card, link) => {
+        if (!card || !link) {
+          card?.remove();
+          return;
+        }
+        card.href = link.href;
+        card.querySelector("strong").textContent = link.textContent.trim();
+      };
+
+      wireCard(document.querySelector("[data-page-prev]"), previous);
+      wireCard(document.querySelector("[data-page-next]"), next);
+      if (pageNav && (previous || next)) pageNav.hidden = false;
+    }
+
+    const navSearch = document.querySelector("#navSearch");
+    const searchEmpty = document.querySelector(".searchEmpty");
+    navSearch?.addEventListener("input", () => {
+      const query = navSearch.value.trim().toLowerCase();
+      let visibleSections = 0;
+      document.querySelectorAll(".navSection").forEach((section) => {
+        let sectionHasMatch = false;
+        section.querySelectorAll(":scope > .navLink").forEach((link) => {
+          const matches = !query || link.textContent.toLowerCase().includes(query);
+          link.hidden = !matches;
+          sectionHasMatch ||= matches;
+        });
+        section.querySelectorAll(".navGroup").forEach((group) => {
+          const summary = group.querySelector("summary")?.textContent.toLowerCase() || "";
+          const groupMatches = !query || summary.includes(query);
+          let childMatches = false;
+          group.querySelectorAll(".navLink").forEach((link) => {
+            const matches = groupMatches || link.textContent.toLowerCase().includes(query);
+            link.hidden = !matches;
+            childMatches ||= matches;
+          });
+          group.hidden = !(groupMatches || childMatches);
+          sectionHasMatch ||= groupMatches || childMatches;
+          if (query && childMatches) group.setAttribute("open", "");
+        });
+        section.hidden = !sectionHasMatch;
+        if (sectionHasMatch) visibleSections += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visibleSections > 0;
+    });
+
+    window.addEventListener("keydown", (event) => {
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.matches("input, textarea, select") || activeElement?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        navSearch?.focus();
+      }
+      if (event.key === "Escape") closeNavigation();
+    });
+
+    const navToggle = document.querySelector("[data-nav-toggle]");
+    const closeNavigation = () => {
+      document.body.classList.remove("navOpen");
+      navToggle?.setAttribute("aria-expanded", "false");
+    };
+    navToggle?.addEventListener("click", () => {
+      const isOpen = document.body.classList.toggle("navOpen");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelector("[data-nav-close]")?.addEventListener("click", closeNavigation);
+    document.querySelector("[data-nav-backdrop]")?.addEventListener("click", closeNavigation);
+    document.querySelectorAll(".sideNav a").forEach((link) => link.addEventListener("click", closeNavigation));
+
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fall through for embedded or permission-restricted browsers.
+        }
+      }
+      const copyField = document.createElement("textarea");
+      copyField.value = text;
+      copyField.setAttribute("readonly", "");
+      copyField.className = "clipboardCopyField";
+      document.body.appendChild(copyField);
+      copyField.select();
+      const copied = document.execCommand("copy");
+      copyField.remove();
+      if (!copied) throw new Error("Browser clipboard access is unavailable");
+    };
+
+    document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const original = button.innerHTML;
+      try {
+        await copyTextToClipboard(window.location.href);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+      window.setTimeout(() => { button.innerHTML = original; }, 1400);
+    });
+
+    document.querySelector("[data-copy-ai]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const label = button.querySelector("[data-copy-ai-label]");
+      const originalLabel = label.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(button.dataset.copyAiUrl, { headers: { Accept: "text/plain" } });
+        if (!response.ok) throw new Error(`Investor context request failed with ${response.status}`);
+        const investorContext = await response.text();
+        if (!investorContext.includes("HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE") || !investorContext.includes("=== BEGIN DOCUMENT ===")) {
+          throw new Error("Investor context bundle is malformed");
+        }
+        await copyTextToClipboard(investorContext);
+        label.textContent = "Investor docs copied";
+      } catch {
+        label.textContent = "Copy failed";
+      } finally {
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        window.setTimeout(() => { label.textContent = originalLabel; }, 1800);
+      }
+    });
+
+    const outline = document.querySelector(".pageOutline");
+    const outlineNav = document.querySelector("[data-page-outline]");
+    const headings = Array.from(document.querySelectorAll(".docContent h2"));
+    const usedIds = new Set();
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const baseId = heading.textContent.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
+        let id = baseId;
+        let suffix = 2;
+        while (usedIds.has(id) || document.getElementById(id)) id = `${baseId}-${suffix++}`;
+        heading.id = id;
+      }
+      usedIds.add(heading.id);
+      const link = document.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent;
+      outlineNav?.appendChild(link);
+    });
+    if (outline && headings.length > 1) outline.hidden = false;
+
+    const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.id = `mermaid-${index}`;
+      diagram.textContent = code.textContent;
+      const wrapper = code.closest(".highlighter-rouge") || code.closest("pre") || code;
+      wrapper.replaceWith(diagram);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        background: "#14161c",
+        primaryColor: "#211d16",
+        primaryTextColor: "#f3f0e9",
+        primaryBorderColor: "#e7b45c",
+        lineColor: "#a7a39a",
+        secondaryColor: "#15221f",
+        tertiaryColor: "#1b1e25",
+        fontFamily: "Geist, system-ui, sans-serif"
+      }
+    });
+
+    for (const node of document.querySelectorAll(".mermaid")) {
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch (error) {
+        node.classList.add("mermaidError");
+        node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
+      }
+    }
+
+    const imageViewer = document.querySelector("[data-image-viewer]");
+    const viewerCanvas = document.querySelector("[data-viewer-canvas]");
+    const viewerViewport = document.querySelector("[data-viewer-viewport]");
+    const viewerTitle = document.querySelector("[data-viewer-title]");
+    const viewerCaption = document.querySelector("[data-viewer-caption]");
+    const viewerZoomLabel = document.querySelector("[data-viewer-zoom]");
+    const viewerZoomOut = document.querySelector("[data-viewer-zoom-out]");
+    const viewerZoomIn = document.querySelector("[data-viewer-zoom-in]");
+    let viewerScale = 1;
+    let viewerBaseWidth = 1;
+    let viewerBaseHeight = 1;
+    let viewerMedia = null;
+    let viewerSource = null;
+    let restoreViewerMedia = null;
+
+    const setViewerScale = (nextScale) => {
+      viewerScale = Math.min(4, Math.max(0.25, nextScale));
+      if (viewerMedia) viewerMedia.style.width = `${Math.round(viewerBaseWidth * viewerScale)}px`;
+      if (viewerZoomLabel) viewerZoomLabel.textContent = `${Math.round(viewerScale * 100)}%`;
+      if (viewerZoomOut) viewerZoomOut.disabled = viewerScale <= 0.25;
+      if (viewerZoomIn) viewerZoomIn.disabled = viewerScale >= 4;
+    };
+
+    const fitViewerMedia = () => {
+      if (!viewerViewport) return;
+      const availableWidth = Math.max(160, viewerViewport.clientWidth - 64);
+      const availableHeight = Math.max(120, viewerViewport.clientHeight - 64);
+      setViewerScale(Math.min(1, availableWidth / viewerBaseWidth, availableHeight / viewerBaseHeight));
+    };
+
+    const mediaSectionTitle = (source) => {
+      const headings = Array.from(document.querySelectorAll(".docContent h2, .docContent h3"));
+      const preceding = headings.filter((heading) => heading.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.at(-1)?.textContent.trim() || "Expanded image";
+    };
+
+    const openMediaViewer = (source) => {
+      if (!imageViewer || !viewerCanvas || !viewerViewport) return;
+      restoreViewerMedia?.();
+      viewerCanvas.replaceChildren();
+      viewerSource = source;
+      viewerTitle.textContent = mediaSectionTitle(source);
+      const figureCaption = source.closest("figure")?.querySelector("figcaption")?.textContent.trim();
+      const imageAlt = source instanceof HTMLImageElement ? source.alt.trim() : "";
+      const caption = figureCaption || imageAlt;
+      viewerCaption.textContent = caption;
+      viewerCaption.hidden = !caption;
+
+      if (source instanceof HTMLImageElement) {
+        viewerMedia = source.cloneNode();
+        viewerMedia.removeAttribute("width");
+        viewerMedia.removeAttribute("height");
+        viewerMedia.className = "imageViewerMedia";
+        viewerMedia.alt = source.alt;
+        viewerBaseWidth = source.naturalWidth || source.getBoundingClientRect().width;
+        viewerBaseHeight = source.naturalHeight || source.getBoundingClientRect().height;
+        restoreViewerMedia = null;
+      } else {
+        const svg = source.querySelector("svg");
+        if (!svg) return;
+        const placeholder = document.createComment("diagram viewer placeholder");
+        const originalStyle = svg.getAttribute("style");
+        const originalClass = svg.getAttribute("class");
+        const renderedBounds = svg.getBoundingClientRect();
+        const viewBox = svg.viewBox?.baseVal;
+        viewerBaseWidth = viewBox?.width || renderedBounds.width;
+        viewerBaseHeight = viewBox?.height || renderedBounds.height;
+        svg.replaceWith(placeholder);
+        viewerMedia = svg;
+        viewerMedia.setAttribute("class", `${originalClass || ""} imageViewerMedia`.trim());
+        restoreViewerMedia = () => {
+          if (originalStyle === null) svg.removeAttribute("style");
+          else svg.setAttribute("style", originalStyle);
+          if (originalClass === null) svg.removeAttribute("class");
+          else svg.setAttribute("class", originalClass);
+          placeholder.replaceWith(svg);
+        };
+      }
+
+      viewerCanvas.appendChild(viewerMedia);
+      setViewerScale(1);
+      document.body.classList.add("mediaViewerOpen");
+      if (typeof imageViewer.showModal === "function") imageViewer.showModal();
+      else imageViewer.setAttribute("open", "");
+      requestAnimationFrame(() => {
+        viewerViewport.scrollLeft = Math.max(0, (viewerCanvas.scrollWidth - viewerViewport.clientWidth) / 2);
+        viewerViewport.scrollTop = Math.max(0, (viewerCanvas.scrollHeight - viewerViewport.clientHeight) / 2);
+        viewerViewport.focus({ preventScroll: true });
+      });
+    };
+
+    const registerZoomableMedia = (source, label) => {
+      if (source.closest("a")) return;
+      source.classList.add("zoomableMedia");
+      source.tabIndex = 0;
+      source.setAttribute("role", "button");
+      source.setAttribute("aria-label", label);
+      source.addEventListener("click", () => openMediaViewer(source));
+      source.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openMediaViewer(source);
+      });
+    };
+
+    document.querySelectorAll(".docContent img").forEach((image) => {
+      registerZoomableMedia(image, `Open image full screen${image.alt ? `: ${image.alt}` : ""}`);
+    });
+    document.querySelectorAll(".docContent .mermaid:not(.mermaidError)").forEach((diagram) => {
+      registerZoomableMedia(diagram, `Open ${mediaSectionTitle(diagram)} diagram full screen`);
+    });
+
+    viewerZoomOut?.addEventListener("click", () => setViewerScale(viewerScale - 0.25));
+    viewerZoomIn?.addEventListener("click", () => setViewerScale(viewerScale + 0.25));
+    document.querySelector("[data-viewer-fit]")?.addEventListener("click", fitViewerMedia);
+    document.querySelector("[data-viewer-close]")?.addEventListener("click", () => imageViewer?.close());
+    viewerViewport?.addEventListener("click", (event) => {
+      if (event.target === viewerViewport || event.target === viewerCanvas) imageViewer?.close();
+    });
+    imageViewer?.addEventListener("close", () => {
+      restoreViewerMedia?.();
+      restoreViewerMedia = null;
+      viewerCanvas?.replaceChildren();
+      document.body.classList.remove("mediaViewerOpen");
+      viewerSource?.focus({ preventScroll: true });
+      viewerSource = null;
+      viewerMedia = null;
+    });
+  </script>
+</body>
+</html>
