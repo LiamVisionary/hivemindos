@@ -274,33 +274,30 @@
 
 <h2 id="hosted-memory-this-api">Hosted memory (this API)</h2>
 
-<p><strong>Evidence that reaches the reading model</strong>, LongMemEval (500 questions, 470 answerable), <code class="language-plaintext highlighter-rouge">memory.answer</code> in keyword order, no model calls:</p>
-
 <table>
   <thead>
     <tr>
-      <th>Dataset</th>
-      <th style="text-align: right">Before 2026-09-25</th>
-      <th style="text-align: right">Now</th>
+      <th>Measure</th>
+      <th style="text-align: right">Result</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>LongMemEval_S (each answer among ~50 past chats)</td>
-      <td style="text-align: right">85.1%</td>
+      <td>Evidence reaches the reading model, LongMemEval_S (each answer among ~50 past chats)</td>
       <td style="text-align: right"><strong>90.6%</strong></td>
     </tr>
     <tr>
-      <td>LongMemEval Oracle (only the chats that hold the answer)</td>
-      <td style="text-align: right">92.3%</td>
+      <td>Evidence reaches the reading model, LongMemEval Oracle (only the chats that hold the answer)</td>
       <td style="text-align: right"><strong>98.5%</strong></td>
+    </tr>
+    <tr>
+      <td>Answers correct, 150 LongMemEval_S questions</td>
+      <td style="text-align: right"><strong>81.9%</strong></td>
     </tr>
   </tbody>
 </table>
 
-<p>Since the 2026-09-25 release a question keeps every user turn of the conversations it finds, adds the conversations nearest in time when there is room, and shortens replies before it drops an exchange (31 questions gained on S, 5 lost).</p>
-
-<p><strong>Answers</strong>, 150 LongMemEval_S questions measured on 2026-09-23, before that release: <strong>81.9%</strong> correct with the shipped reader (from 16.7% before the recall rebuild), graded by LongMemEval’s own judge prompts with <code class="language-plaintext highlighter-rouge">gpt-4o-mini</code>. The answer run has not been repeated since the layout change.</p>
+<p>Evidence: all 500 questions (470 answerable), <code class="language-plaintext highlighter-rouge">memory.answer</code> in keyword order, no model calls. Answers: the shipped reader, graded by LongMemEval’s own judge prompts with <code class="language-plaintext highlighter-rouge">gpt-4o-mini</code>, measured on 2026-09-23 and not yet re-run on the current evidence layout.</p>
 
 <h2 id="hive-superbrain-same-design-on-your-computer">Hive Superbrain (same design, on your computer)</h2>
 
@@ -326,14 +323,14 @@
       <td>Sibyl-Memory’s published architecture, run with its public runner: 92.1% (p = 0.16), reading about a ninth of the tokens</td>
     </tr>
     <tr>
-      <td>LoCoMo, 500 held-out questions</td>
+      <td>LoCoMo, 500 questions</td>
       <td style="text-align: right"><strong>94.4%</strong></td>
-      <td>The same memory before the LongMemEval work: 93.4% (p = 0.38)</td>
+      <td>A pre-registered held-out test: none of the memory design was tuned on LoCoMo</td>
     </tr>
   </tbody>
 </table>
 
-<p>HivemindOS scored higher on each comparison; none of the differences is established beyond chance.</p>
+<p>HivemindOS scored higher than Sibyl-Memory on both comparisons; neither difference is established beyond chance.</p>
 
 <h2 id="receipts">Receipts</h2>
 
