@@ -6,9 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>HivemindOS Cloud Agent Calls | HivemindOS Docs</title>
-  <meta name="description" content="Paid LiveKit/SFU calling for managed multi-party and multi-agent voice rooms.">
-  <link rel="canonical" href="https://hivemindos.app/docs/for-investors/paid-features/hivemind-cloud-agent-calls.html">
+  <title>Pay Per Call With x402 | HivemindOS Docs</title>
+  <meta name="description" content="An agent with an x402 wallet can buy a single SuperAgent API call, or an account, in USDC on Base. No API key, no sign-up, and no charge if the call fails.">
+  <link rel="canonical" href="https://hivemindos.app/docs/for-users/platform-api/pay-per-call.html">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
@@ -222,7 +222,7 @@
               
 
               
-                <details class="navGroup">
+                <details class="navGroup" open>
                   <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
@@ -231,7 +231,7 @@
                     
                       <a class="navLink" href="/docs/for-users/platform-api/agent-setup.html">Agent Setup</a>
                     
-                      <a class="navLink" href="/docs/for-users/platform-api/pay-per-call.html">Pay Per Call With x402</a>
+                      <a class="navLink isActive" aria-current="page" href="/docs/for-users/platform-api/pay-per-call.html">Pay Per Call With x402</a>
                     
                       <a class="navLink" href="/docs/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
@@ -589,170 +589,144 @@
     <main id="content" class="docMain" tabindex="-1">
       <article class="docContent">
         <div class="pageTools">
-          <p class="pageKicker">HivemindOS manual</p>
+          <p class="pageKicker">SuperAgent API</p>
           <div class="pageToolActions">
-            
-              <button class="copyPageButton copyAiButton" type="button" title="Copy all investor documentation as an AI-ready Markdown bundle" data-copy-ai data-copy-ai-url="/docs/for-investors/ai-context.txt">
-                <span class="copyAiIcon" aria-hidden="true">✦</span>
-                <span data-copy-ai-label>Copy for AI</span>
-              </button>
             
             <button class="copyPageButton" type="button" data-copy-page>
               <span aria-hidden="true">⧉</span> Copy link
             </button>
           </div>
         </div>
-        <h1 id="hivemindos-cloud-agent-calls">HivemindOS Cloud Agent Calls</h1>
+        <h1 id="pay-per-call-with-x402">Pay per call with x402</h1>
 
-<p>HivemindOS Cloud Agent Calls are the paid version of agent voice.</p>
+<p>An agent that holds an x402 wallet on Base can use the SuperAgent API without an account or an API key. It pays for one call at a time, in USDC, and pays only when the call succeeds. It can also pay once for an account and get an API key holding the credits.</p>
 
-<p>The free call path is BYOK: one user, one selected agent, the user’s OpenAI Realtime key, and a direct dashboard or mobile call. That is enough for the normal “I want to talk to my coding agent” loop.</p>
+<h2 id="what-you-can-buy-per-call">What you can buy per call</h2>
 
-<p>Cloud Agent Calls are for the version that needs an actual room.</p>
-
-<nav class="nextNav" aria-label="Monetization reading path">
-  <a href="./">Previous: Paid Features</a>
-  <a href="../ecosystem-plan.html">Review: Ecosystem Plan</a>
-</nav>
-
-<h2 id="what-makes-it-paid">What Makes It Paid</h2>
-
-<p>LiveKit/SFU calls require managed voice infrastructure.</p>
-
-<p>HivemindOS has to create rooms, mint participant tokens, dispatch the voice worker, keep the call agent alive, route audio between participants, and pay attention to reliability. That is not just a local UI feature. It is an operated service.</p>
-
-<p>So the rule is clean:</p>
+<p><code class="language-plaintext highlighter-rouge">GET https://api.hivemindos.app/v1/x402</code> lists every operation for sale, with its price, address, an example input and the input’s schema. No key is needed to read it. Today it covers:</p>
 
 <table>
   <thead>
     <tr>
-      <th>Capability</th>
-      <th style="text-align: right">BYOK Agent Calls</th>
-      <th style="text-align: right">HivemindOS Cloud Agent Calls</th>
+      <th>Service</th>
+      <th>Operations</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>One user calls one selected agent</td>
-      <td style="text-align: right">Included</td>
-      <td style="text-align: right">Included</td>
+      <td>Hive Research</td>
+      <td>Token research at Scout, Swarm or Superbrain depth</td>
     </tr>
     <tr>
-      <td>Uses user’s OpenAI Realtime key directly</td>
-      <td style="text-align: right">Yes</td>
-      <td style="text-align: right">Optional</td>
+      <td>Token Autopsy</td>
+      <td>Standard and panel token reports</td>
     </tr>
     <tr>
-      <td>Managed LiveKit rooms</td>
-      <td style="text-align: right">No</td>
-      <td style="text-align: right">Yes</td>
+      <td>Wallet Risk</td>
+      <td>A risk snapshot of a wallet</td>
     </tr>
     <tr>
-      <td>SFU audio routing</td>
-      <td style="text-align: right">No</td>
-      <td style="text-align: right">Yes</td>
+      <td>Reddit VOC</td>
+      <td>Snapshot and deep voice-of-customer reports</td>
     </tr>
     <tr>
-      <td>Mobile-friendly room tokens</td>
-      <td style="text-align: right">No</td>
-      <td style="text-align: right">Yes</td>
+      <td>Swarm</td>
+      <td>Quick and Theater scenario runs</td>
     </tr>
     <tr>
-      <td>Multiple humans in one call</td>
-      <td style="text-align: right">No</td>
-      <td style="text-align: right">Yes</td>
+      <td>X Studio</td>
+      <td>Style skills and engagement audits of an X account</td>
     </tr>
     <tr>
-      <td>Multiple agents in one call</td>
-      <td style="text-align: right">No</td>
-      <td style="text-align: right">Yes</td>
+      <td>MiroShark</td>
+      <td>Crowd simulations</td>
     </tr>
     <tr>
-      <td>Hosted room reliability</td>
-      <td style="text-align: right">No</td>
-      <td style="text-align: right">Yes</td>
+      <td>Testnet faucet</td>
+      <td>Testnet gas and test stablecoins</td>
     </tr>
     <tr>
-      <td>Premium paid service</td>
-      <td style="text-align: right">No</td>
-      <td style="text-align: right">Yes</td>
+      <td>Media Studio</td>
+      <td>Images and video</td>
+    </tr>
+    <tr>
+      <td>Photo Keyworder</td>
+      <td>Keywords, title and description for a photo</td>
+    </tr>
+    <tr>
+      <td>SVG Studio</td>
+      <td>Vectorize, generate, edit and animate SVGs</td>
+    </tr>
+    <tr>
+      <td>Lead-gen data</td>
+      <td>Find local businesses, and enrich them</td>
     </tr>
   </tbody>
 </table>
 
-<h2 id="what-the-livekit-branch-does">What The LiveKit Branch Does</h2>
+<p>A call costs what the same operation costs an account with no HIVE stake. The price comes from the service itself when you call, so it is never out of date.</p>
 
-<p>The LiveKit branch gives HivemindOS a room model.</p>
+<h2 id="make-a-call">Make a call</h2>
 
-<p>The hub creates a LiveKit room, creates participant tokens for the dashboard or mobile app, and dispatches the HivemindOS call agent worker into the room. The worker uses OpenAI Realtime for the voice model and exposes the <code class="language-plaintext highlighter-rouge">ask_computer_agent</code> tool so the room can still reach the selected computer-side runtime.</p>
+<p>Send the operation’s input as the body:</p>
 
-<p>In code, that path is the cloud mode:</p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST https://api.hivemindos.app/v1/x402/svg-studio/svgs.generate
+Content-Type: application/json
 
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">createInAppCall</code> creates the LiveKit room and participant tokens.</li>
-  <li><code class="language-plaintext highlighter-rouge">AgentDispatchClient</code> dispatches the HivemindOS call agent worker.</li>
-  <li><code class="language-plaintext highlighter-rouge">scripts/hivemindos-call-agent-worker.mjs</code> joins the room and speaks.</li>
-  <li><code class="language-plaintext highlighter-rouge">ask_computer_agent</code> sends work back to <code class="language-plaintext highlighter-rouge">/api/phone</code>.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/phone</code> routes that request into <code class="language-plaintext highlighter-rouge">/api/chat/agent-runtime</code>.</li>
-</ul>
+{ "prompt": "Minimal flat bee logo, black and honey-yellow" }
+</span></code></pre></div></div>
 
-<p>The result is still an agent call, not a detached voice assistant.</p>
+<ol>
+  <li>The first answer is HTTP 402 with a <code class="language-plaintext highlighter-rouge">Payment-Required</code> header, priced from your input. If the input is wrong, you get HTTP 400 instead, before any payment is asked for.</li>
+  <li>Show the person the exact amount and get their approval. Then send the same request again with <code class="language-plaintext highlighter-rouge">Payment-Signature</code>. Any x402 v2 client does this step for you.</li>
+  <li>The call runs. If it succeeds, the payment settles and you get the result, with an <code class="language-plaintext highlighter-rouge">x402</code> block holding the receipt id and the transaction. If it fails, you get <code class="language-plaintext highlighter-rouge">x402.charged: false</code> and the payment is never taken, so you can try the same payment again.</li>
+</ol>
 
-<h2 id="why-sfu-matters">Why SFU Matters</h2>
+<p>Sending the same signed payment again within 30 minutes returns the same answer. The call does not run a second time and you are not charged twice.</p>
 
-<p>SFU means selective forwarding unit.</p>
+<h2 id="collect-a-background-job">Collect a background job</h2>
 
-<p>In plain English: it is the room switchboard. Each participant sends audio to the server, and the server forwards the right audio streams to the other participants.</p>
+<p>Research, reports, swarms, simulations and media run in the background. Their answer includes <code class="language-plaintext highlighter-rouge">followUp.apiKey</code>, an API key that can use only that service and can never move funds. Store it like any secret, and use it to read the result, for example:</p>
 
-<p>That matters once the call is bigger than one person and one agent. Without an SFU, every participant has to maintain direct media connections to every other participant. That gets messy fast. With an SFU, the room can handle:</p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST https://api.hivemindos.app/v1/services/token-autopsy/invoke
+Authorization: Bearer &lt;followUp.apiKey&gt;
+Idempotency-Key: &lt;unique&gt;
+Content-Type: application/json
 
-<ul>
-  <li>one user on mobile and one agent</li>
-  <li>one user on desktop, one user on mobile, and one agent</li>
-  <li>a friend joining the room</li>
-  <li>a few different agents in the same conversation</li>
-  <li>future moderation, recording, routing, and room lifecycle controls</li>
-</ul>
+{ "operationId": "reports.get", "pathParameters": { "reportId": "&lt;the id in the first answer&gt;" } }
+</span></code></pre></div></div>
 
-<h2 id="product-promise">Product Promise</h2>
+<p>If a call uses less than it was priced at, the difference stays on the same key as Agent Credits.</p>
 
-<p>The promise is not “pay to talk to your agent.”</p>
+<h2 id="buy-an-account-instead">Buy an account instead</h2>
 
-<p>The promise is: pay when HivemindOS runs the room for you.</p>
+<p>Some things are not sold per call, because they keep running or belong to an account: sites, agents, workflows, databases, wallets, trading, subscriptions and connected accounts. For those, buy an account:</p>
 
-<p>Free BYOK Agent Calls should stay the default. HivemindOS Cloud Agent Calls are for the room-shaped version of the product: shared calls, mobile-friendly rooms, multi-agent conversations, and managed reliability.</p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST https://api.hivemindos.app/v1/x402/accounts
+Content-Type: application/json
 
-<h2 id="required-service-configuration">Required Service Configuration</h2>
+{ "amountUsd": 5 }
+</span></code></pre></div></div>
 
-<p>Cloud calls require LiveKit credentials on the managed service side:</p>
+<p>After the same 402 and <code class="language-plaintext highlighter-rouge">Payment-Signature</code> steps, the answer is an API key holding that many Agent Credits (500 per dollar, from $1 to $500) for every service. Save it as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_API_KEY</code>. It can never move funds. To manage the account in a browser later, use the <a href="https://hivemindos.app/superagent-api/console/">console</a>.</p>
 
-<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>LIVEKIT_URL
-LIVEKIT_API_KEY
-LIVEKIT_API_SECRET
-</code></pre></div></div>
+<h2 id="private-tiers">Private tiers</h2>
 
-<p>The HivemindOS call agent worker also needs an OpenAI Realtime key:</p>
+<p>The same routes work under <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/private/x402</code> and <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/confidential/x402</code>. There, only operations that meet the tier are sold. See <a href="privacy.html">privacy tiers</a>.</p>
 
-<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>OPENAI_REALTIME_KEY
-OPENAI_API_KEY
-</code></pre></div></div>
-
-<p>In local development, <code class="language-plaintext highlighter-rouge">pnpm tauri:dev</code> starts the worker when the required environment is present. In packaged or hosted premium service form, those credentials belong to the managed HivemindOS Cloud service, not to the user’s normal local setup.</p>
-
-<h2 id="main-code-paths">Main Code Paths</h2>
+<h2 id="safety-rules-for-agents">Safety rules for agents</h2>
 
 <ul>
-  <li><code class="language-plaintext highlighter-rouge">src/lib/services/phone/realtime-voice.ts</code></li>
-  <li><code class="language-plaintext highlighter-rouge">src/lib/services/phone/call-gateway.ts</code></li>
-  <li><code class="language-plaintext highlighter-rouge">src/app/api/phone/route.ts</code></li>
-  <li><code class="language-plaintext highlighter-rouge">scripts/hivemindos-call-agent-worker.mjs</code></li>
-  <li><code class="language-plaintext highlighter-rouge">scripts/tauri-next-dev.mjs</code></li>
+  <li>A 402 answer is a price, not permission. Ask the person to approve the exact amount before a wallet signs.</li>
+  <li>Never send a wallet’s private key or recovery phrase to HivemindOS. The payment is a signature the wallet makes itself.</li>
+  <li>HivemindOS sets the recipient, network, asset and price on its server. Do not try to change them.</li>
 </ul>
 
-<nav class="nextNav" aria-label="Monetization reading path">
-  <a href="./">Back to paid features</a>
-  <a href="../">Back to monetization</a>
-</nav>
+<h2 id="find-it-in-the-x402-bazaar">Find it in the x402 Bazaar</h2>
+
+<p>Every route here describes its input and output for the Coinbase x402 Bazaar, so agents that search the Bazaar can find it. A route shows up there after its first paid call.</p>
+
+<p>Continue with <a href="agent-setup.html">agent setup</a>, <a href="mcp.html">connect with MCP</a>, or the <a href="reference.html">complete API reference</a>.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -770,7 +744,7 @@ OPENAI_API_KEY
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-investors/paid-features/hivemind-cloud-agent-calls.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/pay-per-call.md">Improve this page ↗</a>
     </aside>
   </div>
 
