@@ -623,6 +623,16 @@
       <td>All 500 questions, excluding preference; one official judge grades every answer, including Sibyl-Memory’s own published ones; the exact memory context, answer and verdict for every question are <a href="https://github.com/LiamVisionary/hivemindos-memory-benchmarks">published</a> with free checks</td>
     </tr>
     <tr>
+      <td>LongMemEval_S against Sibyl-Memory’s architecture</td>
+      <td style="text-align: right"><strong>94.3%</strong> vs 92.1%, Claude Opus 4.6 on both sides, reading about a ninth of the text</td>
+      <td>All 500 questions with each answer buried among ~50 conversations; Sibyl-Memory’s own published runner, run by us, pre-registered; p = 0.16</td>
+    </tr>
+    <tr>
+      <td>LoCoMo held-out test</td>
+      <td style="text-align: right">93.4% before the LongMemEval work, <strong>94.4%</strong> after (p = 0.38)</td>
+      <td>Pre-registered; 500 questions HivemindOS was never tuned on; shows the changes did not overfit, not that they help there</td>
+    </tr>
+    <tr>
       <td>Live-memory recall</td>
       <td style="text-align: right"><strong>90% Top-1, 98% Top-3, 0.94 MRR</strong></td>
       <td>1,000 read-only queries over an evolving real vault corpus</td>
@@ -838,6 +848,85 @@
 <p>Limitations: the changes above were found by studying the misses on these same 500 questions, and there is no separate held-out set. They are general product behaviour rather than per-question rules, and they shipped for every user. One run per configuration. Every full run we did on this set is reported with the receipt: Sonnet 4.5 first version 91.1%, reported 95.1%, with the optional conversation ledgers 94.5%; Opus 4.6 reported 96.6%, with ledgers 96.0%. Sibyl-Memory’s own 95.6% comes from its string-matching scorer, which on step-by-step answers accepts almost any answer containing the right number anywhere; graded by the official judge, its Opus run scores 95.3%. Oracle hands each question only the conversations that hold its answer, so it tests reading and recall within them, not search through a large history.</p>
 
 <p>The <a href="https://github.com/LiamVisionary/hivemindos-memory-benchmarks/tree/main/longmemeval-oracle-2026-09-25">published receipt</a> holds the exact text the Superbrain handed the reading model for every question, every answer and every verdict. Two free checks need only the public dataset: one confirms that every piece of conversation text the model saw comes word for word from that question’s own history, and one recomputes every number above. Scripts to grade again or read again on your own API key are included.</p>
+
+<h2 id="longmemeval_s-against-sibyl-memorys-architecture">LongMemEval_S Against Sibyl-Memory’s Architecture</h2>
+
+<p>LongMemEval Oracle hands each question only the conversations that hold its answer. LongMemEval_S asks the same 500 questions with each answer buried among about 50 conversations (about 490,000 characters), which is the job a memory system is for. Sibyl-Memory has published no S result, so we ran its published architecture ourselves with its public runner: Claude Code reads the question’s whole chronological journal under Sibyl-Memory’s instructions. Its plugin product was not run, because the integration behind its plugin score is shared only with its beta testers.</p>
+
+<ul>
+  <li><strong>Both sides:</strong> Claude Opus 4.6 reading, LongMemEval’s official judge prompts with <code class="language-plaintext highlighter-rouge">gpt-4o-2024-08-06</code>.</li>
+  <li><strong>Sibyl-Memory:</strong> its runner unchanged except the per-question time limit (120 s to 600 s, because S journals are about ten times longer than Oracle’s), run with an empty home directory so no local settings reached it. The plan was published before it answered anything.</li>
+  <li><strong>HivemindOS:</strong> <code class="language-plaintext highlighter-rouge">hive-brain answer</code> as it ships, without model ordering or embeddings.</li>
+</ul>
+
+<table>
+  <thead>
+    <tr>
+      <th> </th>
+      <th style="text-align: right">HivemindOS</th>
+      <th style="text-align: right">Sibyl-Memory (architecture)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Excluding preference (470)</td>
+      <td style="text-align: right"><strong>443 (94.3%)</strong></td>
+      <td style="text-align: right">433 (92.1%)</td>
+    </tr>
+    <tr>
+      <td>All 500</td>
+      <td style="text-align: right"><strong>470 (94.0%)</strong></td>
+      <td style="text-align: right">457 (91.4%)</td>
+    </tr>
+    <tr>
+      <td>Updated facts (78)</td>
+      <td style="text-align: right"><strong>74</strong></td>
+      <td style="text-align: right">70</td>
+    </tr>
+    <tr>
+      <td>Counting across chats (133)</td>
+      <td style="text-align: right">116</td>
+      <td style="text-align: right"><strong>118</strong></td>
+    </tr>
+    <tr>
+      <td>Dates and time (133)</td>
+      <td style="text-align: right"><strong>127</strong></td>
+      <td style="text-align: right">121</td>
+    </tr>
+    <tr>
+      <td>Tokens the reading model read, per question</td>
+      <td style="text-align: right"><strong>12,096</strong></td>
+      <td style="text-align: right">111,675</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>HivemindOS answered 26 questions Sibyl-Memory missed and Sibyl-Memory 16 that HivemindOS missed (p = 0.16): higher, not established beyond chance, while handing the model about a ninth of the text. Deviations are disclosed with the <a href="https://github.com/LiamVisionary/hivemindos-memory-benchmarks/tree/main/longmemeval-s-sibyl-native-2026-09-25">receipt</a>: two copies of the run overlapped and answered 200 questions twice (the first answer counts), and requests refused for lack of API credit were re-sent.</p>
+
+<h2 id="locomo-held-out-test">LoCoMo Held-Out Test</h2>
+
+<p>The improvements behind the LongMemEval results were found on LongMemEval’s own questions. To test whether they only fit those questions, we pre-registered a comparison on LoCoMo, which none of them was developed on: 500 sampled questions, the memory code before the LongMemEval work against the code after it, Claude Opus 4.6 reading, Mem0’s published LoCoMo prompts and judge.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Code</th>
+      <th style="text-align: right">Correct</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Before (the 91.1% LongMemEval version)</td>
+      <td style="text-align: right">467 (93.4%)</td>
+    </tr>
+    <tr>
+      <td>After (current)</td>
+      <td style="text-align: right"><strong>472 (94.4%)</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The newer code answered 13 questions the older missed and missed 8 it answered (p = 0.38). The changes did not overfit LongMemEval, and they are not shown to help on LoCoMo. The newer code hands the model about twice as much text there. A second, pre-registered variant (both speakers stored as the user) produced empty memory, because saved conversations need an assistant turn; it is published as a failed run. <a href="https://github.com/LiamVisionary/hivemindos-memory-benchmarks/tree/main/locomo-heldout-2026-09-25">Receipt</a>.</p>
 
 <h2 id="public-long-conversation-suites">Public Long-Conversation Suites</h2>
 
@@ -1451,7 +1540,7 @@
   <p>On LongMemEval Oracle, all 500 questions, with LongMemEval’s official judge grading every answer, the HivemindOS Superbrain answered 96.6% correctly with Claude Opus 4.6 reading, against 95.3% for Sibyl-Memory’s Opus 4.6 run, and 95.1% with Claude Sonnet 4.5, against 92.8% for Sibyl-Memory’s Sonnet 4.5 plugin (excluding preference questions).</p>
 </blockquote>
 
-<p>The Sibyl-Memory comparison is measured. Quote it with its setup: LongMemEval Oracle, all 500 questions, the same reading model on both sides, the official <code class="language-plaintext highlighter-rouge">gpt-4o-2024-08-06</code> judge for both, and Sibyl-Memory’s own published answers. Say HivemindOS scored higher; do not say the difference is statistically significant, because it is not (p = 0.33 with Opus 4.6). Do not turn these results into an unmeasured competitor comparison, a hosted latency SLA, a universal token-savings guarantee, or a claim that pattern proposals are production-perfect. The benchmarks deliberately publish their corpus, route, sample size, and limitations so the claims can stay useful as the product evolves.</p>
+<p>The Sibyl-Memory comparison is measured. Quote it with its setup: LongMemEval Oracle, all 500 questions, the same reading model on both sides, the official <code class="language-plaintext highlighter-rouge">gpt-4o-2024-08-06</code> judge for both, and Sibyl-Memory’s own published answers. Say HivemindOS scored higher; do not say the difference is statistically significant, because it is not (p = 0.33 with Opus 4.6). The LongMemEval_S comparison is quoted the same way: all 500 S questions, Claude Opus 4.6 on both sides, Sibyl-Memory’s published architecture run by us with its public runner, 94.3% against 92.1% (p = 0.16), with HivemindOS reading about a ninth of the tokens; it is not a comparison with Sibyl-Memory’s plugin product. Do not turn these results into an unmeasured competitor comparison, a hosted latency SLA, a universal token-savings guarantee, or a claim that pattern proposals are production-perfect. The benchmarks deliberately publish their corpus, route, sample size, and limitations so the claims can stay useful as the product evolves.</p>
 
 <h2 id="reproduce-the-benchmarks">Reproduce The Benchmarks</h2>
 
