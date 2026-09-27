@@ -281,9 +281,9 @@
         </div>
         <h1 id="files-connections-and-integrations">Files, connections, and integrations</h1>
 
-<p>Upload files when a managed service needs source material. Create a connection when it needs to use another account or tool without revealing that credential to your app workers.</p>
+<p>Upload a <strong>file</strong> when a managed service needs source material. Create a <strong>connection</strong> when a service needs another account or tool, without exposing that credential to your app’s workers.</p>
 
-<p>File lists show metadata, not file bytes. Connection lists show safe labels and field names, not secret values.</p>
+<p>File lists show metadata, never file bytes. Connection lists show labels and field names, never secret values.</p>
 
 <h2 id="upload-a-file">Upload a file</h2>
 
@@ -298,55 +298,50 @@
 <span class="p">);</span>
 </code></pre></div></div>
 
-<p>Files must be between 1 byte and 25 MB. The API calculates a SHA-256 checksum. You may pass a known checksum in <code class="language-plaintext highlighter-rouge">sha256</code>; the upload fails if it does not match.</p>
+<p>Files must be between 1 byte and 25 MB. The API calculates a SHA-256 checksum; pass a known one in <code class="language-plaintext highlighter-rouge">sha256</code> and the upload fails if it does not match.</p>
 
-<details class="advancedDetails">
-  <summary>Advanced: raw HTTP upload headers</summary>
+<p>List metadata with <code class="language-plaintext highlighter-rouge">files.list()</code>, download bytes with <code class="language-plaintext highlighter-rouge">files.download(id)</code>, and delete with <code class="language-plaintext highlighter-rouge">files.remove(id)</code>. A deleted file cannot be recreated by replaying its old idempotency key.</p>
 
-  <p>HTTP uploads use the request body for bytes and these headers:</p>
+<p>Over raw HTTP, send the bytes as the request body with these headers:</p>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Header</th>
-        <th>Use</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">Content-Type</code></td>
-        <td>File media type.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">Content-Length</code></td>
-        <td>File size in bytes.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">X-File-Name</code></td>
-        <td>Customer-visible file name.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">X-Content-Sha256</code></td>
-        <td>Optional expected checksum.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-File-Purpose</code></td>
-        <td>Optional project-defined purpose.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">Idempotency-Key</code></td>
-        <td>Stable identifier for one logical upload.</td>
-      </tr>
-    </tbody>
-  </table>
-
-</details>
-
-<p>List metadata with <code class="language-plaintext highlighter-rouge">files.list()</code>, download authenticated bytes with <code class="language-plaintext highlighter-rouge">files.download(id)</code>, and delete with <code class="language-plaintext highlighter-rouge">files.remove(id)</code>. A deleted file cannot be recreated by replaying its old idempotency key.</p>
+<table>
+  <thead>
+    <tr>
+      <th>Header</th>
+      <th>Use</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Content-Type</code></td>
+      <td>File media type.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Content-Length</code></td>
+      <td>File size in bytes.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-File-Name</code></td>
+      <td>Customer-visible file name.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-Content-Sha256</code></td>
+      <td>Optional expected checksum.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-File-Purpose</code></td>
+      <td>Optional project-defined purpose.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Idempotency-Key</code></td>
+      <td>Stable identifier for one logical upload.</td>
+    </tr>
+  </tbody>
+</table>
 
 <h2 id="store-a-connection">Store a connection</h2>
 
-<p>Managed connections protect credentials for an API, OAuth account, wallet, database, remote tool server, or custom integration.</p>
+<p>A connection protects the credential for an API, OAuth account, wallet, database, remote tool server, or custom integration.</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">created</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">connections</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
   <span class="p">{</span>
@@ -367,11 +362,19 @@
 <span class="p">);</span>
 </code></pre></div></div>
 
-<p>The response returns only <code class="language-plaintext highlighter-rouge">credentialFields</code>, such as <code class="language-plaintext highlighter-rouge">["apiKey"]</code>. It never returns credential values. Updating <code class="language-plaintext highlighter-rouge">credentials</code> rotates the protected value; deleting the connection removes it from the project.</p>
+<p>The response returns only <code class="language-plaintext highlighter-rouge">credentialFields</code>, such as <code class="language-plaintext highlighter-rouge">["apiKey"]</code>, never the values. Updating <code class="language-plaintext highlighter-rouge">credentials</code> rotates the stored value; deleting the connection removes it.</p>
 
-<p>Use connection metadata for labels and the credential mapping, never for secrets. <code class="language-plaintext highlighter-rouge">authMode</code> may be <code class="language-plaintext highlighter-rouge">bearer</code>, <code class="language-plaintext highlighter-rouge">header</code>, or <code class="language-plaintext highlighter-rouge">body</code>. <code class="language-plaintext highlighter-rouge">credentialField</code> chooses the protected field. Header and body mappings also require <code class="language-plaintext highlighter-rouge">targetName</code>. Reserved HivemindOS headers cannot be replaced.</p>
+<p><code class="language-plaintext highlighter-rouge">metadata</code> holds labels and the credential mapping, never secrets:</p>
 
-<p>Pass the returned connection id when the selected capability needs it:</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">authMode</code>: <code class="language-plaintext highlighter-rouge">bearer</code>, <code class="language-plaintext highlighter-rouge">header</code>, or <code class="language-plaintext highlighter-rouge">body</code>.</li>
+  <li><code class="language-plaintext highlighter-rouge">credentialField</code>: which protected field to use.</li>
+  <li><code class="language-plaintext highlighter-rouge">targetName</code>: required for header and body modes. Reserved HivemindOS headers cannot be replaced.</li>
+</ul>
+
+<h2 id="use-a-connection">Use a connection</h2>
+
+<p>Pass the connection id when a capability needs it:</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
   <span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span>
@@ -384,13 +387,17 @@
 <span class="p">);</span>
 </code></pre></div></div>
 
-<p>The caller needs <code class="language-plaintext highlighter-rouge">connections:read</code>, the connection must be active, and a service-bound connection cannot be used with a different service. HivemindOS supplies the protected credential to the managed operation and updates <code class="language-plaintext highlighter-rouge">lastVerifiedAt</code> after a successful response. The value is never returned to the caller. For capabilities marked <code class="language-plaintext highlighter-rouge">approval: "always"</code>, include the same <code class="language-plaintext highlighter-rouge">connectionId</code> in both the approval request and the invocation.</p>
+<p>HivemindOS supplies the credential to the operation and updates <code class="language-plaintext highlighter-rouge">lastVerifiedAt</code> after a successful response. The value is never returned.</p>
+
+<ul>
+  <li>The caller needs <code class="language-plaintext highlighter-rouge">connections:read</code>, and the connection must be active.</li>
+  <li>A connection bound to one service cannot be used with another.</li>
+  <li>For capabilities marked <code class="language-plaintext highlighter-rouge">approval: "always"</code>, send the same <code class="language-plaintext highlighter-rouge">connectionId</code> in both the <a href="capabilities-agents.html#create-a-protected-action-approval">approval request</a> and the call.</li>
+</ul>
 
 <h2 id="calendar-and-remote-tool-integrations">Calendar and remote tool integrations</h2>
 
-<p>The <code class="language-plaintext highlighter-rouge">integration-broker</code> service provides managed Google Calendar and remote MCP connections without returning their OAuth or bearer credentials.</p>
-
-<p>Useful capability ids include:</p>
+<p>The <code class="language-plaintext highlighter-rouge">integration-broker</code> service connects Google Calendar and remote MCP servers without returning their OAuth or bearer credentials. Useful capability ids:</p>
 
 <ul>
   <li><code class="language-plaintext highlighter-rouge">connections.list</code></li>
@@ -401,19 +408,24 @@
   <li><code class="language-plaintext highlighter-rouge">connections.revoke</code></li>
 </ul>
 
-<p><code class="language-plaintext highlighter-rouge">google.oauth.start</code> returns an authorization URL for the account owner. The provider callback completes the connection directly with HivemindOS. Calendar writes, new remote-tool connections, and connection revocation require an input-bound approval. Remote tool calls also pass the integration broker’s method and confirmation policy.</p>
+<p><code class="language-plaintext highlighter-rouge">google.oauth.start</code> returns an authorization URL for the account owner; the provider completes the connection directly with HivemindOS. Calendar writes, new remote-tool connections, and revocations need an input-bound approval. Remote tool calls also follow the broker’s method and confirmation policy.</p>
 
-<h2 id="security-pattern">Security pattern</h2>
+<h2 id="keep-credentials-safe">Keep credentials safe</h2>
 
 <ul>
-  <li>Create and rotate credentials from a narrow project-bound key.</li>
-  <li>Give ordinary workers <code class="language-plaintext highlighter-rouge">connections:read</code> only when they need connection metadata.</li>
-  <li>Keep <code class="language-plaintext highlighter-rouge">connections:write</code> away from workloads that use the connected service.</li>
-  <li>Pass a managed <code class="language-plaintext highlighter-rouge">connectionId</code> when a registered operation needs a protected credential; do not retrieve and forward it yourself.</li>
-  <li>Delete a connection and revoke any provider-side grant when an integration is retired.</li>
+  <li>Create and rotate credentials from a narrow, project-bound key.</li>
+  <li>Give workers <code class="language-plaintext highlighter-rouge">connections:read</code> only when they need connection metadata, and keep <code class="language-plaintext highlighter-rouge">connections:write</code> away from workloads that use the connected service.</li>
+  <li>Pass a <code class="language-plaintext highlighter-rouge">connectionId</code> instead of retrieving and forwarding a credential yourself.</li>
+  <li>When you retire an integration, delete the connection and revoke the provider-side grant.</li>
 </ul>
 
-<p>Next: <a href="projects-security.html">projects and isolation</a>, <a href="capabilities-agents.html#create-a-protected-action-approval">capability approvals</a>, or the <a href="reference.html">endpoint reference</a>.</p>
+<h2 id="related">Related</h2>
+
+<ul>
+  <li><a href="projects-security.html">Projects and isolation</a></li>
+  <li><a href="capabilities-agents.html#create-a-protected-action-approval">Capability approvals</a></li>
+  <li><a href="reference.html">Endpoint reference</a></li>
+</ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

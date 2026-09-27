@@ -7,15 +7,15 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
   <title>Safety &amp; Limits | HivemindOS Docs</title>
-  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <meta name="description" content="The checks every trade and transfer passes before it runs, and the limits you set on each wallet.">
   <link rel="canonical" href="https://hivemindos.app/docs/for-users/trading/governance.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="HivemindOS">
   <meta property="og:title" content="Safety &amp; Limits | HivemindOS Docs">
-  <meta property="og:description" content="Local-first agent fleet control room documentation.">
+  <meta property="og:description" content="The checks every trade and transfer passes before it runs, and the limits you set on each wallet.">
   <meta property="og:url" content="https://hivemindos.app/docs/for-users/trading/governance.html">
   <meta name="twitter:title" content="Safety &amp; Limits | HivemindOS Docs">
-  <meta name="twitter:description" content="Local-first agent fleet control room documentation.">
+  <meta name="twitter:description" content="The checks every trade and transfer passes before it runs, and the limits you set on each wallet.">
   <meta property="og:image" content="https://hivemindos.app/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -45,13 +45,11 @@
       </a>
       <div class="topLinks">
         
+          <a href="/docs/for-users/getting-started.html">Get Started</a>
+        
           <a href="/docs/for-users/">User Guide</a>
         
-          <a href="/docs/for-users/features/">Features</a>
-        
-          <a href="/docs/for-users/whole-brain/">Hive Superbrain</a>
-        
-          <a href="/docs/for-users/trading/">Trading</a>
+          <a href="/docs/for-users/platform-api.html">API</a>
         
           <a href="/docs/for-users/troubleshooting-cookbook.html">Help</a>
         
@@ -80,14 +78,14 @@
       <nav class="sideNav">
         
           <section class="navSection">
-            <h2>Start Here</h2>
+            <h2>Get Started</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/docs/">HivemindOS Overview</a>
+                <a class="navLink" href="/docs/">Overview</a>
               
             
               
@@ -111,7 +109,7 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/">Find A Feature</a>
+                <a class="navLink" href="/docs/for-users/features/">All Features</a>
               
             
               
@@ -141,14 +139,26 @@
           </section>
         
           <section class="navSection">
-            <h2>Everyday Work</h2>
+            <h2>The Basics</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/docs/for-users/features/fleet.html">My Hive</a>
+                <details class="navGroup">
+                  <summary>My Hive</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/fleet.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/fleet-machine-permissions.html">Machine Permissions</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/hivemindos-machines.html">HivemindOS Machines</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -156,7 +166,21 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
+                <details class="navGroup">
+                  <summary>Agents And Chat</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/runtimes-and-chat.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/slash-commands.html">Slash Commands</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-plugins.html">Agent Plugins</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/computer-interaction.html">Computer Interaction</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -164,7 +188,19 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/work-and-scheduler.html">Work And Automations</a>
+                <details class="navGroup">
+                  <summary>Work And Automations</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/work-and-scheduler.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/capability-approvals.html">Capability Approvals</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-native-workflows.html">Agent-Native Workflows</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -181,6 +217,12 @@
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/brain-services.html">Memory And Knowledge</a>
                     
+                      <a class="navLink" href="/docs/for-users/whole-brain/knowledge-intake.html">Adding Knowledge</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/vault-map.html">Where Things Live</a>
+                    
                       <a class="navLink" href="/docs/for-users/whole-brain/shared-skills.html">Shared Skills</a>
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/shared-env.html">Shared Env</a>
@@ -188,6 +230,10 @@
                       <a class="navLink" href="/docs/for-users/whole-brain/sync-and-health.html">Sync And Repair</a>
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/workspaces.html">Separate Workspaces</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/device-sync.html">Phone And Desktop</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/shared-brain-benchmarks.html">Memory Benchmarks</a>
                     
                   </div>
                 </details>
@@ -198,7 +244,17 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/hivemind-sync.html">Hivemind Sync</a>
+                <details class="navGroup">
+                  <summary>Hivemind Sync</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/hivemind-sync.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/targeted-file-transfers.html">Handoff Transfers</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -206,7 +262,21 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/zero-human-companies.html">Zero Human Companies</a>
+                <details class="navGroup">
+                  <summary>Skills</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/hive-skills.html">Hive Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/third-party-skills.html">Third-Party Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/hive-fusion.html">Hive Fusion</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -214,13 +284,13 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/integrations-and-work-history.html">Integrations And History</a>
+                <a class="navLink" href="/docs/for-users/features/env-files-notifications-maintenance.html">Settings, Files, And Alerts</a>
               
             
           </section>
         
           <section class="navSection">
-            <h2>Build And Automate</h2>
+            <h2>Build And Create</h2>
             
               
               
@@ -229,6 +299,385 @@
               
                 <a class="navLink" href="/docs/for-users/features/app-builder.html">App Builder And Hosting</a>
               
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Zero Human Companies</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/zero-human-companies.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/founder-mode.html">Founder Mode</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/web-research.html">Web Research</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/connected-intelligence-private-work.html">Connected Intelligence</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/sre-investigations.html">SRE Investigations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hivemind-analytics.html">Analytics</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Communicate And Assist</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/calling.html">Calling</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/socials.html">Socials</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/inbox-triage.html">Inbox Triage</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/bookings.html">Bookings</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/x-command-bot.html">X Command Bot</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hivemind-office.html">Office Companion</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/page-agent.html">Page Agent</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/read-along.html">Read Along</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/privacy-suite.html">Privacy Suite</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/beeline.html">Beeline Family Profiles</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Money And Compute</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Wallets And Spending</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/wallets-honey-and-x402.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/finances.html">Finances</a>
+                    
+                      <a class="navLink" href="/docs/for-users/x-engagement-honey.html">HONEY For X Posts</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup" open>
+                  <summary>Trading</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/trading/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/trading/crypto.html">Crypto</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/stocks.html">Stocks</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/prediction-markets.html">Prediction Markets</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/concentrated-liquidity.html">Concentrated Liquidity</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/bankr-copy-trading.html">Copy Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/copy-trading-agent-analysis.html">Agent-Analyzed Copy Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/nansen-intelligence.html">Nansen Intelligence</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
+                    
+                      <a class="navLink isActive" aria-current="page" href="/docs/for-users/trading/governance.html">Safety And Limits</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hive-compute.html">Hive Compute</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Connections</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Integrations</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/integrations-and-work-history.html">Integrations And Work History</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/finance-district.html">Finance District</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/hivemind-database.html">Hivemind Database</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/monid.html">Monid And AKTA Pro</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/nocodb.html">NocoDB</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/twenty.html">Twenty CRM</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/usepod.html">UsePod</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>MiroShark</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/miroshark/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/miroshark/companion.html">Companion Integration</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/miroshark-and-openclaw.html">Runtime Gateways</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Labs</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/agent-evaluations.html">Agent Evaluations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/agent-challenges.html">Agent Challenges</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/loop-engineering.html">Loop Engineering</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/evo-optimization.html">Evo Optimization</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/harness-experiments.html">Harness Experiments</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/quant-research.html">Quant Research Swarm</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/signal-trader.html">Signal Trader</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/kol-radar.html">KOL Radar</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/penny-stock-paper-lab.html">Penny-Stock Paper Lab</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/prediction-proper-learning.html">Prediction-Market Learning Lab</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>SuperAgent API</h2>
             
               
               
@@ -286,263 +735,33 @@
                 </details>
               
             
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/photo-library.html">Photo Library</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/web-research.html">Web Research</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hive-fusion.html">Hive Fusion</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/packaged-skills/">Skills</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/calling.html">Calling</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/socials.html">Socials</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/bookings.html">Bookings</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hivemind-analytics.html">Analytics</a>
-              
-            
           </section>
         
           <section class="navSection">
-            <h2>Money And Compute</h2>
+            <h2>Under The Hood</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/docs/for-users/features/wallets-honey-and-x402.html">Wallets And Spending Controls</a>
-              
-            
-              
-              
-              
-
-              
-                <details class="navGroup" open>
-                  <summary>Trading</summary>
+                <details class="navGroup">
+                  <summary>How HivemindOS Works</summary>
                   <div class="navChildren">
                     
-                      <a class="navLink" href="/docs/for-users/trading/">Overview</a>
+                      <a class="navLink" href="/docs/for-users/architecture/">Overview</a>
                     
                     
-                      <a class="navLink" href="/docs/for-users/trading/crypto.html">Crypto</a>
+                      <a class="navLink" href="/docs/for-users/architecture/api-and-storage.html">API And Storage</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/stocks.html">Stocks</a>
+                      <a class="navLink" href="/docs/for-users/architecture/syncing-and-tailscale.html">Sync And Private Networking</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                      <a class="navLink" href="/docs/for-users/architecture/tailscale-fleet-telemetry.html">Fleet Telemetry</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/prediction-markets.html">Prediction Markets</a>
-                    
-                      <a class="navLink" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
-                    
-                      <a class="navLink isActive" aria-current="page" href="/docs/for-users/trading/governance.html">Safety And Limits</a>
+                      <a class="navLink" href="/docs/for-users/architecture/generated-media-signing.html">Generated Media Signing</a>
                     
                   </div>
                 </details>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hive-compute.html">Hive Compute</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
-              
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>Connections</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/">Integrations Home</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/usepod.html">UsePod</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/miroshark/">MiroShark</a>
-              
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>Advanced And Reference</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/runtimes/">Advanced Guides</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/architecture/">How HivemindOS Works</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/fleet-machine-permissions.html">Fleet Machine Permissions</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/agent-evaluations.html">Agent Evaluations</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/loop-engineering.html">Loop Engineering</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/capability-approvals.html">Capability Approvals</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/slash-commands.html">Slash Command Reference</a>
               
             
               
@@ -558,7 +777,47 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/bankr/bankr-platform-reference.html">Bankr Provider Reference</a>
+                <details class="navGroup">
+                  <summary>Advanced Agent Setups</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/hermes/local-setup.html">Hermes Local Setup</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/v01-control-plane.html">AEON Control Plane</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/zero-human-companies.html">AEON With Companies</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/github-actions-brain-access.html">AEON GitHub Actions Access</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/tailnet-generation-skills.html">Tailnet Generation Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/code-intelligence.html">Code Intelligence</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/brain-device-sync-protocol.html">Brain Device Sync Protocol</a>
               
             
           </section>
@@ -595,6 +854,30 @@
               
 
               
+                <a class="navLink" href="/docs/for-investors/hive-staking-and-community-tiers.html">HIVE Staking And Tiers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/hive-token-receipts.html">HIVE Token Receipts</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/treasury-reserve-and-seasonal-programs.html">Revenue Allocations</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/docs/for-investors/paid-features/">Paid Features</a>
               
             
@@ -616,79 +899,46 @@
         </div>
         <h1 id="safety--limits">Safety &amp; Limits</h1>
 
-<p>Every trade and transfer goes through the same set of checks before it can run. You set
-the rules once on a wallet, and they’re enforced on every action — whether you do it
-yourself or an agent does it for you.</p>
+<p>Every trade and transfer passes the same checks before it runs. You set the rules once on a wallet in <strong>Wallets</strong>, and they apply to every action, whether you start it or an agent does.</p>
 
-<h2 id="the-checks-before-anything-moves">The checks, before anything moves</h2>
+<h2 id="the-checks-before-anything-moves">The checks before anything moves</h2>
 
 <ol>
-  <li><strong>Company-task freeze switch</strong> — if you’ve frozen a company, actions performed for
-its active Work Board tasks stop immediately. The same agent’s personal, product,
-and unrelated work is not treated as company work.</li>
-  <li><strong>Per-action limits</strong> — caps on how much a single action (or a single trade) can be.
-Anything over the cap is refused.</li>
-  <li><strong>Daily &amp; monthly limits</strong> — rolling totals across everything a wallet spends, so
-activity can’t snowball past what you allow.</li>
-  <li><strong>Approval for bigger amounts</strong> — anything above your “needs approval” threshold
-pauses and waits for a yes before it goes through.</li>
+  <li><strong>Company freeze:</strong> if you freeze a company, actions for its active Work Board tasks stop immediately. The same agent’s unrelated work is not affected.</li>
+  <li><strong>Per-action limit:</strong> a single payment or trade over the cap is refused.</li>
+  <li><strong>Daily and monthly limits:</strong> rolling totals across everything the wallet spends.</li>
+  <li><strong>Approval threshold:</strong> anything above it waits for your yes.</li>
 </ol>
 
-<p>Money coming <strong>in</strong> (a sale) and <strong>practice</strong> (paper) trades don’t count against your
-spending limits. A company freeze also stops them when they belong to an active company task.</p>
+<p>Money coming in (a sale) and paper trades don’t count against your spending limits. A company freeze still stops them when they belong to an active company task.</p>
 
 <h2 id="you-always-confirm">You always confirm</h2>
 
-<p>Before a real action runs, you get a plain-English review — what it is, how much, to
-where, on which network, and any warnings — and you confirm it. In the Trade tab that’s
-the <strong>Review → Confirm</strong> step; in chat, the agent shows you the details and you reply to
-confirm. Nothing executes silently.</p>
+<p>Before a real action runs, you see a plain-English review: what it is, how much, where it goes, which network, and any warnings. In the Trade tab you confirm with <strong>Review → Confirm</strong>; in chat, the agent shows the details and you reply to confirm.</p>
 
 <h2 id="personal-wallets-never-auto-spend">Personal wallets never auto-spend</h2>
 
-<p>Your own (personal) wallet is held to the strictest rule: it <strong>never</strong> spends on its
-own. Every send, swap, or payment from it needs your explicit confirmation, every time —
-even if you asked an agent to do it. Hands-off automation is reserved for agent wallets
-you’ve deliberately set up with limits.</p>
+<p>Your own wallet never spends by itself. Every send, swap, or payment needs your confirmation, every time, even when an agent prepares it.</p>
 
-<h2 id="extra-hyperliquid-protections">Extra Hyperliquid protections</h2>
+<p>An agent wallet with spending turned on can act without asking each time, but only inside its rules: the right network, within its caps and budgets. Anything bigger, off-policy, or unusual stops and asks.</p>
 
-<p>Hyperliquid spot/perp trading and account actions can change real exchange state, so
-HivemindOS adds a few visible checkpoints:</p>
+<h2 id="hyperliquid">Hyperliquid</h2>
 
-<ul>
-  <li>You get a quote before placing a local Hyperliquid order.</li>
-  <li>Builder-fee approval, order confirmation, cancel confirmation, account changes,
-transfers, withdrawals, and TWAPs each use their own confirmation step.</li>
-  <li>The official HivemindOS builder fee is shown before the trade.</li>
-  <li>After builder-fee approval, official HivemindOS orders attach the builder code
-automatically when a fill is eligible.</li>
-  <li>Reduce-only trades are available for closing or shrinking a position.</li>
-  <li>Max trade and max payment limits apply before a new position can open, grow, or move
-funds.</li>
-  <li>A company freeze stops trades attached to an active company Work Board task; company membership alone does not stop unrelated trades.</li>
-</ul>
+<p>Hyperliquid actions add their own checkpoints: a quote before each order, separate confirmations for builder-fee approval, orders, cancels, account changes, transfers, withdrawals, and TWAPs, and reduce-only orders for shrinking a position. See <a href="hyperliquid.html">Hyperliquid Trading</a>.</p>
 
-<p>HivemindOS can enforce the wallet rules, but it cannot prevent normal market risks like
-liquidation, funding payments, slippage, or fast price moves. Keep position size inside
-what you are willing to actively manage.</p>
-
-<h2 id="agents-within-their-limits">Agents within their limits</h2>
-
-<p>An agent wallet you’ve configured with spending turned on <strong>can</strong> act without pinging
-you for every little thing — as long as it stays inside the rules you gave it (spending
-on, the right network and amount, within caps and budgets). The moment something is
-bigger than allowed, off-policy, or unusual, it stops and asks.</p>
+<p>HivemindOS enforces your wallet rules, but it cannot prevent market risks like liquidation, funding payments, slippage, or fast price moves. Keep position sizes to what you can actively manage.</p>
 
 <h2 id="everything-is-logged">Everything is logged</h2>
 
-<p>Each completed action is recorded in <strong>Wallets · Activity</strong> — what it was, how much,
-and where it went — so you always have a clear history of what happened.</p>
+<p>Each completed action appears in <strong>Wallets · Activity</strong> with what it was, how much, and where it went.</p>
 
-<hr />
+<h2 id="related">Related</h2>
 
-<p>Set these limits per wallet in the <strong>Wallets</strong> screen. For what each action does, see
-<a href="crypto.html">Crypto</a> and <a href="stocks.html">Stocks</a>.</p>
+<ul>
+  <li><a href="../features/wallets-honey-and-x402.html">Wallets And Spending Controls</a></li>
+  <li><a href="crypto.html">Crypto</a></li>
+  <li><a href="stocks.html">Stocks</a></li>
+</ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

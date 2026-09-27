@@ -6,16 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Ways to Trade | HivemindOS Docs</title>
-  <meta name="description" content="Trade from the Trade tab, by asking an agent in chat, or from your coding tools, all with the same confirmations.">
-  <link rel="canonical" href="https://hivemindos.app/docs/for-users/trading/agent-access.html">
+  <title>Prediction edge research — developer protocol | HivemindOS Docs</title>
+  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <link rel="canonical" href="https://hivemindos.app/docs/prediction-edge-research.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="HivemindOS">
-  <meta property="og:title" content="Ways to Trade | HivemindOS Docs">
-  <meta property="og:description" content="Trade from the Trade tab, by asking an agent in chat, or from your coding tools, all with the same confirmations.">
-  <meta property="og:url" content="https://hivemindos.app/docs/for-users/trading/agent-access.html">
-  <meta name="twitter:title" content="Ways to Trade | HivemindOS Docs">
-  <meta name="twitter:description" content="Trade from the Trade tab, by asking an agent in chat, or from your coding tools, all with the same confirmations.">
+  <meta property="og:title" content="Prediction edge research — developer protocol | HivemindOS Docs">
+  <meta property="og:description" content="Local-first agent fleet control room documentation.">
+  <meta property="og:url" content="https://hivemindos.app/docs/prediction-edge-research.html">
+  <meta name="twitter:title" content="Prediction edge research — developer protocol | HivemindOS Docs">
+  <meta name="twitter:description" content="Local-first agent fleet control room documentation.">
   <meta property="og:image" content="https://hivemindos.app/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -473,7 +473,7 @@
               
 
               
-                <details class="navGroup" open>
+                <details class="navGroup">
                   <summary>Trading</summary>
                   <div class="navChildren">
                     
@@ -496,7 +496,7 @@
                     
                       <a class="navLink" href="/docs/for-users/trading/nansen-intelligence.html">Nansen Intelligence</a>
                     
-                      <a class="navLink isActive" aria-current="page" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
+                      <a class="navLink" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
                     
                       <a class="navLink" href="/docs/for-users/trading/governance.html">Safety And Limits</a>
                     
@@ -897,51 +897,106 @@
             </button>
           </div>
         </div>
-        <h1 id="ways-to-trade">Ways to Trade</h1>
+        <h1 id="prediction-edge-research--developer-protocol">Prediction edge research — developer protocol</h1>
 
-<p>You can trade in three ways. All three follow the same rules and show the same preview before you confirm.</p>
+<p>This offline research harness compares a fixed family of forecasts against the market. It cannot submit orders, use credentials, collect new markets, or promote a strategy. Historical development results cannot establish an edge.</p>
 
-<h2 id="1-the-trade-tab">1. The Trade tab</h2>
+<p>The family contains the frozen market, the original evidence forecast, mixtures with 25% and 50% weight on the evidence forecast, and a 25% mixture with additional probability-sensitivity abstention. The last candidate retains the same mean probabilities for scoring but rejects fills that do not retain a 2% net edge across the reviewed sensitivity envelope. The envelope is a scenario assumption, <strong>not a calibrated confidence interval</strong>. All original fee, liquidity, minimum-size, depth, capital, event, category and resolution-window limits continue to apply.</p>
+
+<h2 id="development-audit">Development audit</h2>
+
+<div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>node scripts/prediction-edge-research.mjs audit <span class="se">\</span>
+  <span class="nt">--experiment-dir</span> &lt;existing-v2-root&gt; <span class="nt">--output-dir</span> &lt;separate-research-root&gt;
+</code></pre></div></div>
+
+<p>The command reconstructs settled observations from original forecasts, fills and public outcomes, then freezes a proposal before evaluating the declared family. It writes append-only JSON and a Markdown report. The existing V2 root is read-only. Every existing cohort, including open cohorts, is excluded from future confirmation.</p>
+
+<p>Reported historical <strong>retained-fill PnL</strong> is a diagnostic that removes original fills using recorded average costs. Historical runs before execution receipts were introduced lack full lagged books, so this cannot establish strategy profit, new fills, position resizing or execution at each price level. No missing books are reconstructed from later data.</p>
+
+<p>The independent Python audit recomputes Brier and log loss, holds market probabilities fixed in its residual placebo, resamples complete event and cohort clusters, adjusts for the declared candidate family, and removes each event in turn. Small-cluster intervals and exchangeable-residual assumptions limit inference. It always labels development evidence as ineligible for promotion.</p>
+
+<p>V2’s original validator retains its original gates. Additional gates reconcile proper scores, check exact method/market identity coverage, require positive log-loss improvement, and reject a forecaster that adds no information to market odds. The old whole-probability placebo could pass a market-copy forecast because shifting it destroyed the market’s information; the added residual test corrects this failure without deleting the original gate or changing historical artifacts.</p>
+
+<h2 id="human-approval-and-forward-research">Human approval and forward research</h2>
+
+<p>Approval is separate from a request to improve the research system. The operator must explicitly approve the exact canonical proposal digest and the <code class="language-plaintext highlighter-rouge">future-paper-shadow-only</code> scope. The approval file contains:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"prediction-edge-research-approval"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"proposalId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;exact proposal id&gt;"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"proposalDigest"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;complete canonical SHA-256 digest printed by audit&gt;"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"approved"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"approvedAt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;actual UTC approval timestamp&gt;"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"approver"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;human approver&gt;"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"scope"</span><span class="p">:</span><span class="w"> </span><span class="s2">"future-paper-shadow-only"</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>Do not create this artifact without that explicit approval. It is an attestation, not a cryptographic identity signature. Neither CLI has an approval-writing command. A changed proposal, source policy or hashed implementation requires a new review and digest-matched approval.</p>
+
+<p>Use only a canonical snapshot created after approval. Never retrofit a cohort with a missed artifact, existing forecast/run, expired deadline or overlap with development markets/events. Prepare the ordinary V2 forecast from its template and research every market using public sources accessed between snapshot and forecast creation. Supply all eight model/runtime/prompt/instruction/skill/config/calibration/reviewer digests.</p>
+
+<p>The additional evidence file is <code class="language-plaintext highlighter-rouge">{ "markets": [...] }</code>, with one entry per frozen market:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"marketId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;market id&gt;"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"resolutionRule"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;exact substantive resolution rule&gt;"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"criteriaDigest"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;digest of description, resolutionDate and resolutionSource&gt;"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"numericalReasoning"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;base rate or quantitative model, its inputs, assumptions and numerical adjustment&gt;"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"counterevidence"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;credible reasons the forecast could be wrong&gt;"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"lowerYesProbability"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.2</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"upperYesProbability"</span><span class="p">:</span><span class="w"> </span><span class="mf">0.4</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"sources"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">
+    </span><span class="p">{</span><span class="w">
+      </span><span class="nl">"url"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://example.org/public-record"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"accessedAt"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;actual access timestamp&gt;"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"receiptPath"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;local public source receipt, relative to evidence file&gt;"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"sha256"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;SHA-256 of receipt file bytes&gt;"</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"primary"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
+      </span><span class="nl">"independenceGroup"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;publisher or underlying source group&gt;"</span><span class="w">
+    </span><span class="p">}</span><span class="w">
+  </span><span class="p">]</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>Each entry needs at least two attested independent source groups, including primary evidence. Every source must appear in the reviewed forecast with the same access timestamp. Source independence and truth remain reviewer attestations; byte hashes only prove receipt consistency. The probability envelope must contain the raw evidence forecast. The harness transforms its endpoints using each candidate’s mixture and adds a minimum two-percentage-point sensitivity margin for the cautious candidate.</p>
 
 <ol>
-  <li>Open <strong>Trade</strong> and choose <strong>Crypto</strong> or <strong>Stocks</strong>.</li>
-  <li>Pick the wallet you’re acting as: your own, an agent’s, or the Bankr trading wallet.</li>
-  <li>Choose an action, review the preview, and confirm.</li>
+  <li>
+    <p>Freeze all five methods <strong>before</strong> running the original V2 cohort:</p>
+
+    <div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>node scripts/prediction-edge-shadow.mjs freeze <span class="se">\</span>
+  <span class="nt">--experiment-dir</span> &lt;v2-root&gt; <span class="nt">--output-dir</span> &lt;shadow-root&gt; <span class="se">\</span>
+  <span class="nt">--proposal</span> &lt;proposal.json&gt; <span class="nt">--approval</span> &lt;approval.json&gt; <span class="se">\</span>
+  <span class="nt">--cohort</span> &lt;<span class="nb">id</span><span class="o">&gt;</span> <span class="nt">--ai-forecasts</span> &lt;reviewed-original.json&gt; <span class="nt">--evidence</span> &lt;evidence.json&gt;
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>Wait until the printed earliest fill time, at least five minutes after shadow creation, while still before the original deadline. Run the existing V2 controller with the <strong>original</strong> reviewed forecast. It now saves the full public fill frame under <code class="language-plaintext highlighter-rouge">execution-receipts/</code>, along with original method-run digests. No second market collector is needed.</p>
+  </li>
+  <li>
+    <p>Replay the shared frame:</p>
+
+    <div class="language-sh highlighter-rouge"><div class="highlight"><pre class="highlight"><code>node scripts/prediction-edge-shadow.mjs simulate <span class="se">\</span>
+  <span class="nt">--experiment-dir</span> &lt;v2-root&gt; <span class="nt">--output-dir</span> &lt;shadow-root&gt; <span class="se">\</span>
+  <span class="nt">--proposal</span> &lt;proposal.json&gt; <span class="nt">--approval</span> &lt;approval.json&gt; <span class="se">\</span>
+  <span class="nt">--frozen</span> &lt;shadow-root/frozen/cohort.json&gt; <span class="nt">--receipt</span> &lt;canonical-execution-receipt.json&gt;
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>After the existing collector records outcomes, run <code class="language-plaintext highlighter-rouge">score</code> with the same four root/proposal/approval arguments. Scoring replays the immutable inputs and reconciles fills before reporting actual paper PnL, ROI, wins and drawdown. Every forecast is scored, including no-position markets; open outcomes are excluded.</p>
+  </li>
 </ol>
 
-<p>A personal wallet shows a shorter menu (swaps and receiving; sending is in <strong>Wallets</strong>) because personal wallets only do confirm-each actions. An agent wallet shows the full menu.</p>
+<p>The forward scorecard is descriptive and cannot grant promotion. At least 252 new settled markets, the original independent validation suite, family correction, positive forecast and economic results, and positive results without the best event remain required. Missing full-gate coverage is an explicit readiness gap. No scheduled worker is changed by these commands.</p>
 
-<h2 id="2-ask-an-agent-in-chat">2. Ask an agent in chat</h2>
+<h2 id="verification-and-recovery">Verification and recovery</h2>
 
-<p>Describe the trade in plain English:</p>
+<p>Run <code class="language-plaintext highlighter-rouge">node scripts/test-prediction-edge-research.mjs</code>, <code class="language-plaintext highlighter-rouge">node scripts/test-prediction-proper-learning-v2.mjs</code> and <code class="language-plaintext highlighter-rouge">node scripts/test-prediction-proper-betting-paper.mjs</code>. The edge suite is also registered in the fast test gate. Fixtures exercise the complete forward freeze/replay/score path, fee and depth sensitivity, approval/deadline boundaries, open-outcome exclusion and the market-copy placebo failure.</p>
 
-<ul>
-  <li><em>“swap $50 USDC to ETH”</em></li>
-  <li><em>“send 1 USDC to 0x7F31…”</em></li>
-  <li><em>“send 1 USDG from my Robinhood wallet to 0x7F31…”</em></li>
-  <li><em>“quote a $25 ETH long on Hyperliquid”</em></li>
-  <li><em>“buy $25 of HYPE spot on Hyperliquid”</em></li>
-  <li><em>“close my SOL short reduce-only”</em></li>
-  <li><em>“withdraw $10 USDC from Hyperliquid”</em></li>
-  <li><em>“buy $25 of AAPL”</em> / <em>“sell my AAPL”</em></li>
-</ul>
+<p>To stop shadow research, stop invoking its commands. Keep all artifacts, including failed candidates. V1 and V2 forecasting policies remain unchanged, and no shadow result changes the active champion. Instrumentation receipts are additive; no historical input or result needs deletion or rewriting.</p>
 
-<p>The agent shows the amount, destination, and network, then waits for your confirmation. You can also ask it to use your own wallet; it will always ask you to confirm first.</p>
-
-<h2 id="3-from-your-coding-tools">3. From your coding tools</h2>
-
-<p>Agents in <strong>Claude Code, Codex, Gemini, OpenClaw, Hermes, or Aeon</strong> get the same abilities through your connected wallets: sending stablecoins, swapping, Hyperliquid orders and account actions, and buying or selling stocks. They run under the same limits and confirmations, so an agent in your terminal can’t do anything your dashboard agent couldn’t.</p>
-
-<h2 id="the-same-promise-everywhere">The same promise everywhere</h2>
-
-<ul>
-  <li>You see a clear preview before anything happens.</li>
-  <li>You confirm explicitly, and bigger amounts can need an approval step.</li>
-  <li>Each Hyperliquid action type has its own confirmation. After you approve the builder fee once, official builds attach the builder code automatically.</li>
-  <li>Everything stays inside the wallet’s spending limits.</li>
-</ul>
-
-<p>More in <a href="governance.html">Safety &amp; Limits</a>.</p>
+<p>Research foundations: <a href="https://sites.stat.washington.edu/people/raftery/Research/PDF/Gneiting2007jasa.pdf">Gneiting and Raftery, proper scoring rules</a>; <a href="https://www.davidhbailey.com/dhbpapers/deflated-sharpe.pdf">Bailey and López de Prado, selection bias and backtest overfitting</a>.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -959,7 +1014,7 @@
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/trading/agent-access.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/prediction-edge-research.md">Improve this page ↗</a>
     </aside>
   </div>
 

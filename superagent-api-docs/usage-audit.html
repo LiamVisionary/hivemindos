@@ -281,11 +281,13 @@
         </div>
         <h1 id="usage-and-audit-events">Usage and audit events</h1>
 
-<p>Use <strong>usage</strong> to answer “How much did this app use?” Use <strong>audit events</strong> to answer “What happened on this exact request?”</p>
+<p>Use <strong>usage</strong> to answer “how much did this app use?” and <strong>audit events</strong> to answer “what happened on this exact request?”</p>
 
-<p>Usage is best for totals, trends, failures, latency, and Agent Credits. Audit events are best for support and investigation. Neither includes API secrets, connection credentials, wallet keys, request inputs, or service outputs.</p>
+<p>Neither ever includes API secrets, credit credentials, connection credentials, wallet keys, request inputs, or service outputs.</p>
 
 <h2 id="read-a-usage-summary">Read a usage summary</h2>
+
+<p>Needs the <code class="language-plaintext highlighter-rouge">usage:read</code> scope.</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">response</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">usage</span><span class="p">.</span><span class="kd">get</span><span class="p">({</span>
   <span class="na">since</span><span class="p">:</span> <span class="dl">"</span><span class="s2">2026-08-01T00:00:00.000Z</span><span class="dl">"</span><span class="p">,</span>
@@ -297,11 +299,13 @@
 <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">response</span><span class="p">.</span><span class="nx">usage</span><span class="p">.</span><span class="nx">requests</span><span class="p">,</span> <span class="nx">response</span><span class="p">.</span><span class="nx">usage</span><span class="p">.</span><span class="nx">chargedCredits</span><span class="p">);</span>
 </code></pre></div></div>
 
-<p>The summary includes total requests, failures, charged credits reported by authoritative managed services, average duration, and the same values grouped by operation id. Filter with <code class="language-plaintext highlighter-rouge">since</code>, <code class="language-plaintext highlighter-rouge">until</code>, <code class="language-plaintext highlighter-rouge">serviceId</code>, or <code class="language-plaintext highlighter-rouge">operationId</code>.</p>
+<p>The summary shows total requests, failures, charged credits, and average duration, in total and per operation id. Filter with <code class="language-plaintext highlighter-rouge">since</code>, <code class="language-plaintext highlighter-rouge">until</code>, <code class="language-plaintext highlighter-rouge">serviceId</code>, or <code class="language-plaintext highlighter-rouge">operationId</code>.</p>
 
-<p>Credits are recorded only when the owning service or Platform operation returns an authoritative charge. A zero value means no charge was reported for that request; it does not turn a paid service into a free service. Use the service price catalog and account credit history for billing reconciliation.</p>
+<p>Credits appear only when the service reports an authoritative charge. A zero means no charge was reported for that request, not that the service is free. Use the price catalog and account credit history for billing reconciliation.</p>
 
 <h2 id="read-audit-events">Read audit events</h2>
+
+<p>Needs the <code class="language-plaintext highlighter-rouge">audit:read</code> scope.</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">response</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">usage</span><span class="p">.</span><span class="nx">auditEvents</span><span class="p">({</span>
   <span class="na">operationId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">,</span>
@@ -309,26 +313,23 @@
 <span class="p">});</span>
 </code></pre></div></div>
 
-<p>Each event includes:</p>
+<p>Each event has its id and time, project and API-key id, operation and service, HTTP method and public path, final status and duration, and the charged credits when reported.</p>
+
+<h2 id="projects-and-access">Projects and access</h2>
 
 <ul>
-  <li>event id and time;</li>
-  <li>project and API-key id;</li>
-  <li>exact operation and managed service;</li>
-  <li>HTTP method and public Platform path;</li>
-  <li>final response status and duration; and</li>
-  <li>authoritative charged credits when reported.</li>
+  <li>A project-bound key reads only its project. An account-level key selects a project with <code class="language-plaintext highlighter-rouge">X-HivemindOS-Project</code>. See <a href="projects-security.html">projects</a>.</li>
+  <li>Give audit access to operator and support workloads, not ordinary workers.</li>
+  <li>To trace an asynchronous action end to end, combine audit events with <a href="runs-webhooks.html">webhook delivery receipts</a>.</li>
 </ul>
 
-<p>Audit events never include the API-key secret, credit credential, connection credential values, wallet key material, request input, or managed-service output.</p>
+<h2 id="related">Related</h2>
 
-<h2 id="project-and-key-boundaries">Project and key boundaries</h2>
-
-<p><code class="language-plaintext highlighter-rouge">usage:read</code> and <code class="language-plaintext highlighter-rouge">audit:read</code> are separate scopes. A project-bound key reads only its project. An account-level key must select a project with <code class="language-plaintext highlighter-rouge">X-HivemindOS-Project</code> when it wants a project-specific view.</p>
-
-<p>Give audit access to operator and support workloads, not ordinary execution workers. Combine these records with webhook delivery receipts when tracing an asynchronous action from request to final event.</p>
-
-<p>Next: <a href="projects-security.html">projects and isolation</a>, <a href="runs-webhooks.html">runs and webhook receipts</a>, or <a href="limits.html">per-operation limits</a>.</p>
+<ul>
+  <li><a href="projects-security.html">Projects and isolation</a></li>
+  <li><a href="runs-webhooks.html">Runs and webhooks</a></li>
+  <li><a href="limits.html">Per-endpoint limits</a></li>
+</ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

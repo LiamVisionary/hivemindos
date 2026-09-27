@@ -6,16 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>How HivemindOS Works | HivemindOS Docs</title>
-  <meta name="description" content="Advanced architecture reference for operators and contributors.">
+  <title>How HivemindOS works | HivemindOS Docs</title>
+  <meta name="description" content="How the app, your machines, the private network, the shared brain, and managed services fit together.">
   <link rel="canonical" href="https://hivemindos.app/docs/for-users/architecture/">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="HivemindOS">
-  <meta property="og:title" content="How HivemindOS Works | HivemindOS Docs">
-  <meta property="og:description" content="Advanced architecture reference for operators and contributors.">
+  <meta property="og:title" content="How HivemindOS works | HivemindOS Docs">
+  <meta property="og:description" content="How the app, your machines, the private network, the shared brain, and managed services fit together.">
   <meta property="og:url" content="https://hivemindos.app/docs/for-users/architecture/">
-  <meta name="twitter:title" content="How HivemindOS Works | HivemindOS Docs">
-  <meta name="twitter:description" content="Advanced architecture reference for operators and contributors.">
+  <meta name="twitter:title" content="How HivemindOS works | HivemindOS Docs">
+  <meta name="twitter:description" content="How the app, your machines, the private network, the shared brain, and managed services fit together.">
   <meta property="og:image" content="https://hivemindos.app/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -45,13 +45,11 @@
       </a>
       <div class="topLinks">
         
+          <a href="/docs/for-users/getting-started.html">Get Started</a>
+        
           <a href="/docs/for-users/">User Guide</a>
         
-          <a href="/docs/for-users/features/">Features</a>
-        
-          <a href="/docs/for-users/whole-brain/">Hive Superbrain</a>
-        
-          <a href="/docs/for-users/trading/">Trading</a>
+          <a href="/docs/for-users/platform-api.html">API</a>
         
           <a href="/docs/for-users/troubleshooting-cookbook.html">Help</a>
         
@@ -80,14 +78,14 @@
       <nav class="sideNav">
         
           <section class="navSection">
-            <h2>Start Here</h2>
+            <h2>Get Started</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/docs/">HivemindOS Overview</a>
+                <a class="navLink" href="/docs/">Overview</a>
               
             
               
@@ -111,7 +109,7 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/">Find A Feature</a>
+                <a class="navLink" href="/docs/for-users/features/">All Features</a>
               
             
               
@@ -141,14 +139,26 @@
           </section>
         
           <section class="navSection">
-            <h2>Everyday Work</h2>
+            <h2>The Basics</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/docs/for-users/features/fleet.html">My Hive</a>
+                <details class="navGroup">
+                  <summary>My Hive</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/fleet.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/fleet-machine-permissions.html">Machine Permissions</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/hivemindos-machines.html">HivemindOS Machines</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -156,7 +166,21 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
+                <details class="navGroup">
+                  <summary>Agents And Chat</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/runtimes-and-chat.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/slash-commands.html">Slash Commands</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-plugins.html">Agent Plugins</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/computer-interaction.html">Computer Interaction</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -164,7 +188,19 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/work-and-scheduler.html">Work And Automations</a>
+                <details class="navGroup">
+                  <summary>Work And Automations</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/work-and-scheduler.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/capability-approvals.html">Capability Approvals</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-native-workflows.html">Agent-Native Workflows</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -181,6 +217,12 @@
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/brain-services.html">Memory And Knowledge</a>
                     
+                      <a class="navLink" href="/docs/for-users/whole-brain/knowledge-intake.html">Adding Knowledge</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/vault-map.html">Where Things Live</a>
+                    
                       <a class="navLink" href="/docs/for-users/whole-brain/shared-skills.html">Shared Skills</a>
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/shared-env.html">Shared Env</a>
@@ -188,6 +230,10 @@
                       <a class="navLink" href="/docs/for-users/whole-brain/sync-and-health.html">Sync And Repair</a>
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/workspaces.html">Separate Workspaces</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/device-sync.html">Phone And Desktop</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/shared-brain-benchmarks.html">Memory Benchmarks</a>
                     
                   </div>
                 </details>
@@ -198,7 +244,17 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/hivemind-sync.html">Hivemind Sync</a>
+                <details class="navGroup">
+                  <summary>Hivemind Sync</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/hivemind-sync.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/targeted-file-transfers.html">Handoff Transfers</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -206,7 +262,21 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/zero-human-companies.html">Zero Human Companies</a>
+                <details class="navGroup">
+                  <summary>Skills</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/hive-skills.html">Hive Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/third-party-skills.html">Third-Party Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/hive-fusion.html">Hive Fusion</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -214,13 +284,13 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/integrations-and-work-history.html">Integrations And History</a>
+                <a class="navLink" href="/docs/for-users/features/env-files-notifications-maintenance.html">Settings, Files, And Alerts</a>
               
             
           </section>
         
           <section class="navSection">
-            <h2>Build And Automate</h2>
+            <h2>Build And Create</h2>
             
               
               
@@ -229,6 +299,385 @@
               
                 <a class="navLink" href="/docs/for-users/features/app-builder.html">App Builder And Hosting</a>
               
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Zero Human Companies</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/zero-human-companies.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/founder-mode.html">Founder Mode</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/web-research.html">Web Research</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/connected-intelligence-private-work.html">Connected Intelligence</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/sre-investigations.html">SRE Investigations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hivemind-analytics.html">Analytics</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Communicate And Assist</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/calling.html">Calling</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/socials.html">Socials</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/inbox-triage.html">Inbox Triage</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/bookings.html">Bookings</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/x-command-bot.html">X Command Bot</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hivemind-office.html">Office Companion</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/page-agent.html">Page Agent</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/read-along.html">Read Along</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/privacy-suite.html">Privacy Suite</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/beeline.html">Beeline Family Profiles</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Money And Compute</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Wallets And Spending</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/wallets-honey-and-x402.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/finances.html">Finances</a>
+                    
+                      <a class="navLink" href="/docs/for-users/x-engagement-honey.html">HONEY For X Posts</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Trading</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/trading/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/trading/crypto.html">Crypto</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/stocks.html">Stocks</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/prediction-markets.html">Prediction Markets</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/concentrated-liquidity.html">Concentrated Liquidity</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/bankr-copy-trading.html">Copy Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/copy-trading-agent-analysis.html">Agent-Analyzed Copy Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/nansen-intelligence.html">Nansen Intelligence</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/governance.html">Safety And Limits</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hive-compute.html">Hive Compute</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Connections</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Integrations</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/integrations-and-work-history.html">Integrations And Work History</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/finance-district.html">Finance District</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/hivemind-database.html">Hivemind Database</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/monid.html">Monid And AKTA Pro</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/nocodb.html">NocoDB</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/twenty.html">Twenty CRM</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/usepod.html">UsePod</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>MiroShark</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/miroshark/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/miroshark/companion.html">Companion Integration</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/miroshark-and-openclaw.html">Runtime Gateways</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Labs</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/agent-evaluations.html">Agent Evaluations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/agent-challenges.html">Agent Challenges</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/loop-engineering.html">Loop Engineering</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/evo-optimization.html">Evo Optimization</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/harness-experiments.html">Harness Experiments</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/quant-research.html">Quant Research Swarm</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/signal-trader.html">Signal Trader</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/kol-radar.html">KOL Radar</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/penny-stock-paper-lab.html">Penny-Stock Paper Lab</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/prediction-proper-learning.html">Prediction-Market Learning Lab</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>SuperAgent API</h2>
             
               
               
@@ -286,263 +735,33 @@
                 </details>
               
             
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/photo-library.html">Photo Library</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/web-research.html">Web Research</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hive-fusion.html">Hive Fusion</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/packaged-skills/">Skills</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/calling.html">Calling</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/socials.html">Socials</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/bookings.html">Bookings</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hivemind-analytics.html">Analytics</a>
-              
-            
           </section>
         
           <section class="navSection">
-            <h2>Money And Compute</h2>
+            <h2>Under The Hood</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/docs/for-users/features/wallets-honey-and-x402.html">Wallets And Spending Controls</a>
-              
-            
-              
-              
-              
-
-              
-                <details class="navGroup">
-                  <summary>Trading</summary>
+                <details class="navGroup" open>
+                  <summary>How HivemindOS Works</summary>
                   <div class="navChildren">
                     
-                      <a class="navLink" href="/docs/for-users/trading/">Overview</a>
+                      <a class="navLink isActive" aria-current="page" href="/docs/for-users/architecture/">Overview</a>
                     
                     
-                      <a class="navLink" href="/docs/for-users/trading/crypto.html">Crypto</a>
+                      <a class="navLink" href="/docs/for-users/architecture/api-and-storage.html">API And Storage</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/stocks.html">Stocks</a>
+                      <a class="navLink" href="/docs/for-users/architecture/syncing-and-tailscale.html">Sync And Private Networking</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                      <a class="navLink" href="/docs/for-users/architecture/tailscale-fleet-telemetry.html">Fleet Telemetry</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/prediction-markets.html">Prediction Markets</a>
-                    
-                      <a class="navLink" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
-                    
-                      <a class="navLink" href="/docs/for-users/trading/governance.html">Safety And Limits</a>
+                      <a class="navLink" href="/docs/for-users/architecture/generated-media-signing.html">Generated Media Signing</a>
                     
                   </div>
                 </details>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hive-compute.html">Hive Compute</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
-              
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>Connections</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/">Integrations Home</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/usepod.html">UsePod</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/miroshark/">MiroShark</a>
-              
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>Advanced And Reference</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/runtimes/">Advanced Guides</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink isActive" aria-current="page" href="/docs/for-users/architecture/">How HivemindOS Works</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/fleet-machine-permissions.html">Fleet Machine Permissions</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/agent-evaluations.html">Agent Evaluations</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/loop-engineering.html">Loop Engineering</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/capability-approvals.html">Capability Approvals</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/slash-commands.html">Slash Command Reference</a>
               
             
               
@@ -558,7 +777,47 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/bankr/bankr-platform-reference.html">Bankr Provider Reference</a>
+                <details class="navGroup">
+                  <summary>Advanced Agent Setups</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/hermes/local-setup.html">Hermes Local Setup</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/v01-control-plane.html">AEON Control Plane</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/zero-human-companies.html">AEON With Companies</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/github-actions-brain-access.html">AEON GitHub Actions Access</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/tailnet-generation-skills.html">Tailnet Generation Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/code-intelligence.html">Code Intelligence</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/brain-device-sync-protocol.html">Brain Device Sync Protocol</a>
               
             
           </section>
@@ -595,6 +854,30 @@
               
 
               
+                <a class="navLink" href="/docs/for-investors/hive-staking-and-community-tiers.html">HIVE Staking And Tiers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/hive-token-receipts.html">HIVE Token Receipts</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/treasury-reserve-and-seasonal-programs.html">Revenue Allocations</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/docs/for-investors/paid-features/">Paid Features</a>
               
             
@@ -614,160 +897,77 @@
             </button>
           </div>
         </div>
-        <h1 id="how-hivemindos-works">How HivemindOS Works</h1>
+        <h1 id="how-hivemindos-works">How HivemindOS works</h1>
 
-<p>This is an advanced reference for people diagnosing unusual setups, reviewing security boundaries, or changing HivemindOS itself. You do not need it for normal Chat, Work, Brain, Fleet, or Automations use.</p>
+<p>HivemindOS runs on computers you own. This page explains its parts, how they connect, and where the trust boundaries are.</p>
 
-<p>Use it when you need to know where a feature lives, how data moves, and which boundaries are sensitive. The app has a lot of surface area, but the shape is simple: local dashboard, local APIs, private collectors, shared vault, runtime adapters, and explicit rails for anything risky.</p>
-
-<h2 id="system-goals">System Goals</h2>
-
-<p>HivemindOS is built around five constraints:</p>
-
-<ul>
-  <li>Local-first operation: the dashboard, collector, runtime homes, and vault are local files and local services by default.</li>
-  <li>Private fleet networking: cross-machine discovery and control happen through Tailscale or the app-managed Hivemind Link sidecar, not public ports.</li>
-  <li>Runtime neutrality: Hermes, OpenClaw, Aeon, and OpenAI-compatible local servers are exposed through a common adapter surface where possible.</li>
-  <li>Shared brain persistence: durable collaborative state lives in an Obsidian vault when available, with narrow local fallbacks for app continuity.</li>
-  <li>Explicit safety surfaces: env sync, wallet actions, remote update, file access, and paid/API actions are routed through explicit APIs and UI controls.</li>
-</ul>
+<p>You don’t need it for everyday Chat, Work, Brain, or Fleet use. Read it when you self-host, review security, or diagnose an unusual setup.</p>
 
 <figure class="imagePlate">
-  <img src="../../assets/img/diagrams/security-trust-boundaries.jpg" alt="Generated security and trust boundaries infographic showing Public Docs, Browser, Local API, Private Vault, Wallet Keys, Tailnet, and Workers." />
+  <img src="../../assets/img/diagrams/security-trust-boundaries.jpg" alt="Security and trust boundaries infographic showing Public Docs, Browser, Local API, Private Vault, Wallet Keys, Tailnet, and Workers." />
 <figcaption>The boundaries are intentionally uneven. Public docs are public. Browser and API surfaces are local. Vault and wallet material stay private. Tailnet and Workers are explicit external edges.</figcaption>
 </figure>
 
-<h2 id="main-components">Main Components</h2>
+<h2 id="the-parts">The parts</h2>
 
 <table>
   <thead>
     <tr>
-      <th>Layer</th>
-      <th>Primary files</th>
-      <th>Responsibility</th>
+      <th>Part</th>
+      <th>What it is</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>Dashboard shell</td>
-      <td><code class="language-plaintext highlighter-rouge">src/app/page.tsx</code>, <code class="language-plaintext highlighter-rouge">src/features/dashboard/DashboardApp.tsx</code></td>
-      <td>Server-side view selection, client dashboard state, polling, navigation, and feature orchestration</td>
+      <td>The app</td>
+      <td>The dashboard (desktop app or browser) and its local API. It runs on your main computer, the hub.</td>
     </tr>
     <tr>
-      <td>Dashboard views</td>
-      <td><code class="language-plaintext highlighter-rouge">src/features/dashboard/views/**</code>, <code class="language-plaintext highlighter-rouge">src/components/**</code></td>
-      <td>Fleet, My Apps, Work/Kanban, Scheduler, Swarm, Brain/Vault, Chat, Wallet, Phone, AEON, More, Notifications, Memory, Files, Env</td>
+      <td>Your machines</td>
+      <td>Each computer in your hive runs a small collector service that reports health, agents, and apps.</td>
     </tr>
     <tr>
-      <td>API facade</td>
-      <td><code class="language-plaintext highlighter-rouge">src/app/api/**/route.ts</code></td>
-      <td>Local HTTP boundary for dashboard actions, runtime calls, fleet polling, app discovery, vault access, wallets, Honey, phone calls, MiroShark, and maintenance</td>
+      <td>The private network</td>
+      <td>Hivemind Link or your own Tailscale connects your machines. Nothing needs a public port.</td>
     </tr>
     <tr>
-      <td>Runtime adapters</td>
-      <td><code class="language-plaintext highlighter-rouge">src/lib/services/runtime-adapters/**</code></td>
-      <td>Common runtime interface for status, skills, schedules, runs, outputs, sessions, env sync, integrations, and model selection</td>
+      <td>The shared brain</td>
+      <td>A normal Obsidian vault folder that every permitted agent reads and writes.</td>
     </tr>
     <tr>
-      <td>Local services</td>
-      <td><code class="language-plaintext highlighter-rouge">src/lib/services/**</code></td>
-      <td>File-backed state, Obsidian services, telemetry, wallets, brain services, runtime utilities, integrations</td>
-    </tr>
-    <tr>
-      <td>Native bridge</td>
-      <td><code class="language-plaintext highlighter-rouge">src/lib/native/**</code>, <code class="language-plaintext highlighter-rouge">src-tauri/src/lib.rs</code></td>
-      <td>Tauri-only desktop status, local directory listing/creation/display, and native folder picker fallbacks</td>
-    </tr>
-    <tr>
-      <td>Collector</td>
-      <td><code class="language-plaintext highlighter-rouge">scripts/agent-telemetry-collector.mjs</code></td>
-      <td>Small Node HTTP service on each machine for health, snapshots, runtime chat/session bridges, Hivemind Sync env movement, skills, directories, Syncthing, transfers, and E2E hooks</td>
-    </tr>
-    <tr>
-      <td>Setup scripts</td>
-      <td><code class="language-plaintext highlighter-rouge">setup.sh</code>, <code class="language-plaintext highlighter-rouge">setup.ps1</code>, <code class="language-plaintext highlighter-rouge">uninstall.sh</code>, <code class="language-plaintext highlighter-rouge">uninstall.ps1</code>, <code class="language-plaintext highlighter-rouge">scripts/install-telemetry-collector.sh</code></td>
-      <td>Installation, collector/Link service registration, helper CLI installation, uninstall mirror</td>
+      <td>Agent runtimes</td>
+      <td>Hermes, OpenClaw, Aeon, and local OpenAI-compatible servers, reached through one common adapter layer.</td>
     </tr>
     <tr>
       <td>Managed services</td>
-      <td>HivemindOS-controlled private infrastructure</td>
-      <td>Official balances, settlement, pricing, hosted compute, managed-agent accounts, and other service-side authority that cannot safely live in a user-controlled app</td>
+      <td>Optional HivemindOS-hosted services for official balances, settlement, pricing, hosted compute, and managed cloud agents.</td>
     </tr>
   </tbody>
 </table>
 
-<h2 id="runtime-process-model">Runtime Process Model</h2>
+<h2 id="how-they-connect">How they connect</h2>
 
 <pre><code class="language-mermaid">flowchart TD
-  Browser["Browser dashboard"] --&gt; Next["Next.js app on port 5020"]
-  Tauri["Tauri desktop shell"] --&gt; Next
-  Tauri --&gt; Native["Native commands"]
-  Next --&gt; Api["/api routes"]
-  Api --&gt; Adapter["Runtime adapter registry"]
-  Adapter --&gt; Hermes["Hermes adapter"]
-  Adapter --&gt; OpenClaw["OpenClaw adapter"]
-  Adapter --&gt; Aeon["Aeon adapter"]
-  Adapter --&gt; LocalOpenAI["OpenAI-compatible adapter"]
-  Api --&gt; Collector["Collector HTTP service"]
-  Collector --&gt; RuntimeHomes["Runtime home directories"]
-  Collector --&gt; RuntimeProcesses["Runtime CLIs / gateways / APIs"]
-  Api --&gt; Vault["Obsidian vault"]
-  Api --&gt; AppHome["~/.hivemindos"]
-  Native --&gt; LocalPicker["Local folder picker / filesystem"]
+  App["HivemindOS app (desktop or browser)"] --&gt; Api["Local API"]
+  Api --&gt; Home["App data folder"]
+  Api --&gt; Vault["Shared brain vault"]
+  Api --&gt; Collector["Collector on this machine"]
+  Api --&gt; Link["Hivemind Link or Tailscale"]
+  Link --&gt; Remote["Collectors on your other machines"]
+  Collector --&gt; Runtimes["Agent runtimes and local apps"]
+  Remote --&gt; RemoteRuntimes["Agent runtimes and local apps"]
+  Api -.-&gt; Managed["Managed services (optional)"]
 </code></pre>
 
-<p>The dashboard talks to local App Router APIs. Those APIs either touch local files, call the runtime adapter registry, or proxy to a local or remote collector. The collector stays small on purpose. It reads runtime state, exposes selected actions, and reports capabilities.</p>
+<p><strong>The app.</strong> The dashboard only talks to its own local API. That API reads local files, calls agent runtimes through the adapter layer, or forwards requests to a collector. The desktop app and the browser share the same interface. The desktop app adds a few native actions, such as browsing and creating local folders, and falls back to the API when the target is another machine.</p>
 
-<h2 id="dashboard-architecture">Dashboard Architecture</h2>
+<p><strong>Collectors.</strong> A collector is a small service on each machine, on port <code class="language-plaintext highlighter-rouge">8787</code> by default. It reports machine health, agents, and apps. It also runs actions you start on purpose, such as an update or a shared-env change. See <a href="/docs/for-users/architecture/tailscale-fleet-telemetry.html">Fleet telemetry and Hivemind Link</a>.</p>
 
-<p>The dashboard route is <code class="language-plaintext highlighter-rouge">src/app/page.tsx</code>. It accepts <code class="language-plaintext highlighter-rouge">view</code> and <code class="language-plaintext highlighter-rouge">vaultPanel</code> query parameters and renders <code class="language-plaintext highlighter-rouge">DashboardApp</code> with any server-prefetched work history needed for the History view.</p>
+<p><strong>The private network.</strong> Hivemind Link is the default. It joins your own Tailscale account from inside the app and keeps the collector bound to localhost. Install the full system Tailscale client only if you need Tailscale SSH, rsync repair, or HivemindOS-managed Syncthing. Without Tailscale, HivemindOS still runs as a local dashboard with a local vault.</p>
 
-<p><code class="language-plaintext highlighter-rouge">DashboardApp</code> is the main client orchestrator. It owns persisted local UI state, fleet polling, runtime availability, env state, wallets, chat state, scheduler state, MiroShark and Swarm state, brain services, AEON state, app status, and feature wiring. Most of the real behavior is pushed into focused hooks and view components:</p>
+<p><strong>The shared brain.</strong> The vault is a normal markdown folder, usually <code class="language-plaintext highlighter-rouge">~/Documents/Obsidian/hivemindos-vault</code>. Obsidian is the editor, not the transport. You pick one sync owner to move the files between machines. See <a href="/docs/for-users/architecture/syncing-and-tailscale.html">Hivemind Sync and Tailscale</a> and <a href="../whole-brain/">Hive Superbrain</a>.</p>
 
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/hooks/use-dashboard-polling-effects.tsx</code>: repeated polling for fleet, Kanban, and MiroShark state.</li>
-  <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/hooks/use-kanban-task-controller.tsx</code>: board CRUD, task state changes, review/undo, and git status checks.</li>
-  <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/hooks/use-kanban-dispatch-controller.tsx</code>: agent dispatch, runtime session polling, completion handling, and stalled work detection.</li>
-  <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/hooks/use-scheduler-controller.tsx</code>: shared schedules and runtime schedule actions.</li>
-  <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/hooks/use-agent-controller.tsx</code>: runtime integrations, agent creation, runtime sessions, and agent settings.</li>
-  <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/hooks/use-miroshark-brain-controller.tsx</code>: MiroShark, Obsidian graph, shared skills, recent directories, GBrain/Syntho-adjacent vault context, and shared notifications.</li>
-  <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/hooks/use-wallet-files-controller.tsx</code>: wallets, Honey, runtime usage, MoneyClaw, x402, maintenance, and runtime files.</li>
-  <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/hooks/use-status-chat-input-controller.tsx</code>: chat sending, setup/status helpers, Obsidian access, and sync actions.</li>
-  <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/hooks/use-chat-tree-controller.tsx</code>: chat folder tree, runtime session hydration, directory context, and folder creation.</li>
-  <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/hooks/use-fleet-notifications-controller.tsx</code>: app version refresh, machine setup/init, notification storage, note intake, and fleet update coordination.</li>
-</ul>
-
-<p>The active top-level navigation exposes Fleet, Work, Brain, Chat, Wallet, and More. Work owns Kanban, Scheduler, Swarm, and History. More links to Integrations, My Apps, Phone, AEON, maintenance, memory telemetry, runtime files, notifications, env, and related utility views.</p>
-
-<h2 id="api-facade">API Facade</h2>
-
-<p>The app uses Next.js route handlers under <code class="language-plaintext highlighter-rouge">src/app/api</code>. That is the dashboard’s local trust boundary. Major route families are:</p>
-
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">/api/fleet/*</code>: machine discovery, snapshots, updates, provisioning helpers.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/fleet/apps</code> and <code class="language-plaintext highlighter-rouge">/api/fleet/app-icon</code>: hivenet app/service discovery, icon proxying, health checks, and API route catalogs.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/gitlawb/*</code> and <code class="language-plaintext highlighter-rouge">/api/projects/*</code>: GitLawb Code Proof status/setup plus Hivemind project registry and repo linking.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/runtimes/*</code>: runtime status, integrations, skills, schedules, runs, outputs, env sync, sessions, availability.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/chat/*</code>: runtime chat bridge, session reads, and chat folders.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/kanban</code>: file-backed board CRUD, task moves, claims, completions, comments, events.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/obsidian/*</code>: vault status, open/access notes, sync, graph, skills, wallets, machine aliases, recent directories.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/scheduler/*</code>: shared schedule import, runtime actions, skill actions, folder browsing.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/phone</code>: phone gateway pairing/status, scheduled phone rings, dashboard agent-call starts, and phone image generation.</li>
-  <li>OpenClaw runtime support is kept inside the generic runtime and chat layers rather than standalone product routes.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/miroshark/*</code>: companion status, install/start, swarm templates/runs, analysis.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/crypto/*</code>: crypto rail readiness, action preparation, clear-signing reviews, local agent identity records, and offline risk checks.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/wallet/*</code>: local wallet creation, balances, sends, MoneyClaw, backups, x402 calls.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/brain/*</code>: GBrain, Syntho, and trading-brain status/install/query actions.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/env</code>, <code class="language-plaintext highlighter-rouge">/api/runtime-files</code>, <code class="language-plaintext highlighter-rouge">/api/maintenance</code>, <code class="language-plaintext highlighter-rouge">/api/memory-telemetry</code>, <code class="language-plaintext highlighter-rouge">/api/telemetry/events</code>, <code class="language-plaintext highlighter-rouge">/api/work-history</code>: local utility surfaces.</li>
-</ul>
-
-<p>See <a href="/docs/for-users/architecture/api-and-storage.html">API And Storage Reference</a> for route grouping details, and <a href="/docs/for-users/architecture/generated-media-signing.html">Generated Media Signing</a> for how generated images are cached hub-side and served to phone clients with signed URLs.</p>
-
-<h2 id="runtime-adapter-layer">Runtime Adapter Layer</h2>
-
-<p>Runtime adapters are registered in <code class="language-plaintext highlighter-rouge">src/lib/services/runtime-adapters/registry.ts</code>. The shared adapter type lives in <code class="language-plaintext highlighter-rouge">src/lib/services/runtime-adapters/types.ts</code>.</p>
-
-<p>Known runtimes:</p>
+<p><strong>Agent runtimes.</strong> Adapters let the dashboard ask any runtime for status, skills, schedules, runs, outputs, sessions, and model options in the same way.</p>
 
 <table>
   <thead>
@@ -801,141 +1001,58 @@
   </tbody>
 </table>
 
-<p>Adapters let the dashboard ask a runtime for status, skills, schedules, runs, outputs, env sync, sessions, and model options without baking every runtime path into the UI. OpenClaw stays on the generic Hivemind runtime bridge here.</p>
+<p><strong>Managed services.</strong> Some things can’t safely be decided by an app on your own computer: official balances, settlement, pricing, hosted compute, and managed-agent accounts. HivemindOS-controlled infrastructure enforces those. The official Honey ledger stores privacy-safe metadata only. It never receives prompts, responses, local paths, machine names, Tailnet IPs, or wallet secrets.</p>
 
-<h2 id="native-desktop-bridge">Native Desktop Bridge</h2>
-
-<p>The browser and desktop app share the same Next.js UI. The Tauri shell adds a narrow native command surface. It does not fork the product:</p>
+<h2 id="where-your-data-lives">Where your data lives</h2>
 
 <ul>
-  <li><code class="language-plaintext highlighter-rouge">desktop_status</code>: returns build commit, branch, dirty flag, runtime phase, native host, and native server port.</li>
-  <li><code class="language-plaintext highlighter-rouge">list_local_directories</code>: lists local directories for This Mac without routing through the collector.</li>
-  <li><code class="language-plaintext highlighter-rouge">create_local_folder</code>: creates a local child folder after cleaning the requested name.</li>
-  <li><code class="language-plaintext highlighter-rouge">display_local_path</code>: normalizes expanded home paths for display.</li>
+  <li><strong>App data folder (<code class="language-plaintext highlighter-rouge">~/.hivemindos</code>)</strong>: dashboard settings, shared env values, the encrypted wallet vault, local fallbacks, and caches.</li>
+  <li><strong>Shared brain vault</strong>: notes, the work board, schedules, notifications, shared skills, and machine aliases.</li>
+  <li><strong>Runtime homes</strong>: each runtime keeps its own config and sessions in its usual folder.</li>
+  <li><strong>Managed services</strong>: only what they need, such as the optional official Honey ledger and hosted compute accounting.</li>
 </ul>
 
-<p>Frontend adapters live in <code class="language-plaintext highlighter-rouge">src/lib/native/desktop-status.ts</code> and <code class="language-plaintext highlighter-rouge">src/lib/native/filesystem.ts</code>. Browser users keep using the existing API routes. Desktop users can call native commands first, then fall back to the API path when the target is remote or native access is unavailable.</p>
+<p>For exact paths, see <a href="/docs/for-users/architecture/api-and-storage.html">API and storage reference</a>.</p>
 
-<h2 id="collector-architecture">Collector Architecture</h2>
-
-<p><code class="language-plaintext highlighter-rouge">scripts/agent-telemetry-collector.mjs</code> is the machine-local collector. It defaults to <code class="language-plaintext highlighter-rouge">AGENT_TELEMETRY_PORT=8787</code> and <code class="language-plaintext highlighter-rouge">AGENT_TELEMETRY_HOST=0.0.0.0</code>. In Link mode, the collector binds privately and Hivemind Link exposes it through the sidecar.</p>
-
-<p>Collector responsibilities include:</p>
+<h2 id="trust-boundaries">Trust boundaries</h2>
 
 <ul>
-  <li><code class="language-plaintext highlighter-rouge">/health</code>: host, app version, env sync readiness, and capability advertisement.</li>
-  <li><code class="language-plaintext highlighter-rouge">/snapshot</code>: local runtime/machine snapshot data used by Fleet.</li>
-  <li><code class="language-plaintext highlighter-rouge">/agents</code>: local runtime agent inventory and creation/deletion.</li>
-  <li><code class="language-plaintext highlighter-rouge">/env</code>: read, import, or remove shared and runtime-specific env through the hive env helpers and Hivemind Sync.</li>
-  <li><code class="language-plaintext highlighter-rouge">/directories</code>: safe directory browsing for target selection.</li>
-  <li><code class="language-plaintext highlighter-rouge">/apps</code> and <code class="language-plaintext highlighter-rouge">/app-proxy/&lt;port&gt;</code>: local app/service discovery and proxying for hivenet launchers.</li>
-  <li><code class="language-plaintext highlighter-rouge">/skills</code> and <code class="language-plaintext highlighter-rouge">/skills/auto-sync</code>: skill inventory and provider auto-sync.</li>
-  <li><code class="language-plaintext highlighter-rouge">/runtime-*</code> surfaces: runtime integrations, sessions, chat bridge, schedules, runs, outputs, env sync.</li>
-  <li><code class="language-plaintext highlighter-rouge">/syncthing/*</code>: Syncthing status/pairing support for shared vault sync.</li>
-  <li><code class="language-plaintext highlighter-rouge">/e2e/*</code>: real-fleet E2E hooks for env, skills, and encrypted file sharing.</li>
-  <li><code class="language-plaintext highlighter-rouge">/update</code>: start a checkout update on a remote HivemindOS machine.</li>
+  <li><strong>Public</strong>: these docs contain no secrets.</li>
+  <li><strong>Local</strong>: the app, its API, and native actions run on your computer.</li>
+  <li><strong>Private</strong>: the vault and wallet keys stay on your machines. Secret values live in shared env, never in vault notes.</li>
+  <li><strong>Private network</strong>: collectors are reachable only over Hivemind Link or your Tailnet. Don’t expose them publicly. Fleet is read-only by default. Remote updates, env movement, and vault repair are explicit actions, and vault repair writes conflict copies instead of overwriting.</li>
+  <li><strong>External</strong>: managed services enforce official balances, quotas, and pricing. Local settings can’t change them.</li>
 </ul>
 
-<p>The collector is private infrastructure. Keep it on the Tailnet or Hivemind Link path. Do not expose it publicly by default.</p>
+<h2 id="go-deeper">Go deeper</h2>
 
-<h2 id="state-and-storage">State And Storage</h2>
-
-<pre><code class="language-mermaid">flowchart LR
-  Dashboard["Dashboard state"] --&gt; DashboardState["/api/dashboard/state"]
-  DashboardState --&gt; HiveHome["~/.hivemindos"]
-  Api["API routes"] --&gt; HiveHome["~/.hivemindos"]
-  Api --&gt; Vault["Obsidian vault"]
-  Api --&gt; RuntimeHomes["~/.hermes / ~/.openclaw / ~/.aeon"]
-  Api --&gt; Workers["Cloudflare D1 workers"]
-  Collector["Collector"] --&gt; RuntimeHomes
-  Collector --&gt; HiveHome
-  Vault --&gt; SyncOwner["Hivemind Sync"]
-  SyncOwner --&gt; VaultOwner["External sync / HivemindOS Syncthing / manual rsync"]
-  SyncOwner --&gt; Handoff[".hivemindos-transfers handoffs"]
-</code></pre>
-
-<p>Important storage locations:</p>
-
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">~/.hivemindos</code>: install id, server-backed dashboard state, shared env, collector env, Kanban fallback, runtime agent registry, wallet vault, Honey ledger cache, runtime run cache, skill auto-sync config.</li>
-  <li>Obsidian vault: shared brain, Kanban board files, notifications, scheduled-run files, wallet ledger notes, recent directories, shared skills, machine aliases, graph access logs, GBrain and Syntho service notes.</li>
-  <li>Runtime homes: Hermes, OpenClaw, Aeon, and local OpenAI-compatible server config/state.</li>
-  <li>Cloudflare D1: optional official Honey ledger and compute gateway accounting.</li>
-</ul>
-
-<h2 id="shared-brain-model">Shared Brain Model</h2>
-
-<p>The shared brain is a normal markdown folder, usually <code class="language-plaintext highlighter-rouge">~/Documents/Obsidian/hivemindos-vault</code>. The app can detect common vault paths or use <code class="language-plaintext highlighter-rouge">NEXT_PUBLIC_OBSIDIAN_VAULT_PATH</code>.</p>
-
-<p>The vault is not the transport. Sync is owned by exactly one selected owner:</p>
-
-<ul>
-  <li>External provider: Obsidian Sync, iCloud Drive, Dropbox, Git, or user-managed Syncthing.</li>
-  <li>HivemindOS Syncthing: dashboard pairs collectors and lets Syncthing replicate over Tailnet.</li>
-  <li>Manual repair: dashboard runs one-shot rsync repair over Tailscale SSH.</li>
-</ul>
-
-<p>See <a href="/docs/for-users/architecture/syncing-and-tailscale.html">Syncing And Tailscale Architecture</a>.</p>
-
-<p>For the full user-facing brain architecture, folder map, service split, shared-skill model, vault health flow, and docs/setup sync rule, see <a href="../whole-brain/">Hive Superbrain</a>.</p>
-
-<h2 id="fleet-networking">Fleet Networking</h2>
-
-<p>Fleet discovery combines local state, Tailscale device data, Link metadata, and collector health checks. Hivemind Link is the default app-managed networking path. It uses the user’s own Tailscale account through an embedded <code class="language-plaintext highlighter-rouge">tsnet</code> sidecar while keeping the collector bound to localhost.</p>
-
-<p>Security posture:</p>
-
-<ul>
-  <li>Keep collectors private to Tailscale or Link.</li>
-  <li>Prefer read-only inspection by default.</li>
-  <li>Remote update and Hivemind Sync env movement are explicit actions.</li>
-  <li>Secret values move through helper commands and request bodies, not shared notes.</li>
-  <li>Vault sync repair is explicit and writes conflict copies rather than silently overwriting.</li>
-</ul>
-
-<h2 id="wallet-honey-and-compute">Wallet, Honey, And Compute</h2>
-
-<p>Local wallet state is managed through <code class="language-plaintext highlighter-rouge">src/lib/services/wallet/**</code>. Agent wallet secrets stay in a local encrypted vault under <code class="language-plaintext highlighter-rouge">~/.hivemindos</code>. Optional backup records can be written into the shared vault when configured.</p>
-
-<p>Honey has two paths:</p>
-
-<ul>
-  <li>Local observation: the dashboard reads supported runtime usage and submits capped metadata.</li>
-  <li>Trusted reward compute: the official compute gateway provides an OpenAI-compatible endpoint that forwards through Bankr/OpenRouter-compatible routing, reads provider usage, signs receipts, and submits them to the official Honey ledger.</li>
-</ul>
-
-<p>The official Honey ledger stores privacy-safe metadata only. It should not receive prompts, responses, local paths, machine names, Tailnet IPs, or wallet secrets.</p>
-
-<h2 id="build-and-verification">Build And Verification</h2>
-
-<p>Common checks:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pnpm lint
-pnpm typecheck
-pnpm build
-</code></pre></div></div>
-
-<p>Focused checks used during development:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pnpm <span class="nb">test</span>:kanban
-pnpm <span class="nb">test</span>:dashboard-nav
-pnpm <span class="nb">test</span>:fleet-local
-pnpm <span class="nb">test</span>:gbrain-foundation
-pnpm <span class="nb">test</span>:aeon-brain
-pnpm <span class="nb">test</span>:honey-economics
-node scripts/check-file-sizes.mjs
-</code></pre></div></div>
-
-<p>Real fleet E2E suites require suitable Tailnet machines and runtime setup:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>pnpm <span class="nb">test</span>:e2e:real-fleet
-pnpm <span class="nb">test</span>:e2e:agents
-pnpm <span class="nb">test</span>:e2e:env
-pnpm <span class="nb">test</span>:e2e:skills
-pnpm <span class="nb">test</span>:e2e:file-share
-pnpm <span class="nb">test</span>:e2e:kanban
-pnpm <span class="nb">test</span>:e2e:dashboard-smoke
-</code></pre></div></div>
+<div class="docGrid">
+  <section class="docCard">
+    <h3>API and storage</h3>
+    <p>Route groups, collector endpoints, hosted-service routes, and where state is saved on disk.</p>
+    <a href="api-and-storage.html">Open the reference</a>
+  </section>
+  <section class="docCard">
+    <h3>Hivemind Sync and Tailscale</h3>
+    <p>How the shared brain moves between machines and what Tailscale is used for.</p>
+    <a href="syncing-and-tailscale.html">Open the sync guide</a>
+  </section>
+  <section class="docCard">
+    <h3>Fleet telemetry and Hivemind Link</h3>
+    <p>Install collectors, set up collector-only machines, and lock down access.</p>
+    <a href="tailscale-fleet-telemetry.html">Open the fleet guide</a>
+  </section>
+  <section class="docCard">
+    <h3>Generated media signing</h3>
+    <p>How generated images and videos reach your phone privately.</p>
+    <a href="generated-media-signing.html">Open the media guide</a>
+  </section>
+  <section class="docCard">
+    <h3>Diagrams and maps</h3>
+    <p>Visual maps of the fleet, brain, work, wallets, and security boundaries.</p>
+    <a href="../diagrams.html">Open the diagrams</a>
+  </section>
+</div>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

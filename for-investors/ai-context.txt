@@ -3,7 +3,7 @@ format_version: 1
 content_format: Markdown with embedded HTML
 scope: Every public Markdown page under docs/for-investors
 document_count: 11
-generated_at: 2026-09-25T10:46:25+00:00
+generated_at: 2026-09-27T10:10:29+00:00
 usage: Treat each BEGIN/END DOCUMENT block as one source document. Preserve source_path attribution when citing or summarizing claims.
 
 
@@ -15,9 +15,7 @@ description: "The gated sequence from free local adoption to recurring cloud ope
 content:
 # HivemindOS Commercial Sequence
 
-The product comes first. HivemindOS remains useful without a subscription, managed credits, a marketplace, or a token.
-
-The company grows one commercial relationship in stages:
+HivemindOS grows one customer relationship in stages. Each stage opens only when the one before it shows real demand. The product stays useful without a subscription, credits, a marketplace, or a token.
 
 ```text
 local adoption
@@ -29,68 +27,49 @@ local adoption
   -> marketplace liquidity
 ```
 
-## Stage One: Free Local Adoption
+## Stage one: free local adoption
 
-Users can build and operate local agents, swarms, workflows, models, memory, and apps with their own machines and provider keys.
+People build and run local agents, workflows, models, memory, and apps on their own machines with their own provider keys. This free product is how customers arrive and why they trust HivemindOS. It is not weakened to push cloud sales.
 
-The free product is the acquisition surface and trust foundation. It should not be weakened to manufacture cloud conversion.
+## Stage two: first paid activation
 
-## Stage Two: First Paid Activation
-
-The easiest paid moments are concrete:
+The first purchases are concrete and pay-as-you-go:
 
 - publish an app at a stable URL
-- keep one agent running after personal machines turn off
-- use a managed model or API without creating another provider account
-- run a hosted MiroShark simulation from the shared HivemindOS balance or direct x402 while keeping local simulation free
+- keep one agent running after your own machines turn off
+- use a managed model or API without opening another provider account
+- run a hosted MiroShark simulation from the shared HivemindOS balance or direct x402 (local simulation stays free)
 
-These purchases can remain pay-as-you-go. They establish willingness to pay without forcing a subscription before recurring value exists.
+The hosted MiroShark simulation is $1.20 per accepted run. That is the complete customer price, and a run that does not start is not charged.
 
-The current MiroShark hosted simulation is $1.20 per accepted run. That is the complete customer price, and a run that does not start is not charged.
+## Stage three: Hivemind Cloud subscription
 
-## Stage Three: Hivemind Cloud Subscription
+Cloud Pro and Cloud Team charge for the persistent operating layer: schedules, monitoring, shared history, approvals, spending controls, deployment history, shared agents and memory, and audit trails. Managed infrastructure stays metered, because its cost grows with agent activity, not with seats.
 
-Cloud Pro and Cloud Team monetize the persistent operating layer:
+## Stage four: Agent Economy Transaction Expansion
 
-- schedules and monitoring
-- shared operating history
-- approvals and spending controls
-- managed deployment history
-- shared agents and memory
-- auditability and collaboration
-
-The subscription is the primary recurring operations engine. Managed infrastructure remains metered because its cost and value scale with agent activity rather than human seats alone.
-
-## Stage Four: Agent Economy Transaction Expansion
-
-As agents gain budgets and perform more economic work, HivemindOS can earn disclosed revenue from supported trading, payment, and routing actions.
-
-Current official rails include:
+As agents get budgets and do more economic work, HivemindOS earns disclosed fees on supported trading, payment, and routing actions.
 
 | Economic action | Current HivemindOS economics |
 | --- | ---: |
 | DEX swap | 0.20% platform fee |
-| Supported live stock or tokenized-stock execution | 0.10% execution fee |
+| Supported live stock or tokenized stock execution | 0.10% execution fee |
 | Paid x402 or Veil private-payment execution | 0.50% platform fee |
 | Bankr-managed Base copy trade | 0.50% post-verification fee, $0.02–$0.50 |
 | Eligible Hyperliquid perp fill | 0.005% builder fee |
 | Qualifying Base x402 transaction | Builder Code attribution; rewards are contingent rather than guaranteed |
 
-The transaction engine should scale only while execution remains competitive, fees remain visible, and settlement success stays high. Ordinary wallet transfers and externally earned company revenue remain free.
+This engine should grow only while execution stays competitive, fees stay visible, and settlement success stays high. Ordinary wallet transfers and revenue earned outside HivemindOS stay free. Other Bankr actions (swaps, cross-chain actions, token launches, prediction markets, NFTs, automations) carry no HivemindOS fee; only hosted copy trading does, after each copied swap is verified.
 
-Hosted Bankr copy trading now has a verifiable settlement path and charges only after the copied Base swap independently verifies. Other Bankr-mediated swaps, cross-chain actions, token launches, prediction markets, NFTs, and automations remain product capabilities without separate HivemindOS revenue until provider-native or hosted settlement can enforce it.
+The full rail list, with Robinhood Chain and minimums, is on the [investor overview](index.html#transaction-fees).
 
-## Stage Five: Enterprise Expansion
+## Stage five: enterprise
 
-Enterprise is the same control plane with stronger deployment, identity, policy, reliability, and support commitments.
+Enterprise is the same control plane with stronger deployment, identity, policy, reliability, and support commitments. It is sold only for capabilities that exist: private deployment, SSO, audit export, regional controls, and SLAs are each labeled available, pilot, or planned.
 
-It becomes sellable only when the required capability is real. A roadmap item is not an entitlement. Private deployment, SSO, audit export, regional controls, and SLA commitments must each be labeled available, pilot, or planned.
+## Stage six: marketplaces
 
-## Stage Six: Marketplaces
-
-An agent, workflow, or compute marketplace launches only after HivemindOS has recurring buyer demand and can provide suppliers with realistic utilization.
-
-Marketplace fees scale with value supplied:
+An agent, workflow, or compute marketplace launches only after there is recurring buyer demand and suppliers can expect real utilization. Fees scale with what HivemindOS provides:
 
 | HivemindOS role | Fee policy |
 | --- | ---: |
@@ -99,11 +78,11 @@ Marketplace fees scale with value supplied:
 | HivemindOS sources the buyer | 5–10% target |
 | HivemindOS sources, hosts, executes, supports, and protects the transaction | 10–20% target |
 
-GMV, provider earnings, and buyer spend remain separate from net platform revenue.
+GMV, provider earnings, and buyer spend are reported separately from net platform revenue. The compute marketplace has its own [evidence gates](paid-features/hive-compute-marketplace.html).
 
-## Commercial Gates
+## Commercial gates
 
-Expansion should be evidence-gated:
+Expansion is evidence-gated:
 
 | Gate | Evidence required |
 | --- | --- |
@@ -115,7 +94,7 @@ Expansion should be evidence-gated:
 | Compute marketplace expansion | Sufficient demand to create provider utilization |
 | HIVE utility changes | Product-market fit, specialist legal review, server-authoritative benefit definitions, and exact prospective public terms |
 
-## Metrics That Matter
+## Metrics that matter
 
 - activated and product-qualified workspaces
 - paid conversion by activation path
@@ -131,21 +110,7 @@ Expansion should be evidence-gated:
 - contribution margin
 - expansion versus contraction
 
-Gross payment volume, total deployed agents, token activity, and marketplace GMV are supporting metrics. They do not replace net revenue, realized take rate, contribution margin, or retained customers.
-
-## Strategy Summary
-
-HivemindOS becomes a business when users pay it to operate reliable agent infrastructure. It can become a much larger platform when those governed agents repeatedly trade, pay, and purchase services through HivemindOS rails. Marketplaces add third-party supply only after that buyer activity is real.
-
-```text
-product
-  -> recurring managed-service revenue
-  -> governed agent transaction volume
-  -> transaction and routing revenue
-  -> retained buyer demand
-  -> platform liquidity
-  -> optional ecosystem utility
-```
+Payment volume, deployed agents, token activity, and marketplace GMV are supporting metrics. They do not replace net revenue, take rate, contribution margin, or retained customers.
 
 <nav class="nextNav" aria-label="Monetization reading path">
   <a href="index.html">Back to investor overview</a>
@@ -164,21 +129,19 @@ content:
 
 **Community review draft — July 20, 2026**
 
-We are considering bringing HIVE from Base to Robinhood Chain without launching a second supply or asking the community to fund another liquidity pool.
+We are considering bringing HIVE from Base to Robinhood Chain without creating a second supply or asking the community to fund a new liquidity pool. This draft explains the design so the Base and HIVE communities can challenge it before any mainnet launch.
 
-The short version:
+In short:
 
 - Base remains HIVE's home market.
 - HIVE on Robinhood Chain would be backed 1:1 by HIVE locked on Base.
-- We would not mint a separate unbacked supply.
-- We would not need to provide a HIVE/ETH liquidity pool on Robinhood Chain at launch.
+- No separate, unbacked supply would be minted.
+- No HIVE/ETH pool on Robinhood Chain would be needed at launch.
 - Robinhood users could still buy or sell HIVE through the existing Base market.
 
-This document explains the proposed system in simple terms so the Base and HIVE communities can challenge it before any mainnet launch.
+## How the bridge works
 
-## HIVE stays one 1:1-backed token
-
-The canonical HIVE contract remains on Base:
+The canonical HIVE contract stays on Base:
 
 ```text
 Network: Base
@@ -186,26 +149,23 @@ Contract: 0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3
 Initial supply: 100,000,000,000 HIVE
 ```
 
-When someone bridges HIVE from Base to Robinhood Chain:
+Moving HIVE to Robinhood Chain:
 
-1. Their HIVE is locked in a bridge contract on Base.
-2. The matching amount is created for them on Robinhood Chain.
-3. Those Robinhood HIVE tokens cannot exist without matching Base HIVE locked behind them.
+1. Your HIVE is locked in a bridge contract on Base.
+2. The same amount is created for you on Robinhood Chain.
 
-When HIVE comes back:
+Moving it back:
 
 1. The Robinhood HIVE is destroyed.
-2. The matching Base HIVE is unlocked for the user.
+2. The matching Base HIVE is unlocked for you.
 
-This is a lock-and-mint bridge. It does not duplicate the economically usable supply: every spendable HIVE on Robinhood Chain should have one HIVE locked and unavailable on Base.
+This is a lock-and-mint bridge. Every spendable HIVE on Robinhood Chain has one HIVE locked on Base, so usable supply is never duplicated.
 
-## Where does the liquidity come from?
+## Where the liquidity comes from
 
-The bridge itself does not need a trading pool. It only moves HIVE that somebody already owns.
+The bridge only moves HIVE someone already owns; it needs no trading pool. Buying and selling would use HIVE's existing Base market instead of a thin second market.
 
-For buying and selling, the proposal is to keep using HIVE's existing Base market instead of creating a thin second market on Robinhood Chain.
-
-### Buying HIVE from Robinhood Chain
+**Buying from Robinhood Chain:**
 
 ```text
 User pays ETH or USDG on Robinhood Chain
@@ -217,11 +177,9 @@ The existing Base market sells HIVE
 The purchased HIVE is bridged back to the user on Robinhood Chain
 ```
 
-The HIVE comes from sellers and liquidity already available in the Base market. It does not come from a HivemindOS treasury wallet, and HivemindOS does not need to front the purchase.
+The HIVE comes from sellers already in the Base market, not from a HivemindOS treasury wallet.
 
-### Selling HIVE from Robinhood Chain
-
-Selling runs the same path in reverse:
+**Selling from Robinhood Chain:**
 
 ```text
 User bridges HIVE back to Base
@@ -231,7 +189,7 @@ The Base market buys the HIVE
 Relay returns ETH or USDG to the user on Robinhood Chain
 ```
 
-There would be no local Robinhood HIVE market initially. Robinhood wallets could hold and transfer HIVE there, while buying and selling would use Base liquidity behind a guided cross-chain flow.
+At first there would be no local Robinhood HIVE market. Robinhood wallets could hold and transfer HIVE, while trades use Base liquidity through a guided cross-chain flow.
 
 ## Proposed fees
 
@@ -241,65 +199,55 @@ The current testnet design uses:
 - **0.45% routed-trade app fee** when the app coordinates a buy or sell through Relay.
 - **0.50% nominal HivemindOS fee** for a routed trade that includes one bridge step.
 
-Relay costs, network gas, market price impact, and any live provider fees are separate. The user should see the complete quote before signing anything.
+Relay costs, gas, price impact, and provider fees are separate. You would see the complete quote before signing.
 
-The bridge contract permanently caps its own fee at 0.25%. Governance could lower the bridge fee, but could never raise it above that cap without replacing the contracts and going through a new public review.
+The bridge contract permanently caps its own fee at 0.25%. Governance could lower the fee but could not raise it above that cap without replacing the contracts and a new public review. These are proposed launch fees, not a promise that every trade costs exactly 0.50% all-in.
 
-These are proposed launch economics, not a promise that every trade will cost exactly 0.50% all-in.
+## What has been tested
 
-## What has actually been tested?
-
-The direct bridge is deployed on Base Sepolia and Robinhood testnet.
-
-We completed a real round trip:
+The direct bridge is deployed on Base Sepolia and Robinhood testnet. A real round trip:
 
 - 1,000 test HIVE moved from Base Sepolia to Robinhood testnet.
 - 999.5 HIVE arrived after the 0.05% bridge fee.
-- The HIVE was then bridged back to Base Sepolia.
-- After both directions, the remaining Robinhood supply exactly matched the net HIVE locked on Base.
+- The HIVE was bridged back to Base Sepolia.
+- Afterward, the remaining Robinhood supply exactly matched the net HIVE locked on Base.
 - Contract, invariant, recovery, hosted-gateway, and browser tests passed.
 
-Relay supports both Base and Robinhood Chain on mainnet, and a read-only quote found a route from Robinhood ETH into the existing Base HIVE market.
+Relay supports Base and Robinhood Chain on mainnet, and a read-only quote found a route from Robinhood ETH into the Base HIVE market. Relay does **not** support Robinhood testnet, so the full buy/sell flow was tested only with controlled simulations. It must pass a small, capped mainnet trial before wider use.
 
-Relay does **not** currently support Robinhood testnet. That means the direct HIVE bridge has been proven with real testnet transactions, but the complete routed buy/sell flow cannot be economically settled through Relay on testnet. It has been tested with controlled provider simulations and must still pass a small, capped mainnet canary before wider activation.
+No HIVE mainnet bridge contract has been deployed, and no real mainnet funds have moved.
 
-No HIVE mainnet bridge contract has been deployed and no real mainnet funds have been moved.
-
-## Main safeguards
+## Safeguards
 
 - No owner-controlled mint function for Robinhood HIVE.
-- Every Robinhood HIVE must remain backed by locked Base HIVE.
+- Every Robinhood HIVE must stay backed by locked Base HIVE.
 - Hourly and daily limits cap how much can move in either direction.
 - A guardian can pause the bridge but cannot mint, withdraw backing, or change configuration.
 - Mainnet governance changes must wait at least 72 hours.
-- Bridge fees are accounted for separately from backing, so governance cannot withdraw user principal as “fees.”
+- Bridge fees are tracked separately from backing, so governance cannot withdraw user principal as "fees."
 - The app accepts only the official HIVE and payment-token addresses.
-- Expired quotes, wrong wallets, wrong networks, duplicate submissions, and excessive price impact fail closed.
-- The direct bridge remains separate from Relay, so a Relay outage does not make already-bridged HIVE unbacked.
+- Expired quotes, wrong wallets, wrong networks, duplicate submissions, and excessive price impact are refused.
+- The direct bridge is separate from Relay, so a Relay outage cannot make bridged HIVE unbacked.
 
-## Risks and trade-offs
+## Risks
 
-This design avoids asking the community to fund a second pool, but it is not risk-free.
+- **Bridge risk:** depends on LayerZero messaging, its verification network, and our bridge contracts.
+- **Routing risk:** one-click trading depends on Relay continuing to support both chains.
+- **Market risk:** large trades still move the HIVE price on Base. A bridge does not create liquidity or guarantee an exit price.
+- **Multi-step risk:** a routed trade spans several transactions. The app can save and resume each step, but separate blockchains cannot be made truly atomic.
+- **Governance risk:** pausing, limits, fee withdrawals, and configuration need transparent multisig and timelock operations.
+- **New-chain risk:** Robinhood Chain has less production history than Base.
 
-- **Bridge risk:** The system depends on LayerZero messaging, the configured verification network, and our bridge contracts.
-- **Routing risk:** One-click buying and selling depends on Relay continuing to support Robinhood Chain and Base.
-- **Market risk:** Large trades can still move the HIVE price on Base. A bridge does not create liquidity or guarantee an exit price.
-- **Multi-step risk:** A routed trade crosses multiple transactions. The app can save and resume each checkpoint, but it cannot make separate blockchains truly atomic.
-- **Governance risk:** Pausing, limits, fee withdrawals, and configuration need transparent multisig and timelock operations.
-- **New-chain risk:** Robinhood Chain is newer than Base and has less production history.
-
-The bridge should launch with conservative limits, public monitoring, and a small real-money canary—not with unlimited capacity on day one.
+The bridge should launch with conservative limits, public monitoring, and a small real-money trial, not unlimited capacity on day one.
 
 ## Questions for the community
-
-We would especially value feedback on these points:
 
 1. Does keeping all price discovery and liquidity on Base make sense for the first launch?
 2. Is 0.05% for direct bridging and 0.50% nominally for routed trades reasonable?
 3. Should ETH and USDG both be supported for Robinhood-side buying and selling?
 4. What trade-size and price-impact limits would you want at launch?
 5. What additional audits, monitors, multisig participants, or emergency controls would earn your trust?
-6. Would you prefer direct bridging to launch first, with routed trading enabled only after a separate canary?
+6. Would you prefer direct bridging to launch first, with routed trading enabled only after a separate trial?
 
 ## Review links
 
@@ -322,36 +270,31 @@ description: "Six optional non-custodial HIVE staking tiers with Honey earning, 
 content:
 # HIVE Staking And Community Tiers
 
-HIVE staking is an optional membership layer. Stake HIVE across six bee tiers to earn qualifying Honey faster, receive more free-agent usage, and save up to 61% on participating services. HivemindOS remains useful without holding or staking HIVE.
+HIVE staking is optional membership. Stake HIVE to reach one of six bee tiers, which earn Honey faster, give more free-agent usage, and unlock member pricing of up to 61% off on participating services. HivemindOS works fully without holding or staking HIVE.
 
-## Product Boundary
-
-The free local-first product remains free. Ordinary cloud subscriptions, managed usage, and enterprise contracts remain available through supported non-token payment paths.
-
-Staking may provide:
+## What staking gives you
 
 - wallet-linked community identity and profile status
-- stake-based Honey earning multipliers
-- stake-based free-agent usage multipliers
+- a Honey earning multiplier
+- a free-agent usage multiplier
 - member pricing of up to 61% off on participating services
-- eligibility signals for token-specific community activities
+- eligibility for token-specific community activities
 
-Staking does not grant company ownership, binding governance, treasury control, admin access, guaranteed placement, yield, revenue share, or a financial return. Product benefits are services, not payouts.
+Staking does not grant company ownership, binding governance, treasury control, admin access, guaranteed placement, yield, revenue share, or a financial return. The benefits are services, not payouts. Cloud subscriptions, managed usage, and enterprise contracts can all be bought without HIVE.
 
-## V1 Contract Model
+## How to stake and unstake
 
-The Base staking contract is deliberately simple:
+The staking contract on Base is non-custodial:
 
-1. A user connects a Base-compatible wallet.
-2. The user approves and stakes HIVE.
-3. The contract records active stake for tier reads.
-4. The user requests unstaking.
-5. The visible three-day cooldown completes.
-6. The user withdraws the unstaked HIVE to the same wallet.
+1. Connect a Base-compatible wallet.
+2. Approve and stake HIVE. The contract records your active stake, which sets your tier.
+3. To leave, request unstaking.
+4. Wait for the visible three-day cooldown.
+5. Withdraw your HIVE to the same wallet.
 
-The user retains the right to withdraw principal after the cooldown. Staked principal is not company treasury property and cannot be used for buybacks.
+You can always withdraw your principal after the cooldown. Staked HIVE is not company treasury property and cannot be used for buybacks.
 
-## Six Membership Tiers
+## The six tiers
 
 | Public tier | Active stake | Honey earning | Free-agent usage |
 | --- | ---: | ---: | ---: |
@@ -362,50 +305,41 @@ The user retains the right to withdraw principal after the cooldown. Staked prin
 | Carpenter Bee | 250m HIVE | 1.70× | 1.75× |
 | Queen Bee | 1b HIVE | 2.00× | 2.00× |
 
-These are membership and service-benefit tiers, not investment-return tiers. Tier names and thresholds do not promise future value.
+These are membership tiers, not investment-return tiers. Tier names and thresholds do not promise future value.
 
-## Honey Earning Multipliers
+## Honey earning multipliers
 
-The Honey column applies the active tier multiplier when qualifying Honey is earned from accepted contribution evidence. It does not create Honey for wallet activity alone, weaken contribution review, or create a transferable balance.
-
-Honey remains one cumulative, non-transferable, non-spendable contribution ledger. A multiplier changes how much Honey an accepted contribution records; it does not convert Honey to HIVE or make Honey cash-equivalent. HivemindOS-controlled infrastructure verifies the linked staking wallet and applies the multiplier.
+Your tier multiplies Honey only when you earn it from accepted contribution evidence. Holding HIVE alone creates no Honey. Honey stays one non-transferable, non-spendable record; a multiplier changes how much an accepted contribution records, but it does not make Honey cash or convert it to HIVE. See [Honey, HIVE, And Treasury](honey-hive-treasury.html#honey).
 
 ## Free-Agent Usage Multipliers
 
-The ordinary free-agent allowance remains available without staking and is powered by Swarm Sovereign models. A workspace with a signature-verified staking-wallet link receives the tier multiplier shown above on its eligible request and token allowance.
+Everyone gets the ordinary free-agent allowance, powered by Swarm Sovereign models. A workspace with a signature-verified link to a staking wallet gets its tier's multiplier on its daily request and token allowance.
 
-- The allowance is an in-kind service benefit. It cannot be transferred, redeemed, withdrawn, sold, or converted into cash, HIVE, Honey, revenue, or treasury assets.
-- One verified workspace shares one boosted allowance across its devices. Linking one wallet does not create a new boosted pool for every device.
+- The allowance is a service benefit. It cannot be transferred, redeemed, withdrawn, sold, or converted into cash, HIVE, Honey, revenue, or treasury assets.
+- One verified workspace shares one boosted allowance across all its devices.
 - IP and platform-wide safety limits remain unchanged.
-- Missing authentication, an unlinked workspace, an unknown tier, or a failed server-to-server tier check falls back to the ordinary unstaked allowance.
-- If cumulative Honey independently qualifies a workspace for a bounded allowance, the higher verified multiplier applies; the multipliers do not stack.
+- If the tier check fails for any reason, you get the ordinary unstaked allowance.
+- If your lifetime Honey qualifies you for a higher multiplier, the higher one applies. They do not stack.
 
-The quota schedule may change or pause prospectively for capacity, abuse, legal, security, or operational reasons. Usage already consumed is not a stored balance or property right.
+The quota schedule may change or pause going forward for capacity, abuse, legal, security, or operational reasons.
 
 ## Member Pricing: Up To 61% Off
 
-Participating services may offer HIVE members up to 61% off. This is consumption pricing: a member pays a lower price for eligible usage, and no tier receives a payout.
+Participating services may offer HIVE members up to 61% off. This is consumption pricing: a member pays less for eligible usage, and no tier receives a payout.
 
-Exact service prices, cost floors, eligible products, and tier-level discount calculations remain server-owned. HivemindOS-controlled infrastructure resolves the active stake and quoted price; the downloadable client cannot grant a tier, override a price, or price a service below its enforced cost floor.
-
-The universal public claim is “up to 61% off,” not a promise that every product, purchase, or tier receives the maximum discount. Current exact prices should be read from the owning hosted service at quote time rather than copied into static documentation.
+Exact service prices, cost floors, eligible products, and tier-level discount calculations remain server-owned. The hosted service checks your stake and quotes the price; the app cannot grant a tier, change a price, or go below a cost floor. "Up to 61% off" is the maximum, not a promise for every product or tier. The exact price is shown when you get a quote.
 
 ## Revenue Policy Is Separate From Staking
 
-HivemindOS allocates 15% of each service's server-owned allocation basis — realized margin for most managed services, recognized platform revenue for others — to HIVE buybacks. A separate exact 15% goes to the company treasury. The treasury does not fund buybacks, and staked principal funds neither rail. The tokenomics policy assigns no fixed use to the remainder.
+HivemindOS allocates 15% of each service's server-owned allocation basis (realized margin for most managed services, recognized platform revenue for others) to HIVE buybacks. A separate exact 15% goes to the company treasury. The treasury does not fund buybacks, and staked principal funds neither. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). HivemindOS does not burn HIVE.
 
-Confirmed HIVE purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). HivemindOS does not burn HIVE. Buybacks and treasury allocations create no payout, ownership right, governance right, price promise, or claim for a holder or staker.
+Buybacks and treasury allocations give holders and stakers no payout, ownership, governance right, price promise, or claim. See [Revenue Allocations And Treasury Boundaries](treasury-reserve-and-seasonal-programs.html).
 
-## Safety And Communication
+## Changes to tiers and benefits
 
-- Show the contract address, chain, active stake, pending unstake, cooldown, and withdrawal state.
-- Never imply that user principal is available to the company treasury or buyback rail.
-- Never market expected appreciation as a reason to stake.
-- Never present company revenue or buybacks as a staking return.
-- Keep core product access independent from token ownership.
-- Publish material benefit or policy changes prospectively with an effective date.
+HivemindOS shows stakers the contract address, chain, active stake, pending unstake, cooldown, and withdrawal state. It does not market staking with expected price gains, and core product access never depends on holding HIVE.
 
-Tier thresholds, member pricing, eligibility, staking benefits, and execution may change, pause, or end for legal, regulatory, tax, accounting, security, liquidity, market-integrity, reserve, or operational reasons. Completed on-chain receipts remain part of the historical record. See [Tokenomics Policy Changes](honey-hive-treasury.html#tokenomics-policy-changes) for the canonical policy.
+Tier thresholds, member pricing, eligibility, and benefits may change, pause, or end for legal, regulatory, tax, accounting, security, liquidity, market-integrity, reserve, or operational reasons. We publish material benefit or policy changes prospectively with an effective date, and completed on-chain receipts stay on the public record. See [Tokenomics Policy Changes](honey-hive-treasury.html#tokenomics-policy-changes).
 
 <nav class="nextNav" aria-label="Monetization reading path">
   <a href="hive-token-receipts.html">Back: HIVE Token Receipts</a>
@@ -422,7 +356,7 @@ description: "Direct on-chain evidence for the HIVE Base contract, launch distri
 content:
 # HIVE Token Receipts
 
-HIVE on Base is identified by one canonical contract:
+This page lists the on-chain evidence for HIVE so you can check it yourself. HIVE on Base has one canonical contract:
 
 ```text
 Network: Base (chain ID 8453)
@@ -430,11 +364,11 @@ Symbol: HIVE
 Contract: 0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3
 ```
 
-The [live HIVE receipt dossier](https://hivemindos.app/hive/receipts/) and its [machine-readable manifest](https://hivemindos.app/hive-token-receipts.json) publish the current evidence set. This page summarizes the launch facts observed at Base block `48,551,072` on July 12, 2026 UTC. Holder balances, staking totals, liquidity, price, volume, and sentiment change over time and must be refreshed from the linked sources.
+The [live HIVE receipt dossier](https://hivemindos.app/hive/receipts/) and its [machine-readable manifest](https://hivemindos.app/hive-token-receipts.json) hold the current evidence. The facts below were observed at Base block `48,551,072` on July 12, 2026 UTC. Holder balances, staking totals, liquidity, and price change over time, so refresh them from the linked sources.
 
-## Launch Distribution
+## Launch distribution
 
-The [launch transaction](https://basescan.org/tx/0x35adf31159934811e9bc99b7c1c22183bc7ca19209f88aea0b2d334143d4ea9e) minted 100 billion HIVE into the Doppler launch path.
+The [launch transaction](https://basescan.org/tx/0x35adf31159934811e9bc99b7c1c22183bc7ca19209f88aea0b2d334143d4ea9e) minted 100 billion HIVE into the Doppler launch path:
 
 - 100,000,000,000 HIVE initial supply
 - 99,999,999,999.999999957521 HIVE routed to the Uniswap V4 PoolManager
@@ -442,15 +376,13 @@ The [launch transaction](https://basescan.org/tx/0x35adf31159934811e9bc99b7c1c22
 - zero creator premint
 - zero creator vesting allocation
 
-The zero-premint receipt describes the launch only. It does not claim that the founder, treasury, team, or related parties hold zero HIVE acquired later on the open market.
+The zero-premint receipt covers the launch only. It does not claim that the founder, treasury, team, or related parties hold no HIVE bought later on the open market.
 
-The public [Bankr launch record](https://api.bankr.bot/token-launches/0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3) independently binds the contract to the same launch transaction and Uniswap V4 pool ID. It attributes both the deployer identity and fee recipient to [`0x8a25202e830f024aa5e1bdd01a8e997534655c51`](https://basescan.org/address/0x8a25202e830f024aa5e1bdd01a8e997534655c51). The same wallet receives 95% of the Bankr/Doppler trading-fee allocation, with 5% assigned to Doppler. That centralized fee right is disclosed separately from token supply, liquidity custody, staking principal, and user wallets. The attribution is a launch receipt, not a claim that the project has attested the wallet's complete deployer history or every related-wallet cluster.
+The public [Bankr launch record](https://api.bankr.bot/token-launches/0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3) ties the contract to the same launch transaction and Uniswap V4 pool. It names [`0x8a25202e830f024aa5e1bdd01a8e997534655c51`](https://basescan.org/address/0x8a25202e830f024aa5e1bdd01a8e997534655c51) as both deployer and fee recipient. The same wallet receives 95% of the Bankr/Doppler trading-fee allocation, with 5% assigned to Doppler. That centralized fee right is disclosed separately from token supply, liquidity, staking principal, and user wallets. It is a launch receipt, not an attestation of that wallet's full history or every related wallet.
 
-## Permanent Liquidity Architecture
+## Permanent liquidity
 
-HIVE uses Doppler multicurve liquidity on Uniswap V4. It does not issue a conventional creator-held V2 LP token; launch-liquidity permanence comes from the immutable V4 configuration described below.
-
-The token's immutable Doppler asset configuration identifies:
+HIVE uses Doppler multicurve liquidity on Uniswap V4. There is no creator-held LP token; permanence comes from the token's immutable configuration:
 
 | Role | Address |
 | --- | --- |
@@ -459,39 +391,39 @@ The token's immutable Doppler asset configuration identifies:
 | NoOp migrator | `0x6ddfED58D238Ca3195E49d8ac3d4cEa6386E5C33` |
 | Migration destination | `0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD` |
 
-Doppler's [canonical NoOpMigrator source](https://github.com/whetstoneresearch/doppler/blob/568fc2fe42e6aaf5928fac5dd4365555f0dcad86/src/migrators/NoOpMigrator.sol) always reverts migration. HIVE's configuration therefore prevents the launch liquidity from being withdrawn through Doppler's migration path. This is the V4 permanent-liquidity receipt; it does not depend on a creator-held LP position.
+Doppler's [canonical NoOpMigrator source](https://github.com/whetstoneresearch/doppler/blob/568fc2fe42e6aaf5928fac5dd4365555f0dcad86/src/migrators/NoOpMigrator.sol) always reverts migration, so launch liquidity cannot be withdrawn through Doppler's migration path.
 
-Permanent launch liquidity does not guarantee market depth, price stability, demand, or an exit at a particular price.
+Permanent liquidity does not guarantee market depth, price stability, demand, or an exit at any price.
 
-## Contract Controls
+## Contract controls
 
 The HIVE contract is [exact-match verified as Doppler DERC20 on BaseScan](https://basescan.org/address/0xa382c83e2a3b79368f372c2eb9b6925ffaf45ba3#code).
 
 - The token owner is Doppler Airlock at `0x660eAaEdEBc968f8f3694354FA8EC0b4c5Ba8D12`, not the founder wallet.
-- The launch governance and timelock are dead addresses.
-- The verified transfer path contains no project-configurable buy tax, sell tax, blacklist, or pause switch.
+- Launch governance and timelock are dead addresses.
+- The transfer path has no project-configurable buy tax, sell tax, blacklist, or pause switch.
 - The DERC20 template exposes a maximum 2% yearly inflation parameter.
 - HIVE's inflation clock has never started: `currentYearStart()` and `lastMintTimestamp()` both return zero.
 
-The inflation parameter deserves explicit disclosure. Doppler Airlock starts the mint clock only inside a successful migration. HIVE's immutable migration target is the NoOp migrator, whose migration call always reverts. Because EVM transactions are atomic, the preceding ownership and mint-clock changes roll back as well. Inflation is therefore inactive and cannot be started through HIVE's configured migration path.
+Why inflation stays off: Doppler Airlock starts the mint clock only during a successful migration. HIVE's migration target is the NoOp migrator, which always reverts, and because EVM transactions are atomic, the mint-clock change rolls back too. Inflation cannot be started through HIVE's configured migration path.
 
-## Holder Concentration Snapshot
+## Holder concentration snapshot
 
-The July 12 snapshot paginated the public [Blockscout holder API](https://base.blockscout.com/api/v2/tokens/0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3/holders), which returned 319 holder addresses.
+The July 12 snapshot read the public [Blockscout holder API](https://base.blockscout.com/api/v2/tokens/0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3/holders), which returned 319 holder addresses.
 
-After excluding only the named Uniswap V4 PoolManager, Doppler initializer, HIVE staking vault, Doppler Airlock, and known sink/dead addresses, the largest included address held 3.2711% and the top ten included addresses held 17.986% of supply. Smart-contract wallets remained included unless they were one of those named protocol or pooled-custody exclusions.
+Excluding only the Uniswap V4 PoolManager, Doppler initializer, HIVE staking vault, Doppler Airlock, and known sink/dead addresses, the largest remaining address held 3.2711% and the top ten held 17.986% of supply. Smart-contract wallets stayed included.
 
-The exact addresses, balances, exclusions, and method are in the machine-readable manifest. This is a reproducible distribution snapshot, not proof that wallets are unrelated or that beneficial ownership is fully known.
+The addresses, balances, exclusions, and method are in the machine-readable manifest. This is a reproducible snapshot, not proof that wallets are unrelated or that beneficial ownership is fully known.
 
-## Live Utility And Buyback Receipts
+## Staking and buyback receipts
 
-The [HIVE staking contract](https://basescan.org/address/0x26c7121e41e779327adbd5682646dc5deb764539#code) held 2.213947706948184371 billion actively staked HIVE at the snapshot block and was not paused. Staking is non-custodial and non-yield-bearing. It supplies community status, access signals, member usage pricing on participating apps, and Honey multipliers.
+The [HIVE staking contract](https://basescan.org/address/0x26c7121e41e779327adbd5682646dc5deb764539#code) held 2.213947706948184371 billion actively staked HIVE at the snapshot block and was not paused. Staking is non-custodial and pays no yield. It supplies community status, access signals, member usage pricing on participating apps, and Honey multipliers.
 
 The [HIVE Buyback Ledger](https://hivemindos.app/buybacks/) publishes confirmed HIVE purchases. These purchases use the separate 15% buyback allocation rather than the company treasury. HivemindOS does not destroy purchased HIVE. A buyback creates no holder return, staking payout, company ownership, price floor, or claim on revenue.
 
-## Verification Boundary
+## Verification boundary
 
-This dossier improves transparency; it is not a smart-contract audit or financial advice. Review the verified contracts and refresh live market and holder data before relying on the snapshot.
+This dossier improves transparency; it is not a smart-contract audit or financial advice. Review the verified contracts and refresh live data before relying on the snapshot.
 
 <nav class="nextNav" aria-label="HIVE investor reading path">
   <a href="honey-hive-treasury.html">Back: Honey, HIVE, And Treasury</a>
@@ -508,7 +440,7 @@ description: "The separation between contribution records, purchased cloud credi
 content:
 # Honey, HIVE, And Treasury
 
-HivemindOS separates three concepts that must not be presented as one balance.
+HivemindOS has three separate things that are never one balance: Honey, Hivemind Cloud credits, and HIVE. This page explains each one and how revenue is allocated.
 
 | Layer | Purpose | What it is not |
 | --- | --- | --- |
@@ -518,55 +450,42 @@ HivemindOS separates three concepts that must not be presented as one balance.
 
 ## Honey
 
-Honey can record useful participation such as reviewed agent work, accepted open-source contributions, verified testing, documentation, or completed bounties.
+Honey records useful, verified participation, such as reviewed agent work, accepted open-source contributions, testing, documentation, or completed bounties. Raw model tokens, self-reported activity, or unobserved output do not earn Honey.
 
-Community Hive Brain awards 0.1 Honey for each distinct copy-trading outcome accepted by the hosted verification gate. Unverified submissions, duplicate outcomes, and retries earn nothing. The contributing wallet must resolve to a HivemindOS workspace before the signed ledger records the reward; eligible unmatched rewards remain pending rather than being redirected or lost.
+How Honey is earned:
 
-Honey should be earned only from bounded evidence. Raw model tokens, self-reported activity, or unobserved output do not by themselves prove productive contribution.
+- **Community Hive Brain:** 0.1 Honey for each distinct copy-trading outcome that passes hosted verification. Unverified, duplicate, and retried submissions earn nothing. The contributing wallet must link to a HivemindOS workspace; until it does, the reward waits as pending.
+- **Telegram recognition:** members with a signature-verified identity can give a fixed, scarce Honey recognition for a named contribution. Daily, pair, recipient, cooldown, and global budget limits apply.
+- **Historical HIVE tips:** past tip-receiver rank may be recorded at 1 Honey per 1,000,000 HIVE received.
 
-Telegram members with a signature-verified identity can issue a fixed, scarce Honey recognition for a named contribution. Hosted daily, pair, recipient, cooldown, global-budget, and idempotency controls bound that signal. Historical HIVE-tip receiver rank may be represented at 1 Honey per 1,000,000 HIVE received. Mission, verified-work, peer-recognition, learning, and historical-seed labels preserve provenance, but they do not create different classes of Honey.
+Source labels (mission, verified work, peer recognition, learning, historical seed) show where Honey came from. They do not create different kinds of Honey.
 
-Lifetime Honey can qualify a workspace for a larger daily free-agent request-and-token allowance, from 1.10× at 10 Honey to a capped 2.00× at 5,000. HivemindOS-controlled infrastructure calculates the total from verified ledger records, bounded recognition, and documented seed events; local state cannot grant it. The Honey allowance and a verified HIVE staking allowance do not stack—the higher one applies. This is revocable in-kind service access, not stored monetary value, a purchased credit, or a withdrawal right.
+What Honey does:
 
-Honey does not automatically convert to HIVE. Official Honey-to-HIVE exchange and claim routes fail closed unless a separately authorized hosted policy enables conversion. The product must not describe an unavailable or unreviewed conversion as “ready to claim.”
+- **More free-agent usage.** Lifetime Honey raises a workspace's daily free-agent request and token allowance, from 1.10× at 10 Honey to a capped 2.00× at 5,000. This allowance and a HIVE staking allowance do not stack; the higher one applies. It is revocable service access, not stored value or a withdrawal right.
+- **Staking multiplies Honey.** An active HIVE staking tier multiplies qualifying Honey earned: 1.00×, 1.10×, 1.25×, 1.45×, 1.70×, and 2.00× from Honeybee through Queen Bee.
 
-An active HIVE staking tier can also multiply qualifying Honey earned. The six-tier Honey curve is 1.00×, 1.10×, 1.25×, 1.45×, 1.70×, and 2.00× from Honeybee through Queen Bee. HivemindOS-controlled infrastructure resolves the linked wallet and records the resulting Honey; local state cannot grant a tier or manufacture contribution evidence.
+HivemindOS-controlled infrastructure calculates Honey totals and tiers from verified records. Local state cannot grant Honey, a tier, or contribution evidence.
 
-## Hivemind Cloud Credits
+Honey does not automatically convert to HIVE. Honey-to-HIVE exchange and claim routes stay off unless a separately authorized hosted policy turns them on, and the product never shows an unavailable conversion as "ready to claim."
 
-Purchased service credits are operational billing instruments.
+## Hivemind Cloud credits
 
-They may fund:
+Credits are how customers pay for managed services: managed agents, hosted models and APIs, app publishing, managed media and tools, and other HivemindOS-operated services.
 
-- managed agent runtime
-- hosted models and APIs
-- app publishing and dynamic execution
-- managed media and tools
-- other HivemindOS-operated services
-
-They remain spend-only, nontransferable, nonredeemable for cash, server-recorded, and funded only from verified payment events. Customer-facing pricing should show ordinary dollar-denominated balances and usage rather than implying that cloud service credit is a token reward.
+Credits are spend-only, nontransferable, not redeemable for cash, recorded on the server, and funded only by verified payments. Prices and balances are shown in ordinary dollars, not as token rewards.
 
 ## HIVE
 
-HIVE may support optional community identity, payments, staking-based Honey earning multipliers, free-agent usage multipliers, member pricing of up to 61% off on participating services, marketplace settlement, or bounties where those capabilities are available and legally reviewed. Exact service prices remain server-owned.
+HIVE may support optional community identity, payments, staking-based Honey earning multipliers, free-agent usage multipliers, member pricing of up to 61% off on participating services, marketplace settlement, or bounties, where those features are available and legally reviewed. Exact service prices remain server-owned.
 
-HIVE is not required to:
+You do not need HIVE to run HivemindOS locally, buy Hivemind Cloud services, join a paid workspace, use enterprise features, or bring a provider key. HIVE is not company ownership. See [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for tier details.
 
-- run HivemindOS locally
-- buy ordinary Hivemind Cloud services
-- join a paid workspace
-- use enterprise features
-- bring a provider key
+## Revenue allocation
 
-HIVE should never be described as company ownership unless a legally valid instrument actually provides that ownership.
+Customer collections are not automatically platform revenue. Recognized platform revenue excludes pass-through costs, refunds, and reversals. Marketplace gross merchandise value is not platform revenue; only HivemindOS's earned fee counts. Purchased credits are recognized only when consumed.
 
-## Revenue Allocation Policy
-
-Customer collections are not automatically recognized platform revenue. Recognized platform revenue excludes directly attributable pass-through costs, refunds, and reversals. Marketplace gross merchandise value is not platform revenue; only HivemindOS's earned platform fee is counted. Purchased credits are recognized only when consumed.
-
-Each paid service's allocation basis is server-owned and published in the official commercial catalog: realized margin for most managed services, recognized platform revenue for others. A client cannot choose or compute either basis.
-
-The tokenomics allocation is deliberately simple:
+Each paid service has a server-owned allocation basis, published in the official commercial catalog: realized margin for most managed services, recognized platform revenue for others. From that basis:
 
 ```text
 server-owned per-service allocation basis
@@ -575,47 +494,20 @@ server-owned per-service allocation basis
 └─ remainder -> outside the tokenomics allocation, with no fixed use assigned here
 ```
 
-The two 15% allocations are separate. HIVE buybacks do not come from the company treasury, and the treasury does not fund buybacks. Each rail has its own accounting and receipts. A connected user wallet, staked principal, local environment value, or client-supplied revenue claim cannot choose either amount or recipient.
+- HivemindOS allocates 15% of each service's server-owned allocation basis to HIVE buybacks.
+- A separate exact 15% of the same server-owned allocation basis goes to the company treasury.
+- The treasury does not fund HIVE buybacks. Each rail has its own accounting and receipts.
+- No user wallet, staked principal, local setting, or client revenue claim can choose either amount or recipient.
+- Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). Pending or failed purchases do not count. HivemindOS does not burn HIVE.
+- Hive Research's first paid production run produced one confirmed HIVE purchase on Base under its earlier app-specific policy. That receipt stays public; new Hive Research revenue follows the platform-wide 15% buyback allocation.
 
-The buyback rule is enforced by HivemindOS-controlled infrastructure across supported revenue streams. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). Pending allocations, failed batches, projected capacity, and unconfirmed transactions do not count as HIVE bought. HivemindOS does not burn HIVE.
-
-Hive Research's first real paid production analysis produced one confirmed HIVE purchase on Base under its earlier app-specific policy. That historical receipt remains public while new Hive Research revenue follows the platform-wide 15% buyback allocation.
-
-The separate 15% treasury allocation remains company property. It creates no holder or staker ownership, redemption right, revenue share, governance right, or claim on treasury assets. This policy does not assign a fixed purpose to treasury funds or to the remainder outside the two allocations.
+The treasury allocation remains company property. It creates no holder or staker ownership, redemption right, revenue share, governance right, or claim on treasury assets. Buybacks do not promise a token price, liquidity, profit, or return. More detail: [Revenue Allocations And Treasury Boundaries](treasury-reserve-and-seasonal-programs.html).
 
 ## Tokenomics Policy Changes
 
-Tokenomics is an operating policy, not an immutable promise. Revenue definitions and allocation formulas; buyback amounts, destinations, cadence, minimums, and caps; staking benefits; tier thresholds; eligibility; and execution may be changed, delayed, paused, or discontinued when reasonably necessary because of applicable law or regulatory guidance, tax or accounting treatment, corporate duties, security, liquidity, market integrity, reserves or solvency, provider constraints, or other operational conditions.
+Tokenomics is an operating policy, not an immutable promise. Allocation formulas, buyback amounts and timing, staking benefits, tier thresholds, and eligibility may change, pause, or end when needed for legal, regulatory, tax, accounting, corporate, security, liquidity, market-integrity, reserve, provider, or operational reasons.
 
-Material changes are published with an effective date and apply prospectively unless applicable law requires otherwise. Completed on-chain actions and historical receipts remain part of the public record and are not rewritten. Holding or staking HIVE does not create a contractual right to continuation of any particular formula, buyback, benefit, tier, or cadence.
-
-## Public Communication Rules
-
-Do say:
-
-- Honey is one cumulative record; source labels preserve where it came from without creating separate balances or classes.
-- Honey is non-transferable and non-spendable, and it does not automatically convert to HIVE.
-- Every verified Honey advances the same service-benefit levels.
-- Cloud credits pay for managed services.
-- HIVE is optional ecosystem infrastructure.
-- Six optional staking tiers multiply qualifying Honey earned and free-agent usage.
-- Participating services advertise member pricing of up to 61% off while exact service prices remain server-owned.
-- HivemindOS allocates 15% of each service's server-owned allocation basis — realized margin for most managed services, recognized platform revenue for others — to HIVE buybacks.
-- A separate exact 15% of the same server-owned allocation basis goes to the company treasury.
-- The treasury does not fund HIVE buybacks.
-- The tokenomics policy assigns no fixed use to the remainder.
-- The public ledger publishes confirmed HIVE purchases.
-- HivemindOS does not burn HIVE.
-- Staking produces no yield, revenue share, ownership, binding governance, or treasury claim.
-
-Do not say:
-
-- HIVE is ownership of HivemindOS.
-- Customer collections, gross marketplace volume, or purchased-but-unspent credits are the same as recognized platform revenue.
-- Honey is guaranteed to become HIVE.
-- Stakers receive a fixed share of company revenue.
-- The treasury allocation belongs to stakers or funds buybacks.
-- Buybacks support or guarantee token price, liquidity, profit, or a return.
+Material changes are published with an effective date and apply going forward unless the law requires otherwise. Completed on-chain actions and historical receipts remain part of the public record and are not rewritten. Holding or staking HIVE gives no contractual right to any particular formula, buyback, benefit, tier, or schedule.
 
 <nav class="nextNav" aria-label="Monetization reading path">
   <a href="index.html">Back to investor overview</a>
@@ -632,41 +524,24 @@ description: "HivemindOS monetizes one proprietary local-first agent-economy pla
 content:
 # For Investors
 
-HivemindOS is a proprietary local-first control plane for autonomous agent operations, with a narrow public compatibility SDK and an archived MIT Community Edition.
+HivemindOS is a proprietary local-first control plane for running AI agents. It ships with a narrow public compatibility SDK and an archived MIT Community Edition.
 
 HivemindOS has one product relationship with two compounding revenue engines:
 
-1. **Agent operations revenue:** Hivemind Cloud subscriptions, managed execution, hosting, models, APIs, enterprise controls, and implementation.
-2. **Agent economy revenue:** disclosed fees and routing economics when HivemindOS agents trade, pay, call paid APIs, or transact through supported rails.
+1. **Agent operations:** Hivemind Cloud subscriptions, managed execution, hosting, models, APIs, enterprise controls, and implementation.
+2. **Agent economy:** disclosed fees when HivemindOS agents trade, pay, call paid APIs, or transact through supported rails.
 
-```text
-Local HivemindOS
-  -> agents run through Hivemind Cloud
-     -> subscription + managed usage + enterprise revenue
-  -> agents transact through governed rails
-     -> trading + payment + routing revenue
-```
+Cloud revenue is the nearer-term recurring base; transaction revenue is the asymmetric upside if agent commerce becomes a large market.
 
-This is not eight unrelated businesses. It is one agent operating platform monetized when agents are operated and when they conduct economic activity. Cloud revenue is the nearer-term recurring base; transaction revenue is the asymmetric upside if agent commerce becomes a large market.
+## What is free
 
-## The Local-To-Managed Boundary
+Local agents, local memory, local workflows, your own model keys (BYOK), linked machines, and self-hosted runtimes all work without a subscription. The free product is how people find HivemindOS, and it stays useful on its own.
 
-Local agents, local memory, local workflows, BYOK models, linked machines, and self-hosted runtimes remain available without a Hivemind Cloud subscription.
+## What is paid
 
-Customers pay when HivemindOS operates an ongoing service on their behalf:
+Customers pay when HivemindOS runs a service for them: an always-on agent, hosted schedules and monitoring, shared approvals and budgets, public app hosting, managed model and API access, or private enterprise deployment.
 
-- always-on agent runtime and persistent workspace
-- hosted control plane, schedules, monitoring, and deployment history
-- shared agents, approvals, budgets, and audit history
-- public app hosting and isolated dynamic execution
-- managed model and API access without customer-owned provider accounts
-- private deployment, identity controls, support, and service commitments
-
-Wherever agents run, official reputation, entitlement, settlement, and payout decisions remain server-controlled. Local environments, client configuration, and client-supplied claims cannot mint credit, entitlements, or payouts.
-
-## Commercial Plans
-
-The managed service owns the official catalog. Launch packaging is intentionally small:
+Wherever agents run, official reputation, entitlement, settlement, and payout decisions remain server-controlled. Local settings and client claims cannot create credit, entitlements, or payouts.
 
 | Plan | Price | Current commercial status | Primary job |
 | --- | ---: | --- | --- |
@@ -675,11 +550,9 @@ The managed service owns the official catalog. Launch packaging is intentionally
 | Cloud Team | $299/month | Design-partner validation | Five-member governed workspace; includes $50 managed usage |
 | Enterprise | $30,000/year minimum | Contact-led | Private or BYOC deployment, SSO, policy controls, SLA, and support |
 
-Subscriptions pay for the control plane and governance layer. Agent hours, model/API calls, hosted apps, storage, and other variable infrastructure remain separately metered. This prevents a one-seat workspace from operating an unbounded fleet for one seat fee.
+Subscriptions pay for the control plane. Agent hours, model and API calls, hosted apps, and storage are metered separately, so one seat cannot run an unbounded fleet. The Pro, Team, and Enterprise prices are launch hypotheses still being validated with customers.
 
-The Pro, Team, and Enterprise numbers are launch hypotheses under validation, not proven willingness-to-pay claims. They should change only through customer evidence and server-authoritative policy.
-
-## Current Metered Add-Ons
+### Current metered add-ons
 
 | Managed service | Current server-owned rate |
 | --- | ---: |
@@ -693,13 +566,15 @@ The Pro, Team, and Enterprise numbers are launch hypotheses under validation, no
 | Managed models and APIs | Published upstream cost plus service markup |
 | MiroShark hosted simulation | $1.20 from HivemindOS credits or direct x402; local runs remain free |
 
-These products are expansion usage inside Hivemind Cloud. They are not separate investor pillars.
-
 MiroShark's hosted price is the complete customer price, with no extra local fee. A run that does not start is not charged.
 
-## Current Agent Economy Revenue Rails
+### Near-term pilot
 
-Selected transaction economics are already live in official HivemindOS policy:
+Before self-serve pricing is proven, HivemindOS sells a bounded **Managed Agent Operations Pilot**: six weeks, $5,000 upfront, one production workflow, up to three managed agents, and conversion to Cloud Team or a separately contracted managed plan. It is a customer-development offer, not a separate product line.
+
+## Transaction fees
+
+Selected transaction fees are live today:
 
 | Rail | Current HivemindOS economics | Revenue status |
 | --- | ---: | --- |
@@ -712,22 +587,15 @@ Selected transaction economics are already live in official HivemindOS policy:
 | Ordinary wallet transfers | 0% | Intentionally free |
 | Revenue recorded from outside HivemindOS | 0% | Intentionally free |
 
-The general 0.20%, 0.10%, and 0.50% platform-fee rails use a $0.01 minimum and $10 maximum where a fee applies. Bankr copy trading instead uses a $0.02 minimum and $0.50 maximum. Fees are disclosed before confirmation and settle only after the main action succeeds. Paper trades, rejected actions, read-only research, and unpaid calls do not create a fee.
+- The 0.20%, 0.10%, and 0.50% platform fees have a $0.01 minimum and $10 maximum. Bankr copy trading uses a $0.02 minimum and $0.50 maximum.
+- Fees are shown before confirmation and collected only after the main action succeeds. Paper trades, rejected actions, research, and unpaid calls are free.
+- Robinhood Chain Stock Tokens are bought and sold with USDG, the chain's dollar stablecoin.
+- [Base Builder Codes](https://docs.base.org/apps/builder-codes/builder-codes) are attribution infrastructure, not a contractual fee. Rewards count only when actually earned.
+- Ordinary Bankr swaps, cross-chain actions, token launches, prediction markets, NFTs, and automations do not create a separate HivemindOS platform fee. Hosted Bankr copy trading is the exception, because each copied Base swap is verified before its capped fee is collected.
 
-[Base Builder Codes](https://docs.base.org/apps/builder-codes/builder-codes) are attribution infrastructure, not a contractual fee. They can make qualifying Base activity measurable and eligible for program rewards as those programs evolve, but rewards should be recognized only when actually earned.
+### How large transaction revenue could get
 
-Ordinary Bankr swaps, cross-chain actions, token launches, prediction markets, NFTs, and automations do not create a separate HivemindOS platform fee. Hosted Bankr copy trading is the explicit exception because the managed monitor independently verifies each copied Base swap before collecting its bounded fee through Bankr.
-
-## Why Transaction Revenue Can Become The Largest Engine
-
-Agent operations create recurring revenue per customer. Agent commerce can create revenue on every eligible economic action across every participating agent.
-
-```text
-gross transaction revenue
-= eligible agent transaction volume
-x realized net take rate
-+ builder or partner rewards actually earned
-```
+Transaction revenue is eligible volume times the realized take rate, plus partner rewards actually earned.
 
 Illustrative gross platform-fee sensitivity—not a forecast:
 
@@ -737,88 +605,67 @@ Illustrative gross platform-fee sensitivity—not a forecast:
 | $1 billion | $1 million | $2 million | $5 million |
 | $10 billion | $10 million | $20 million | $50 million |
 
-Actual realized revenue depends on rail mix, caps, minimums, failed or reversed actions, rebates, provider economics, settlement cost, fraud loss, and regulatory constraints. The table demonstrates operating leverage; it does not assume that HivemindOS will reach those volumes.
+Real revenue depends on rail mix, caps, minimums, failed actions, provider costs, fraud, and regulation. The table shows operating leverage; it does not assume HivemindOS reaches these volumes.
 
-## Near-Term Customer Development
+## How revenue is counted
 
-Before presenting self-serve pricing as validated, HivemindOS should sell a bounded **Managed Agent Operations Pilot**:
+Operating revenue is subscriptions, hosted products, managed-execution gross profit, transaction fees, and implementation work. Provider spend, transaction volume, marketplace GMV, provider payouts, and token activity are reported separately. Buyer collections are not automatically company revenue.
 
-- six weeks
-- $5,000 upfront
-- one production operating workflow
-- up to three managed agents
-- monitoring, approvals, spending boundaries, deployment, and outcome receipts
-- explicit implementation limits
-- conversion to Cloud Team or a separately contracted high-touch managed plan
+## Where revenue goes
 
-The pilot is a customer-development and implementation offer, not a permanent fifth product line.
+HivemindOS allocates 15% to HIVE buybacks and a separate 15% to the company treasury. Both are computed on a server-owned per-service allocation basis published in the official commercial catalog: realized margin for most managed services, recognized platform revenue for others. The treasury does not fund buybacks, and the tokenomics policy assigns no fixed use to the remainder.
 
-## Revenue Reporting
+The live [HIVE Buyback Ledger](https://hivemindos.app/buybacks/) is the source of truth for completed purchases. HivemindOS does not burn HIVE. Buybacks create no staking payout, ownership right, treasury claim, or price promise. Details: [Revenue Allocations And Treasury Boundaries](treasury-reserve-and-seasonal-programs.html).
 
-Operating revenue should be shown as:
+## Honey and HIVE
 
-```text
-subscription revenue
-+ hosted product revenue
-+ managed execution gross profit
-+ transaction and routing fee revenue
-+ implementation revenue
-```
+- **Honey** is one cumulative, non-transferable, non-spendable record of verified contribution. It is not cash and does not automatically convert to HIVE.
+- **Hivemind Cloud credits** are separate purchased, spend-only service credits.
+- **HIVE** is an optional ecosystem token. It is not company ownership, a required payment method, or part of the pricing ladder.
 
-Provider spend, eligible transaction volume, gross payment volume, marketplace GMV, creator/provider payouts, and token activity are reported separately. Builder attribution is not revenue until a reward is actually earned. Buyer collections are not automatically company revenue. Principal-versus-agent accounting treatment requires review for each managed-provider and marketplace arrangement.
+Staking HIVE is optional membership across six bee tiers, from Honeybee to Queen Bee. Tiers give higher Honey earning multipliers, higher free-agent usage multipliers, and member pricing advertised as up to 61% off on participating services. Exact service prices remain server-owned.
 
-The operating model should be built from observed cohorts:
+Tokenomics policies may change, pause, or end for legal, regulatory, tax, accounting, security, liquidity, or operational reasons. Material changes are published ahead of time with an effective date, and completed on-chain receipts stay on the public record.
 
-```text
-activated workspaces
-x product-qualified conversion
-x paid conversion
-x retained subscription revenue
-+ usage expansion
-```
+## Pages in this section
 
-Investor reporting should include paid workspaces, 30/90-day retention, recurring revenue per workspace, usage gross profit, support cost, contribution margin, fee-bearing transaction volume, realized take rate, transaction-fee revenue, successful settlement rate, and expansion versus contraction. Illustrative customer counts or transaction volumes without funnel, churn, rail mix, and cost assumptions are not forecasts.
-
-## Scale-Dependent Network Upside
-
-Trading, payment, and routing fees are already active on selected rails. Their strategic value grows with the number of governed agents, the economic actions each agent performs, and the share HivemindOS can monetize without degrading execution quality or trust.
-
-Marketplaces, compute-provider take rates, workflow commissions, provider partnerships, embedded swap economics, and HIVE utility remain additional scale-dependent options. They are not required to prove near-term willingness to pay, but they can deepen the transaction engine after retained demand exists.
-
-[0x documents](https://docs.0x.org/evm/0x-swap-api/guides/monetize-your-app-using-swap) embedded integrator fees and, for suitable commercial plans, trade-surplus economics. HivemindOS currently uses its separate official post-success execution fee on applicable routes; embedded 0x economics remain an additional integration opportunity rather than current revenue.
-
-- Revenue earned outside HivemindOS carries no platform fee.
-- Marketplace fees apply only when HivemindOS supplies measurable distribution, hosting, execution, billing, or protection.
-- Ordinary wallet transfers carry no HivemindOS platform fee.
-- Financial and marketplace take rates remain capped, disclosed, and measured separately from provider fees and gross transaction volume.
-- Base Builder Code rewards, partner rebates, and similar programs are reported as earned revenue rather than assumed take rate.
-
-## HIVE And Honey Boundary
-
-HIVE is optional ecosystem infrastructure. It is not company ownership, a required payment method, or part of the core pricing ladder.
-
-Honey is one cumulative, non-transferable, non-spendable record of verified ecosystem contribution and bounded recognition, with source labels kept only for provenance. Hivemind Cloud credits are separate purchased, spend-only service credits. Honey is not cash and does not automatically convert to HIVE.
-
-Staking HIVE is optional membership across six bee tiers: Honeybee, Bumblebee, Mason Bee, Orchid Bee, Carpenter Bee, and Queen Bee. The tiers preserve three benefits: higher Honey earning multipliers, higher free-agent usage multipliers, and member pricing advertised as up to 61% off on participating services. Exact service prices remain server-owned.
-
-HivemindOS allocates 15% to HIVE buybacks and a separate 15% to the company treasury, each computed on a server-owned per-service allocation basis published in the official commercial catalog — realized margin for most managed services, recognized platform revenue for others. The treasury does not fund the buybacks, the two allocations use separate accounting rails, and the tokenomics policy assigns no fixed use to the remainder.
-
-The live [HIVE Buyback Ledger](https://hivemindos.app/buybacks/) is the source of truth for execution status and completed purchases. It preserves Hive Research's first paid production run and confirmed HIVE purchase on Base as historical evidence. HivemindOS does not burn HIVE. Buybacks create no staking payout, ownership right, treasury claim, price promise, or Honey-to-HIVE conversion.
-
-Tokenomics policies may change, pause, or end in response to legal, regulatory, tax, accounting, security, liquidity, market-integrity, reserve, or operational requirements. Material changes are published prospectively with an effective date, while completed on-chain receipts remain part of the historical record.
-
-See [HIVE Token Receipts](hive-token-receipts.html), [Honey, HIVE, And Treasury](honey-hive-treasury.html), [Revenue Allocations And Treasury Boundaries](treasury-reserve-and-seasonal-programs.html), and [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for the on-chain evidence and separated policies.
-
-## One-Sentence Pitch
-
-> HivemindOS is the proprietary local-first control plane for the agent economy: teams pay it to operate governed agents, and HivemindOS earns again when those agents transact through supported trading, payment, and routing rails.
-
-## Read Next
-
-- [Ecosystem Plan](ecosystem-plan.html)
-- [Paid Features](paid-features/)
-- [App Builder And Hosting](paid-features/app-builder-hosting.html)
-- [Hive Compute Marketplace](paid-features/hive-compute-marketplace.html)
+<div class="docGrid">
+  <section class="docCard">
+    <h3>Ecosystem Plan</h3>
+    <p>The staged, evidence-gated path from free local use to cloud, transactions, enterprise, and marketplaces.</p>
+    <a href="ecosystem-plan.html">Open the plan</a>
+  </section>
+  <section class="docCard">
+    <h3>Paid Features</h3>
+    <p>Managed capabilities, hosting economics, cloud calls, and the deferred compute marketplace.</p>
+    <a href="paid-features/">Open paid features</a>
+  </section>
+  <section class="docCard">
+    <h3>Honey, HIVE, And Treasury</h3>
+    <p>What Honey, Cloud credits, and HIVE are, and how revenue is allocated.</p>
+    <a href="honey-hive-treasury.html">Open Honey and HIVE</a>
+  </section>
+  <section class="docCard">
+    <h3>HIVE Staking And Community Tiers</h3>
+    <p>The six tiers, their multipliers, member pricing, and what staking does not give you.</p>
+    <a href="hive-staking-and-community-tiers.html">Open staking</a>
+  </section>
+  <section class="docCard">
+    <h3>HIVE Token Receipts</h3>
+    <p>On-chain evidence for the contract, launch, liquidity, controls, holders, and buybacks.</p>
+    <a href="hive-token-receipts.html">Open receipts</a>
+  </section>
+  <section class="docCard">
+    <h3>Revenue Allocations</h3>
+    <p>The separate 15% buyback and 15% treasury rails and their limits.</p>
+    <a href="treasury-reserve-and-seasonal-programs.html">Open allocations</a>
+  </section>
+  <section class="docCard">
+    <h3>Robinhood Chain Bridge Review</h3>
+    <p>A community review draft for bridging HIVE from Base to Robinhood Chain.</p>
+    <a href="hive-robinhood-bridge-community-review.html">Open the draft</a>
+  </section>
+</div>
 === END DOCUMENT ===
 
 
@@ -830,24 +677,14 @@ description: "The local-first app-building funnel, hosted Site revenue streams, 
 content:
 # App Builder And Hosting
 
-HivemindOS now offers a Replit/Lovable-style app-building experience with a
-local-first advantage: users can ask an agent to create and refine their app on
-hardware they already control, then purchase hosting only when the result needs
-to be shared or kept online.
+HivemindOS lets users ask an agent to build and refine an app on their own hardware, then pay for hosting only when the app needs to be shared or stay online.
 
-This separates two jobs cleanly:
+- **App Builder drives adoption.** Building, file edits, installs, and local previews run on the user's own or linked machines, with no managed cloud agent needed.
+- **Hive Publish drives recurring revenue.** HivemindOS runs the public URL, release storage, access rules, renewals, and isolated server-side runtime.
 
-- **App Builder drives adoption.** Local and linked-machine creation, file
-  operations, dependency installation, and loopback previews do not require a
-  managed cloud agent.
-- **Hive Publish drives recurring revenue.** HivemindOS operates the public
-  route, release storage, access policy, renewal lifecycle, and isolated dynamic
-  runtime.
+For the user workflow and limits, see the [App Builder guide](../../for-users/features/app-builder.html).
 
-For the product workflow, plan limits, and user-facing hosting lifecycle, see
-the [App Builder guide](../../for-users/features/app-builder.html).
-
-## Current Revenue Streams
+## Prices
 
 | Revenue stream | Customer value | Current charge |
 | --- | --- | ---: |
@@ -856,58 +693,26 @@ the [App Builder guide](../../for-users/features/app-builder.html).
 | Pro Site | Renewable static hosting with a larger release allowance | **$15 per 30 days** |
 | Dynamic App | Renewable isolated server-side edge execution | **$25 per 30 days** |
 
-Each charge applies to one Site. One customer can host several Sites, and a
-customer who builds entirely on their own machine can still buy any compatible
-hosting plan. This expands the paid funnel beyond users who need a Managed Cloud
-Agent.
+- Each charge covers one Site. A customer can host several Sites.
+- Anyone can buy hosting, including users who build entirely on their own machine. They don't need a Managed Cloud Agent.
+- Renewable plans have opt-in auto-renew and debit the hosted credit balance every 30 days.
+- After a failed renewal, a seven-day grace period keeps the app online, and a 30-day retention window lets the customer recover the release.
+- This is renewable hosting, not lifetime hosting.
+- The $1 preview is meant to come from an existing credit balance or a larger top-up, so a card fee doesn't eat a $1 charge.
 
-Renewable plans use an opt-in auto-renew setting and debit the customer's hosted
-credit balance every 30 days. A seven-day grace period protects an app from an
-immediate outage after a failed renewal, and a 30-day retention window gives the
-customer time to recover an expired or unpublished release. This is renewable
-hosting revenue, not a lifetime-hosting promise.
+## Role in the business
 
-## Role In The Revenue Model
+Publishing is an easy first purchase: a free local user pays for one managed outcome before needing a subscription. Retained publishers can then grow into Cloud Pro, Cloud Team, managed agents, models, and APIs. Hosting is an entry point into Hivemind Cloud, not a separate business.
 
-Publishing is a concrete first paid activation. It lets a free local user pay HivemindOS for one managed outcome before the user needs a recurring control-plane subscription.
+## Costs and margin protection
 
-Retained publishers can later expand into Cloud Pro, Cloud Team, managed agents, models, APIs, and dynamic execution. Hosting is therefore an acquisition and expansion surface inside Hivemind Cloud, not a standalone company thesis.
+HivemindOS charges per Site, while the hosting provider's base plan and included allowances are shared across all Sites. Cloudflare's current pricing starts with a **$5 monthly account minimum**, then meters extra requests and CPU. See Cloudflare's [Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/) and [Dynamic Workers pricing](https://developers.cloudflare.com/dynamic-workers/pricing/). Storage, logs, support, payment processing, refunds, and taxes vary with real use, so gross margin is measured from production cohorts, not estimated.
 
-## Unit-Economics Boundary
+To cap cost, each Dynamic App Site is limited to 10 million requests, 250 million reserved CPU-ms, 1 million storage operations, and 1 GiB of runtime storage. Every request reserves the full 25ms CPU ceiling, so the budget is conservative. When the request or CPU limit is reached, requests are refused until the allowance resets. When the storage-operation allowance runs out, further storage calls are refused, and a write that would exceed storage capacity fails without changing the stored value. At current Cloudflare overage rates, a Site using its full allowance stays bounded relative to its $25 plan price.
 
-The HivemindOS price is collected per Site, while Cloudflare's base Workers
-subscription and included request/CPU allowances are shared at the account
-level. Current Cloudflare pricing starts with a **$5 monthly account minimum**,
-then meters additional requests and CPU at low unit rates. Dynamic Workers also
-meter unique workers invoked per day. See Cloudflare's current
-[Workers pricing](https://developers.cloudflare.com/workers/platform/pricing/)
-and [Dynamic Workers pricing](https://developers.cloudflare.com/dynamic-workers/pricing/).
+Investor reporting should show hosted properties, preview-to-renewal conversion, 30/90-day hosting retention, revenue per property, infrastructure, payment, and support cost, and contribution margin.
 
-The base platform and included allowances are shared across Sites, while storage, requests, CPU, logs, databases, support, payment processing, refunds, and taxes vary with real usage. Infrastructure gross margin must therefore be measured from production cohorts rather than inferred from a hypothetical portfolio.
-
-The $1 preview should debit an existing hosted-credit balance or be bundled into a larger top-up. It should not normally create an isolated $1 card charge whose fixed payment-processing fee consumes a large share of the purchase.
-
-## Margin Protection
-
-The Dynamic App plan now enforces 10 million requests, 250 million reserved
-CPU-ms, 1 million storage operations, and 1 GiB of runtime storage per Site.
-Every request reserves the full 25ms invocation ceiling, making the CPU budget
-conservative even when actual code usually finishes faster. Exhausted request
-or CPU allowances return HTTP 429 until reset; exhausted storage-operation
-allowances reject further calls, while capacity-limited writes fail closed
-without overwriting the prior value.
-
-At current Cloudflare overage rates, a Site consuming its full conservative
-allowance remains bounded relative to its $25 plan revenue, even after the
-shared account allocation is exhausted. This replaces an unlimited tail risk
-with a known maximum; future published overage packs can create incremental
-revenue without silently passing through an unbounded bill.
-
-Investor reporting should show hosted properties, conversion from preview to renewable hosting, 30/90-day hosting retention, revenue per property, infrastructure cost, payment cost, support cost, and contribution margin. Customer-count illustrations without conversion and churn assumptions are not forecasts.
-
-Official prices, entitlements, renewals, credit debits, and public slug ownership
-remain server-authoritative. The open-source app can display and submit a plan,
-but it cannot redefine official hosting economics.
+Official prices, renewals, credit debits, and URL ownership are enforced by HivemindOS servers. The app can show and submit a plan, but it cannot change hosting prices.
 
 <nav class="nextNav" aria-label="Paid feature reading path">
   <a href="index.html">Back to paid features</a>
@@ -924,25 +729,25 @@ description: "Evidence-gated option for a future HivemindOS compute marketplace,
 content:
 # Hive Compute Marketplace
 
-Hive Compute is an experimental product option, not a near-term revenue assumption. The near-term monetization engine is Hivemind Cloud: recurring subscriptions, metered managed execution, and a productized Managed Agent Ops pilot.
+Hive Compute is an experimental option, not a near-term revenue assumption. The near-term business is Hivemind Cloud: subscriptions, metered managed execution, and the Managed Agent Ops pilot. No marketplace revenue, provider supply, or network effect is forecast until real demand and reliable supply exist.
 
-The local host and client surfaces may continue to support self-hosted experimentation. HivemindOS should not forecast marketplace revenue, provider liquidity, or a network-effect multiple until real buyer demand and reliable supply are demonstrated.
+Users can already try self-hosted compute in the app; see [Hive Compute](../../for-users/features/hive-compute.html).
 
-## Why It Is Deferred
+## Why it is deferred
 
-A two-sided compute marketplace adds several businesses at once:
+A two-sided compute marketplace means running several businesses at once:
 
-- buyer acquisition and workload routing
-- host acquisition and quality control
-- prepaid balances, metering, settlement, and payouts
-- fraud, disputes, sanctions, tax, and support operations
-- reliability, privacy, attestation, and reputation policy
+- finding buyers and routing their work
+- finding hosts and checking their quality
+- balances, metering, settlement, and payouts
+- fraud, disputes, sanctions, tax, and support
+- reliability, privacy, attestation, and reputation
 
-Those obligations are valuable only after Hivemind Cloud has repeatable demand. Building them too early would dilute the subscription and managed-execution wedge.
+These only pay off once Hivemind Cloud has repeatable demand. Building them too early would pull focus from the core business.
 
 ## Evidence Gates
 
-Marketplace activation requires all of the following:
+The marketplace launches only when all of these are true:
 
 1. At least 20 paying Hivemind Cloud customers with recurring managed-compute usage.
 2. At least $25,000 in monthly managed-compute gross merchandise value for three consecutive months.
@@ -953,29 +758,19 @@ Marketplace activation requires all of the following:
 
 These are management gates, not forecasts or investor promises.
 
-## Experimental Economics
+## Experimental pricing
 
-Current implementation defaults—such as a 20% platform fee and token-level input/output prices—are test policy for experimental routing. They are not validated market pricing and must not appear in the base financial model.
+Today's test defaults, such as a 20% platform fee and token-level input/output prices, are for experimental routing only. They are not validated market pricing and are not in the financial model. Launch pricing would be rebuilt from observed demand, costs, host payouts, fraud loss, and support burden, and the marketplace would launch only if it improves customer economics without lowering contribution margin below the Cloud target.
 
-Before launch, pricing must be rebuilt from observed willingness to pay, upstream/fallback costs, host payouts, payment processing, fraud loss, support burden, and required gross margin. A marketplace should launch only if it improves customer economics without lowering HivemindOS contribution margin below the Cloud target.
+## Who decides what
 
-## Trust Boundary
+The downloadable app is never the commercial authority. HivemindOS-controlled hosted infrastructure, or verifiable settlement rails, decide buyer balances, job settlement, provider eligibility and reputation, fees and payouts, refunds and disputes, payment verification, and private-workload eligibility.
 
-The downloadable app is never the commercial authority. An official marketplace must keep these decisions in HivemindOS-controlled hosted infrastructure or verifiable settlement rails:
+The app may discover local models, set up an opt-in worker, show status, and display signed receipts. It cannot create balances, choose fee recipients, approve payouts, or override hosted policy.
 
-- buyer entitlement and prepaid balance
-- job reservation and exact usage settlement
-- provider eligibility, reputation, and quarantine
-- platform fee and payout calculation
-- withdrawals, refunds, disputes, and audit history
-- x402 or other payment-proof verification
-- attestation and private-workload eligibility
+## Launch decision
 
-The local app may discover local models, configure an opt-in worker, show status, and display signed receipts. It must not mint balances, choose official fee recipients, authorize payouts, or override hosted policy.
-
-## Launch Decision
-
-If the evidence gates pass, Hive Compute can become a second-stage expansion of the existing metered-execution engine. If they do not, HivemindOS should continue buying capacity from established providers and keep the customer experience focused on reliable managed execution.
+If the gates pass, Hive Compute becomes a second stage of the metered-execution business. If they do not, HivemindOS keeps buying capacity from established providers and stays focused on reliable managed execution.
 
 <nav class="nextNav" aria-label="Monetization reading path">
   <a href="./">Back to paid features</a>
@@ -992,24 +787,13 @@ description: "Paid LiveKit/SFU calling for managed multi-party and multi-agent v
 content:
 # HivemindOS Cloud Agent Calls
 
-HivemindOS Cloud Agent Calls are the paid version of agent voice.
+Cloud Agent Calls are the paid, room-based version of agent voice. The free version already covers the common case: one person talking to one agent.
 
-The free call path is BYOK: one user, one selected agent, the user's OpenAI Realtime key, and a direct dashboard or mobile call. That is enough for the normal “I want to talk to my coding agent” loop.
+## Free versus paid
 
-Cloud Agent Calls are for the version that needs an actual room.
+The free call path is BYOK: one user, one selected agent, the user's own OpenAI Realtime key, and a direct call from the dashboard or phone. See [Calling](../../for-users/features/calling.html).
 
-<nav class="nextNav" aria-label="Monetization reading path">
-  <a href="./">Previous: Paid Features</a>
-  <a href="../ecosystem-plan.html">Review: Ecosystem Plan</a>
-</nav>
-
-## What Makes It Paid
-
-LiveKit/SFU calls require managed voice infrastructure.
-
-HivemindOS has to create rooms, mint participant tokens, dispatch the voice worker, keep the call agent alive, route audio between participants, and pay attention to reliability. That is not just a local UI feature. It is an operated service.
-
-So the rule is clean:
+A call with several people or several agents needs a real room, and a room needs managed infrastructure. HivemindOS creates the room, issues access tokens for each participant, brings the call agent in, keeps it running, and routes audio between everyone. That is an operated service, so it is paid.
 
 | Capability                               | BYOK Agent Calls | HivemindOS Cloud Agent Calls |
 | ---------------------------------------- | ---------------: | ---------------------------: |
@@ -1023,74 +807,19 @@ So the rule is clean:
 | Hosted room reliability                  |               No |                          Yes |
 | Premium paid service                     |               No |                          Yes |
 
-## What The LiveKit Branch Does
+The call agent can still hand work to the agent on your computer, so a room call is still an agent call, not a separate voice assistant.
 
-The LiveKit branch gives HivemindOS a room model.
+## Why rooms need a server
 
-The hub creates a LiveKit room, creates participant tokens for the dashboard or mobile app, and dispatches the HivemindOS call agent worker into the room. The worker uses OpenAI Realtime for the voice model and exposes the `ask_computer_agent` tool so the room can still reach the selected computer-side runtime.
+Rooms use an SFU (selective forwarding unit): a switchboard server. Each participant sends audio once to the server, and the server forwards it to everyone else. Without one, every participant must connect directly to every other participant, which breaks down quickly. With one, a room can hold a user on phone and desktop, a friend, and several agents at once.
 
-In code, that path is the cloud mode:
+## Product promise
 
-- `createInAppCall` creates the LiveKit room and participant tokens.
-- `AgentDispatchClient` dispatches the HivemindOS call agent worker.
-- `scripts/hivemindos-call-agent-worker.mjs` joins the room and speaks.
-- `ask_computer_agent` sends work back to `/api/phone`.
-- `/api/phone` routes that request into `/api/chat/agent-runtime`.
-
-The result is still an agent call, not a detached voice assistant.
-
-## Why SFU Matters
-
-SFU means selective forwarding unit.
-
-In plain English: it is the room switchboard. Each participant sends audio to the server, and the server forwards the right audio streams to the other participants.
-
-That matters once the call is bigger than one person and one agent. Without an SFU, every participant has to maintain direct media connections to every other participant. That gets messy fast. With an SFU, the room can handle:
-
-- one user on mobile and one agent
-- one user on desktop, one user on mobile, and one agent
-- a friend joining the room
-- a few different agents in the same conversation
-- future moderation, recording, routing, and room lifecycle controls
-
-## Product Promise
-
-The promise is not “pay to talk to your agent.”
-
-The promise is: pay when HivemindOS runs the room for you.
-
-Free BYOK Agent Calls should stay the default. HivemindOS Cloud Agent Calls are for the room-shaped version of the product: shared calls, mobile-friendly rooms, multi-agent conversations, and managed reliability.
-
-## Required Service Configuration
-
-Cloud calls require LiveKit credentials on the managed service side:
-
-```text
-LIVEKIT_URL
-LIVEKIT_API_KEY
-LIVEKIT_API_SECRET
-```
-
-The HivemindOS call agent worker also needs an OpenAI Realtime key:
-
-```text
-OPENAI_REALTIME_KEY
-OPENAI_API_KEY
-```
-
-In local development, `pnpm tauri:dev` starts the worker when the required environment is present. In packaged or hosted premium service form, those credentials belong to the managed HivemindOS Cloud service, not to the user's normal local setup.
-
-## Main Code Paths
-
-- `src/lib/services/phone/realtime-voice.ts`
-- `src/lib/services/phone/call-gateway.ts`
-- `src/app/api/phone/route.ts`
-- `scripts/hivemindos-call-agent-worker.mjs`
-- `scripts/tauri-next-dev.mjs`
+The promise is not "pay to talk to your agent." It is "pay when HivemindOS runs the room for you." Free BYOK calls stay the default. The room provider and voice-model credentials belong to the managed HivemindOS Cloud service, not to your local setup.
 
 <nav class="nextNav" aria-label="Monetization reading path">
   <a href="./">Back to paid features</a>
-  <a href="../">Back to monetization</a>
+  <a href="../ecosystem-plan.html">Review: Ecosystem Plan</a>
 </nav>
 === END DOCUMENT ===
 
@@ -1103,43 +832,46 @@ description: "Managed operations capabilities and agent-economy transaction rail
 content:
 # HivemindOS Paid Capabilities
 
-Paid capabilities are the parts HivemindOS operates for a customer. The local-first product remains free; the managed service charges for persistent availability, governance, collaboration, deployment, provider access, and support.
+Paid capabilities are the parts HivemindOS runs for a customer. The local-first product stays free; customers pay for always-on availability, governance, collaboration, hosting, provider access, and support.
 
 ## One Platform, Two Revenue Engines
 
-HivemindOS has one customer relationship with two primary engines:
-
 1. **Agent operations:** workspace subscriptions plus metered infrastructure, hosting, models, APIs, and enterprise controls.
-2. **Agent economy:** disclosed trading, payment, routing, and later marketplace economics when governed agents transact.
+2. **Agent economy:** disclosed trading, payment, routing, and later marketplace fees when agents transact.
 
-Individual features below are capabilities, usage meters, and transaction rails inside that relationship—not separate businesses.
+The features below are parts of one customer relationship, not separate businesses. Plan prices and metered rates are on the [investor overview](../index.html#what-is-paid).
 
-## Available Managed Capabilities
+## Managed capabilities
 
 <div class="docGrid">
   <section class="docCard">
     <h3>Managed Cloud Agents</h3>
-    <p>Dedicated always-on Hermes runtimes with persistent storage, managed inference, metering, and start/stop controls.</p>
+    <p>Always-on agent runtimes with persistent storage, managed inference, metering, and start/stop controls.</p>
     <a href="../../for-users/features/managed-cloud-agents.html">Open managed agents</a>
   </section>
   <section class="docCard">
     <h3>App Builder And Hosting</h3>
-    <p>Share previews and renewable static, Pro, and dynamic apps published from local, linked, or managed projects.</p>
+    <p>Share previews and renewable static, Pro, and dynamic app hosting.</p>
     <a href="app-builder-hosting.html">Open hosting economics</a>
   </section>
   <section class="docCard">
     <h3>Managed Models And APIs</h3>
-    <p>Provider access, unified billing, receipts, routing, budgets, and server-side credential custody when users do not bring their own keys.</p>
-    <a href="../index.html#current-metered-add-ons">Open pricing model</a>
+    <p>Provider access, unified billing, receipts, and budgets for users who don't bring their own keys.</p>
+    <a href="../index.html#current-metered-add-ons">Open pricing</a>
   </section>
   <section class="docCard">
     <h3>Cloud Agent Calls</h3>
-    <p>Managed voice-room infrastructure for multi-device, multi-party, and multi-agent calls where available.</p>
+    <p>Managed voice rooms for calls with several people or several agents.</p>
     <a href="hivemind-cloud-agent-calls.html">Open cloud calls</a>
+  </section>
+  <section class="docCard">
+    <h3>Hive Compute Marketplace</h3>
+    <p>A deferred, evidence-gated option for a community compute marketplace.</p>
+    <a href="hive-compute-marketplace.html">Open compute marketplace</a>
   </section>
 </div>
 
-## Available Transaction Economics
+## Transaction fees
 
 | Rail | Current economics | Status |
 | --- | ---: | --- |
@@ -1150,9 +882,9 @@ Individual features below are capabilities, usage meters, and transaction rails 
 | Eligible Hyperliquid perp fills | 0.005% | Live builder fee |
 | Base x402 Builder Code | Attribution and potential rewards | Live attribution; rewards not guaranteed |
 
-These rails are documented in the [Trading guide](../../for-users/trading/) and [Wallets, Honey, And x402](../../for-users/features/wallets-honey-and-x402.html). Ordinary Bankr swaps, cross-chain activity, token launches, prediction markets, NFTs, and automations remain product capabilities without a separate HivemindOS fee; the hosted Bankr copy-trading monitor is the explicit exception.
+Users can read how these work in the [Trading guide](../../for-users/trading/) and [Wallets, Honey, And x402](../../for-users/features/wallets-honey-and-x402.html). Other Bankr actions carry no HivemindOS fee; hosted Bankr copy trading is the only exception.
 
-## Validation And Later Expansion
+## Status and allocation rules
 
 | Capability | Status rule |
 | --- | --- |
@@ -1161,20 +893,22 @@ These rails are documented in the [Trading guide](../../for-users/trading/) and 
 | Agent/workflow marketplace | Defer until recurring buyer demand exists |
 | Compute marketplace expansion | Defer supply growth until providers can receive realistic utilization |
 | Stake-tier member usage pricing | Server-enforced consumption pricing on participating hive products; never a payout |
-| HIVE buyback allocation | 15% of each service's server-owned allocation basis (realized margin for most managed services, recognized platform revenue for others) funds a separate HIVE purchase rail; confirmed purchases remain publicly receipted and HIVE is not burned |
-| Company treasury allocation | A separate exact 15% of the same server-owned allocation basis goes to company treasury; the treasury does not fund buybacks and creates no holder claim |
+| HIVE buyback allocation | 15% of each service's server-owned allocation basis funds a separate HIVE purchase rail; purchases are publicly receipted and HIVE is not burned |
+| Company treasury allocation | A separate exact 15% of the same basis; the treasury does not fund buybacks and creates no holder claim |
 | Outside tokenomics allocation | The remainder has no fixed use assigned by the tokenomics policy |
 
-## Billing Principles
+The allocation basis is explained in [Revenue Allocations And Treasury Boundaries](../treasury-reserve-and-seasonal-programs.html).
 
-- Show ordinary dollar-denominated prices and usage.
-- Keep Hivemind Cloud credits spend-only, nontransferable, and nonredeemable.
-- Permit BYOK and self-hosting; subscriptions monetize management and governance rather than key lock-in.
-- Quote variable provider and infrastructure costs before commitment where practical.
-- Cap money-movement fees and charge nothing for ordinary wallet transfers.
-- Separate deterministic fee revenue from Base Builder Code attribution, contingent rewards, provider fees, and gross transaction volume.
-- Do not make HIVE a required payment method or gate core product access on staking; stake-tier member usage pricing sets usage prices on participating hive products, never access.
-- Do not promise features marked design-partner, contact-led, or planned.
+## Billing principles
+
+- Prices and usage are shown in ordinary dollars.
+- Hivemind Cloud credits are spend-only, nontransferable, and nonredeemable.
+- BYOK and self-hosting stay allowed; subscriptions charge for management, not key lock-in.
+- Variable provider and infrastructure costs are quoted before you commit where practical.
+- Money-movement fees are capped, and ordinary wallet transfers are free.
+- Fee revenue is reported separately from Builder Code attribution, contingent rewards, provider fees, and transaction volume.
+- HIVE is never a required payment method, and staking never gates core access. Member usage pricing changes prices on participating products, not access.
+- Features marked design-partner, contact-led, or planned are not promised.
 
 <nav class="nextNav" aria-label="Monetization reading path">
   <a href="../">Back to investor overview</a>
@@ -1191,9 +925,9 @@ description: "The separate 15% HIVE buyback and 15% company treasury allocations
 content:
 # Revenue Allocations And Treasury Boundaries
 
-This page keeps its existing filename for link compatibility. The current policy is a simple two-allocation model, not a staking-income program.
+This is the canonical page for where HivemindOS revenue goes. There are two fixed allocations, one for HIVE buybacks and one for the company treasury. Neither is a staking-income program.
 
-## Current Allocation
+## The allocation
 
 | Revenue rail | Allocation | Boundary |
 | --- | ---: | --- |
@@ -1201,46 +935,44 @@ This page keeps its existing filename for link compatibility. The current policy
 | Company treasury | 15% of the per-service allocation basis | Company property; does not fund HIVE buybacks |
 | Outside tokenomics allocation | Remainder of the per-service allocation basis | This policy assigns no fixed use |
 
-The two 15% allocations are exact and separate. They do not form one discretionary treasury bucket, and the treasury is not the source of HIVE purchases.
+The two 15% allocations are exact and separate. They are not one shared bucket, and the treasury is not the source of HIVE purchases.
 
-## Recognized Revenue Boundary
+## What the allocation is based on
 
-Recognized platform revenue is narrower than customer collections or transaction volume. It excludes directly attributable pass-through costs, refunds, and reversals. Marketplace gross merchandise value is not recognized platform revenue; only HivemindOS's earned platform fee is counted. Purchased credits are recognized only when consumed.
+Each service's allocation basis is server-owned and published in the official commercial catalog: realized margin for most managed services, recognized platform revenue for others.
 
-The allocation basis is server-owned and published per service in the official commercial catalog: realized margin for most managed services, recognized platform revenue for others.
+Recognized platform revenue is narrower than what customers pay or total transaction volume:
 
-Official hosted infrastructure calculates and records both allocations. A downloadable client, local environment value, connected user wallet, or client-supplied revenue claim cannot choose the allocation basis, amount, or recipient.
+- It excludes pass-through costs, refunds, and reversals.
+- For marketplaces, only HivemindOS's earned fee counts, not gross merchandise value.
+- Purchased credits count only when they are spent.
 
-## HIVE Buyback Rail
+HivemindOS's hosted infrastructure calculates and records both allocations. The app, a local setting, a connected wallet, or a client revenue claim cannot choose the basis, amount, or recipient.
 
-The buyback rail purchases HIVE from its own separate 15% allocation. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/); pending allocations, failed batches, and unconfirmed transactions do not count as HIVE bought.
+## HIVE buybacks
 
-HivemindOS does not burn HIVE. A buyback is not a distribution, staking payment, price floor, liquidity guarantee, or promise of token appreciation.
+The buyback rail buys HIVE with its own 15% allocation. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). Pending allocations, failed batches, and unconfirmed transactions do not count.
 
-## Company Treasury Rail
+HivemindOS does not burn HIVE. A buyback is not a distribution, staking payment, price floor, liquidity guarantee, or promise of appreciation.
 
-The separate 15% treasury allocation is company property. This tokenomics policy does not prescribe one fixed use for treasury assets.
+## Company treasury
 
-The treasury allocation gives HIVE holders and stakers no:
+The treasury allocation is company property, and this policy does not fix how it is used. It gives HIVE holders and stakers no:
 
 - ownership of company or treasury assets
 - redemption right
 - share of revenue
 - automatic distribution
 - binding governance or control over treasury decisions
-- promise that treasury funds will purchase HIVE
+- promise that treasury funds will buy HIVE
 
-## Staking Separation
+## Staking is separate
 
-The staking vault holds user principal. It does not fund buybacks or the company treasury. Holding or staking HIVE does not create a balance or claim against either revenue allocation.
+The staking vault holds user principal. It funds neither buybacks nor the treasury, and staking creates no claim on either. The six tiers give product benefits only; see [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html).
 
-The six staking tiers provide product benefits only: Honey earning multipliers, free-agent usage multipliers, and member pricing advertised as up to 61% off on participating services. They provide no yield, revenue share, ownership, binding governance, or treasury claim.
+## Changes
 
-## Change And Receipt Policy
-
-Allocation definitions, percentages, cadence, minimums, caps, and execution may change, pause, or end prospectively because of legal, regulatory, tax, accounting, corporate, security, liquidity, market-integrity, reserve, solvency, or operational requirements.
-
-Material changes are published with an effective date. Completed on-chain purchases and historical receipts remain part of the public record. Continuation of an operating policy is not a contractual right of holding or staking HIVE.
+Allocation definitions, percentages, timing, minimums, caps, and execution may change, pause, or end going forward for legal, regulatory, tax, accounting, corporate, security, liquidity, market-integrity, reserve, solvency, or operational reasons. Material changes are published with an effective date. Completed on-chain purchases stay on the public record. Holding or staking HIVE gives no contractual right to the policy continuing.
 
 <nav class="nextNav" aria-label="Monetization reading path">
   <a href="honey-hive-treasury.html">Back: Honey, HIVE, And Treasury</a>

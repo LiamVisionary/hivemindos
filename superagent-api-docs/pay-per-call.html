@@ -281,11 +281,29 @@
         </div>
         <h1 id="pay-per-call-with-x402">Pay per call with x402</h1>
 
-<p>An agent that holds an x402 wallet on Base can use the SuperAgent API without an account or an API key. It pays for one call at a time, in USDC, and pays only when the call succeeds. It can also pay once for an account and get an API key holding the credits.</p>
+<p>An agent with an x402 wallet on Base can use the SuperAgent API without an account or API key. It pays for one call at a time in USDC, and only when the call succeeds. It can also pay once for an account and get an API key holding the credits.</p>
 
-<h2 id="what-you-can-buy-per-call">What you can buy per call</h2>
+<h2 id="make-a-call">Make a call</h2>
 
-<p><code class="language-plaintext highlighter-rouge">GET https://api.hivemindos.app/v1/x402</code> lists every operation for sale, with its price, address, an example input and the input’s schema. No key is needed to read it. Today it covers:</p>
+<p>Send the operation’s input as the body:</p>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST https://api.hivemindos.app/v1/x402/svg-studio/svgs.generate
+Content-Type: application/json
+
+{ "prompt": "Minimal flat bee logo, black and honey-yellow" }
+</span></code></pre></div></div>
+
+<ol>
+  <li>The first answer is HTTP 402 with a <code class="language-plaintext highlighter-rouge">Payment-Required</code> header, priced from your input. If the input is wrong, you get HTTP 400 instead, before any payment is asked for.</li>
+  <li>Show the person the exact amount and get their approval. Then send the same request again with <code class="language-plaintext highlighter-rouge">Payment-Signature</code>. Any x402 v2 client does this step for you.</li>
+  <li>The call runs. On success the payment settles and you get the result, with an <code class="language-plaintext highlighter-rouge">x402</code> block holding the receipt id and transaction. On failure you get <code class="language-plaintext highlighter-rouge">x402.charged: false</code> and the payment is never taken, so you can try the same payment again.</li>
+</ol>
+
+<p>Sending the same signed payment again within 30 minutes returns the same answer. The call does not run twice and you are not charged twice.</p>
+
+<h2 id="what-you-can-buy">What you can buy</h2>
+
+<p><code class="language-plaintext highlighter-rouge">GET https://api.hivemindos.app/v1/x402</code> lists every operation for sale, with its price, address, an example input and the input’s schema. No key is needed. Today it covers:</p>
 
 <table>
   <thead>
@@ -346,29 +364,11 @@
   </tbody>
 </table>
 
-<p>A call costs what the same operation costs an account with no HIVE stake. The price comes from the service itself when you call, so it is never out of date.</p>
+<p>A call costs what the same operation costs an account with no HIVE stake. The price comes from the service when you call, so it is never out of date.</p>
 
-<h2 id="make-a-call">Make a call</h2>
+<h2 id="collect-a-background-result">Collect a background result</h2>
 
-<p>Send the operation’s input as the body:</p>
-
-<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST https://api.hivemindos.app/v1/x402/svg-studio/svgs.generate
-Content-Type: application/json
-
-{ "prompt": "Minimal flat bee logo, black and honey-yellow" }
-</span></code></pre></div></div>
-
-<ol>
-  <li>The first answer is HTTP 402 with a <code class="language-plaintext highlighter-rouge">Payment-Required</code> header, priced from your input. If the input is wrong, you get HTTP 400 instead, before any payment is asked for.</li>
-  <li>Show the person the exact amount and get their approval. Then send the same request again with <code class="language-plaintext highlighter-rouge">Payment-Signature</code>. Any x402 v2 client does this step for you.</li>
-  <li>The call runs. If it succeeds, the payment settles and you get the result, with an <code class="language-plaintext highlighter-rouge">x402</code> block holding the receipt id and the transaction. If it fails, you get <code class="language-plaintext highlighter-rouge">x402.charged: false</code> and the payment is never taken, so you can try the same payment again.</li>
-</ol>
-
-<p>Sending the same signed payment again within 30 minutes returns the same answer. The call does not run a second time and you are not charged twice.</p>
-
-<h2 id="collect-a-background-job">Collect a background job</h2>
-
-<p>Research, reports, swarms, simulations and media run in the background. Their answer includes <code class="language-plaintext highlighter-rouge">followUp.apiKey</code>, an API key that can use only that service and can never move funds. Store it like any secret, and use it to read the result, for example:</p>
+<p>Research, reports, swarms, simulations and media run in the background. Their answer includes <code class="language-plaintext highlighter-rouge">followUp.apiKey</code>, an API key that can use only that service and can never move funds. Store it like any secret and use it to read the result:</p>
 
 <div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST https://api.hivemindos.app/v1/services/token-autopsy/invoke
 Authorization: Bearer &lt;followUp.apiKey&gt;
@@ -382,7 +382,7 @@ Content-Type: application/json
 
 <h2 id="buy-an-account-instead">Buy an account instead</h2>
 
-<p>Some things are not sold per call, because they keep running or belong to an account: sites, agents, workflows, databases, wallets, trading, subscriptions and connected accounts. For those, buy an account:</p>
+<p>Sites, agents, workflows, databases, wallets, trading, subscriptions and connected accounts keep running or belong to an account, so they are not sold per call. Buy an account for those:</p>
 
 <div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST https://api.hivemindos.app/v1/x402/accounts
 Content-Type: application/json
@@ -390,13 +390,13 @@ Content-Type: application/json
 { "amountUsd": 5 }
 </span></code></pre></div></div>
 
-<p>After the same 402 and <code class="language-plaintext highlighter-rouge">Payment-Signature</code> steps, the answer is an API key holding that many Agent Credits (500 per dollar, from $1 to $500) for every service. Save it as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_API_KEY</code>. It can never move funds. To manage the account in a browser later, use the <a href="https://hivemindos.app/superagent-api/console/">console</a>.</p>
+<p>After the same 402 and <code class="language-plaintext highlighter-rouge">Payment-Signature</code> steps, you get an API key holding that many Agent Credits (500 per dollar, from $1 to $500) for every service. Save it as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_API_KEY</code>. It can never move funds. Manage the account later in the <a href="https://hivemindos.app/superagent-api/console/">console</a>.</p>
 
 <h2 id="private-tiers">Private tiers</h2>
 
-<p>The same routes work under <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/private/x402</code> and <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/confidential/x402</code>. There, only operations that meet the tier are sold. See <a href="privacy.html">privacy tiers</a>.</p>
+<p>The same routes work under <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/private/x402</code> and <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/confidential/x402</code>, where only operations that meet the tier are sold. See <a href="privacy.html">privacy tiers</a>.</p>
 
-<h2 id="safety-rules-for-agents">Safety rules for agents</h2>
+<h2 id="rules-for-agents">Rules for agents</h2>
 
 <ul>
   <li>A 402 answer is a price, not permission. Ask the person to approve the exact amount before a wallet signs.</li>
@@ -406,9 +406,15 @@ Content-Type: application/json
 
 <h2 id="find-it-in-the-x402-bazaar">Find it in the x402 Bazaar</h2>
 
-<p>Every route here describes its input and output for the Coinbase x402 Bazaar, so agents that search the Bazaar can find it. A route shows up there after its first paid call.</p>
+<p>Every route describes its input and output for the Coinbase x402 Bazaar, so agents that search the Bazaar can find it. A route appears there after its first paid call.</p>
 
-<p>Continue with <a href="agent-setup.html">agent setup</a>, <a href="mcp.html">connect with MCP</a>, or the <a href="reference.html">complete API reference</a>.</p>
+<h2 id="related">Related</h2>
+
+<ul>
+  <li><a href="agent-setup.html">Agent setup</a></li>
+  <li><a href="mcp.html">Connect with MCP</a></li>
+  <li><a href="reference.html">API reference</a></li>
+</ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

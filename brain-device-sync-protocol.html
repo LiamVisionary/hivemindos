@@ -6,16 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Brain device sync protocol | HivemindOS Docs</title>
-  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <title>Brain Device Sync Protocol | HivemindOS Docs</title>
+  <meta name="description" content="Developer reference for the desktop endpoint HivemindOS Mobile uses to replicate Brain files.">
   <link rel="canonical" href="https://hivemindos.app/docs/brain-device-sync-protocol.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="HivemindOS">
-  <meta property="og:title" content="Brain device sync protocol | HivemindOS Docs">
-  <meta property="og:description" content="Local-first agent fleet control room documentation.">
+  <meta property="og:title" content="Brain Device Sync Protocol | HivemindOS Docs">
+  <meta property="og:description" content="Developer reference for the desktop endpoint HivemindOS Mobile uses to replicate Brain files.">
   <meta property="og:url" content="https://hivemindos.app/docs/brain-device-sync-protocol.html">
-  <meta name="twitter:title" content="Brain device sync protocol | HivemindOS Docs">
-  <meta name="twitter:description" content="Local-first agent fleet control room documentation.">
+  <meta name="twitter:title" content="Brain Device Sync Protocol | HivemindOS Docs">
+  <meta name="twitter:description" content="Developer reference for the desktop endpoint HivemindOS Mobile uses to replicate Brain files.">
   <meta property="og:image" content="https://hivemindos.app/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -45,13 +45,11 @@
       </a>
       <div class="topLinks">
         
+          <a href="/docs/for-users/getting-started.html">Get Started</a>
+        
           <a href="/docs/for-users/">User Guide</a>
         
-          <a href="/docs/for-users/features/">Features</a>
-        
-          <a href="/docs/for-users/whole-brain/">Hive Superbrain</a>
-        
-          <a href="/docs/for-users/trading/">Trading</a>
+          <a href="/docs/for-users/platform-api.html">API</a>
         
           <a href="/docs/for-users/troubleshooting-cookbook.html">Help</a>
         
@@ -80,14 +78,14 @@
       <nav class="sideNav">
         
           <section class="navSection">
-            <h2>Start Here</h2>
+            <h2>Get Started</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/docs/">HivemindOS Overview</a>
+                <a class="navLink" href="/docs/">Overview</a>
               
             
               
@@ -111,7 +109,7 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/">Find A Feature</a>
+                <a class="navLink" href="/docs/for-users/features/">All Features</a>
               
             
               
@@ -141,14 +139,26 @@
           </section>
         
           <section class="navSection">
-            <h2>Everyday Work</h2>
+            <h2>The Basics</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/docs/for-users/features/fleet.html">My Hive</a>
+                <details class="navGroup">
+                  <summary>My Hive</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/fleet.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/fleet-machine-permissions.html">Machine Permissions</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/hivemindos-machines.html">HivemindOS Machines</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -156,7 +166,21 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
+                <details class="navGroup">
+                  <summary>Agents And Chat</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/runtimes-and-chat.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/slash-commands.html">Slash Commands</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-plugins.html">Agent Plugins</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/computer-interaction.html">Computer Interaction</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -164,7 +188,19 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/work-and-scheduler.html">Work And Automations</a>
+                <details class="navGroup">
+                  <summary>Work And Automations</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/work-and-scheduler.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/capability-approvals.html">Capability Approvals</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-native-workflows.html">Agent-Native Workflows</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -181,6 +217,12 @@
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/brain-services.html">Memory And Knowledge</a>
                     
+                      <a class="navLink" href="/docs/for-users/whole-brain/knowledge-intake.html">Adding Knowledge</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/vault-map.html">Where Things Live</a>
+                    
                       <a class="navLink" href="/docs/for-users/whole-brain/shared-skills.html">Shared Skills</a>
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/shared-env.html">Shared Env</a>
@@ -188,6 +230,10 @@
                       <a class="navLink" href="/docs/for-users/whole-brain/sync-and-health.html">Sync And Repair</a>
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/workspaces.html">Separate Workspaces</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/device-sync.html">Phone And Desktop</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/shared-brain-benchmarks.html">Memory Benchmarks</a>
                     
                   </div>
                 </details>
@@ -198,7 +244,17 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/hivemind-sync.html">Hivemind Sync</a>
+                <details class="navGroup">
+                  <summary>Hivemind Sync</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/hivemind-sync.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/targeted-file-transfers.html">Handoff Transfers</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -206,7 +262,21 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/zero-human-companies.html">Zero Human Companies</a>
+                <details class="navGroup">
+                  <summary>Skills</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/hive-skills.html">Hive Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/third-party-skills.html">Third-Party Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/hive-fusion.html">Hive Fusion</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -214,13 +284,13 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/integrations-and-work-history.html">Integrations And History</a>
+                <a class="navLink" href="/docs/for-users/features/env-files-notifications-maintenance.html">Settings, Files, And Alerts</a>
               
             
           </section>
         
           <section class="navSection">
-            <h2>Build And Automate</h2>
+            <h2>Build And Create</h2>
             
               
               
@@ -229,6 +299,385 @@
               
                 <a class="navLink" href="/docs/for-users/features/app-builder.html">App Builder And Hosting</a>
               
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Zero Human Companies</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/zero-human-companies.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/founder-mode.html">Founder Mode</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/web-research.html">Web Research</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/connected-intelligence-private-work.html">Connected Intelligence</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/sre-investigations.html">SRE Investigations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hivemind-analytics.html">Analytics</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Communicate And Assist</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/calling.html">Calling</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/socials.html">Socials</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/inbox-triage.html">Inbox Triage</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/bookings.html">Bookings</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/x-command-bot.html">X Command Bot</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hivemind-office.html">Office Companion</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/page-agent.html">Page Agent</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/read-along.html">Read Along</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/privacy-suite.html">Privacy Suite</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/beeline.html">Beeline Family Profiles</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Money And Compute</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Wallets And Spending</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/wallets-honey-and-x402.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/finances.html">Finances</a>
+                    
+                      <a class="navLink" href="/docs/for-users/x-engagement-honey.html">HONEY For X Posts</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Trading</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/trading/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/trading/crypto.html">Crypto</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/stocks.html">Stocks</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/prediction-markets.html">Prediction Markets</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/concentrated-liquidity.html">Concentrated Liquidity</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/bankr-copy-trading.html">Copy Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/copy-trading-agent-analysis.html">Agent-Analyzed Copy Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/nansen-intelligence.html">Nansen Intelligence</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/governance.html">Safety And Limits</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hive-compute.html">Hive Compute</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Connections</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Integrations</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/integrations-and-work-history.html">Integrations And Work History</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/finance-district.html">Finance District</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/hivemind-database.html">Hivemind Database</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/monid.html">Monid And AKTA Pro</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/nocodb.html">NocoDB</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/twenty.html">Twenty CRM</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/usepod.html">UsePod</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>MiroShark</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/miroshark/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/miroshark/companion.html">Companion Integration</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/miroshark-and-openclaw.html">Runtime Gateways</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Labs</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/agent-evaluations.html">Agent Evaluations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/agent-challenges.html">Agent Challenges</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/loop-engineering.html">Loop Engineering</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/evo-optimization.html">Evo Optimization</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/harness-experiments.html">Harness Experiments</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/quant-research.html">Quant Research Swarm</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/signal-trader.html">Signal Trader</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/kol-radar.html">KOL Radar</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/penny-stock-paper-lab.html">Penny-Stock Paper Lab</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/prediction-proper-learning.html">Prediction-Market Learning Lab</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>SuperAgent API</h2>
             
               
               
@@ -286,98 +735,10 @@
                 </details>
               
             
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/photo-library.html">Photo Library</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/web-research.html">Web Research</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hive-fusion.html">Hive Fusion</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/packaged-skills/">Skills</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/calling.html">Calling</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/socials.html">Socials</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/bookings.html">Bookings</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hivemind-analytics.html">Analytics</a>
-              
-            
           </section>
         
           <section class="navSection">
-            <h2>Money And Compute</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/wallets-honey-and-x402.html">Wallets And Spending Controls</a>
-              
+            <h2>Under The Hood</h2>
             
               
               
@@ -385,164 +746,22 @@
 
               
                 <details class="navGroup">
-                  <summary>Trading</summary>
+                  <summary>How HivemindOS Works</summary>
                   <div class="navChildren">
                     
-                      <a class="navLink" href="/docs/for-users/trading/">Overview</a>
+                      <a class="navLink" href="/docs/for-users/architecture/">Overview</a>
                     
                     
-                      <a class="navLink" href="/docs/for-users/trading/crypto.html">Crypto</a>
+                      <a class="navLink" href="/docs/for-users/architecture/api-and-storage.html">API And Storage</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/stocks.html">Stocks</a>
+                      <a class="navLink" href="/docs/for-users/architecture/syncing-and-tailscale.html">Sync And Private Networking</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                      <a class="navLink" href="/docs/for-users/architecture/tailscale-fleet-telemetry.html">Fleet Telemetry</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/prediction-markets.html">Prediction Markets</a>
-                    
-                      <a class="navLink" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
-                    
-                      <a class="navLink" href="/docs/for-users/trading/governance.html">Safety And Limits</a>
+                      <a class="navLink" href="/docs/for-users/architecture/generated-media-signing.html">Generated Media Signing</a>
                     
                   </div>
                 </details>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hive-compute.html">Hive Compute</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
-              
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>Connections</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/">Integrations Home</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/usepod.html">UsePod</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/miroshark/">MiroShark</a>
-              
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>Advanced And Reference</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/runtimes/">Advanced Guides</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/architecture/">How HivemindOS Works</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/fleet-machine-permissions.html">Fleet Machine Permissions</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/agent-evaluations.html">Agent Evaluations</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/loop-engineering.html">Loop Engineering</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/capability-approvals.html">Capability Approvals</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/slash-commands.html">Slash Command Reference</a>
               
             
               
@@ -558,7 +777,47 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/bankr/bankr-platform-reference.html">Bankr Provider Reference</a>
+                <details class="navGroup">
+                  <summary>Advanced Agent Setups</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/hermes/local-setup.html">Hermes Local Setup</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/v01-control-plane.html">AEON Control Plane</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/zero-human-companies.html">AEON With Companies</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/github-actions-brain-access.html">AEON GitHub Actions Access</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/tailnet-generation-skills.html">Tailnet Generation Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/code-intelligence.html">Code Intelligence</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink isActive" aria-current="page" href="/docs/brain-device-sync-protocol.html">Brain Device Sync Protocol</a>
               
             
           </section>
@@ -595,6 +854,30 @@
               
 
               
+                <a class="navLink" href="/docs/for-investors/hive-staking-and-community-tiers.html">HIVE Staking And Tiers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/hive-token-receipts.html">HIVE Token Receipts</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/treasury-reserve-and-seasonal-programs.html">Revenue Allocations</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/docs/for-investors/paid-features/">Paid Features</a>
               
             
@@ -616,54 +899,69 @@
         </div>
         <h1 id="brain-device-sync-protocol">Brain device sync protocol</h1>
 
-<p>Developer reference for the desktop endpoint used by HivemindOS Mobile. This is file replication, not memory extraction: Markdown notes, skill folders, and binary attachments retain their bytes. The current server implementation is <code class="language-plaintext highlighter-rouge">src/lib/services/obsidian/mobile-brain-sync.ts</code>.</p>
+<p>Developer reference for the desktop endpoint used by HivemindOS Mobile. This is file replication, not memory extraction: Markdown notes, skill folders, and binary attachments keep their exact bytes. The server implementation is <code class="language-plaintext highlighter-rouge">src/lib/services/obsidian/mobile-brain-sync.ts</code>.</p>
 
-<p>All requests use <code class="language-plaintext highlighter-rouge">POST /api/brain/sync</code> and the existing dashboard session or paired-device authentication. Runtime-agent principals are rejected. The desktop resolves its currently selected workspace vault; requests cannot supply an absolute vault root. Clients must retain the original desktop connection and must not fail over mutations to another machine.</p>
+<h2 id="basics">Basics</h2>
+
+<ul>
+  <li>Every request is <code class="language-plaintext highlighter-rouge">POST /api/brain/sync</code> with the dashboard session or paired-device authentication. Runtime-agent principals are rejected.</li>
+  <li>The desktop uses its currently selected workspace vault. Requests cannot supply a vault path.</li>
+  <li>Clients must stay on the original desktop connection and never fail over mutations to another machine.</li>
+  <li>Paths are vault-relative, revisions are lowercase SHA-256 hex, and times are milliseconds since the Unix epoch.</li>
+</ul>
 
 <h2 id="manifest">Manifest</h2>
 
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="nl">"action"</span><span class="p">:</span><span class="s2">"manifest"</span><span class="p">,</span><span class="nl">"limit"</span><span class="p">:</span><span class="mi">200</span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
-<p>Returns <code class="language-plaintext highlighter-rouge">{ok:true,protocol:1,vaultId,entries,nextCursor?,complete,truncated,reasons,limits}</code>. Each entry is <code class="language-plaintext highlighter-rouge">{path,revision,size,modifiedAt,deleted?}</code>. Paths are vault-relative, revisions are lowercase SHA256 hex, and times are milliseconds since the Unix epoch. A deleted entry retains the previous content revision. Its bytes are absent; recreation uses <code class="language-plaintext highlighter-rouge">expectedRevision:null</code>.</p>
+<p>Returns <code class="language-plaintext highlighter-rouge">{ok:true,protocol:1,vaultId,entries,nextCursor?,complete,truncated,reasons,limits}</code>. Each entry is <code class="language-plaintext highlighter-rouge">{path,revision,size,modifiedAt,deleted?}</code>. A deleted entry keeps its previous revision but has no bytes; recreate it with <code class="language-plaintext highlighter-rouge">expectedRevision:null</code>.</p>
 
-<p>Pass <code class="language-plaintext highlighter-rouge">nextCursor</code> as <code class="language-plaintext highlighter-rouge">cursor</code> to resume. Work is bounded per page, so a large vault continues on subsequent pages. Emitted pages are immutable and replayable. Scan progress and its pages survive server restarts. Cursors expire after ten minutes without progress; the server retains up to eight recent scans. An expired cursor returns 409 with <code class="language-plaintext highlighter-rouge">code:"snapshot-expired"</code>; discard that partial traversal and restart.</p>
+<p><strong>Paging.</strong> Pass <code class="language-plaintext highlighter-rouge">nextCursor</code> back as <code class="language-plaintext highlighter-rouge">cursor</code>. Pages are bounded, immutable, replayable, and survive server restarts. A cursor expires after ten minutes without progress, and the server keeps up to eight recent scans. An expired cursor returns 409 with <code class="language-plaintext highlighter-rouge">code:"snapshot-expired"</code>: discard the partial traversal and start again. Files seen only on earlier pages are not assumed deleted.</p>
 
-<p>Only a terminal page with <code class="language-plaintext highlighter-rouge">complete:true</code> proves a full, stable traversal. Directory changes during traversal invalidate absence inference. A terminal <code class="language-plaintext highlighter-rouge">complete:false,truncated:true</code> response still contains usable observations and explicit tombstones, but the client must not infer deletion or absence from paths it did not receive. <code class="language-plaintext highlighter-rouge">reasons</code> can contain <code class="language-plaintext highlighter-rouge">files-changed</code>, <code class="language-plaintext highlighter-rouge">file-too-large</code>, <code class="language-plaintext highlighter-rouge">directory-limit</code>, <code class="language-plaintext highlighter-rouge">unreadable-file</code>, or <code class="language-plaintext highlighter-rouge">unreadable-folder</code>. A transiently changed file is checked again on the next traversal.</p>
+<p><strong>Absence.</strong> Only a final page with <code class="language-plaintext highlighter-rouge">complete:true</code> proves a full, stable traversal. A final <code class="language-plaintext highlighter-rouge">complete:false,truncated:true</code> page still has usable entries and explicit tombstones, but the client must not infer deletion from paths it did not receive. <code class="language-plaintext highlighter-rouge">reasons</code> may include <code class="language-plaintext highlighter-rouge">files-changed</code>, <code class="language-plaintext highlighter-rouge">file-too-large</code>, <code class="language-plaintext highlighter-rouge">directory-limit</code>, <code class="language-plaintext highlighter-rouge">unreadable-file</code>, or <code class="language-plaintext highlighter-rouge">unreadable-folder</code>. A file that changed mid-scan is checked again next time.</p>
 
-<p>The server retains bounded history for explicit external-deletion detection. Older history can be omitted; clients retain their own per-desktop baseline and use a completed manifest to determine absence. Files named only by earlier pages are not assumed deleted when a cursor expires.</p>
+<p>The server keeps bounded history for detecting external deletions and may drop older entries, so clients keep their own per-desktop baseline and use a completed manifest to decide absence.</p>
 
 <h2 id="read">Read</h2>
 
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="nl">"action"</span><span class="p">:</span><span class="s2">"read"</span><span class="p">,</span><span class="nl">"vaultId"</span><span class="p">:</span><span class="s2">"&lt;returned-id&gt;"</span><span class="p">,</span><span class="nl">"files"</span><span class="p">:[{</span><span class="nl">"path"</span><span class="p">:</span><span class="s2">"Notes/Example.md"</span><span class="p">,</span><span class="nl">"revision"</span><span class="p">:</span><span class="s2">"&lt;sha256&gt;"</span><span class="p">}]}</span><span class="w">
 </span></code></pre></div></div>
 
-<p>Returns <code class="language-plaintext highlighter-rouge">{ok:true,vaultId,results}</code>. Results include <code class="language-plaintext highlighter-rouge">path</code> and <code class="language-plaintext highlighter-rouge">status</code>: <code class="language-plaintext highlighter-rouge">ok</code>, <code class="language-plaintext highlighter-rouge">not-found</code>, <code class="language-plaintext highlighter-rouge">conflict</code>, <code class="language-plaintext highlighter-rouge">too-large</code>, or <code class="language-plaintext highlighter-rouge">invalid</code>. An <code class="language-plaintext highlighter-rouge">ok</code> result includes <code class="language-plaintext highlighter-rouge">revision</code>, <code class="language-plaintext highlighter-rouge">size</code>, <code class="language-plaintext highlighter-rouge">modifiedAt</code>, and <code class="language-plaintext highlighter-rouge">contentBase64</code>. A revision mismatch returns <code class="language-plaintext highlighter-rouge">currentRevision</code>; refresh before using newer bytes as a baseline. Files have no extension allowlist.</p>
+<p>Returns <code class="language-plaintext highlighter-rouge">{ok:true,vaultId,results}</code>. Each result has <code class="language-plaintext highlighter-rouge">path</code> and a <code class="language-plaintext highlighter-rouge">status</code> of <code class="language-plaintext highlighter-rouge">ok</code>, <code class="language-plaintext highlighter-rouge">not-found</code>, <code class="language-plaintext highlighter-rouge">conflict</code>, <code class="language-plaintext highlighter-rouge">too-large</code>, or <code class="language-plaintext highlighter-rouge">invalid</code>. An <code class="language-plaintext highlighter-rouge">ok</code> result includes <code class="language-plaintext highlighter-rouge">revision</code>, <code class="language-plaintext highlighter-rouge">size</code>, <code class="language-plaintext highlighter-rouge">modifiedAt</code>, and <code class="language-plaintext highlighter-rouge">contentBase64</code>. A revision mismatch returns <code class="language-plaintext highlighter-rouge">currentRevision</code>; refresh before using the newer bytes as a baseline. Any file extension is allowed.</p>
 
 <h2 id="apply">Apply</h2>
 
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="nl">"action"</span><span class="p">:</span><span class="s2">"apply"</span><span class="p">,</span><span class="nl">"vaultId"</span><span class="p">:</span><span class="s2">"&lt;returned-id&gt;"</span><span class="p">,</span><span class="nl">"changes"</span><span class="p">:[{</span><span class="nl">"path"</span><span class="p">:</span><span class="s2">"Notes/Example.md"</span><span class="p">,</span><span class="nl">"expectedRevision"</span><span class="p">:</span><span class="kc">null</span><span class="p">,</span><span class="nl">"contentBase64"</span><span class="p">:</span><span class="s2">"SGVsbG8K"</span><span class="p">}]}</span><span class="w">
 </span></code></pre></div></div>
 
-<p>For deletion, omit <code class="language-plaintext highlighter-rouge">contentBase64</code> and set <code class="language-plaintext highlighter-rouge">deleted:true</code>. Returns <code class="language-plaintext highlighter-rouge">{ok:true,vaultId,results}</code> with <code class="language-plaintext highlighter-rouge">status:applied|unchanged|conflict|invalid</code>, and optional <code class="language-plaintext highlighter-rouge">revision</code>, <code class="language-plaintext highlighter-rouge">deleted</code>, <code class="language-plaintext highlighter-rouge">currentRevision</code>, or <code class="language-plaintext highlighter-rouge">conflictPath</code>. Malformed batches are rejected before any writes. Valid batches are processed one file at a time; an individual failure does not imply that earlier results were rolled back.</p>
-
-<p><code class="language-plaintext highlighter-rouge">expectedRevision:null</code> creates only when the path is absent, including after a tombstone. Updating or deleting existing bytes requires their current revision. Identical desired bytes are an idempotent success even if an acknowledgment was lost. A conflicting update leaves the current file intact and retains incoming bytes in a deterministic <code class="language-plaintext highlighter-rouge">Sync Conflicts/</code> file. A conflicting deletion preserves the current file. The client must likewise preserve unsynced local bytes when accepting a desktop change.</p>
-
-<p>Updates and deletes first move the old file into <code class="language-plaintext highlighter-rouge">.trash/HivemindOS Sync/</code>. A durable preparation record permits recovery after termination. New content is flushed into a temporary file and installed with exclusive creation, so a competing editor’s replacement is never overwritten. The previous bytes remain recoverable. Recovery restores an archived file only when its original path is still absent. Sync operations share the existing cross-process lock mechanism; a process that died with a lock is eligible for recovery after its stale-lock interval.</p>
-
-<p>Committed changes also leave durable search invalidation in private <code class="language-plaintext highlighter-rouge">brain-file-indexes</code> state. The canonical memory and full-vault search readers refresh their generated indexes before answering; typed-memory reads rebuild under the existing memory write lock. Full-vault query caches and shared skill caches incorporate the durable version, so another process cannot keep serving an older cached result after a file change. Failed invalidation delivery remains in the sync journal and retries before the next operation. This coalesces a run of uploads into one refresh at read time instead of rebuilding the full vault after every file.</p>
-
-<h2 id="bounds-and-ownership">Bounds and ownership</h2>
+<p>To delete, omit <code class="language-plaintext highlighter-rouge">contentBase64</code> and set <code class="language-plaintext highlighter-rouge">deleted:true</code>. Returns <code class="language-plaintext highlighter-rouge">{ok:true,vaultId,results}</code> with <code class="language-plaintext highlighter-rouge">status</code> of <code class="language-plaintext highlighter-rouge">applied</code>, <code class="language-plaintext highlighter-rouge">unchanged</code>, <code class="language-plaintext highlighter-rouge">conflict</code>, or <code class="language-plaintext highlighter-rouge">invalid</code>, plus optional <code class="language-plaintext highlighter-rouge">revision</code>, <code class="language-plaintext highlighter-rouge">deleted</code>, <code class="language-plaintext highlighter-rouge">currentRevision</code>, or <code class="language-plaintext highlighter-rouge">conflictPath</code>.</p>
 
 <ul>
-  <li>8 MiB per file, 12 MiB of decoded content per batch, 16 batch items.</li>
-  <li>Up to 500 manifest entries per page, 256 MiB of hashing per page, and 60,000 inspected directory entries per page. An individual directory exceeding the inspection bound makes that traversal partial.</li>
-  <li>Symlink files and directories are excluded; traversal, hidden paths, components longer than 240 characters, and trailing dots/spaces are rejected. Hidden configuration, build outputs, generated Brain indexes and replay generations, and runtime mirrors do not replicate. Ordinary Markdown under <code class="language-plaintext highlighter-rouge">Operations/Brain Services/</code> remains included.</li>
-  <li>The local app keeps sync identities, scan pages, hashes, preparation records, and bounded receipts outside the vault under its private <code class="language-plaintext highlighter-rouge">brain-sync</code> state. Neither this metadata nor recovery trash is replicated by this endpoint.</li>
-  <li><code class="language-plaintext highlighter-rouge">Sync Conflicts/</code> and recovery trash are created only when needed. They are not additions to the default vault scaffold. No new setup daemon or external sync service is installed.</li>
+  <li>Malformed batches are rejected before any write. Valid batches apply one file at a time; a later failure does not roll back earlier results.</li>
+  <li><code class="language-plaintext highlighter-rouge">expectedRevision:null</code> creates a file only if the path is absent (including after a tombstone). Updates and deletes need the current revision.</li>
+  <li>Writing identical bytes succeeds idempotently, even if an earlier acknowledgment was lost.</li>
+  <li>A conflicting update keeps the current file and saves the incoming bytes to a deterministic <code class="language-plaintext highlighter-rouge">Sync Conflicts/</code> file. A conflicting delete keeps the current file. Clients must likewise preserve unsynced local bytes when accepting a desktop change.</li>
 </ul>
 
-<p>Hermetic validation: <code class="language-plaintext highlighter-rouge">pnpm test:brain-device-sync</code>. Fixtures use temporary vaults and test the actual route handler, conflict preservation, binary files, pagination, external mutations, symlink rejection, process-termination recovery, and actual desktop memory/search/skill readers after synced creates, edits, and deletions. Tests do not read or mutate the user’s configured vault.</p>
+<p><strong>Crash safety.</strong> Updates and deletes first move the old file into <code class="language-plaintext highlighter-rouge">.trash/HivemindOS Sync/</code>, with a durable preparation record for recovery. New content is written to a temporary file and installed with exclusive creation, so a competing editor’s file is never overwritten. Recovery restores an archived file only if its original path is still empty. Sync shares the existing cross-process lock, and a lock held by a dead process is recovered after its stale-lock interval.</p>
+
+<p><strong>Search freshness.</strong> Each committed change records a durable search invalidation. The canonical memory and full-vault search readers refresh their generated indexes before answering, and typed-memory reads rebuild under the memory write lock. Query and skill caches include the durable version, so no process serves stale results after a change. Failed invalidations stay in the sync journal and retry before the next operation. A burst of uploads therefore costs one refresh at read time, not a full rebuild per file.</p>
+
+<h2 id="limits-and-exclusions">Limits and exclusions</h2>
+
+<ul>
+  <li>8 MiB per file, 12 MiB of decoded content per batch, 16 items per batch.</li>
+  <li>Up to 500 manifest entries, 256 MiB of hashing, and 60,000 inspected directory entries per page. A single directory over the inspection limit makes that traversal partial.</li>
+  <li>Symlinked files and folders are skipped. Traversal paths, hidden paths, path components longer than 240 characters, and trailing dots or spaces are rejected.</li>
+  <li>Hidden configuration, build output, generated Brain indexes and replay generations, and runtime mirrors are not replicated. Ordinary Markdown under <code class="language-plaintext highlighter-rouge">Operations/Brain Services/</code> is.</li>
+  <li>Sync identities, scan pages, hashes, preparation records, and receipts live in private app state outside the vault. Neither they nor the recovery trash are replicated.</li>
+  <li><code class="language-plaintext highlighter-rouge">Sync Conflicts/</code> and the recovery trash are created only when needed. No setup daemon or external sync service is installed.</li>
+</ul>
+
+<h2 id="testing">Testing</h2>
+
+<p>Run <code class="language-plaintext highlighter-rouge">pnpm test:brain-device-sync</code>. It uses temporary vaults and the real route handler to cover conflicts, binary files, paging, external changes, symlink rejection, crash recovery, and the desktop’s memory, search, and skill readers after synced creates, edits, and deletes. It never touches your configured vault.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

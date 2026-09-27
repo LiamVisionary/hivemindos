@@ -281,12 +281,13 @@
         </div>
         <h1 id="private-and-confidential-access">Private and confidential access</h1>
 
-<p>The SuperAgent API has three base URLs. They are the same API with the same paths, and each one offers only what meets its privacy level.</p>
+<p>The SuperAgent API has three base URLs. They are the same API with the same paths; each offers only what meets its privacy level.</p>
 
-<div class="plainAnswer">
-  <strong>In plain English</strong>
-  <p>If you are fine with any model or service, use <code>/v1</code>. If what you send must never reach a service that keeps it, use <code>/v1/private</code>. If models must also run in hardware that proves what it is running, use <code>/v1/confidential</code>.</p>
-</div>
+<ul>
+  <li>Fine with any model or service? Use <code class="language-plaintext highlighter-rouge">/v1</code>.</li>
+  <li>What you send must never reach a service that keeps it? Use <code class="language-plaintext highlighter-rouge">/v1/private</code>.</li>
+  <li>Models must also run in hardware that proves what it runs? Use <code class="language-plaintext highlighter-rouge">/v1/confidential</code>.</li>
+</ul>
 
 <table>
   <thead>
@@ -308,7 +309,7 @@
       <td>Private</td>
       <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/private</code></td>
       <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/private/mcp</code></td>
-      <td>Only models and services that keep nothing you send. Nothing goes to a service that is not private.</td>
+      <td>Only models and services that keep nothing you send.</td>
     </tr>
     <tr>
       <td>Confidential</td>
@@ -319,16 +320,16 @@
   </tbody>
 </table>
 
-<p>Each tier includes everything the stricter tiers do. Replace <code class="language-plaintext highlighter-rouge">/v1</code> with the tier’s base in any path: <code class="language-plaintext highlighter-rouge">/v1/private/services/cloud-superbrain/invoke</code> is the private version of <code class="language-plaintext highlighter-rouge">/v1/services/cloud-superbrain/invoke</code>.</p>
+<p>Swap <code class="language-plaintext highlighter-rouge">/v1</code> for the tier’s base in any path: <code class="language-plaintext highlighter-rouge">/v1/private/services/cloud-superbrain/invoke</code> is the private version of <code class="language-plaintext highlighter-rouge">/v1/services/cloud-superbrain/invoke</code>.</p>
 
 <h2 id="what-each-tier-includes">What each tier includes</h2>
 
-<p>The catalog, capabilities, actions, MCP tools and OpenAPI document under a tier’s base list only what that tier includes. Read them from the base you will call:</p>
+<p>The catalog, capabilities, actions, MCP tools and OpenAPI document under a tier’s base list only what that tier includes, so read them from the base you will call:</p>
 
 <div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">GET https://api.hivemindos.app/v1/private/catalog
 </span></code></pre></div></div>
 
-<p>Every capability also shows the strictest tier it serves in its <code class="language-plaintext highlighter-rouge">privacy</code> field.</p>
+<p>Each capability’s <code class="language-plaintext highlighter-rouge">privacy</code> field shows the strictest tier it serves.</p>
 
 <table>
   <thead>
@@ -358,19 +359,23 @@
 <p>In the confidential tier:</p>
 
 <ul>
-  <li><strong>Chat and Memory Answer</strong> use only models that run in an attested enclave. The provider checks the enclave’s attestation on every request. A reply that arrives without that check is discarded, and you are not charged for it.</li>
-  <li><strong>Memory Answer</strong> has no default reader there, because the default reader is private but not attested. Name one from <code class="language-plaintext highlighter-rouge">memory.models</code> under the confidential base as <code class="language-plaintext highlighter-rouge">model</code>.</li>
-  <li><strong>Memories</strong> you write are never sent to an embedding model. Recall finds them by keyword, so Semantic Recall is refused with <code class="language-plaintext highlighter-rouge">409</code>.</li>
+  <li><strong>Chat and Memory Answer</strong> use only models that run in an attested enclave, checked on every request. A reply without that check is discarded and not charged.</li>
+  <li><strong>Memory Answer</strong> has no default reader, because the default is private but not attested. Name one from <code class="language-plaintext highlighter-rouge">memory.models</code> under the confidential base as <code class="language-plaintext highlighter-rouge">model</code>.</li>
+  <li><strong>Memories</strong> are never sent to an embedding model. Recall finds them by keyword, so Semantic Recall is refused with <code class="language-plaintext highlighter-rouge">409</code>.</li>
   <li><strong>Media</strong> models are listed and jobs can be read, but nothing is generated: no media model runs in attested hardware yet.</li>
 </ul>
 
 <h2 id="models">Models</h2>
 
-<p>Every model in the managed catalog has a <code class="language-plaintext highlighter-rouge">privacy_level</code>: <code class="language-plaintext highlighter-rouge">standard</code>, <code class="language-plaintext highlighter-rouge">private</code> or <code class="language-plaintext highlighter-rouge">confidential</code>. Under a tier’s base, <code class="language-plaintext highlighter-rouge">managed-models</code> <code class="language-plaintext highlighter-rouge">models.list</code> returns only the models that meet it, and a chat that names any other model is refused before anything is charged.</p>
+<p>Every model in the managed catalog has a <code class="language-plaintext highlighter-rouge">privacy_level</code>: <code class="language-plaintext highlighter-rouge">standard</code>, <code class="language-plaintext highlighter-rouge">private</code> or <code class="language-plaintext highlighter-rouge">confidential</code>. Under a tier’s base, <code class="language-plaintext highlighter-rouge">managed-models</code> <code class="language-plaintext highlighter-rouge">models.list</code> returns only models that meet it, and a chat naming any other model is refused before anything is charged.</p>
 
-<p>A model is <code class="language-plaintext highlighter-rouge">private</code> when its provider publishes that it keeps no prompts or replies, or when HivemindOS runs it. It is <code class="language-plaintext highlighter-rouge">confidential</code> when it also runs in an enclave whose attestation is checked on every request; the provider names these models with a <code class="language-plaintext highlighter-rouge">:private</code> suffix. Models routed to other providers are <code class="language-plaintext highlighter-rouge">standard</code>.</p>
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">private</code>: the provider publishes that it keeps no prompts or replies, or HivemindOS runs the model.</li>
+  <li><code class="language-plaintext highlighter-rouge">confidential</code>: also runs in an enclave whose attestation is checked on every request. The provider names these models with a <code class="language-plaintext highlighter-rouge">:private</code> suffix.</li>
+  <li><code class="language-plaintext highlighter-rouge">standard</code>: every other model.</li>
+</ul>
 
-<p>Media generation follows the same rule: under the private base, the media catalog and <code class="language-plaintext highlighter-rouge">/media/models</code> list only the private media models, and a request for any other model is refused before anything is charged.</p>
+<p>Media generation follows the same rule: under the private base, the media catalog and <code class="language-plaintext highlighter-rouge">/media/models</code> list only private media models.</p>
 
 <p>Memory Answer lets you choose its reader the same way. See <a href="memory.html#choose-who-reads-the-answer">managed memory</a>.</p>
 
@@ -389,11 +394,9 @@
 <span class="p">);</span>
 </code></pre></div></div>
 
-<p>A pinned key works only in its tier or a stricter one, whichever base URL it calls. Every key created from it keeps the pin, and a child key cannot loosen it. Keys report their tier in <code class="language-plaintext highlighter-rouge">privacy</code>.</p>
+<p>A pinned key works only in its tier or a stricter one, whatever base URL it calls. Child keys keep the pin and cannot loosen it. Keys report their tier in <code class="language-plaintext highlighter-rouge">privacy</code>.</p>
 
-<h2 id="ask-for-a-tier-by-header">Ask for a tier by header</h2>
-
-<p>Send <code class="language-plaintext highlighter-rouge">X-HivemindOS-Privacy: private</code> or <code class="language-plaintext highlighter-rouge">X-HivemindOS-Privacy: confidential</code> to ask for a tier on any path. The strictest of the base URL, the header and the key’s pin applies. Nothing can loosen a tier.</p>
+<p>You can also send <code class="language-plaintext highlighter-rouge">X-HivemindOS-Privacy: private</code> or <code class="language-plaintext highlighter-rouge">X-HivemindOS-Privacy: confidential</code> on any request. The strictest of the base URL, the header and the key’s pin applies. Nothing can loosen a tier.</p>
 
 <h2 id="when-something-is-refused">When something is refused</h2>
 
@@ -408,17 +411,24 @@
 </span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
-<p>Name managed operations by <code class="language-plaintext highlighter-rouge">operationId</code> in the private tiers. A raw service path that is not a published operation cannot be checked, so it is refused.</p>
+<p>In the private tiers, name managed operations by <code class="language-plaintext highlighter-rouge">operationId</code>. A raw service path that is not a published operation cannot be checked, so it is refused.</p>
 
 <h2 id="what-hivemindos-keeps">What HivemindOS keeps</h2>
 
-<p>A reply from a private model is kept for 15 minutes, so that a retry with the same idempotency key, or a recovery lookup, can still collect it after a dropped connection. Then the words are deleted and only the billing record stays. A retry after that is told the reply is gone. It never runs the model again or charges again. The API itself does not keep private replies for replay.</p>
+<ul>
+  <li>A reply from a private model is kept for 15 minutes, so a retry with the same idempotency key, or a recovery lookup, can still collect it after a dropped connection. Then the words are deleted and only the billing record stays. A later retry is told the reply is gone; it never runs the model or charges again.</li>
+  <li>What you ask HivemindOS to store is kept as usual: memories, files, database records, and saved run results.</li>
+  <li>A memory keeps the strictest tier it was written in. Memory Answer reads it only with a reader that meets that tier.</li>
+  <li>A run keeps the tier it was created in. An idempotency key used in one tier cannot be reused in another.</li>
+</ul>
 
-<p>What you ask HivemindOS to store is kept as usual: memories, files, database records, and the saved results of runs. A memory keeps the strictest tier it was written in. Memory Answer reads it only with a reader that meets that tier, and one written in the confidential tier is never sent to an embedding model.</p>
+<h2 id="related">Related</h2>
 
-<p>A run keeps the tier it was created in. An idempotency key used in one tier cannot be reused in another.</p>
-
-<p>Next: <a href="authentication.html">create narrow API keys</a>, <a href="memory.html">use managed memory</a>, or <a href="services.html">browse managed services</a>.</p>
+<ul>
+  <li><a href="authentication.html">Authentication and API keys</a></li>
+  <li><a href="memory.html">Managed memory</a></li>
+  <li><a href="services.html">Service catalog</a></li>
+</ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

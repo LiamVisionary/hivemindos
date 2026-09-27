@@ -281,18 +281,16 @@
         </div>
         <h1 id="connect-an-agent-with-mcp">Connect an agent with MCP</h1>
 
-<p>MCP is the simplest way to let an agent use HivemindOS managed services. The agent can search the actions available to its key, read data, and run approved work without you writing a separate wrapper for every endpoint.</p>
+<p>MCP is the simplest way to let an agent use HivemindOS managed services. The agent searches the actions its key allows, reads data, and runs approved work, without you writing a wrapper for each endpoint.</p>
 
 <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>MCP address: https://api.hivemindos.app/mcp
 Transport: Streamable HTTP
 Authentication: Authorization: Bearer hmos_live_...
 </code></pre></div></div>
 
-<p>This is the full SuperAgent MCP. The separate Hive Compute MCP remains useful for agents that need only the GPU marketplace.</p>
-
 <h2 id="connect-it">Connect it</h2>
 
-<p>Add a remote HTTP MCP server using your client’s secret or environment-variable feature:</p>
+<p>Add a remote HTTP MCP server, using your client’s secret or environment-variable feature for the key:</p>
 
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
   </span><span class="nl">"mcpServers"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">
@@ -307,17 +305,19 @@ Authentication: Authorization: Bearer hmos_live_...
 </span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
-<p>Client formats differ slightly. If your client has an <strong>Add remote MCP server</strong> screen, enter the address above and add <code class="language-plaintext highlighter-rouge">Authorization</code> as a protected header. Do not paste the key into a shared configuration file, prompt, repository, screenshot, or browser application.</p>
+<p>If your client has an <strong>Add remote MCP server</strong> screen, enter the address and add <code class="language-plaintext highlighter-rouge">Authorization</code> as a protected header. Never paste the key into a shared config file, prompt, repository, screenshot, or browser app.</p>
+
+<h2 id="give-it-a-narrow-key">Give it a narrow key</h2>
 
 <p>An MCP key needs:</p>
 
 <ul>
   <li>the <code class="language-plaintext highlighter-rouge">services:read</code> scope;</li>
-  <li>the <code class="language-plaintext highlighter-rouge">actions.list</code> operation so the server can authenticate the MCP session and return its action catalog; and</li>
-  <li>only the additional scopes, services, and exact operations its job needs.</li>
+  <li>the <code class="language-plaintext highlighter-rouge">actions.list</code> operation, so the server can open the session and return its action catalog; and</li>
+  <li>only the extra scopes, services, and exact operations the agent’s job needs.</li>
 </ul>
 
-<p>For example, this operation allowlist can search Cloud Superbrain memory and do nothing else:</p>
+<p>This key can search Cloud Superbrain memory and do nothing else:</p>
 
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
   </span><span class="nl">"scopes"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"services:read"</span><span class="p">,</span><span class="w"> </span><span class="s2">"services:invoke"</span><span class="p">],</span><span class="w">
@@ -335,9 +335,11 @@ Authentication: Authorization: Bearer hmos_live_...
 </span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
-<h2 id="what-the-agent-receives">What the agent receives</h2>
+<p>Make keys in the <a href="https://hivemindos.app/superagent-api/console/#keys">console</a> or through the API (<a href="authentication.html">authentication guide</a>).</p>
 
-<p>The MCP exposes four stable tools:</p>
+<h2 id="what-the-agent-gets">What the agent gets</h2>
+
+<p>Four stable tools:</p>
 
 <table>
   <thead>
@@ -366,57 +368,91 @@ Authentication: Authorization: Bearer hmos_live_...
   </tbody>
 </table>
 
-<p>The small tool list keeps agent setup fast even though the API has hundreds of managed actions. Search results are filtered before they reach the agent. A restricted key cannot discover or call an excluded service or operation.</p>
+<p>Search results are filtered by the key, so a restricted key cannot discover or call an excluded service or operation.</p>
 
 <h2 id="one-tool-per-operation">One tool per operation</h2>
 
-<p>Some apps choose from a fixed list of tools instead of searching, for example Meta Muse connectors and chat apps with a tool picker. For them, connect to:</p>
+<p>Some apps pick from a fixed tool list instead of searching, such as Meta Muse connectors and chat apps with a tool picker. Connect those to:</p>
 
 <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>https://api.hivemindos.app/mcp?tools=operations
 </code></pre></div></div>
 
-<p>This lists the four tools above plus one tool for each operation, named <code class="language-plaintext highlighter-rouge">&lt;service&gt;__&lt;operation&gt;</code>, such as <code class="language-plaintext highlighter-rouge">svg-studio__svgs_generate</code> or <code class="language-plaintext highlighter-rouge">token-autopsy__reports_create</code>. Each tool describes its input with an example, its price and how to collect a background result. Add <code class="language-plaintext highlighter-rouge">&amp;services=svg-studio,leadgen-data</code> to list only the services your app uses.</p>
+<p>This adds one tool per operation, named <code class="language-plaintext highlighter-rouge">&lt;service&gt;__&lt;operation&gt;</code>, such as <code class="language-plaintext highlighter-rouge">svg-studio__svgs_generate</code> or <code class="language-plaintext highlighter-rouge">token-autopsy__reports_create</code>. Each tool describes its input with an example, its price, and how to collect a background result. Add <code class="language-plaintext highlighter-rouge">&amp;services=svg-studio,leadgen-data</code> to list only the services your app uses.</p>
 
-<p>These tools are a view, not extra permission. Every call still goes through the key’s scopes, services, operations, limits, approvals and privacy tier, and a write gets its own idempotency key when the app does not send one.</p>
+<p>These tools are a view, not extra permission: every call still goes through the key’s scopes, services, operations, limits, approvals and privacy tier. A write gets its own idempotency key if the app does not send one.</p>
 
-<h2 id="meta-muse">Meta Muse</h2>
+<p><strong>Meta Muse:</strong> ask Muse to connect a remote MCP server at <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/mcp?tools=operations</code>, authenticated with <code class="language-plaintext highlighter-rouge">Authorization: Bearer &lt;key&gt;</code>. Give it a key with only the services it should use. Muse keeps the key in its own credential store.</p>
 
-<p>Muse can use the SuperAgent API as a custom connector. Ask Muse to connect a remote MCP server at <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/mcp?tools=operations</code>, authenticated with an API key sent as <code class="language-plaintext highlighter-rouge">Authorization: Bearer &lt;key&gt;</code>. Make a key for it in the <a href="https://hivemindos.app/superagent-api/console/#keys">console</a> with only the services it should use. Muse keeps the key in its own credential store.</p>
+<h2 id="hivepunkz-and-other-nft-agents">HivePunkz and other NFT agents</h2>
 
-<h2 id="safe-agent-instructions">Safe agent instructions</h2>
+<p>The <code class="language-plaintext highlighter-rouge">nft-agents</code> service lets Grok Bot, a Muse or any agent with a key use the person’s own NFT agents: HivePunkz, Loopers, JPEG Frens and any other NFT that is an agent. Search for <code class="language-plaintext highlighter-rouge">nft-agents</code> to find its actions.</p>
 
-<p>Give the agent these rules:</p>
+<table>
+  <thead>
+    <tr>
+      <th>Action</th>
+      <th>What it does</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.list</code></td>
+      <td>The agents in the wallet the person linked on hivemindos.app/chat, each with an id like <code class="language-plaintext highlighter-rouge">hivepunkz:441</code>.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.get</code></td>
+      <td>Any bee or agent NFT: its card, shift, holder and what its holder shares. Free.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.chat</code></td>
+      <td>Talk with one of the person’s own agents in its own voice. The linked wallet must hold it. Billed as the model costs.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">bees.quote</code>, <code class="language-plaintext highlighter-rouge">bees.run</code>, <code class="language-plaintext highlighter-rouge">bees.job</code></td>
+      <td>Talk to or hire someone else’s shared bee. Quote, ask the person, then run on exactly the quoted price.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>A chat never runs work for the agent. When an agent asks for something to be done, the answer includes it as <code class="language-plaintext highlighter-rouge">work</code>, and your agent runs it only if the person agrees and the key allows it.</p>
+
+<h2 id="rules-to-give-the-agent">Rules to give the agent</h2>
 
 <ol>
   <li>Search before every unfamiliar action. Never invent an <code class="language-plaintext highlighter-rouge">actionId</code>.</li>
   <li>Use <code class="language-plaintext highlighter-rouge">hive_read</code> for actions marked <code class="language-plaintext highlighter-rouge">read</code> and <code class="language-plaintext highlighter-rouge">hive_write</code> for <code class="language-plaintext highlighter-rouge">write</code> or <code class="language-plaintext highlighter-rouge">execute</code>.</li>
   <li>Reuse an idempotency key only for the same intended write and the same input.</li>
-  <li>Ask the user before payments, trades, transfers, signatures, deletion, publishing, or another consequential action.</li>
+  <li>Ask the user before payments, trades, transfers, signatures, deletion, publishing, or any other consequential action.</li>
   <li>Never send a seed phrase, wallet private key, API secret, or unrelated credential as service input.</li>
-  <li>Treat an approval request or HTTP 402 response as a pause for user confirmation, not permission to continue automatically.</li>
+  <li>Treat an approval request or HTTP 402 response as a pause for user confirmation, not permission to continue.</li>
 </ol>
 
-<p>The downloadable <a href="https://hivemindos.app/superagent-api/SKILL.md">SuperAgent API skill</a> includes these rules and the complete setup workflow.</p>
+<p>The <a href="https://hivemindos.app/superagent-api/SKILL.md">SuperAgent API skill</a> includes these rules and the full setup workflow.</p>
 
-<h2 id="projects-and-files">Projects and files</h2>
+<h2 id="projects-files-and-payments">Projects, files, and payments</h2>
 
-<p>A project-bound key always stays in its project. An account-level key can select a project using the MCP connection’s <code class="language-plaintext highlighter-rouge">X-HivemindOS-Project</code> protected header or the <code class="language-plaintext highlighter-rouge">projectId</code> tool argument.</p>
+<ul>
+  <li>A project-bound key always stays in its project. An account-level key can pick a project with the protected <code class="language-plaintext highlighter-rouge">X-HivemindOS-Project</code> header or the <code class="language-plaintext highlighter-rouge">projectId</code> tool argument.</li>
+  <li>JSON actions return their normal API result. Binary downloads return an authenticated resource link; fetch it with the same key. Binary uploads take <code class="language-plaintext highlighter-rouge">bodyBase64</code> plus a file header such as <code class="language-plaintext highlighter-rouge">X-File-Name</code>.</li>
+  <li>MCP calls use the same Agent Credit balance, pricing, limits, approvals, and audit trail as REST and the SDK.</li>
+  <li>To buy Agent Credits with x402, search for <code class="language-plaintext highlighter-rouge">credits.x402.topUp</code> and call it with <code class="language-plaintext highlighter-rouge">hive_write</code>. The first call returns the payment challenge. After the user confirms the exact amount, the x402 wallet signs and the retry sends <code class="language-plaintext highlighter-rouge">Payment-Signature</code> with the same idempotency key. The MCP cannot change the recipient, network, asset, price, or credited account.</li>
+</ul>
 
-<p>JSON actions return their normal API result. Binary downloads return an authenticated resource link; fetch it with the same API key. Binary uploads accept <code class="language-plaintext highlighter-rouge">bodyBase64</code> plus a supported file header such as <code class="language-plaintext highlighter-rouge">X-File-Name</code>.</p>
+<h2 id="protocol-details">Protocol details</h2>
 
-<h2 id="payments-and-agent-credits">Payments and Agent Credits</h2>
+<p>The endpoint is a stateless Streamable HTTP MCP server. It supports <code class="language-plaintext highlighter-rouge">initialize</code>, <code class="language-plaintext highlighter-rouge">ping</code>, <code class="language-plaintext highlighter-rouge">tools/list</code>, <code class="language-plaintext highlighter-rouge">tools/call</code>, notifications, and JSON-RPC batches. Tool annotations mark read-only and consequential actions. <code class="language-plaintext highlighter-rouge">GET /v1/actions</code> publishes the same key-filtered action catalog over REST for SDK clients and custom adapters.</p>
 
-<p>MCP calls use the same Agent Credit balance, service pricing, endpoint limits, approval rules, and audit trail as REST and the SDK.</p>
+<p>Every call goes through the normal SuperAgent API request path, so MCP adds no second permission system.</p>
 
-<p>To buy Agent Credits with x402, search for <code class="language-plaintext highlighter-rouge">credits.x402.topUp</code>, then call it with <code class="language-plaintext highlighter-rouge">hive_write</code>. The first call returns the payment challenge. After the user confirms the exact amount, an x402 wallet signs the challenge and the retry sends <code class="language-plaintext highlighter-rouge">Payment-Signature</code> with the same idempotency key. The MCP cannot change the recipient, network, asset, price, or credited HivemindOS account.</p>
+<p>For GPU-marketplace-only agents there is also a separate <a href="compute-faucet.html#connect-an-agent-through-mcp">Hive Compute MCP</a>.</p>
 
-<h2 id="advanced-protocol-behavior">Advanced: protocol behavior</h2>
+<h2 id="related">Related</h2>
 
-<p>The endpoint is a stateless Streamable HTTP MCP server. It supports <code class="language-plaintext highlighter-rouge">initialize</code>, <code class="language-plaintext highlighter-rouge">ping</code>, <code class="language-plaintext highlighter-rouge">tools/list</code>, <code class="language-plaintext highlighter-rouge">tools/call</code>, notifications, and JSON-RPC batches. Tool annotations explicitly separate read-only and consequential actions. The REST endpoint <code class="language-plaintext highlighter-rouge">GET /v1/actions</code> publishes the same key-filtered action catalog for SDK clients and custom agent adapters.</p>
-
-<p>All execution is sent through the normal SuperAgent API request path. Service allowlists, exact operation allowlists, project isolation, per-operation quotas, approvals, idempotency, Agent Credit charging, and downstream service policy remain authoritative; MCP does not create a second permission system.</p>
-
-<p>Continue with <a href="authentication.html">authentication and API keys</a>, <a href="limits.html">endpoint limits</a>, or the <a href="reference.html">complete API reference</a>.</p>
+<ul>
+  <li><a href="authentication.html">Authentication and API keys</a></li>
+  <li><a href="limits.html">Per-endpoint limits</a></li>
+  <li><a href="reference.html">API reference</a></li>
+</ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

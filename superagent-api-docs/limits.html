@@ -281,16 +281,11 @@
         </div>
         <h1 id="per-endpoint-limits">Per-endpoint limits</h1>
 
-<p>Limits stop one key or worker from using more capacity than you intended. You can answer four separate questions for each endpoint:</p>
+<p>Limits stop one key or worker from using more than you intended. For each endpoint you can cap requests per minute, hour, or day, how many run at once, and, for selected money operations, Agent Credits spent per day.</p>
 
-<ul>
-  <li>How many requests can it make per minute, hour, or day?</li>
-  <li>How many requests can run at the same time?</li>
-  <li>How many Agent Credits can selected money operations spend per day?</li>
-  <li>Should a broad key-wide limit also apply?</li>
-</ul>
+<p>Limits are fixed when the key is created. To change them, create a replacement key.</p>
 
-<p>Limits are fixed when the key is created. Create a replacement key when you need different limits.</p>
+<h2 id="set-limits-on-a-key">Set limits on a key</h2>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">apiKeys</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
   <span class="p">{</span>
@@ -334,112 +329,106 @@
 <span class="p">);</span>
 </code></pre></div></div>
 
-<details class="advancedDetails">
-  <summary>Advanced: selector matching and validation ceilings</summary>
+<h2 id="limit-fields">Limit fields</h2>
 
-  <h2 id="limit-selectors">Limit selectors</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Field</th>
+      <th>Meaning</th>
+      <th style="text-align: right">Accepted maximum</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">requestsPerMinute</code></td>
+      <td>Requests during a fixed minute window.</td>
+      <td style="text-align: right">60,000</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">requestsPerHour</code></td>
+      <td>Requests during a fixed hour window.</td>
+      <td style="text-align: right">1,000,000</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">requestsPerDay</code></td>
+      <td>Requests during a fixed UTC day.</td>
+      <td style="text-align: right">10,000,000</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">maxConcurrent</code></td>
+      <td>Requests for the selector that may be in progress at once.</td>
+      <td style="text-align: right">1,000</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">creditsPerDay</code></td>
+      <td>HivemindOS credits charged by one supported operation during a fixed UTC day.</td>
+      <td style="text-align: right">1,000,000,000</td>
+    </tr>
+  </tbody>
+</table>
 
-  <p>The <code class="language-plaintext highlighter-rouge">limits</code> object is keyed by an operation id:</p>
+<ul>
+  <li>Request and concurrency values must be positive integers. <code class="language-plaintext highlighter-rouge">creditsPerDay</code> must be positive with at most three decimal places.</li>
+  <li>A key may define at most 128 selectors.</li>
+  <li>The maximums are validation ceilings, not default quotas. An omitted field adds no limit, but account balance, plan allowance, service availability, wallet policy, and ancestor-key limits still apply.</li>
+  <li>Concurrent capacity stays in use until the response finishes, including a streamed one. Always consume or cancel response bodies.</li>
+</ul>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Selector</th>
-        <th>Applies to</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">*</code></td>
-        <td>Every authenticated SuperAgent API operation.</td>
-      </tr>
-      <tr>
-        <td>A static operation such as <code class="language-plaintext highlighter-rouge">databases.actions</code></td>
-        <td>Only that endpoint operation.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">services.invoke</code></td>
-        <td>Every direct managed-service invocation.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;</code></td>
-        <td>Direct invocation of one managed service.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;.&lt;operationId&gt;</code></td>
-        <td>One exact registered capability invoked directly.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">runs.create</code></td>
-        <td>Every durable run creation.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;</code></td>
-        <td>Run creation for one managed service.</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;.&lt;operationId&gt;</code></td>
-        <td>One exact registered capability created as a run.</td>
-      </tr>
-    </tbody>
-  </table>
+<h2 id="limit-selectors">Limit selectors</h2>
 
-  <p>For <code class="language-plaintext highlighter-rouge">hive-research</code> operation <code class="language-plaintext highlighter-rouge">analyses.create</code>, the API checks <code class="language-plaintext highlighter-rouge">*</code>, <code class="language-plaintext highlighter-rouge">services.invoke</code>, <code class="language-plaintext highlighter-rouge">services.invoke.hive-research</code>, and <code class="language-plaintext highlighter-rouge">services.invoke.hive-research.analyses.create</code>. Every matching limit applies. The request is rejected as soon as any one of them is exhausted.</p>
+<p>The <code class="language-plaintext highlighter-rouge">limits</code> object is keyed by operation id:</p>
 
-  <p>The same hierarchy applies to managed memory. An answer call can be limited independently with <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.answer</code>, while <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain</code> caps every Cloud Superbrain operation available to that key.</p>
+<table>
+  <thead>
+    <tr>
+      <th>Selector</th>
+      <th>Applies to</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">*</code></td>
+      <td>Every authenticated SuperAgent API operation.</td>
+    </tr>
+    <tr>
+      <td>A static operation such as <code class="language-plaintext highlighter-rouge">databases.actions</code></td>
+      <td>Only that endpoint operation.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">services.invoke</code></td>
+      <td>Every direct managed-service invocation.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;</code></td>
+      <td>Direct invocation of one managed service.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;.&lt;operationId&gt;</code></td>
+      <td>One exact registered capability invoked directly.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">runs.create</code></td>
+      <td>Every durable run creation.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;</code></td>
+      <td>Run creation for one managed service.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">runs.create.&lt;serviceId&gt;.&lt;operationId&gt;</code></td>
+      <td>One exact registered capability created as a run.</td>
+    </tr>
+  </tbody>
+</table>
 
-  <p>The complete set of accepted operation ids is exported as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_OPERATION_IDS</code> by the TypeScript SDK and appears in the <a href="reference.html">endpoint reference</a>.</p>
+<p>Every matching selector applies, and the request is rejected as soon as any one is used up. For <code class="language-plaintext highlighter-rouge">hive-research</code> operation <code class="language-plaintext highlighter-rouge">analyses.create</code>, the API checks <code class="language-plaintext highlighter-rouge">*</code>, <code class="language-plaintext highlighter-rouge">services.invoke</code>, <code class="language-plaintext highlighter-rouge">services.invoke.hive-research</code>, and <code class="language-plaintext highlighter-rouge">services.invoke.hive-research.analyses.create</code>. Likewise, <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.answer</code> limits memory answers alone, while <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain</code> caps every Cloud Superbrain operation.</p>
 
-  <h2 id="limit-fields">Limit fields</h2>
-
-  <table>
-    <thead>
-      <tr>
-        <th>Field</th>
-        <th>Meaning</th>
-        <th style="text-align: right">Accepted maximum</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">requestsPerMinute</code></td>
-        <td>Requests during a fixed minute window.</td>
-        <td style="text-align: right">60,000</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">requestsPerHour</code></td>
-        <td>Requests during a fixed hour window.</td>
-        <td style="text-align: right">1,000,000</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">requestsPerDay</code></td>
-        <td>Requests during a fixed UTC day.</td>
-        <td style="text-align: right">10,000,000</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">maxConcurrent</code></td>
-        <td>Requests for the selector that may be in progress at once.</td>
-        <td style="text-align: right">1,000</td>
-      </tr>
-      <tr>
-        <td><code class="language-plaintext highlighter-rouge">creditsPerDay</code></td>
-        <td>HivemindOS credits charged by one supported operation during a fixed UTC day.</td>
-        <td style="text-align: right">1,000,000,000</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p>Request and concurrency values must be positive integers. <code class="language-plaintext highlighter-rouge">creditsPerDay</code> must be positive and may have at most three decimal places. A key may define at most 128 operation selectors.</p>
-
-  <p>These are validation ceilings, not automatic quotas. If a field is omitted, that key does not add a limit for that field. Account balance, plan allowance, service availability, wallet policy, and any ancestor-key limits still apply.</p>
-
-  <p>Concurrent capacity remains in use until the response finishes, including a streamed response. Always consume or cancel response bodies so your application releases capacity promptly.</p>
-
-</details>
+<p>The SDK exports every accepted operation id as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_OPERATION_IDS</code>; they are also in the <a href="reference.html#limit-operation-ids">endpoint reference</a>.</p>
 
 <h2 id="daily-credit-limits">Daily credit limits</h2>
 
-<p><code class="language-plaintext highlighter-rouge">creditsPerDay</code> is available only for SuperAgent API-billed operations whose maximum charge can be checked before work starts:</p>
+<p><code class="language-plaintext highlighter-rouge">creditsPerDay</code> works only on operations whose maximum charge can be checked before work starts:</p>
 
 <ul>
   <li><code class="language-plaintext highlighter-rouge">wallets.create</code></li>
@@ -449,23 +438,21 @@
   <li><code class="language-plaintext highlighter-rouge">swaps.execute</code></li>
 </ul>
 
-<p>Daily credit limits cannot be placed on <code class="language-plaintext highlighter-rouge">*</code>, a managed-service selector, a quote, a read, or another operation. Before a supported paid action starts, the API confirms that its maximum charge fits the remaining key limit. Only the final charged amount counts toward the daily total.</p>
+<p>It cannot be set on <code class="language-plaintext highlighter-rouge">*</code>, a managed-service selector, a quote, a read, or any other operation. Before a paid action starts, the API checks that its maximum charge fits the remaining limit; only the final charge counts toward the daily total.</p>
 
-<p><code class="language-plaintext highlighter-rouge">credits.x402.topUp</code> accepts request and concurrency limits, but not <code class="language-plaintext highlighter-rouge">creditsPerDay</code>: it buys credits rather than spending them. The unsigned HTTP 402 challenge does not consume the top-up request window. The first signed payment attempt does, while a completed idempotent replay returns the saved result without consuming another slot.</p>
+<p>A key’s credit limit does not add credits and does not replace wallet policy. A request must pass the key limit, have enough account credits, and satisfy the wallet’s own rules.</p>
 
-<p>A key-level credit limit does not add credits to the account and does not replace wallet policy. A request must pass the key limit, have enough account credits, and satisfy the wallet’s own transaction and daily rules.</p>
+<p><code class="language-plaintext highlighter-rouge">credits.x402.topUp</code> accepts request and concurrency limits but not <code class="language-plaintext highlighter-rouge">creditsPerDay</code>, because it buys credits rather than spending them. The unsigned HTTP 402 challenge does not use up a request slot; the first signed payment attempt does, and an idempotent replay of a completed top-up does not.</p>
 
-<h2 id="delegated-keys-and-ancestor-limits">Delegated keys and ancestor limits</h2>
+<h2 id="child-keys-and-ancestor-limits">Child keys and ancestor limits</h2>
 
-<p>Every key in the authority chain remains active policy. If a root key allows 1,000 requests per hour and a child allows 100, the child’s effective ceiling is 100. A child cannot create a covering limit with a larger value than an ancestor.</p>
+<p>Every key above a child still applies its limits. If a root key allows 1,000 requests per hour and its child allows 100, the child gets 100. A child cannot set a covering limit higher than an ancestor’s, and leaving a limit out does not bypass the parent. Revoking or expiring any ancestor invalidates the child.</p>
 
-<p>Omitting a child limit does not bypass its parent. Revoking or expiring any ancestor invalidates the child entirely.</p>
-
-<p>Use this to enforce organizational ceilings at the root while allowing each worker to set a smaller local budget.</p>
+<p>Use this to set organization-wide ceilings on the root key and smaller budgets on each worker.</p>
 
 <h2 id="handle-http-429">Handle HTTP 429</h2>
 
-<p>When a key reaches a request, concurrency, or supported daily-credit limit, the API returns HTTP 429:</p>
+<p>When a key hits a request, concurrency, or daily-credit limit, the API returns HTTP 429:</p>
 
 <div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
   </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w">
@@ -477,13 +464,13 @@
 </span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
-<p>The response also includes:</p>
+<p>With these headers:</p>
 
 <div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">Retry-After: 18
 X-HivemindOS-Limit-Operation: services.invoke.hive-research
 </span></code></pre></div></div>
 
-<p>Pause that workload for at least <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code>. Queueing work in your own backend is usually better than making every caller retry independently. A different operation may still have capacity, but do not route around a deliberate key-wide or ancestor limit.</p>
+<p>Pause that workload for at least <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code>. Queueing work in your backend is usually better than having every caller retry. Another operation may still have capacity, but do not route around a deliberate key-wide or ancestor limit.</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
   <span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span>
@@ -497,7 +484,12 @@ X-HivemindOS-Limit-Operation: services.invoke.hive-research
 <span class="p">}</span>
 </code></pre></div></div>
 
-<p>Next: review <a href="authentication.html">authentication and delegation</a> or find an exact selector in the <a href="reference.html">endpoint reference</a>.</p>
+<h2 id="related">Related</h2>
+
+<ul>
+  <li><a href="authentication.html">Authentication and delegation</a></li>
+  <li><a href="reference.html">Endpoint reference</a></li>
+</ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

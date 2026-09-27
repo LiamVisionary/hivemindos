@@ -294,12 +294,9 @@
   </div>
 </div>
 
-<p>The HivemindOS SuperAgent API lets your server use managed HivemindOS features. It does <strong>not</strong> control a user’s computer or open a desktop session.</p>
+<p>The HivemindOS SuperAgent API lets your server use managed HivemindOS services. Your app sends a request, HivemindOS does the work, and your app gets the result. Paid work uses the same Agent Credit balance as the rest of HivemindOS.</p>
 
-<div class="plainAnswer">
-  <strong>In plain English</strong>
-  <p>Your app sends a request, HivemindOS does the managed work, and your app receives the result. Paid work uses the same Agent Credit balance as the rest of HivemindOS.</p>
-</div>
+<p>It does <strong>not</strong> control a user’s computer or open a desktop session.</p>
 
 <table>
   <thead>
@@ -332,130 +329,67 @@
   </tbody>
 </table>
 
-<h2 id="choose-what-you-want-to-build">Choose what you want to build</h2>
-
-<div class="docGrid">
-  <div class="docCard">
-    <h3>Give your app an agent</h3>
-    <p>Run research, swarms, mini apps, media work, publishing, analytics, and scheduled workflows.</p>
-    <a href="services.html">Browse managed services</a>
-  </div>
-  <div class="docCard">
-    <h3>Add long-term memory</h3>
-    <p>Save facts and decisions, find them later, answer from them, and keep a clear history.</p>
-    <a href="memory.html">Use managed memory</a>
-  </div>
-  <div class="docCard">
-    <h3>Store application data</h3>
-    <p>Provision a managed database, read and change records, and move a portable copy when needed.</p>
-    <a href="databases.html">Use managed databases</a>
-  </div>
-  <div class="docCard">
-    <h3>Build safer money flows</h3>
-    <p>Create managed wallets, ask for approvals, and submit bounded transfers, signatures, spot trades, and any-token swaps, including unsigned swaps for your own wallet.</p>
-    <a href="wallets-trading.html">Use wallets and trading</a>
-  </div>
-  <div class="docCard">
-    <h3>Run work in the background</h3>
-    <p>Give long jobs a durable status, save their results, and notify your app with signed webhooks.</p>
-    <a href="runs-webhooks.html">Use runs and webhooks</a>
-  </div>
-  <div class="docCard">
-    <h3>Control exactly what a key can do</h3>
-    <p>Allow only selected services and actions, then set request and spending limits for each endpoint.</p>
-    <a href="authentication.html">Create a restricted key</a>
-  </div>
-</div>
-
-<details class="advancedDetails">
-  <summary>Advanced: how the complete catalog stays predictable</summary>
-
-  <p>The managed catalog currently spans 33 stable service ids across agents, mini apps, data, media, integrations, finance, and platform services. API-key policy, projects, endpoint limits, retry safety, usage history, and Agent Credits work consistently across the suite.</p>
-
-  <p>The authenticated service catalog and capability registry are the source of truth. Each service entry includes its status and capability URL. Each capability has a stable operation id, exact access selector, request method, path template, approval mode, and run support.</p>
-
-</details>
-
 <h2 id="quickstart">Quickstart</h2>
 
-<h3 id="connect-an-mcp-compatible-agent">Connect an MCP-compatible agent</h3>
+<h3 id="1-get-an-api-key">1. Get an API key</h3>
 
-<p>Add <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/mcp</code> as a remote Streamable HTTP server and send your restricted SuperAgent API key in the protected <code class="language-plaintext highlighter-rouge">Authorization</code> header. The agent receives four tools: list services, search allowed actions, read, and act. Your key’s scopes, service and operation boundaries, project, endpoint limits, approvals, and Agent Credit balance apply unchanged.</p>
+<p>Pick the path that fits you:</p>
 
-<p>See <a href="mcp.html">Connect an agent with MCP</a> for a ready-to-copy configuration and a least-privilege key example.</p>
+<ul>
+  <li><strong>Let your coding agent do it.</strong> On <a href="https://hivemindos.app/superagent-api/#setup">hivemindos.app/superagent-api</a>, press <strong>Copy</strong> under “Set it up with your agent” and send it to the agent working on your project. You open one link to sign in, add credits and approve. The agent saves the key in your project’s env file and checks it works. See <a href="agent-setup.html">agent setup</a>.</li>
+  <li><strong>Make one yourself</strong> in the <a href="https://hivemindos.app/superagent-api/console/#keys">console</a>.</li>
+  <li><strong>Create one in code</strong> with an existing HivemindOS credit token (shown below).</li>
+  <li><strong>Skip the account.</strong> An agent with an x402 wallet can <a href="pay-per-call.html">pay for a single call</a> and is charged only if the call succeeds.</li>
+</ul>
 
-<h3 id="let-your-agent-configure-it">Let your agent configure it</h3>
+<p>Keys begin with <code class="language-plaintext highlighter-rouge">hmos_live_</code>. Keep them on your server: never put one in a browser bundle, mobile app, public repository, log, or analytics event.</p>
 
-<p>On <a href="https://hivemindos.app/superagent-api/#setup">hivemindos.app/superagent-api</a>, press <strong>Copy</strong> under “Set it up with your agent”, paste it into the coding agent working on your project, and send. The agent gives you one link: sign in, add credits and approve there, and the agent collects the key, saves it in your project’s env file and checks it works. You never copy a key. See <a href="agent-setup.html">Set up the SuperAgent API with your agent</a>.</p>
-
-<p>If the agent supports reusable skills, download <a href="https://hivemindos.app/superagent-api/SKILL.md">the SuperAgent API <code class="language-plaintext highlighter-rouge">SKILL.md</code></a>. It teaches the agent how to keep managing keys, limits, capabilities, funding, tests, and audits after the first setup.</p>
-
-<p>The agent must still ask before signing or sending an x402 payment. See the <a href="agent-setup.html">agent setup guide</a> if you want to review the steps first.</p>
-
-<p>An agent with an x402 wallet can also skip the account: it can <a href="pay-per-call.html">pay for a single call</a>, such as a token report or an image, and is charged only if the call succeeds.</p>
-
-<h3 id="install-the-typescript-sdk">Install the TypeScript SDK</h3>
+<p>To create a key in code, install the SDK:</p>
 
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>npm <span class="nb">install </span>https://github.com/LiamVisionary/hivemindos-sdk/releases/download/v1.5.0/hivemindos-sdk-1.5.0.tgz
 </code></pre></div></div>
 
-<p>This installs the built SDK from its GitHub release and works with npm, pnpm and yarn. It is imported as <code class="language-plaintext highlighter-rouge">@hivemindos/sdk</code>.</p>
+<p>This installs the built SDK from its GitHub release. It works with npm, pnpm and yarn, and is imported as <code class="language-plaintext highlighter-rouge">@hivemindos/sdk</code>. The API also works with any HTTPS client.</p>
 
-<p>The API also works with any HTTPS client. All examples use JSON unless a database archive is being uploaded or downloaded.</p>
-
-<h3 id="create-the-first-api-key">Create the first API key</h3>
-
-<p>Use an existing HivemindOS credit token once to create a SuperAgent API key. The key below can use research and managed databases, but nothing else.</p>
+<p>This key can list services and run research, and nothing else:</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">createHivemindOSApiKey</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@hivemindos/sdk</span><span class="dl">"</span><span class="p">;</span>
 
 <span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">createHivemindOSApiKey</span><span class="p">({</span>
   <span class="na">creditToken</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_CREDIT_TOKEN</span><span class="o">!</span><span class="p">,</span>
-  <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">my-backend-root-key-v1</span><span class="dl">"</span><span class="p">,</span>
+  <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">my-backend-key-v1</span><span class="dl">"</span><span class="p">,</span>
   <span class="na">label</span><span class="p">:</span> <span class="dl">"</span><span class="s2">My backend</span><span class="dl">"</span><span class="p">,</span>
-  <span class="na">scopes</span><span class="p">:</span> <span class="p">[</span>
-    <span class="dl">"</span><span class="s2">services:read</span><span class="dl">"</span><span class="p">,</span>
-    <span class="dl">"</span><span class="s2">services:invoke</span><span class="dl">"</span><span class="p">,</span>
-    <span class="dl">"</span><span class="s2">databases:read</span><span class="dl">"</span><span class="p">,</span>
-    <span class="dl">"</span><span class="s2">databases:write</span><span class="dl">"</span><span class="p">,</span>
-    <span class="dl">"</span><span class="s2">credits:read</span><span class="dl">"</span><span class="p">,</span>
-    <span class="dl">"</span><span class="s2">api_keys:manage</span><span class="dl">"</span><span class="p">,</span>
-  <span class="p">],</span>
-  <span class="na">allowedServices</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">hivemind-database</span><span class="dl">"</span><span class="p">],</span>
+  <span class="na">scopes</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">services:read</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">services:invoke</span><span class="dl">"</span><span class="p">],</span>
+  <span class="na">allowedServices</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">],</span>
   <span class="na">allowedOperations</span><span class="p">:</span> <span class="p">[</span>
     <span class="dl">"</span><span class="s2">services.list</span><span class="dl">"</span><span class="p">,</span>
     <span class="dl">"</span><span class="s2">capabilities.list</span><span class="dl">"</span><span class="p">,</span>
     <span class="dl">"</span><span class="s2">actions.list</span><span class="dl">"</span><span class="p">,</span>
     <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">,</span>
-    <span class="dl">"</span><span class="s2">databases.account.read</span><span class="dl">"</span><span class="p">,</span>
-    <span class="dl">"</span><span class="s2">databases.query</span><span class="dl">"</span><span class="p">,</span>
   <span class="p">],</span>
   <span class="na">limits</span><span class="p">:</span> <span class="p">{</span>
-    <span class="dl">"</span><span class="s2">*</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span> <span class="na">requestsPerHour</span><span class="p">:</span> <span class="mi">1</span><span class="nx">_000</span><span class="p">,</span> <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">10</span> <span class="p">},</span>
     <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
       <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">60</span><span class="p">,</span>
       <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
     <span class="p">},</span>
-    <span class="dl">"</span><span class="s2">databases.actions</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span> <span class="na">requestsPerDay</span><span class="p">:</span> <span class="mi">500</span> <span class="p">},</span>
   <span class="p">},</span>
 <span class="p">});</span>
 
 <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">result</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
 
-<span class="c1">// The complete secret is returned only when the key is created.</span>
-<span class="c1">// Save it in your server-side secret manager.</span>
+<span class="c1">// The full secret is returned only now. Save it in your secret manager.</span>
 <span class="kd">const</span> <span class="nx">apiKey</span> <span class="o">=</span> <span class="nx">result</span><span class="p">.</span><span class="nx">secret</span><span class="p">;</span>
 </code></pre></div></div>
 
-<p>Keys begin with <code class="language-plaintext highlighter-rouge">hmos_live_</code>. Never place one in a browser bundle, mobile binary, public repository, log, or analytics event.</p>
+<p><code class="language-plaintext highlighter-rouge">allowedServices</code> and <code class="language-plaintext highlighter-rouge">allowedOperations</code> limit what the key can reach. See <a href="authentication.html">authentication and API keys</a> for every option.</p>
 
-<h3 id="call-the-api">Call the API</h3>
+<h3 id="2-make-your-first-call">2. Make your first call</h3>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">HivemindOSClient</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@hivemindos/sdk</span><span class="dl">"</span><span class="p">;</span>
 
 <span class="kd">const</span> <span class="nx">hive</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">HivemindOSClient</span><span class="p">({</span>
   <span class="na">apiKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_API_KEY</span><span class="o">!</span><span class="p">,</span>
-  <span class="na">projectId</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_PROJECT_ID</span><span class="p">,</span>
+  <span class="na">projectId</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_PROJECT_ID</span><span class="p">,</span> <span class="c1">// optional</span>
 <span class="p">});</span>
 
 <span class="kd">const</span> <span class="nx">catalog</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">list</span><span class="p">();</span>
@@ -471,64 +405,88 @@
 <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">research</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">research</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
 </code></pre></div></div>
 
-<p>The equivalent authentication header is:</p>
+<p>Over plain HTTPS, send the key as a bearer token:</p>
 
 <div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">Authorization: Bearer hmos_live_...
 </span></code></pre></div></div>
 
-<p>Every mutation and spending action also requires a unique <code class="language-plaintext highlighter-rouge">Idempotency-Key</code> header.</p>
+<p>Every mutation and spending action also needs a unique <code class="language-plaintext highlighter-rouge">Idempotency-Key</code> header. A retry with the same key and input returns the first result instead of repeating the work.</p>
 
-<h2 id="read-the-result">Read the result</h2>
+<h3 id="3-read-the-result">3. Read the result</h3>
 
-<p>JSON endpoints return a stable success or failure envelope:</p>
+<p>Every JSON response has the same shape. Check <code class="language-plaintext highlighter-rouge">ok</code> first:</p>
 
-<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
-  </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"services"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="w">
-</span><span class="p">}</span><span class="w">
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w"> </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nl">"services"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
-<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
-  </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w">
-  </span><span class="nl">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"This API key does not have access to that managed service."</span><span class="w">
-</span><span class="p">}</span><span class="w">
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w"> </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="nl">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"This API key does not have access to that managed service."</span><span class="w"> </span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
-<p>Check <code class="language-plaintext highlighter-rouge">ok</code> before reading the result. Failures may also include <code class="language-plaintext highlighter-rouge">code</code>, <code class="language-plaintext highlighter-rouge">operationId</code>, <code class="language-plaintext highlighter-rouge">metric</code>, and <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code> so your app can choose the right next action.</p>
+<p>A failure may also include <code class="language-plaintext highlighter-rouge">code</code>, <code class="language-plaintext highlighter-rouge">operationId</code>, <code class="language-plaintext highlighter-rouge">metric</code>, and <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code> so your app can decide what to do next. See <a href="runs-webhooks.html#error-envelope">errors</a>.</p>
 
-<h2 id="understand-payment">Understand payment</h2>
+<h3 id="or-connect-an-agent-with-mcp">Or connect an agent with MCP</h3>
 
-<p>Every API key belongs to one HivemindOS account. Paid API work uses that account’s Agent Credits. A request cannot charge a different account or choose its own price.</p>
+<p>Add <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/mcp</code> as a remote Streamable HTTP server and send the key in a protected <code class="language-plaintext highlighter-rouge">Authorization</code> header. The agent gets four tools: list services, search allowed actions, read, and act. See <a href="mcp.html">Connect an agent with MCP</a>.</p>
 
-<p>Managed database capacity follows the account’s eligible plan. Wallet assets are separate: Agent Credits pay for managed work, while wallet assets pay transfer amounts, network fees, and trades.</p>
+<p>If your agent supports reusable skills, download <a href="https://hivemindos.app/superagent-api/SKILL.md">the SuperAgent API <code class="language-plaintext highlighter-rouge">SKILL.md</code></a> so it can keep managing keys, limits, funding, and tests.</p>
 
-<p>Use <code class="language-plaintext highlighter-rouge">GET /pricing</code> for the current price and <code class="language-plaintext highlighter-rouge">GET /credits/balance</code> for the current balance. Show the returned final or maximum price before paid work starts.</p>
-
-<p>An API key with <code class="language-plaintext highlighter-rouge">credits:write</code> can buy more Agent Credits through <code class="language-plaintext highlighter-rouge">POST /credits/x402/top-up</code>. The API returns a standard x402 challenge, accepts a signed Base payment, and adds the purchased credits to that key’s existing HivemindOS account. HivemindOS fixes the official revenue recipient, network, asset, price, and credited account on the server, so the caller cannot redirect a payment or fund another account.</p>
-
-<h2 id="continue">Continue</h2>
+<h2 id="how-payment-works">How payment works</h2>
 
 <ul>
-  <li><a href="authentication.html">Authentication and API keys</a></li>
-  <li><a href="agent-setup.html">Copy-paste agent setup</a></li>
-  <li><a href="pay-per-call.html">Pay per call with x402, no key</a></li>
-  <li><a href="mcp.html">Connect an agent with MCP</a></li>
-  <li><a href="projects-security.html">Projects, isolation, and service accounts</a></li>
-  <li><a href="services.html">Service access and catalog</a></li>
-  <li><a href="memory.html">Managed memory and knowledge</a></li>
-  <li><a href="privacy.html">Private and confidential access</a></li>
-  <li><a href="capabilities-agents.html">Capabilities, agents, workflows, and mini apps</a></li>
-  <li><a href="compute-faucet.html">Hive Compute marketplace, privacy tiers, MCP, and testnet assets</a></li>
-  <li><a href="limits.html">Per-endpoint limits</a></li>
-  <li><a href="files-connections.html">Files, connections, and integrations</a></li>
-  <li><a href="databases.html">Managed databases</a></li>
-  <li><a href="wallets-trading.html">Wallets, approvals, and trading</a></li>
-  <li><a href="runs-webhooks.html">Runs, artifacts, webhooks, and errors</a></li>
-  <li><a href="usage-audit.html">Usage and audit events</a></li>
-  <li><a href="reference.html">Endpoint and scope reference</a></li>
+  <li>Every key belongs to one HivemindOS account, and paid work uses that account’s Agent Credits. A request cannot charge another account or set its own price.</li>
+  <li>Wallet assets are separate: Agent Credits pay for managed work, while wallet assets pay transfer amounts, network fees, and trades.</li>
+  <li>Managed database capacity follows the account’s eligible plan.</li>
+  <li>Read the current price with <code class="language-plaintext highlighter-rouge">GET /pricing</code> and the balance with <code class="language-plaintext highlighter-rouge">GET /credits/balance</code>. Show the returned final or maximum price before paid work starts.</li>
+  <li>A key with <code class="language-plaintext highlighter-rouge">credits:write</code> can buy more Agent Credits with x402 through <code class="language-plaintext highlighter-rouge">POST /credits/x402/top-up</code>. HivemindOS fixes the recipient, network, asset, price, and credited account on the server. See the <a href="reference.html#x402-agent-credit-top-up">reference</a>.</li>
 </ul>
 
-<p>The <a href="https://api.hivemindos.app/openapi.json">OpenAPI contract</a> remains authoritative for request and response schemas.</p>
+<h2 id="choose-what-to-build">Choose what to build</h2>
+
+<div class="docGrid">
+  <div class="docCard">
+    <h3>Give your app an agent</h3>
+    <p>Run research, swarms, mini apps, media work, publishing, analytics, and scheduled workflows.</p>
+    <a href="services.html">Browse managed services</a>
+  </div>
+  <div class="docCard">
+    <h3>Add long-term memory</h3>
+    <p>Save facts and decisions, find them later, and answer from them.</p>
+    <a href="memory.html">Use managed memory</a>
+  </div>
+  <div class="docCard">
+    <h3>Store application data</h3>
+    <p>Provision a managed database, then read and change records.</p>
+    <a href="databases.html">Use managed databases</a>
+  </div>
+  <div class="docCard">
+    <h3>Build safer money flows</h3>
+    <p>Create managed wallets, ask for approvals, and run bounded transfers, signatures, trades, and any-token swaps.</p>
+    <a href="wallets-trading.html">Use wallets and trading</a>
+  </div>
+  <div class="docCard">
+    <h3>Run work in the background</h3>
+    <p>Track long jobs, save their results, and get signed webhooks.</p>
+    <a href="runs-webhooks.html">Use runs and webhooks</a>
+  </div>
+  <div class="docCard">
+    <h3>Control what a key can do</h3>
+    <p>Allow only selected services and actions, then set request and spending limits.</p>
+    <a href="authentication.html">Create a restricted key</a>
+  </div>
+</div>
+
+<p>The catalog spans 33 stable service ids. The authenticated service catalog and capability registry are the source of truth: each capability has a stable operation id, access selector, method, path, approval mode, and run support.</p>
+
+<h2 id="all-guides">All guides</h2>
+
+<ul>
+  <li>Start: <a href="agent-setup.html">agent setup</a>, <a href="authentication.html">authentication and API keys</a>, <a href="pay-per-call.html">pay per call with x402</a>, <a href="mcp.html">MCP</a>, <a href="limits.html">per-endpoint limits</a></li>
+  <li>Build: <a href="services.html">services</a>, <a href="answer-engine.html">AI web search</a>, <a href="memory.html">memory</a>, <a href="benchmarks.html">memory benchmarks</a>, <a href="capabilities-agents.html">capabilities and agents</a>, <a href="compute-faucet.html">Hive Compute and testnet assets</a>, <a href="files-connections.html">files and connections</a>, <a href="databases.html">databases</a>, <a href="wallets-trading.html">wallets and trading</a>, <a href="runs-webhooks.html">runs and webhooks</a></li>
+  <li>Operate: <a href="privacy.html">privacy tiers</a>, <a href="projects-security.html">projects and isolation</a>, <a href="usage-audit.html">usage and audit</a></li>
+  <li>Reference: <a href="reference.html">endpoints and scopes</a></li>
+</ul>
+
+<p>The <a href="https://api.hivemindos.app/openapi.json">OpenAPI contract</a> is authoritative for request and response schemas.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

@@ -281,9 +281,9 @@
         </div>
         <h1 id="superagent-api-reference">SuperAgent API reference</h1>
 
-<p>This is the complete technical route map. If you are making your first call, start with the <a href="./">plain-language overview</a>. Use this page when you need an exact scope, endpoint, header, or limit selector.</p>
+<p>The complete map of scopes, endpoints, headers, and limit selectors. For your first call, start with the <a href="./">quickstart</a>.</p>
 
-<p>The <a href="https://api.hivemindos.app/openapi.json">OpenAPI 3.1 document</a> is the source of truth for request and response shapes. It can also generate clients, validators, and API explorers.</p>
+<p>The <a href="https://api.hivemindos.app/openapi.json">OpenAPI 3.1 document</a> is the source of truth for request and response shapes, and can generate clients, validators, and API explorers.</p>
 
 <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>Base URL: https://api.hivemindos.app/v1
 MCP URL: https://api.hivemindos.app/mcp
@@ -327,7 +327,7 @@ Content type: application/json
   </tbody>
 </table>
 
-<p>The health and OpenAPI documents are also available under <code class="language-plaintext highlighter-rouge">/v1</code>. Pricing is public and does not accept client-supplied prices.</p>
+<p>The health and OpenAPI documents are also available under <code class="language-plaintext highlighter-rouge">/v1</code>. Pricing is public and never accepts client-supplied prices.</p>
 
 <h2 id="scopes">Scopes</h2>
 
@@ -456,7 +456,7 @@ Content type: application/json
 
 <h2 id="endpoint-map">Endpoint map</h2>
 
-<p><code class="language-plaintext highlighter-rouge">Idem</code> means a valid <code class="language-plaintext highlighter-rouge">Idempotency-Key</code> header is required. <code class="language-plaintext highlighter-rouge">Limit operation</code> is the selector used in API-key limits.</p>
+<p>Paths are relative to the API base. <strong>Idem</strong> means an <code class="language-plaintext highlighter-rouge">Idempotency-Key</code> header is required. <strong>Limit operation</strong> is the selector used in API-key <a href="limits.html">limits</a>.</p>
 
 <h3 id="api-keys-services-and-credits">API keys, services, and credits</h3>
 
@@ -1016,10 +1016,11 @@ Content type: application/json
 
 <h2 id="limit-operation-ids">Limit operation ids</h2>
 
-<p>The wildcard selector <code class="language-plaintext highlighter-rouge">*</code> matches every authenticated operation. The complete static set is:</p>
+<p>The wildcard <code class="language-plaintext highlighter-rouge">*</code> matches every authenticated operation. The complete static set is:</p>
 
 <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>services.list
 capabilities.list
+actions.list
 services.invoke
 credits.balance.read
 credits.x402.topUp
@@ -1094,7 +1095,7 @@ webhookDeliveries.list
 webhookDeliveries.replay
 </code></pre></div></div>
 
-<p>For every service id, two exact selectors are also valid:</p>
+<p>For every service id and registered operation, these selectors are also valid:</p>
 
 <div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>services.invoke.&lt;serviceId&gt;
 runs.create.&lt;serviceId&gt;
@@ -1102,7 +1103,7 @@ services.invoke.&lt;serviceId&gt;.&lt;operationId&gt;
 runs.create.&lt;serviceId&gt;.&lt;operationId&gt;
 </code></pre></div></div>
 
-<p>The SDK exports the expanded list as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_OPERATION_IDS</code> and exports the five operations that accept <code class="language-plaintext highlighter-rouge">creditsPerDay</code> as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_CREDIT_METERED_OPERATION_IDS</code>.</p>
+<p>The SDK exports the expanded list as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_OPERATION_IDS</code>, and the five operations that accept <code class="language-plaintext highlighter-rouge">creditsPerDay</code> as <code class="language-plaintext highlighter-rouge">HIVEMINDOS_PLATFORM_CREDIT_METERED_OPERATION_IDS</code>.</p>
 
 <h2 id="request-headers">Request headers</h2>
 
@@ -1260,9 +1261,15 @@ runs.create.&lt;serviceId&gt;.&lt;operationId&gt;
 <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@hivemindos/sdk</span><span class="dl">"</span><span class="p">;</span>
 </code></pre></div></div>
 
-<p>The SDK returns the same <code class="language-plaintext highlighter-rouge">{ ok: true, ... }</code> or <code class="language-plaintext highlighter-rouge">{ ok: false, error, ... }</code> envelopes as the HTTPS API. It does not throw for an ordinary API failure; check <code class="language-plaintext highlighter-rouge">ok</code> before using the result.</p>
+<p>The SDK returns the same <code class="language-plaintext highlighter-rouge">{ ok: true, ... }</code> or <code class="language-plaintext highlighter-rouge">{ ok: false, error, ... }</code> envelopes as the HTTPS API. It does not throw on an ordinary API failure, so check <code class="language-plaintext highlighter-rouge">ok</code> before using the result.</p>
 
-<p>Return to the <a href="./">SuperAgent API quickstart</a>, or open <a href="authentication.html">authentication</a>, <a href="limits.html">limits</a>, <a href="databases.html">databases</a>, <a href="wallets-trading.html">wallets and trading</a>, or <a href="runs-webhooks.html">runs and webhooks</a>.</p>
+<h2 id="related">Related</h2>
+
+<ul>
+  <li><a href="./">Quickstart</a></li>
+  <li><a href="authentication.html">Authentication</a> and <a href="limits.html">limits</a></li>
+  <li><a href="runs-webhooks.html">Runs, webhooks, and errors</a></li>
+</ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

@@ -281,38 +281,11 @@
         </div>
         <h1 id="runs-artifacts-webhooks-and-errors">Runs, artifacts, webhooks, and errors</h1>
 
-<p>Use a <strong>direct call</strong> when your app can wait for the answer. Use a <strong>run</strong> when work may continue after the request ends. Use a <strong>webhook</strong> when HivemindOS should tell your app that something changed.</p>
-
-<table>
-  <thead>
-    <tr>
-      <th>Need</th>
-      <th>Use</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>A quick result in the current request</td>
-      <td>Direct service invocation</td>
-    </tr>
-    <tr>
-      <td>A durable status for longer work</td>
-      <td>Run</td>
-    </tr>
-    <tr>
-      <td>A saved result file</td>
-      <td>Artifact</td>
-    </tr>
-    <tr>
-      <td>An automatic notification</td>
-      <td>Webhook</td>
-    </tr>
-  </tbody>
-</table>
+<p>Use a <strong>direct call</strong> when your app can wait for the answer. Use a <strong>run</strong> when work may continue after the request ends; its result is saved as an <strong>artifact</strong>. Use a <strong>webhook</strong> when HivemindOS should tell your app that something changed.</p>
 
 <h2 id="durable-runs">Durable runs</h2>
 
-<p>Create a run with <code class="language-plaintext highlighter-rouge">runs:write</code> and service access for the selected service:</p>
+<p>Create a run with <code class="language-plaintext highlighter-rouge">runs:write</code> and access to the service:</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">created</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">runs</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
   <span class="p">{</span>
@@ -327,22 +300,15 @@
 <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">created</span><span class="p">.</span><span class="nx">run</span><span class="p">.</span><span class="nx">id</span><span class="p">,</span> <span class="nx">created</span><span class="p">.</span><span class="nx">run</span><span class="p">.</span><span class="nx">status</span><span class="p">);</span>
 </code></pre></div></div>
 
-<p>A run records:</p>
+<p>Creating a run returns HTTP 202 with status <code class="language-plaintext highlighter-rouge">queued</code>. HivemindOS then records <code class="language-plaintext highlighter-rouge">running</code>, <code class="language-plaintext highlighter-rouge">succeeded</code>, or <code class="language-plaintext highlighter-rouge">failed</code>. Read runs with <code class="language-plaintext highlighter-rouge">runs.list()</code> or <code class="language-plaintext highlighter-rouge">runs.get(id)</code>. Only a <code class="language-plaintext highlighter-rouge">queued</code> run can be cancelled.</p>
 
-<ul>
-  <li>the managed <code class="language-plaintext highlighter-rouge">serviceId</code> and stable operation id;</li>
-  <li><code class="language-plaintext highlighter-rouge">status</code>, <code class="language-plaintext highlighter-rouge">progress</code>, <code class="language-plaintext highlighter-rouge">output</code>, and a customer-safe <code class="language-plaintext highlighter-rouge">error</code>;</li>
-  <li>maximum and charged HivemindOS credits when the run owns that accounting; and</li>
-  <li>creation and update times.</li>
-</ul>
+<p>A run records its <code class="language-plaintext highlighter-rouge">serviceId</code> and operation id; <code class="language-plaintext highlighter-rouge">status</code>, <code class="language-plaintext highlighter-rouge">progress</code>, <code class="language-plaintext highlighter-rouge">output</code>, and a customer-safe <code class="language-plaintext highlighter-rouge">error</code>; maximum and charged credits when the run owns that accounting; and creation and update times.</p>
 
-<p>Run creation returns HTTP 202 with status <code class="language-plaintext highlighter-rouge">queued</code>. HivemindOS starts the work outside the request, then records <code class="language-plaintext highlighter-rouge">running</code>, <code class="language-plaintext highlighter-rouge">succeeded</code>, or <code class="language-plaintext highlighter-rouge">failed</code>. Read runs with <code class="language-plaintext highlighter-rouge">runs.list()</code> or <code class="language-plaintext highlighter-rouge">runs.get(id)</code>. Only a run that is still <code class="language-plaintext highlighter-rouge">queued</code> can be cancelled.</p>
+<p>A key can only read runs for services it is allowed to use. Direct calls and runs have separate <a href="limits.html#limit-selectors">limit selectors</a>.</p>
 
-<p>Run listings and reads are filtered through the caller’s service boundary. A key cannot read a run for a service it is not allowed to use.</p>
+<h2 id="download-result-artifacts">Download result artifacts</h2>
 
-<h2 id="result-artifacts">Result artifacts</h2>
-
-<p>Successful JSON run results are also saved as authenticated <code class="language-plaintext highlighter-rouge">result.json</code> artifacts. Durable artifact storage accepts results up to 25 MB; a deployment without managed artifact storage retains smaller results only.</p>
+<p>A successful JSON run result is also saved as an authenticated <code class="language-plaintext highlighter-rouge">result.json</code> artifact, up to 25 MB. A deployment without managed artifact storage keeps smaller results only.</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">listed</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">artifacts</span><span class="p">.</span><span class="nx">list</span><span class="p">(</span><span class="nx">runId</span><span class="p">);</span>
 <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">listed</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">listed</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
@@ -358,11 +324,11 @@
 <span class="p">}</span>
 </code></pre></div></div>
 
-<p>Artifact access requires <code class="language-plaintext highlighter-rouge">artifacts:read</code>, account ownership, and service access for the source run. Download URLs are not public links.</p>
+<p>Downloads need <code class="language-plaintext highlighter-rouge">artifacts:read</code>, account ownership, and access to the run’s service. Download URLs are not public links.</p>
 
 <h2 id="create-a-signed-webhook">Create a signed webhook</h2>
 
-<p>A webhook needs <code class="language-plaintext highlighter-rouge">webhooks:write</code>, a public HTTPS destination, at least one event name, and an idempotency key.</p>
+<p>A webhook needs <code class="language-plaintext highlighter-rouge">webhooks:write</code>, a public HTTPS URL, at least one event name, and an idempotency key.</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">created</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">webhooks</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
   <span class="p">{</span>
@@ -384,9 +350,17 @@
 <span class="nx">saveSecret</span><span class="p">(</span><span class="nx">created</span><span class="p">.</span><span class="nx">signingSecret</span><span class="p">);</span>
 </code></pre></div></div>
 
-<p>Use <code class="language-plaintext highlighter-rouge">"*"</code> to receive all events permitted by the webhook’s service boundary. A webhook inherits the creating key’s resolved service allowlist. Revoking or expiring that key or an ancestor stops new delivery. A key may list or disable only webhooks created by itself or its descendants.</p>
+<ul>
+  <li>The signing secret begins with <code class="language-plaintext highlighter-rouge">hmos_whsec_</code>. It is returned only on creation (or a replay of the same creation request), never in later listings.</li>
+  <li>Use <code class="language-plaintext highlighter-rouge">"*"</code> to receive every event allowed by the webhook’s service boundary, which it inherits from the creating key.</li>
+  <li>Revoking or expiring that key or an ancestor stops new deliveries. A key can list or disable only webhooks created by itself or its descendants.</li>
+  <li>URLs must be public HTTPS without embedded credentials or a custom port. Redirects are not followed.</li>
+  <li><code class="language-plaintext highlighter-rouge">webhooks.update()</code> changes the URL, events, status, or a narrower service boundary. <code class="language-plaintext highlighter-rouge">webhooks.rotateSecret()</code> issues a new signing secret, returned once.</li>
+</ul>
 
-<p>Each delivery has its own receipt. Failed deliveries retry with increasing delays, up to eight attempts, and can be replayed after the destination is fixed:</p>
+<h3 id="replay-failed-deliveries">Replay failed deliveries</h3>
+
+<p>Failed deliveries retry with increasing delays, up to eight attempts. After fixing your endpoint, replay them:</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">failed</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">webhooks</span><span class="p">.</span><span class="nx">deliveries</span><span class="p">({</span> <span class="na">status</span><span class="p">:</span> <span class="dl">"</span><span class="s2">failed</span><span class="dl">"</span><span class="p">,</span> <span class="na">limit</span><span class="p">:</span> <span class="mi">50</span> <span class="p">});</span>
 <span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">failed</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">failed</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
@@ -398,15 +372,7 @@
 <span class="p">}</span>
 </code></pre></div></div>
 
-<p>Use <code class="language-plaintext highlighter-rouge">webhooks.update()</code> to change the URL, event set, status, or narrower service boundary. Use <code class="language-plaintext highlighter-rouge">webhooks.rotateSecret()</code> to issue a new signing secret; the full new value is returned once.</p>
-
-<p>The signing secret begins with <code class="language-plaintext highlighter-rouge">hmos_whsec_</code> and is returned when the webhook is created or the same creation request is replayed. It is not included in later webhook listings.</p>
-
-<p>Webhook URLs must use public HTTPS without embedded credentials or a custom port. Redirects are not followed.</p>
-
 <h2 id="event-format">Event format</h2>
-
-<p>Each delivery includes:</p>
 
 <div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">X-HivemindOS-Event: run.succeeded
 X-HivemindOS-Delivery: delivery_...
@@ -425,7 +391,7 @@ Content-Type: application/json
 </span><span class="p">}</span><span class="w">
 </span></code></pre></div></div>
 
-<p>Current event names include:</p>
+<p>Current events:</p>
 
 <ul>
   <li><code class="language-plaintext highlighter-rouge">run.started</code>, <code class="language-plaintext highlighter-rouge">run.succeeded</code>, and <code class="language-plaintext highlighter-rouge">run.failed</code></li>
@@ -434,11 +400,11 @@ Content-Type: application/json
   <li><code class="language-plaintext highlighter-rouge">wallet.transaction.broadcast</code> and <code class="language-plaintext highlighter-rouge">trade.submitted</code></li>
 </ul>
 
-<p>Design consumers to accept new event names and additive data fields without failing.</p>
+<p>Accept new event names and added data fields without failing.</p>
 
 <h2 id="verify-a-signature">Verify a signature</h2>
 
-<p>Compute HMAC-SHA256 over <code class="language-plaintext highlighter-rouge">&lt;timestamp&gt;.&lt;raw-request-body&gt;</code> with the webhook signing secret. Compare the hexadecimal digest in constant time and reject stale timestamps before parsing or acting on the event.</p>
+<p>Compute HMAC-SHA256 over <code class="language-plaintext highlighter-rouge">&lt;timestamp&gt;.&lt;raw-request-body&gt;</code> with the signing secret, compare in constant time, and reject stale timestamps before acting on the event.</p>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">createHmac</span><span class="p">,</span> <span class="nx">timingSafeEqual</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">node:crypto</span><span class="dl">"</span><span class="p">;</span>
 
@@ -469,18 +435,18 @@ Content-Type: application/json
 <span class="p">}</span>
 </code></pre></div></div>
 
-<p>Verify against the raw bytes exactly as received. Re-serializing parsed JSON changes the signature. After verification, deduplicate on the event <code class="language-plaintext highlighter-rouge">id</code>, place work on your own queue, and return a 2xx response promptly.</p>
+<p>Verify the raw bytes exactly as received; re-serialized JSON will not match. Then deduplicate on the event <code class="language-plaintext highlighter-rouge">id</code>, queue the work, and return a 2xx response quickly.</p>
 
 <h2 id="error-envelope">Error envelope</h2>
 
-<p>All JSON errors include <code class="language-plaintext highlighter-rouge">ok: false</code> and a customer-safe <code class="language-plaintext highlighter-rouge">error</code>. Some errors add fields that tell your application what to do next.</p>
+<p>Every JSON error has <code class="language-plaintext highlighter-rouge">ok: false</code> and a customer-safe <code class="language-plaintext highlighter-rouge">error</code>. Some add fields that tell your app what to do next.</p>
 
 <table>
   <thead>
     <tr>
       <th style="text-align: right">HTTP</th>
       <th>Meaning</th>
-      <th>Recommended handling</th>
+      <th>What to do</th>
     </tr>
   </thead>
   <tbody>
@@ -502,7 +468,7 @@ Content-Type: application/json
     <tr>
       <td style="text-align: right">403</td>
       <td>The key scope, service boundary, delegated authority, approval, or wallet policy rejects the action.</td>
-      <td>Use an appropriately restricted key or change the account-owned policy through its normal review path.</td>
+      <td>Use a suitably restricted key or change the account-owned policy through its normal review path.</td>
     </tr>
     <tr>
       <td style="text-align: right">404</td>
@@ -512,7 +478,7 @@ Content-Type: application/json
     <tr>
       <td style="text-align: right">409</td>
       <td>The state, confirmation, quote, approval, or idempotency key conflicts with the request.</td>
-      <td>Read the current resource and create a fresh quote or idempotency key only for a genuinely new action.</td>
+      <td>Read the current resource. Use a fresh quote or idempotency key only for a genuinely new action.</td>
     </tr>
     <tr>
       <td style="text-align: right">410</td>
@@ -527,22 +493,28 @@ Content-Type: application/json
     <tr>
       <td style="text-align: right">424</td>
       <td>Required managed-service setup is incomplete.</td>
-      <td>Ask the account owner to finish setup before trying again.</td>
+      <td>Ask the account owner to finish setup first.</td>
     </tr>
     <tr>
       <td style="text-align: right">429</td>
       <td>An API-key limit was reached.</td>
-      <td>Wait for <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code> and respect <code class="language-plaintext highlighter-rouge">Retry-After</code>.</td>
+      <td>Wait for <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code> and respect <code class="language-plaintext highlighter-rouge">Retry-After</code>. See <a href="limits.html#handle-http-429">limits</a>.</td>
     </tr>
     <tr>
       <td style="text-align: right">500–503</td>
       <td>The managed operation is temporarily unavailable.</td>
-      <td>Preserve the same idempotency key and retry with bounded backoff when the action is safe to repeat.</td>
+      <td>Keep the same idempotency key and retry with bounded backoff when the action is safe to repeat.</td>
     </tr>
   </tbody>
 </table>
 
-<p>For HTTP 429, read the <a href="limits.html">per-endpoint limits guide</a>. For the exact request schema, use the <a href="https://api.hivemindos.app/openapi.json">OpenAPI contract</a>.</p>
+<h2 id="related">Related</h2>
+
+<ul>
+  <li><a href="limits.html">Per-endpoint limits</a></li>
+  <li><a href="usage-audit.html">Usage and audit events</a></li>
+  <li><a href="https://api.hivemindos.app/openapi.json">OpenAPI contract</a></li>
+</ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">

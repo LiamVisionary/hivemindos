@@ -7,15 +7,15 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
   <title>Agent-Native Workflows | HivemindOS Docs</title>
-  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <meta name="description" content="Tools and records that let agents coordinate work while you can see and review what they do.">
   <link rel="canonical" href="https://hivemindos.app/docs/for-users/features/agent-native-workflows.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="HivemindOS">
   <meta property="og:title" content="Agent-Native Workflows | HivemindOS Docs">
-  <meta property="og:description" content="Local-first agent fleet control room documentation.">
+  <meta property="og:description" content="Tools and records that let agents coordinate work while you can see and review what they do.">
   <meta property="og:url" content="https://hivemindos.app/docs/for-users/features/agent-native-workflows.html">
   <meta name="twitter:title" content="Agent-Native Workflows | HivemindOS Docs">
-  <meta name="twitter:description" content="Local-first agent fleet control room documentation.">
+  <meta name="twitter:description" content="Tools and records that let agents coordinate work while you can see and review what they do.">
   <meta property="og:image" content="https://hivemindos.app/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -45,13 +45,11 @@
       </a>
       <div class="topLinks">
         
+          <a href="/docs/for-users/getting-started.html">Get Started</a>
+        
           <a href="/docs/for-users/">User Guide</a>
         
-          <a href="/docs/for-users/features/">Features</a>
-        
-          <a href="/docs/for-users/whole-brain/">Hive Superbrain</a>
-        
-          <a href="/docs/for-users/trading/">Trading</a>
+          <a href="/docs/for-users/platform-api.html">API</a>
         
           <a href="/docs/for-users/troubleshooting-cookbook.html">Help</a>
         
@@ -80,14 +78,14 @@
       <nav class="sideNav">
         
           <section class="navSection">
-            <h2>Start Here</h2>
+            <h2>Get Started</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/docs/">HivemindOS Overview</a>
+                <a class="navLink" href="/docs/">Overview</a>
               
             
               
@@ -111,7 +109,7 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/">Find A Feature</a>
+                <a class="navLink" href="/docs/for-users/features/">All Features</a>
               
             
               
@@ -141,14 +139,26 @@
           </section>
         
           <section class="navSection">
-            <h2>Everyday Work</h2>
+            <h2>The Basics</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/docs/for-users/features/fleet.html">My Hive</a>
+                <details class="navGroup">
+                  <summary>My Hive</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/fleet.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/fleet-machine-permissions.html">Machine Permissions</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/hivemindos-machines.html">HivemindOS Machines</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -156,7 +166,21 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
+                <details class="navGroup">
+                  <summary>Agents And Chat</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/runtimes-and-chat.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/slash-commands.html">Slash Commands</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-plugins.html">Agent Plugins</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/computer-interaction.html">Computer Interaction</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -164,7 +188,19 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/work-and-scheduler.html">Work And Automations</a>
+                <details class="navGroup" open>
+                  <summary>Work And Automations</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/work-and-scheduler.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/capability-approvals.html">Capability Approvals</a>
+                    
+                      <a class="navLink isActive" aria-current="page" href="/docs/for-users/features/agent-native-workflows.html">Agent-Native Workflows</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -181,6 +217,12 @@
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/brain-services.html">Memory And Knowledge</a>
                     
+                      <a class="navLink" href="/docs/for-users/whole-brain/knowledge-intake.html">Adding Knowledge</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/vault-map.html">Where Things Live</a>
+                    
                       <a class="navLink" href="/docs/for-users/whole-brain/shared-skills.html">Shared Skills</a>
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/shared-env.html">Shared Env</a>
@@ -188,6 +230,10 @@
                       <a class="navLink" href="/docs/for-users/whole-brain/sync-and-health.html">Sync And Repair</a>
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/workspaces.html">Separate Workspaces</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/device-sync.html">Phone And Desktop</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/shared-brain-benchmarks.html">Memory Benchmarks</a>
                     
                   </div>
                 </details>
@@ -198,7 +244,17 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/hivemind-sync.html">Hivemind Sync</a>
+                <details class="navGroup">
+                  <summary>Hivemind Sync</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/hivemind-sync.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/targeted-file-transfers.html">Handoff Transfers</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -206,7 +262,21 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/zero-human-companies.html">Zero Human Companies</a>
+                <details class="navGroup">
+                  <summary>Skills</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/hive-skills.html">Hive Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/third-party-skills.html">Third-Party Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/hive-fusion.html">Hive Fusion</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -214,13 +284,13 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/integrations-and-work-history.html">Integrations And History</a>
+                <a class="navLink" href="/docs/for-users/features/env-files-notifications-maintenance.html">Settings, Files, And Alerts</a>
               
             
           </section>
         
           <section class="navSection">
-            <h2>Build And Automate</h2>
+            <h2>Build And Create</h2>
             
               
               
@@ -229,6 +299,385 @@
               
                 <a class="navLink" href="/docs/for-users/features/app-builder.html">App Builder And Hosting</a>
               
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Zero Human Companies</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/zero-human-companies.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/founder-mode.html">Founder Mode</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/web-research.html">Web Research</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/connected-intelligence-private-work.html">Connected Intelligence</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/sre-investigations.html">SRE Investigations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hivemind-analytics.html">Analytics</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Communicate And Assist</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/calling.html">Calling</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/socials.html">Socials</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/inbox-triage.html">Inbox Triage</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/bookings.html">Bookings</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/x-command-bot.html">X Command Bot</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hivemind-office.html">Office Companion</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/page-agent.html">Page Agent</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/read-along.html">Read Along</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/privacy-suite.html">Privacy Suite</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/beeline.html">Beeline Family Profiles</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Money And Compute</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Wallets And Spending</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/wallets-honey-and-x402.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/finances.html">Finances</a>
+                    
+                      <a class="navLink" href="/docs/for-users/x-engagement-honey.html">HONEY For X Posts</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Trading</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/trading/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/trading/crypto.html">Crypto</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/stocks.html">Stocks</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/prediction-markets.html">Prediction Markets</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/concentrated-liquidity.html">Concentrated Liquidity</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/bankr-copy-trading.html">Copy Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/copy-trading-agent-analysis.html">Agent-Analyzed Copy Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/nansen-intelligence.html">Nansen Intelligence</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/governance.html">Safety And Limits</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hive-compute.html">Hive Compute</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Connections</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Integrations</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/integrations-and-work-history.html">Integrations And Work History</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/finance-district.html">Finance District</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/hivemind-database.html">Hivemind Database</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/monid.html">Monid And AKTA Pro</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/nocodb.html">NocoDB</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/twenty.html">Twenty CRM</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/usepod.html">UsePod</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>MiroShark</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/miroshark/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/miroshark/companion.html">Companion Integration</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/miroshark-and-openclaw.html">Runtime Gateways</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Labs</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/agent-evaluations.html">Agent Evaluations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/agent-challenges.html">Agent Challenges</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/loop-engineering.html">Loop Engineering</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/evo-optimization.html">Evo Optimization</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/harness-experiments.html">Harness Experiments</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/quant-research.html">Quant Research Swarm</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/signal-trader.html">Signal Trader</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/kol-radar.html">KOL Radar</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/penny-stock-paper-lab.html">Penny-Stock Paper Lab</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/prediction-proper-learning.html">Prediction-Market Learning Lab</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>SuperAgent API</h2>
             
               
               
@@ -286,98 +735,10 @@
                 </details>
               
             
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/photo-library.html">Photo Library</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/web-research.html">Web Research</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hive-fusion.html">Hive Fusion</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/packaged-skills/">Skills</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/calling.html">Calling</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/socials.html">Socials</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/bookings.html">Bookings</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hivemind-analytics.html">Analytics</a>
-              
-            
           </section>
         
           <section class="navSection">
-            <h2>Money And Compute</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/wallets-honey-and-x402.html">Wallets And Spending Controls</a>
-              
+            <h2>Under The Hood</h2>
             
               
               
@@ -385,164 +746,22 @@
 
               
                 <details class="navGroup">
-                  <summary>Trading</summary>
+                  <summary>How HivemindOS Works</summary>
                   <div class="navChildren">
                     
-                      <a class="navLink" href="/docs/for-users/trading/">Overview</a>
+                      <a class="navLink" href="/docs/for-users/architecture/">Overview</a>
                     
                     
-                      <a class="navLink" href="/docs/for-users/trading/crypto.html">Crypto</a>
+                      <a class="navLink" href="/docs/for-users/architecture/api-and-storage.html">API And Storage</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/stocks.html">Stocks</a>
+                      <a class="navLink" href="/docs/for-users/architecture/syncing-and-tailscale.html">Sync And Private Networking</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                      <a class="navLink" href="/docs/for-users/architecture/tailscale-fleet-telemetry.html">Fleet Telemetry</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/prediction-markets.html">Prediction Markets</a>
-                    
-                      <a class="navLink" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
-                    
-                      <a class="navLink" href="/docs/for-users/trading/governance.html">Safety And Limits</a>
+                      <a class="navLink" href="/docs/for-users/architecture/generated-media-signing.html">Generated Media Signing</a>
                     
                   </div>
                 </details>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hive-compute.html">Hive Compute</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
-              
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>Connections</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/">Integrations Home</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/usepod.html">UsePod</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/miroshark/">MiroShark</a>
-              
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>Advanced And Reference</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/runtimes/">Advanced Guides</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/architecture/">How HivemindOS Works</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/fleet-machine-permissions.html">Fleet Machine Permissions</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/agent-evaluations.html">Agent Evaluations</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/loop-engineering.html">Loop Engineering</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/capability-approvals.html">Capability Approvals</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/slash-commands.html">Slash Command Reference</a>
               
             
               
@@ -558,7 +777,47 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/bankr/bankr-platform-reference.html">Bankr Provider Reference</a>
+                <details class="navGroup">
+                  <summary>Advanced Agent Setups</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/hermes/local-setup.html">Hermes Local Setup</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/v01-control-plane.html">AEON Control Plane</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/zero-human-companies.html">AEON With Companies</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/github-actions-brain-access.html">AEON GitHub Actions Access</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/tailnet-generation-skills.html">Tailnet Generation Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/code-intelligence.html">Code Intelligence</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/brain-device-sync-protocol.html">Brain Device Sync Protocol</a>
               
             
           </section>
@@ -595,6 +854,30 @@
               
 
               
+                <a class="navLink" href="/docs/for-investors/hive-staking-and-community-tiers.html">HIVE Staking And Tiers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/hive-token-receipts.html">HIVE Token Receipts</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/treasury-reserve-and-seasonal-programs.html">Revenue Allocations</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/docs/for-investors/paid-features/">Paid Features</a>
               
             
@@ -616,175 +899,123 @@
         </div>
         <h1 id="agent-native-workflows">Agent-Native Workflows</h1>
 
-<p>Agent-native workflows make agent actions inspectable before, during, and after a run.</p>
+<p>These features let agents coordinate work through HivemindOS while keeping everything they do visible and reviewable. Records live in your shared vault when it is available, or in local HivemindOS state otherwise. They improve visibility; they never grant an agent extra authority.</p>
 
-<p>HivemindOS keeps these surfaces local-first: durable records live in the shared vault when available, otherwise in local HivemindOS state under <code class="language-plaintext highlighter-rouge">~/.hivemindos/</code>. The dashboard can show them, agents can reference them, and server routes remain authoritative for side effects.</p>
+<h2 id="mcp-tools-for-agents">MCP tools for agents</h2>
 
-<h2 id="action-metadata">Action Metadata</h2>
+<p>The HivemindOS MCP server gives any MCP-capable agent the same coordination tools the dashboard uses:</p>
 
-<p>The Hive action registry is the shared metadata spine for agent-facing powers.</p>
+<table>
+  <thead>
+    <tr>
+      <th>Tool</th>
+      <th>What it does</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">work_board</code></td>
+      <td>List, create, claim, heartbeat, comment on, complete, fail, block, or promote Work board tasks.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">queen_bee</code></td>
+      <td>Check Queen Bee, queue work, break a PRD into tasks, or run Queen Bee flow templates.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">work_event</code></td>
+      <td>Define event triggers and publish events that turn into ordinary Work board tasks.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">request_human_approval</code></td>
+      <td>Create a <strong>Needs You</strong> card for a human decision. It does not approve anything itself.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">spawn_subagent</code></td>
+      <td>Start self-contained work in a fresh child session and return a job id right away.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">check_subagent</code></td>
+      <td>Check a child’s status without waiting.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">await_subagent</code></td>
+      <td>Wait for a child’s result when the parent needs it.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">run_subagent</code></td>
+      <td>Start a child and wait for it in one call. Supports standard MCP Tasks.</td>
+    </tr>
+  </tbody>
+</table>
 
-<p>Each registered action describes:</p>
+<p>Work still lands on the <a href="work-and-scheduler.html">Work board</a>, and Queen Bee still handles routing and receipts.</p>
+
+<p>Wallet and trading tools (<code class="language-plaintext highlighter-rouge">send_usdc</code>, <code class="language-plaintext highlighter-rouge">dex_swap</code>, <code class="language-plaintext highlighter-rouge">stock_trade</code>) are marked as critical and need their exact confirmation token. The dashboard still runs its own spending, wallet, and settlement checks.</p>
+
+<h3 id="subagents-and-context-isolation">Subagents and context isolation</h3>
+
+<p>Use <code class="language-plaintext highlighter-rouge">spawn_subagent</code> when a child needs substantial tool work and the parent can keep going. Check on it with <code class="language-plaintext highlighter-rouge">check_subagent</code>, and call <code class="language-plaintext highlighter-rouge">await_subagent</code> only when you need the result. <code class="language-plaintext highlighter-rouge">run_subagent</code> does both in one step; MCP clients on protocol <code class="language-plaintext highlighter-rouge">2025-11-25</code> get it as a background task that notifies on completion.</p>
+
+<p>How isolation works:</p>
 
 <ul>
-  <li>stable id, title, description, tags, and aliases</li>
-  <li>Zod input schema</li>
-  <li>side effects such as read, write, filesystem, remote machine, wallet, payment, credential, or public message</li>
-  <li>risk level</li>
-  <li>read-only status</li>
-  <li>MCP exposure</li>
-  <li>context-index retrieval text</li>
-  <li>explicit confirmation requirements when money movement or other high-risk execution is involved</li>
+  <li>The child doesn’t see the parent’s conversation, so the task must stand on its own.</li>
+  <li>The parent gets only the child’s final response, within a 1,000–12,000 character budget you can set. Intermediate steps stay with the child.</li>
+  <li>The requesting agent isn’t picked as the child when another eligible worker exists.</li>
+  <li>Results are hypotheses until the parent checks their evidence.</li>
 </ul>
 
-<p>The registry feeds:</p>
+<p>This keeps the parent’s context small, but it doesn’t prove lower total usage: the child spends its own tokens.</p>
 
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">/api/context-index</code> retrieval entries</li>
-  <li>the HivemindOS MCP tool catalog</li>
-  <li>static route/action drift checks</li>
-  <li>high-risk tool metadata for wallet, payment, and trading flows</li>
-</ul>
-
-<p>For wallet and trading MCP tools, the external MCP server performs a local metadata preflight before calling the dashboard route. <code class="language-plaintext highlighter-rouge">send_usdc</code>, <code class="language-plaintext highlighter-rouge">dex_swap</code>, and <code class="language-plaintext highlighter-rouge">stock_trade</code> must be registered as critical destructive wallet/payment actions and must receive their exact confirmation token. The dashboard route still performs the authoritative spend-policy, entitlement, wallet, and settlement checks.</p>
-
-<h2 id="mcp-work-orchestration">MCP Work Orchestration</h2>
-
-<p>The HivemindOS MCP server exposes the core coordinator surfaces as local-first tools:</p>
-
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">work_board</code>: list, create, claim, heartbeat, comment, complete, fail, block, or promote Work Board tasks through <code class="language-plaintext highlighter-rouge">/api/kanban</code>.</li>
-  <li><code class="language-plaintext highlighter-rouge">queen_bee</code>: inspect Queen Bee state, queue coordinator work, decompose PRDs, or operate Queen Bee flow templates and runs.</li>
-  <li><code class="language-plaintext highlighter-rouge">work_event</code>: create local event triggers and publish event payloads that fan out into ordinary Work Board tasks.</li>
-  <li><code class="language-plaintext highlighter-rouge">request_human_approval</code>: create a Needs You card for a human decision without granting approval to the requesting agent.</li>
-  <li><code class="language-plaintext highlighter-rouge">spawn_subagent</code>: start self-contained work in a fresh child session and return a job id immediately.</li>
-  <li><code class="language-plaintext highlighter-rouge">check_subagent</code>: inspect child status without blocking parent work.</li>
-  <li><code class="language-plaintext highlighter-rouge">await_subagent</code>: wait only when the parent needs the bounded child handoff.</li>
-  <li><code class="language-plaintext highlighter-rouge">run_subagent</code>: compatibility shortcut for spawn followed by await, with standard MCP Tasks support.</li>
-</ul>
-
-<p>These tools adapt external multi-agent queue patterns into HivemindOS rather than replacing the local task model. Work still lands in the Work Board, task state still lives in the shared vault or local fallback store, and Queen Bee remains the coordinator for routing and receipts.</p>
-
-<h3 id="awaited-subagents-and-context-isolation">Awaited subagents and context isolation</h3>
-
-<p>Use <code class="language-plaintext highlighter-rouge">spawn_subagent</code> when the child needs substantial tool work but the parent has useful work it can continue. The route selects an eligible worker, starts a private collector job, and returns its job id without waiting. The parent can check it without blocking and call <code class="language-plaintext highlighter-rouge">await_subagent</code> only at the dependency point. <code class="language-plaintext highlighter-rouge">run_subagent</code> keeps the compact spawn-and-wait form.</p>
-
-<p>With MCP <code class="language-plaintext highlighter-rouge">2025-11-25</code>, <code class="language-plaintext highlighter-rouge">run_subagent</code> supports task-augmented tool calls. The initial tool call returns an MCP task immediately, the server continues handling other parent requests, completion emits a task-status notification, and <code class="language-plaintext highlighter-rouge">tasks/result</code> supplies the normal tool result. Explicit spawn/check/await tools provide the same lifecycle to older MCP clients and runtimes with different orchestration conventions.</p>
-
-<p>The isolation boundary is explicit:</p>
-
-<ul>
-  <li>the parent transcript is not sent to the child, so the task must be self-contained</li>
-  <li>child tool calls and intermediate messages are not returned to the parent</li>
-  <li>only the final response is inserted, with a configurable 1,000–12,000 character budget</li>
-  <li>the source agent is excluded from automatic selection when another eligible worker exists</li>
-  <li>delegated results remain hypotheses until the parent verifies their evidence or artifacts</li>
-</ul>
-
-<p>This reduces parent-context growth by construction, but it is not proof of lower total provider usage: the child still spends its own input/output tokens, and comparative savings require fresh parity-controlled baseline and treatment runs.</p>
-
-<p>Parent runtimes are not coupled to the child runtime: any MCP-capable agent can coordinate the lifecycle. Installed one-shot child adapters cover HivemindOS, Hermes, Codex, Claude Code, OpenCode, OpenHands, Aider, Claw, and OpenClaw. The selected runtime must be ready on its machine; HivemindOS does not silently substitute an unrelated runtime. Private job records survive ordinary polling, expire after their configured lifetime, and become an actionable failed state if their machine restarts mid-run. The standard task wait is capped at 20 minutes; longer durable work belongs on the Work Board.</p>
+<p>Children can run on HivemindOS, Hermes, Codex, Claude Code, OpenCode, OpenHands, Aider, Claw, or OpenClaw. The chosen runtime must be ready on its machine; HivemindOS won’t swap in a different one. A child job fails clearly if its machine restarts mid-run. Waits are capped at 20 minutes; longer work belongs on the Work board.</p>
 
 <h3 id="cross-session-publishing">Cross-session publishing</h3>
 
-<p>An explicit request to commit, merge, land, publish, or push work across all sessions starts immediately from the repository’s current Git state. HivemindOS snapshots the shared checkout, attached worktrees, local branches, and unpublished commits without contacting, inspecting, or waiting on other conversations.</p>
+<p>An explicit request to commit, merge, land, publish, or push work across all sessions starts immediately from the repository’s current Git state. HivemindOS captures the shared checkout, attached worktrees, local branches, and unpublished commits without contacting, inspecting, or waiting on other conversations.</p>
 
-<p>The publisher preserves captured changes through normal commits and branches, runs proportionate checks, scans the publish set for secrets, merges safe local branches, and pushes without force. Conversation activity does not block the operation, and unrelated repositories remain outside its scope.</p>
+<p>It keeps captured changes as normal commits and branches, runs proportionate checks, scans for secrets, merges safe local branches, and pushes without force. Other repositories are not touched.</p>
 
-<p>After the first push, HivemindOS makes one immediate second Git pass to catch changes that arrived during publishing. It does not enter a task-wait loop. Any state that cannot be included without destructive conflict resolution is reported in the publishing conversation.</p>
+<p>After the first push, HivemindOS makes one immediate second Git pass to catch changes that arrived during publishing. Anything it can’t include without a destructive conflict resolution is reported in the conversation.</p>
 
-<h2 id="dashboard-pins">Dashboard Pins</h2>
+<h2 id="dashboard-pins">Dashboard pins</h2>
 
-<p>Dashboard pins are a built-in feedback layer for the control room.</p>
+<p>Pins let you leave feedback on any part of the dashboard.</p>
 
-<p>From any dashboard route, the operator can:</p>
+<ol>
+  <li>Open the pin overlay and click the part of the screen you mean.</li>
+  <li>Write a note and save it.</li>
+  <li>Resolve, archive, or delete the pin later, or send it to the Work board as a task.</li>
+</ol>
 
-<ul>
-  <li>open the pin overlay</li>
-  <li>click a UI target to capture selector, text, bounding box, and route context</li>
-  <li>write a note</li>
-  <li>save the pin to local server-side state</li>
-  <li>see open pin markers on that route</li>
-  <li>resolve, archive, or delete the pin</li>
-  <li>send the pin to the Work Board as an idempotent task</li>
-</ul>
+<p>Pins are saved by HivemindOS, not in browser storage. A pin never changes anything by itself.</p>
 
-<p>Pins are not stored in browser storage. They are persisted through <code class="language-plaintext highlighter-rouge">/api/dashboard/pins</code>, with local state under <code class="language-plaintext highlighter-rouge">~/.hivemindos/dashboard-pins.json</code>.</p>
+<h2 id="shared-brain-review-queue">Shared Brain review queue</h2>
 
-<h2 id="shared-brain-review-queue">Shared Brain Review Queue</h2>
+<p>Agents propose changes to durable shared knowledge instead of making them silently. The review queue holds new memories, memory updates, skill edits, instruction edits, and jobs.</p>
 
-<p>Agents should not silently rewrite durable shared brain content.</p>
-
-<p>The Shared Brain review queue gives agents a safe staging area for:</p>
-
-<ul>
-  <li>new memory proposals</li>
-  <li>memory evolution proposals</li>
-  <li>skill edits</li>
-  <li>instruction edits</li>
-  <li>jobs</li>
-</ul>
-
-<p>The Memory utility shows pending and approved proposals. An operator can approve, reject, and apply supported proposal types. Approved memory and memory-evolution proposals write through the existing Shared Brain Memory writer, including reviewed tags and proof behavior. Skill, instruction, and job proposals remain manual until a dedicated safe apply path exists.</p>
-
-<p>The review API is dashboard-authenticated and exposed at <code class="language-plaintext highlighter-rouge">/api/brain/review</code>.</p>
+<p>Open the <strong>Memory</strong> view to approve, reject, or apply proposals. Approved memory proposals are written through the normal Shared Brain Memory path. Skill, instruction, and job proposals are applied by hand for now.</p>
 
 <h2 id="context-x-ray">Context X-Ray</h2>
 
-<p>Context X-Ray records what context an agent run could see.</p>
+<p>Context X-Ray records what an agent run could see: the sources, why each matched, a short snippet, and an estimated token count, with sensitive values redacted. The <strong>Memory</strong> view uses it to show why an agent saw a particular skill, tool, app, runtime, doc, or file. X-Ray records describe context; they are not trusted source data.</p>
 
-<p>It stores redacted manifests with:</p>
+<h2 id="visual-plans-and-recaps">Visual plans and recaps</h2>
+
+<p>Visual plans and recaps give a quick map of a piece of work: a summary, file tree, diagrams, wireframe notes, a diff summary, and risk notes.</p>
 
 <ul>
-  <li>run id or thread id</li>
-  <li>model label</li>
-  <li>total estimated tokens</li>
-  <li>source list</li>
-  <li>source kind</li>
-  <li>route or path</li>
-  <li>status</li>
-  <li>match reason</li>
-  <li>source snippet</li>
-  <li>redaction labels</li>
+  <li>Queen Bee creates a visual plan when it queues a Work board task or breaks down a PRD, linked back to that task.</li>
+  <li>Local code work can produce a recap of changed files, risky areas, and what to review.</li>
 </ul>
 
-<p>Capability search can opt into Context X-Ray capture. Chat capability preflight records best-effort manifests tied to the runtime session and chat thread, so the Memory workbench can show why an agent saw a skill, tool, API route, connected app, runtime, doc, or workspace file.</p>
+<p>Plans and recaps describe work. They never approve a deployment, spending, credential access, or destructive changes.</p>
 
-<p>Manifests are stored through <code class="language-plaintext highlighter-rouge">/api/context-xray</code> in local JSONL state under <code class="language-plaintext highlighter-rouge">~/.hivemindos/context-xray.jsonl</code>.</p>
-
-<h2 id="visual-plans-and-recaps">Visual Plans And Recaps</h2>
-
-<p>Visual artifacts are structured plan and recap records for work that benefits from a quick map.</p>
-
-<p>An artifact can include:</p>
+<h2 id="related">Related</h2>
 
 <ul>
-  <li>summary markdown</li>
-  <li>file-tree items</li>
-  <li>Mermaid diagrams</li>
-  <li>wireframe notes</li>
-  <li>diff summaries</li>
-  <li>risk notes</li>
-</ul>
-
-<p>Queen Bee writes visual plan artifacts when it queues a Work Board task or decomposes a PRD. The artifact links to the Work Board task or PRD epic and carries the Queen Bee fingerprint or PRD run id. The route response returns a compact <code class="language-plaintext highlighter-rouge">visualPlan</code> receipt.</p>
-
-<p>Local code work can also generate a visual recap from repository diff metadata. Recaps summarize changed files, high-risk areas, and review focus without using destructive git commands.</p>
-
-<p>Artifacts are stored through <code class="language-plaintext highlighter-rouge">/api/visual-artifacts</code> in the shared vault under <code class="language-plaintext highlighter-rouge">Operations/Plans/Visual Artifacts/</code> when available, with <code class="language-plaintext highlighter-rouge">~/.hivemindos/visual-artifacts/</code> as fallback.</p>
-
-<h2 id="safety-model">Safety Model</h2>
-
-<p>Agent-native workflow records improve visibility, but they do not grant authority.</p>
-
-<ul>
-  <li>Dashboard pins create feedback and Work Board tasks; they do not execute changes by themselves.</li>
-  <li>MCP Work Board and event tools create or update local task records; they do not run arbitrary event handlers outside the HivemindOS API.</li>
-  <li>Human approval request tools create review cards; they do not authorize the requesting agent to proceed.</li>
-  <li>Review proposals stage durable brain changes; only approved memory proposals auto-apply through the typed memory writer.</li>
-  <li>Context X-Ray manifests describe visible context; they do not become trusted source data.</li>
-  <li>Visual plans and recaps describe work; they do not approve deployment, spending, credential access, or destructive changes.</li>
-  <li>MCP confirmation metadata is a client-side guard; server routes still enforce official commercial, wallet, payment, quota, entitlement, and credential trust boundaries.</li>
+  <li><a href="work-and-scheduler.html">Work and automations</a></li>
+  <li><a href="agent-evaluations.html">Agent Evaluations</a></li>
+  <li><a href="agent-challenges.html">Agent Challenges</a></li>
 </ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>

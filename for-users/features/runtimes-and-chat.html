@@ -6,16 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Agents, Runtimes, And Chat | HivemindOS Docs</title>
-  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <title>Agents and Chat | HivemindOS Docs</title>
+  <meta name="description" content="Talk to agents, choose modes and models, and see what each answer is based on.">
   <link rel="canonical" href="https://hivemindos.app/docs/for-users/features/runtimes-and-chat.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="HivemindOS">
-  <meta property="og:title" content="Agents, Runtimes, And Chat | HivemindOS Docs">
-  <meta property="og:description" content="Local-first agent fleet control room documentation.">
+  <meta property="og:title" content="Agents and Chat | HivemindOS Docs">
+  <meta property="og:description" content="Talk to agents, choose modes and models, and see what each answer is based on.">
   <meta property="og:url" content="https://hivemindos.app/docs/for-users/features/runtimes-and-chat.html">
-  <meta name="twitter:title" content="Agents, Runtimes, And Chat | HivemindOS Docs">
-  <meta name="twitter:description" content="Local-first agent fleet control room documentation.">
+  <meta name="twitter:title" content="Agents and Chat | HivemindOS Docs">
+  <meta name="twitter:description" content="Talk to agents, choose modes and models, and see what each answer is based on.">
   <meta property="og:image" content="https://hivemindos.app/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -45,13 +45,11 @@
       </a>
       <div class="topLinks">
         
+          <a href="/docs/for-users/getting-started.html">Get Started</a>
+        
           <a href="/docs/for-users/">User Guide</a>
         
-          <a href="/docs/for-users/features/">Features</a>
-        
-          <a href="/docs/for-users/whole-brain/">Hive Superbrain</a>
-        
-          <a href="/docs/for-users/trading/">Trading</a>
+          <a href="/docs/for-users/platform-api.html">API</a>
         
           <a href="/docs/for-users/troubleshooting-cookbook.html">Help</a>
         
@@ -80,14 +78,14 @@
       <nav class="sideNav">
         
           <section class="navSection">
-            <h2>Start Here</h2>
+            <h2>Get Started</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/docs/">HivemindOS Overview</a>
+                <a class="navLink" href="/docs/">Overview</a>
               
             
               
@@ -111,7 +109,7 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/">Find A Feature</a>
+                <a class="navLink" href="/docs/for-users/features/">All Features</a>
               
             
               
@@ -141,14 +139,26 @@
           </section>
         
           <section class="navSection">
-            <h2>Everyday Work</h2>
+            <h2>The Basics</h2>
             
               
               
               
 
               
-                <a class="navLink" href="/docs/for-users/features/fleet.html">My Hive</a>
+                <details class="navGroup">
+                  <summary>My Hive</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/fleet.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/fleet-machine-permissions.html">Machine Permissions</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/hivemindos-machines.html">HivemindOS Machines</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -156,7 +166,21 @@
               
 
               
-                <a class="navLink isActive" aria-current="page" href="/docs/for-users/features/runtimes-and-chat.html">Agents And Chat</a>
+                <details class="navGroup" open>
+                  <summary>Agents And Chat</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink isActive" aria-current="page" href="/docs/for-users/features/runtimes-and-chat.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/slash-commands.html">Slash Commands</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-plugins.html">Agent Plugins</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/computer-interaction.html">Computer Interaction</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -164,7 +188,19 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/work-and-scheduler.html">Work And Automations</a>
+                <details class="navGroup">
+                  <summary>Work And Automations</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/work-and-scheduler.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/capability-approvals.html">Capability Approvals</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-native-workflows.html">Agent-Native Workflows</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -181,6 +217,12 @@
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/brain-services.html">Memory And Knowledge</a>
                     
+                      <a class="navLink" href="/docs/for-users/whole-brain/knowledge-intake.html">Adding Knowledge</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/vault-map.html">Where Things Live</a>
+                    
                       <a class="navLink" href="/docs/for-users/whole-brain/shared-skills.html">Shared Skills</a>
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/shared-env.html">Shared Env</a>
@@ -188,6 +230,10 @@
                       <a class="navLink" href="/docs/for-users/whole-brain/sync-and-health.html">Sync And Repair</a>
                     
                       <a class="navLink" href="/docs/for-users/whole-brain/workspaces.html">Separate Workspaces</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/device-sync.html">Phone And Desktop</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/shared-brain-benchmarks.html">Memory Benchmarks</a>
                     
                   </div>
                 </details>
@@ -198,7 +244,17 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/hivemind-sync.html">Hivemind Sync</a>
+                <details class="navGroup">
+                  <summary>Hivemind Sync</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/hivemind-sync.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/targeted-file-transfers.html">Handoff Transfers</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -206,7 +262,21 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/zero-human-companies.html">Zero Human Companies</a>
+                <details class="navGroup">
+                  <summary>Skills</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/hive-skills.html">Hive Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/third-party-skills.html">Third-Party Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/hive-fusion.html">Hive Fusion</a>
+                    
+                  </div>
+                </details>
               
             
               
@@ -214,13 +284,13 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/features/integrations-and-work-history.html">Integrations And History</a>
+                <a class="navLink" href="/docs/for-users/features/env-files-notifications-maintenance.html">Settings, Files, And Alerts</a>
               
             
           </section>
         
           <section class="navSection">
-            <h2>Build And Automate</h2>
+            <h2>Build And Create</h2>
             
               
               
@@ -229,6 +299,385 @@
               
                 <a class="navLink" href="/docs/for-users/features/app-builder.html">App Builder And Hosting</a>
               
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Zero Human Companies</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/zero-human-companies.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/founder-mode.html">Founder Mode</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/web-research.html">Web Research</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/connected-intelligence-private-work.html">Connected Intelligence</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/sre-investigations.html">SRE Investigations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hivemind-analytics.html">Analytics</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Communicate And Assist</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/calling.html">Calling</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/socials.html">Socials</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/inbox-triage.html">Inbox Triage</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/bookings.html">Bookings</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/x-command-bot.html">X Command Bot</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hivemind-office.html">Office Companion</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/page-agent.html">Page Agent</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/read-along.html">Read Along</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/privacy-suite.html">Privacy Suite</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/beeline.html">Beeline Family Profiles</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Money And Compute</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Wallets And Spending</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/wallets-honey-and-x402.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/finances.html">Finances</a>
+                    
+                      <a class="navLink" href="/docs/for-users/x-engagement-honey.html">HONEY For X Posts</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Trading</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/trading/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/trading/crypto.html">Crypto</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/stocks.html">Stocks</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/prediction-markets.html">Prediction Markets</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/concentrated-liquidity.html">Concentrated Liquidity</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/bankr-copy-trading.html">Copy Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/copy-trading-agent-analysis.html">Agent-Analyzed Copy Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/nansen-intelligence.html">Nansen Intelligence</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/governance.html">Safety And Limits</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hive-compute.html">Hive Compute</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Connections</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Integrations</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/integrations-and-work-history.html">Integrations And Work History</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/finance-district.html">Finance District</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/hivemind-database.html">Hivemind Database</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/monid.html">Monid And AKTA Pro</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/nocodb.html">NocoDB</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/twenty.html">Twenty CRM</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/usepod.html">UsePod</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>MiroShark</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/miroshark/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/miroshark/companion.html">Companion Integration</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/miroshark-and-openclaw.html">Runtime Gateways</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Labs</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/agent-evaluations.html">Agent Evaluations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/agent-challenges.html">Agent Challenges</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/loop-engineering.html">Loop Engineering</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/evo-optimization.html">Evo Optimization</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/harness-experiments.html">Harness Experiments</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/quant-research.html">Quant Research Swarm</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/signal-trader.html">Signal Trader</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/kol-radar.html">KOL Radar</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/penny-stock-paper-lab.html">Penny-Stock Paper Lab</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/prediction-proper-learning.html">Prediction-Market Learning Lab</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>SuperAgent API</h2>
             
               
               
@@ -286,98 +735,10 @@
                 </details>
               
             
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/connected-intelligence-private-work.html">Connected Intelligence And Private Work</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/photo-library.html">Photo Library</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/web-research.html">Web Research</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hive-fusion.html">Hive Fusion</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/packaged-skills/">Skills</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/calling.html">Calling</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/socials.html">Socials</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/bookings.html">Bookings</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hivemind-analytics.html">Analytics</a>
-              
-            
           </section>
         
           <section class="navSection">
-            <h2>Money And Compute</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/wallets-honey-and-x402.html">Wallets And Spending Controls</a>
-              
+            <h2>Under The Hood</h2>
             
               
               
@@ -385,164 +746,22 @@
 
               
                 <details class="navGroup">
-                  <summary>Trading</summary>
+                  <summary>How HivemindOS Works</summary>
                   <div class="navChildren">
                     
-                      <a class="navLink" href="/docs/for-users/trading/">Overview</a>
+                      <a class="navLink" href="/docs/for-users/architecture/">Overview</a>
                     
                     
-                      <a class="navLink" href="/docs/for-users/trading/crypto.html">Crypto</a>
+                      <a class="navLink" href="/docs/for-users/architecture/api-and-storage.html">API And Storage</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/stocks.html">Stocks</a>
+                      <a class="navLink" href="/docs/for-users/architecture/syncing-and-tailscale.html">Sync And Private Networking</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                      <a class="navLink" href="/docs/for-users/architecture/tailscale-fleet-telemetry.html">Fleet Telemetry</a>
                     
-                      <a class="navLink" href="/docs/for-users/trading/prediction-markets.html">Prediction Markets</a>
-                    
-                      <a class="navLink" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
-                    
-                      <a class="navLink" href="/docs/for-users/trading/governance.html">Safety And Limits</a>
+                      <a class="navLink" href="/docs/for-users/architecture/generated-media-signing.html">Generated Media Signing</a>
                     
                   </div>
                 </details>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/hive-compute.html">Hive Compute</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
-              
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>Connections</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/">Integrations Home</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/usepod.html">UsePod</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/integrations/miroshark/">MiroShark</a>
-              
-            
-          </section>
-        
-          <section class="navSection">
-            <h2>Advanced And Reference</h2>
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/runtimes/">Advanced Guides</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/architecture/">How HivemindOS Works</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/fleet-machine-permissions.html">Fleet Machine Permissions</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/agent-evaluations.html">Agent Evaluations</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/loop-engineering.html">Loop Engineering</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/features/capability-approvals.html">Capability Approvals</a>
-              
-            
-              
-              
-              
-
-              
-                <a class="navLink" href="/docs/for-users/slash-commands.html">Slash Command Reference</a>
               
             
               
@@ -558,7 +777,47 @@
               
 
               
-                <a class="navLink" href="/docs/for-users/bankr/bankr-platform-reference.html">Bankr Provider Reference</a>
+                <details class="navGroup">
+                  <summary>Advanced Agent Setups</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/hermes/local-setup.html">Hermes Local Setup</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/v01-control-plane.html">AEON Control Plane</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/zero-human-companies.html">AEON With Companies</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/github-actions-brain-access.html">AEON GitHub Actions Access</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/tailnet-generation-skills.html">Tailnet Generation Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/code-intelligence.html">Code Intelligence</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/brain-device-sync-protocol.html">Brain Device Sync Protocol</a>
               
             
           </section>
@@ -595,6 +854,30 @@
               
 
               
+                <a class="navLink" href="/docs/for-investors/hive-staking-and-community-tiers.html">HIVE Staking And Tiers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/hive-token-receipts.html">HIVE Token Receipts</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/treasury-reserve-and-seasonal-programs.html">Revenue Allocations</a>
+              
+            
+              
+              
+              
+
+              
                 <a class="navLink" href="/docs/for-investors/paid-features/">Paid Features</a>
               
             
@@ -614,42 +897,26 @@
             </button>
           </div>
         </div>
-        <h1 id="agents-runtimes-and-chat">Agents, Runtimes, And Chat</h1>
+        <h1 id="agents-and-chat">Agents and Chat</h1>
 
-<p>An agent is a reusable AI teammate with its own instructions, capabilities, and conversation history. A new installation prepares an assistant for everyday work; you can add specialists when you want a separate responsibility or way of working.</p>
+<p>An agent is a reusable AI teammate with its own instructions, skills, and conversation history. A new installation comes with an assistant ready for everyday work, and you can add specialists when you want a separate role.</p>
 
-<p>HivemindOS keeps the chosen agent, workspace, files, model, and earlier messages attached to the conversation. That means you can continue a real piece of work instead of rebuilding the context every time you send a prompt.</p>
+<p>Each conversation keeps its agent, workspace, files, model, and earlier messages, so you can keep working on the same thing without re-explaining it.</p>
 
-<h2 id="start-a-conversation">Start A Conversation</h2>
+<h2 id="start-a-conversation">Start a conversation</h2>
 
 <ol>
-  <li>Start from <strong>Home</strong>, or open <strong>Chat</strong> to continue a conversation.</li>
-  <li>Use your prepared assistant, or choose another agent when the task needs it. If it lives on another device, that device needs to be online.</li>
-  <li>Add files, images, or a project folder when the work needs them.</li>
-  <li>Ask normally. HivemindOS shows progress, setup, approvals, and results in the conversation.</li>
+  <li>Start from <strong>Home</strong>, or open <strong>Chat</strong> to continue an earlier conversation.</li>
+  <li>Use your assistant, or choose another agent. If it lives on another device, that device must be online.</li>
+  <li>Add files, images, or a project folder if the work needs them.</li>
+  <li>Ask normally. Progress, setup steps, approvals, and results appear in the conversation.</li>
 </ol>
 
-<p>Model selection is optional. Open <strong>Advanced</strong> when you want to change it or adjust the other detailed controls. The model picker uses a scrolling glass menu with search. <strong>Keep visible</strong> pins those controls across app restarts. Your existing agent and model choices are preserved.</p>
+<p>Choosing a model is optional. Open <strong>Advanced</strong> to change it and other detailed controls, and select <strong>Keep visible</strong> to keep them open across restarts.</p>
 
-<!-- Superseded: the primary starting sequence put agent/model selection before every prompt, making optional setup look necessary. The prepared assistant and optional Advanced controls replace that sequence. -->
+<p>You can send another message while the agent is still working; each message starts its own run. Chat history is kept across restarts in both the desktop app and the browser.</p>
 
-<h2 id="try-sphere-view">Try Sphere View</h2>
-
-<p>Turn on <strong>Sphere view</strong> at the top of Home to try a larger honey-colored sphere with a floating glass input and compact task shortcuts. This experimental view is off by default, and your choice is remembered.</p>
-
-<p>Leave <strong>Chat here</strong> on to keep the sphere around tasks you start or reopen from Home. Your conversation still has the usual progress, attachments, approvals, results, and task modes. <strong>Focused view</strong>, in the top-right controls, keeps the glass interface with a quiet background. <strong>Return to sphere</strong> brings the sphere back with the same conversation and unsent draft. Turn off <strong>Chat here</strong> to open tasks in the focused layout instead.</p>
-
-<p>Sending from Home keeps the sphere in place while the conversation opens. If opening takes a moment, Home stays visible and editable; any new text you type while waiting is saved for your next task.</p>
-
-<p>Chat history and details live in rounded floating panels. Use <strong>Show chat history</strong> on the left or <strong>Show chat details</strong> on the right to open them. Each panel’s minus button shrinks it back to a floating button. Opening and closing them preserves your message draft; on small screens, they open one at a time and soften the conversation behind them. Moving keyboard focus back into the conversation closes the panel. With Reduce Motion enabled, the panels switch without the stretching animation.</p>
-
-<p><strong>Show app preview</strong> and <strong>Show terminal</strong> in the top-right controls open matching glass panels. Their minus buttons minimize them with the same motion. Restoring a preview keeps its selected tab and device size. Restoring the terminal keeps its output and unfinished command; minimizing it does not stop a running command.</p>
-
-<p>The terminal shows where your commands will run. When a conversation has no computer selected, choose one directly in the terminal. <strong>Connect a computer</strong> opens setup while keeping your conversation in place.</p>
-
-<p>Select the <strong>voice icon</strong> to open the same voice conversation available in My Hive, with the sphere responding to spoken replies when visible. The call’s messages appear in a short, scrolling glass panel above your input in both sphere and focused chat. Type there to reply during the call, or use the camera button to share what you see. Switching between the two views keeps the call and your unsent reply. Your unsent task text returns when the call ends. Outside a call, the microphone inside a task’s input still dictates into that task. With Reduce Motion enabled, the sphere stays in place and responds through light instead of movement.</p>
-
-<h2 id="auto-chat-do-and-create">Auto, Chat, Do, and Create</h2>
+<h2 id="choose-a-mode">Choose a mode</h2>
 
 <table>
   <thead>
@@ -661,11 +928,11 @@
   <tbody>
     <tr>
       <td><strong>Auto</strong></td>
-      <td>Start without choosing a mode; your assistant follows the request and your existing permissions.</td>
+      <td>Start without choosing; your assistant follows the request and your existing permissions.</td>
     </tr>
     <tr>
       <td><strong>Chat</strong></td>
-      <td>Discuss, explain, and research without changing files or taking external actions.</td>
+      <td>Discuss, explain, and research without changing files or taking outside actions.</td>
     </tr>
     <tr>
       <td><strong>Do</strong></td>
@@ -678,42 +945,92 @@
   </tbody>
 </table>
 
-<p>Changing modes keeps the same conversation and attachments. Do and Create can take time to reason through a difficult task; neither mode grants extra permission to act or spend.</p>
+<p>Switching modes keeps the conversation and attachments. No mode grants extra permission to act or spend. Chat mode blocks changes; to act, switch to Do or Create yourself. If an agent can’t guarantee Chat’s no-changes rule, that mode is unavailable for it.</p>
 
-<p>Chat mode blocks changes. To turn a discussion into an action, choose Do or Create yourself. If your chosen agent cannot provide Chat’s no-changes boundary, that option is unavailable and the conversation explains how to choose a supported assistant.</p>
+<p>Use <a href="work-and-scheduler.html">Work</a> instead when a request should be assigned, tracked, reviewed, or kept with formal deliverables.</p>
 
-<p>Use <strong>Work</strong> instead when the request should be assigned, tracked through stages, reviewed independently, or kept with formal deliverables. A conversation can also create or continue an app workspace without losing the project between messages.</p>
-
-<h2 id="choose-the-right-agent">Choose The Right Agent</h2>
+<h2 id="choose-the-right-agent">Choose the right agent</h2>
 
 <ul>
-  <li>Choose a local agent for files and apps on this computer.</li>
-  <li>Choose a remote agent when the required project or capability lives on another trusted machine.</li>
-  <li>Choose a managed cloud agent when work must continue while your computers are off.</li>
-  <li>Choose a specialist because of its instructions and skills, not merely because its name sounds relevant.</li>
+  <li>A local agent for files and apps on this computer.</li>
+  <li>A remote agent when the project or tool lives on another trusted machine.</li>
+  <li>A <a href="managed-cloud-agents.html">managed cloud agent</a> when work must continue while your computers are off.</li>
+  <li>A specialist for its instructions and skills, not just its name.</li>
 </ul>
 
-<p>If setup is missing, Chat shows the relevant connection or runtime setup in place. Completing it refreshes the conversation without throwing away your prompt.</p>
+<p>If something isn’t set up, Chat shows the setup right in the conversation and keeps your prompt.</p>
 
-<h2 id="models-running-on-this-computer">Models Running On This Computer</h2>
+<h2 id="know-what-an-answer-rests-on">Know what an answer rests on</h2>
 
-<p>Your first assistant, and new assistants that keep the default model, use a model running on this computer when one is loaded in LM Studio, Ollama, or another local model app. Otherwise they use the free online model. Choosing a model for an assistant turns this off, and it then uses the model you chose.</p>
+<p>A model answers from a compressed memory of its training. That is fine for common, stable facts and unreliable for anything recent, niche, or numeric. Chat shows you which kind of answer you got:</p>
 
-<p>When the online model can’t answer because it can’t be reached or today’s free allowance is used up, a model loaded on this computer answers instead, if there is one. A reply that needs payment still asks for it.</p>
+<ul>
+  <li><strong>Model badges.</strong> The model picker marks models that can use <strong>Tools</strong> (search, files, commands, connected apps), read <strong>Images</strong>, or do <strong>Thinking</strong> on hard problems. A badge appears only when HivemindOS is sure. If your model can’t use tools, the picker says so, and the agent answers from memory instead of pretending to look things up.</li>
+  <li><strong>Where the answer came from.</strong> Each reply is marked <strong>From memory</strong> or <strong>Used tools</strong>, with a count of files or images it read. Treat “from memory” answers about recent events, exact numbers, or obscure topics as a draft to confirm.</li>
+  <li><strong>Start a fresh chat.</strong> Everything in a conversation is sent with each new message. When a chat grows long or drifts to a new topic, a <strong>Start a fresh chat</strong> suggestion appears. Dismiss it to keep going.</li>
+  <li><strong>Read images as text.</strong> Under <strong>Advanced</strong>, switch <strong>Images</strong> from <em>as-is</em> to <em>read as text</em>. Each image is first transcribed word for word as a step you can check. Use this for labels, receipts, and anything with numbers.</li>
+  <li><strong>Examples.</strong> In agent settings, <strong>Custom instructions</strong> has an <strong>Examples</strong> section: pairs of <em>when I ask something like…</em> and <em>answer it like this</em>. One example steers format and tone better than a paragraph of rules.</li>
+</ul>
 
-<p>Either way, the line under the reply names the model on this computer that answered, and says why when it stood in for the online model. Incognito conversations always stay on the private online model.</p>
+<p>Use the thumbs-up and thumbs-down buttons on a reply to rate it.</p>
 
-<p>A model on this computer answers only when the whole conversation fits in the context it was loaded with, so it never answers with part of your assistant’s instructions missing. Assistants need more than the 4,096 tokens many local model apps start with: load the model with a context of 16,384 or more. In Ollama, set <code class="language-plaintext highlighter-rouge">OLLAMA_CONTEXT_LENGTH=16384</code> before starting it.</p>
+<h2 id="use-a-model-on-this-computer">Use a model on this computer</h2>
 
-<h2 id="source-grounded-work">Source-Grounded Work</h2>
+<p>Your first assistant, and any assistant left on the default model, uses a model running on this computer when one is loaded in LM Studio, Ollama, or another local model app. Otherwise it uses the free online model. Choosing a specific model turns this off.</p>
 
-<p>Attach a document for a one-conversation task, or add files to Hive Superbrain when agents should be able to find and reuse them later. Source material remains clearly separated from your instructions, so text inside a document or webpage does not silently become an agent command.</p>
+<p>If the online model can’t be reached or today’s free allowance is used up, a model loaded on this computer answers instead, if there is one. A reply that needs payment still asks first. The line under each reply names the local model that answered and why. Incognito conversations always stay on the private online model.</p>
 
-<h2 id="advanced-runtime-and-provider-details">Advanced: Runtime And Provider Details</h2>
+<p>A local model answers only when the whole conversation fits in its context, so your assistant’s instructions are never cut off. Many local apps start at 4,096 tokens, which is too small. Load the model with a context of 16,384 or more. In Ollama, set <code class="language-plaintext highlighter-rouge">OLLAMA_CONTEXT_LENGTH=16384</code> before starting it.</p>
 
-<p>You do not need the runtime table below for normal chat. It is a reference for people choosing a specific agent engine, model provider, background runner, or local model host.</p>
+<h2 id="attach-documents-and-build-apps">Attach documents and build apps</h2>
 
-<p>Known runtimes are defined in <code class="language-plaintext highlighter-rouge">src/lib/types/agent-runtime.ts</code>:</p>
+<p>Attach a document for one conversation, or add it to Hive Superbrain so agents can find it later. Text inside a document or web page never becomes an agent instruction. See <a href="local-document-reader.html">Documents And Brain Drop</a> for formats and privacy.</p>
+
+<p>Ask for a new app, site, dashboard, or game and Chat creates a project for it in the built-in <strong>App workspace</strong>. The project stays attached to the conversation, and Preview opens that exact project on the chosen machine.</p>
+
+<p>Phrases that explicitly ask to teach the hive something create a Brain Review proposal. Nothing becomes shared memory until it is approved.</p>
+
+<h2 id="sphere-view">Sphere view</h2>
+
+<p>Turn on <strong>Sphere view</strong> at the top of Home to try an experimental layout with a large sphere and a floating input. It is off by default. With <strong>Chat here</strong> on, tasks you start from Home open around the sphere; <strong>Focused view</strong> switches to a quieter layout, and <strong>Return to sphere</strong> switches back with your conversation and draft intact.</p>
+
+<p><strong>Show app preview</strong> and <strong>Show terminal</strong> open side panels. The terminal shows which computer your commands run on; if none is selected, choose one there or select <strong>Connect a computer</strong>.</p>
+
+<h2 id="swarm-commands">Swarm commands</h2>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">/swarm [number] &lt;task&gt;</code> asks a team of your ready agents for role-specific passes and returns one combined answer. Add a number to cap the team size.</li>
+  <li><code class="language-plaintext highlighter-rouge">/swarm-goal &lt;build request&gt;</code> expands a rough build idea into a full brief and hands it to Queen Bee as tracked, evidence-checked Work. See <a href="work-and-scheduler.html#queen-bee-swarm-goals">Queen Bee Swarm Goals</a>.</li>
+  <li><code class="language-plaintext highlighter-rouge">/swarm-sim &lt;scenario&gt;</code> starts a MiroShark simulation and shows its queued status.</li>
+</ul>
+
+<p>The swarm button in the composer only fills in <code class="language-plaintext highlighter-rouge">/swarm </code>; nothing runs until you send. See <a href="../slash-commands.html">Slash commands</a> for the full list.</p>
+
+<h2 id="automatic-thread-titles">Automatic thread titles</h2>
+
+<p>Open title settings from the Chat sidebar to keep first-message previews or turn on <strong>Local</strong> or <strong>Cloud</strong> titles.</p>
+
+<ul>
+  <li>A title is created from your first real message, alongside the reply. Greetings like “hello” wait for the next message.</li>
+  <li><strong>Local</strong> uses a small Qwen3.5 0.8B model or a larger 4B option, installed through LM Studio in the app.</li>
+  <li><strong>Cloud</strong> lets you pick from your configured models.</li>
+  <li>Only your first and latest real messages are used, up to 600 characters each. Tool output and attachments are excluded, and text sent to the cloud is scrubbed of secrets first.</li>
+  <li>A title is set once and isn’t replaced later.</li>
+</ul>
+
+<h2 id="voice-and-calls">Voice and calls</h2>
+
+<ul>
+  <li><strong>Voice chat with Queen Bee.</strong> Choose <strong>Voice Chat with Queen Bee</strong> from the menu bar icon or <strong>Navigation</strong> menu (<code class="language-plaintext highlighter-rouge">Cmd+Shift+V</code>). The window shows a glow and a live transcript while you talk. Replies use OpenAI speech when an OpenAI voice key is set up, or your computer’s built-in voice otherwise.</li>
+  <li><strong>Voice in a conversation.</strong> Select the voice icon in Chat to talk with your agent. You can type during the call or use the camera button to share what you see.</li>
+  <li><strong>Agent calls.</strong> Start an in-app voice call with an agent, or have a scheduled call ring your paired phone. See <a href="calling.html">Calling</a> for free and paid options.</li>
+</ul>
+
+<h2 id="advanced-runtimes-and-providers">Advanced: runtimes and providers</h2>
+
+<p>You don’t need this section for normal chat. It is a reference for choosing a specific agent engine, model provider, or local model app.</p>
+
+<h3 id="runtimes">Runtimes</h3>
 
 <table>
   <thead>
@@ -762,292 +1079,52 @@
   </tbody>
 </table>
 
-<h2 id="aeon-and-zero-human-companies">AEON And Zero Human Companies</h2>
+<p><strong>Managed background tasks.</strong> Codex, Claude Code, and HivemindOS can run background tasks that keep their folder, model, status, logs, and completion check in one record. A signed-out Claude Code install is not shown as ready. HivemindOS tasks stay inside the selected folder, follow the task’s permission setting, and can be stopped or resumed. Running <code class="language-plaintext highlighter-rouge">codex</code> or <code class="language-plaintext highlighter-rouge">claude</code> yourself in a terminal is outside HivemindOS; report that work through the Work board if it should count. See <a href="agent-evaluations.html">Agent Evaluations</a>.</p>
 
-<p>AEON remains an optional runtime. Choosing it for one Zero Human Company links that company to one saved AEON workspace and skill; it does not make AEON the authority for unrelated agents, companies, schedules, models, or app settings.</p>
+<p><strong>AEON</strong> is optional. Choosing it for a Zero Human Company links that one company to one AEON workspace and skill; it doesn’t take over other agents or settings. See <a href="../runtimes/aeon/zero-human-companies.html">Using AEON With Zero Human Companies</a>.</p>
 
-<p>The default company engine is still a HivemindOS crew. In AEON mode, a native crew is optional, Company Runs records the accepted handoff, and AEON owns the detailed run state and outputs. See <a href="../runtimes/aeon/zero-human-companies.html">Using AEON With Zero Human Companies</a>.</p>
+<h3 id="chatgpt-sign-in-and-api-billing">ChatGPT sign-in and API billing</h3>
 
-<h2 id="how-runtime-settings-work">How Runtime Settings Work</h2>
+<p>When ChatGPT sign-in (OAuth) is connected, HivemindOS uses it for OpenAI chat, including delegated Hermes runs and Queen Bee. This is checked again when each run starts, so an older tab or synced device can’t switch you to API-key billing. If a signed-in run fails, you see the failure instead of a silent retry on your API key.</p>
+
+<p>To use API-key billing for OpenAI chat on purpose, set <code class="language-plaintext highlighter-rouge">OPENAI_PREFER_API_KEY=1</code>, or disconnect ChatGPT sign-in. Separate OpenAI features such as speech or image generation may still use their API key.</p>
+
+<h3 id="local-model-apps">Local model apps</h3>
 
 <ul>
-  <li>Runtime adapters live in <code class="language-plaintext highlighter-rouge">src/lib/services/runtime-adapters</code>.</li>
-  <li>The adapter registry is <code class="language-plaintext highlighter-rouge">src/lib/services/runtime-adapters/registry.ts</code>.</li>
-  <li>Agent settings use <code class="language-plaintext highlighter-rouge">/api/runtimes/[runtime]/integrations</code> for capability and model-selection data.</li>
-  <li>Runtime availability is read through <code class="language-plaintext highlighter-rouge">/api/runtimes/availability</code>.</li>
-  <li>Remote runtime agent creation is proxied through <code class="language-plaintext highlighter-rouge">/api/agents/runtime</code> when the collector supports it.</li>
+  <li><strong>LM Studio</strong> can be installed, started, and controlled from agent settings: download, load, unload, and test models, and find models shared through LM Link.</li>
+  <li><strong>Local Model Advisor</strong>, inside the LM Studio panel, checks your CPU, GPU, and memory on this computer and recommends models that fit. It ranks all 7,738 GGUF candidates from a built-in 9,810-model snapshot and downloads your pick through LM Studio (1,564 entries have a direct download route; the rest use LM Studio’s search). It needs no extra install, and nothing is downloaded until you choose a model.</li>
+  <li><strong>FreeToken</strong> serves large Mixture-of-Experts models. HivemindOS finds its server on port <code class="language-plaintext highlighter-rouge">1919</code> on this machine or another machine in your hive. FreeToken <code class="language-plaintext highlighter-rouge">0.1.2</code> needs a Linux x86_64 host with an NVIDIA GPU, driver r580 or newer, and CUDA 13; a Mac can use a supported machine in your hive. Install it yourself, start it with <code class="language-plaintext highlighter-rouge">ft serve --model &lt;path-or-hf-id&gt;</code>, then refresh Local models.</li>
+  <li><strong>SIE</strong> is for a shared GPU server. Point the SIE provider at its gateway (default <code class="language-plaintext highlighter-rouge">http://127.0.0.1:8080</code>) to see its models, health, queue, and GPU memory. Generation models can be used in chat, and generation and embedding models can be warmed from the panel. SIE decides which models stay loaded. See the <a href="https://github.com/superlinked/sie">SIE project</a>.</li>
 </ul>
 
-<h3 id="openai-oauth-and-api-billing">OpenAI OAuth And API Billing</h3>
+<h3 id="adaptive-routing">Adaptive routing</h3>
 
-<p>When ChatGPT OAuth is connected, HivemindOS treats it as the default OpenAI
-authentication method for chat. This applies to normal agent chat, delegated
-Hermes runs, Queen Bee’s tool-capable fallback, and other built-in OpenAI chat
-fallbacks.</p>
-
-<p>The choice is enforced again when a run starts. An older browser tab, phone,
-fleet sync, or vault mirror cannot silently turn a newer OAuth selection into
-an API-key-billed OpenAI run. If an OAuth-protected run fails, HivemindOS shows
-the failure instead of retrying through an unscoped runtime default that might
-use an API key.</p>
-
-<p>Set <code class="language-plaintext highlighter-rouge">OPENAI_PREFER_API_KEY=1</code> only when you intentionally want OpenAI chat to
-use API-key billing. Disconnecting ChatGPT OAuth also makes the API key the
-fallback when one is configured. This boundary covers OpenAI chat; separately
-configured OpenAI services such as speech-to-text, text-to-speech, or image
-generation may still use their documented API credentials.</p>
-
-<h2 id="managed-codex-and-claude-code-tasks">Managed Codex And Claude Code Tasks</h2>
-
-<p>Codex and Claude Code can run managed background tasks from HivemindOS. The task keeps its working directory, selected model, process status, logs, and completion evaluation in one run record.</p>
-
-<p>Runtime status distinguishes a CLI that is installed and authenticated from one that is merely installed. A logged-out Claude Code install is not presented as ready. Codex can use the selected profile model instead of relying on a stale CLI default.</p>
-
-<p>Only managed tasks receive this run evaluation. Starting <code class="language-plaintext highlighter-rouge">codex</code> or <code class="language-plaintext highlighter-rouge">claude</code> independently in a terminal stays outside the HivemindOS run path. If that work needs to count toward routing, a company, or a loop contract, return the result and evidence through the Work Board.</p>
-
-<p>See <a href="agent-evaluations.html">Agent Evaluations</a> for the shared completion rules.</p>
-
-<h2 id="managed-hivemindos-tasks">Managed HivemindOS Tasks</h2>
-
-<p>HivemindOS background tasks keep one live agent session attached to the selected workspace. Plans, progress, tool activity, and the final response flow into the normal run record. You can stop an active task, and a later task can continue from a saved session when the agent supports it.</p>
-
-<p>Built-in file reads and edits remain inside the selected workspace. Trusted local commands start in that workspace and follow the task’s permission setting; restricted and plan-only agents cannot change files or start commands. If the bundled agent cannot start the live session, HivemindOS automatically uses its compatibility runner without losing the task.</p>
-
-<p>The local session bridge implements stable <a href="https://agentclientprotocol.com/get-started/introduction">Agent Client Protocol v1</a>. Remote machine work still travels through Hivemind Link so it keeps the app’s existing machine identity, authentication, and fleet controls.</p>
-
-<p>Managed assistant messages also include thumbs-up and thumbs-down controls. Ratings stay attached to the exact saved response and feed its chat evaluation without becoming autonomous worker-routing evidence.</p>
-
-<h2 id="how-chat-works">How Chat Works</h2>
+<p>The <strong>Adaptive</strong> provider picks a model for each message from OpenRouter and any configured OpenAI-compatible providers, instead of using one fixed model.</p>
 
 <ul>
-  <li>The primary send path is <code class="language-plaintext highlighter-rouge">/api/chat/agent-runtime</code>.</li>
-  <li>Session reads use <code class="language-plaintext highlighter-rouge">/api/chat/agent-session</code>.</li>
-  <li>Runtime stream events are normalized by <code class="language-plaintext highlighter-rouge">src/lib/services/runtime-stream-events.ts</code>.</li>
-  <li>The collector bridges Hermes and other local runtime sessions when a remote machine owns the agent.</li>
-  <li>Chat turns are concurrent. Sending another message while an agent is working starts a separate run immediately, including in the same thread; HivemindOS does not put the message in a local queue or reject it because that agent already has a chat in progress. Each turn keeps its own streamed response and process events. A provider or runtime may still report its own capacity error, and consequential tools still use their normal approval and idempotency controls.</li>
-  <li>Chat history and thread preferences use the shared dashboard state, so they survive restarts consistently in the desktop app and browser. Folder creation is supported by <code class="language-plaintext highlighter-rouge">/api/chat/folders</code>.</li>
-  <li>Chat folder creation and linked directory context use the same machine-aware directory helper as Kanban and Scheduler: native local folder picker in Tauri, Hivemind Link/collector directory browsing for remote machines, and API fallback in the browser.</li>
-  <li>New app, site, dashboard, game, and clone requests can use the built-in App workspace. Chat creates the durable project before implementation, keeps its identity on the conversation, and makes Preview start and open that exact project on the selected machine. Simple HTML/CSS/JavaScript requests use a dependency-free static runtime; framework requests use the reviewed Next.js runtime.</li>
-  <li>Capability-search preflight can record redacted Context X-Ray manifests for a runtime session. The Memory workbench uses those manifests to show which skills, tools, API routes, connected apps, runtimes, docs, or workspace files were visible to the agent.</li>
-  <li>Runtime-specific powers such as deterministic connector queries and artifact authoring are declared in the runtime capability matrix. Hermes is the first runtime enabled for these PromptQL-style work-product flows; other runtimes opt in through the same matrix instead of separate branches.</li>
-  <li>Explicit Teach Hive phrasing in chat creates a Brain Review proposal, not an immediate memory write. The normal Brain Review approval/apply path still decides what becomes durable Shared Brain Memory.</li>
+  <li>Candidates are scored on availability, health, cost, speed, task fit, privacy, context size, and past results. Choose <strong>Balanced</strong>, <strong>Fast</strong>, <strong>Quality</strong>, <strong>Cheapest</strong>, <strong>Reliable</strong>, or <strong>Private</strong> to change the weighting.</li>
+  <li><strong>Best free</strong> never uses paid models. <strong>Free then fallback</strong> tries free routes first, then only the fallback model you entered.</li>
+  <li>Optional cost and speed caps are strict: under a cost cap, paid routes with unknown pricing are skipped; under a speed cap, routes with unknown speed are skipped.</li>
+  <li>Rate-limited or failing routes are paused for a while, and models that keep giving poor answers rank lower. Each run records which route was chosen and why.</li>
+  <li>Long Hermes tasks can stay quiet for up to 15 minutes while working; the chat limit is 20 minutes. If one route fails mid-task, the next resumes the same session.</li>
 </ul>
 
-<h3 id="know-what-an-answer-rests-on">Know What An Answer Rests On</h3>
+<h3 id="hive-fusion-compound-model">Hive Fusion compound model</h3>
 
-<p>A model answers from a compressed memory of what it read during training. That memory is good for common, stable facts and unreliable for anything recent, niche, or numeric. Chat shows you which kind of answer you are getting and gives you the tools to change it.</p>
+<p>The <code class="language-plaintext highlighter-rouge">Hive Fusion</code> provider sends your prompt to a panel of your configured models at once. A judge model compares their answers, and a synthesizer writes one final answer from that analysis. If only one provider is set up, it still works with a one-model panel. The panel, judge, synthesizer, and panel size (default 3) can be customized. OpenRouter’s hosted version is offered separately as <code class="language-plaintext highlighter-rouge">openrouter/fusion</code> under <strong>OpenRouter</strong>.</p>
 
-<ul>
-  <li><strong>Model badges.</strong> The model picker marks what each model can do: <strong>Tools</strong> (search, files, commands, connected apps), <strong>Images</strong> (it can look at attachments), and <strong>Thinking</strong> (it can work longer on hard problems). A model with no badge may still do these things; the badge only appears when it is certain. If the model you picked definitely cannot use tools, the picker says so, and the agent answers from memory instead of pretending to look something up.</li>
-  <li><strong>Where the answer came from.</strong> Under every reply, a small note reads either <strong>From memory</strong> or <strong>Used tools</strong>, with a count of any files or images it read. Treat “from memory” answers about recent events, exact numbers, or obscure topics as a first draft to confirm.</li>
-  <li><strong>Start a fresh chat when the topic changes.</strong> Everything in a conversation rides along with each new message. When a chat grows heavy or the last few messages have drifted to a new subject, a suggestion appears above the message box with a <strong>Start a fresh chat</strong> button. Dismiss it to keep going; it stays quiet until the chat has grown a good deal more.</li>
-  <li><strong>Read images as text first.</strong> Under <strong>Advanced</strong> in the message box, switch <strong>Images</strong> from <em>as-is</em> to <em>read as text</em>. Each attached image is first written out word for word as a step in the conversation you can check, then the agent works from that text. Use it for labels, receipts, test results, and anything with numbers, so a misread digit is caught at the transcription rather than the conclusion.</li>
-  <li><strong>Show, don’t tell.</strong> In Agent settings, <strong>Custom instructions</strong> now has an <strong>Examples</strong> section: pairs of <em>when I ask something like…</em> and <em>answer it like this</em>. One concrete example steers format and tone better than a paragraph of rules, and it applies to every agent and model in chat.</li>
-</ul>
+<h3 id="hive-compute-models">Hive Compute models</h3>
 
-<h3 id="local-model-runtimes">Local Model Runtimes</h3>
+<p>In the <strong>HivemindOS</strong> provider’s <strong>All models</strong> list, <strong>Auto</strong>, <strong>Fast</strong>, and <strong>Deep</strong> carry <strong>SALE</strong> badges. They try marketplace GPU workers first and fall back to the matching hosted model when marketplace capacity is unavailable. See <a href="hive-compute.html">Hive Compute</a> to earn from your own spare GPU.</p>
 
-<p>Agent Settings offers several first-class local model paths:</p>
+<h2 id="related">Related</h2>
 
 <ul>
-  <li><strong>LM Studio</strong> is the download-and-control path. HivemindOS can install or start the local server, download catalog models, explicitly load or unload them, test them, and discover models shared through LM Link.</li>
-  <li><strong>FreeToken</strong> is the large Mixture-of-Experts serving path. HivemindOS automatically discovers its OpenAI-compatible server on loopback port <code class="language-plaintext highlighter-rouge">1919</code> (or through a HivemindOS fleet collector), labels its models as FreeToken, routes selected chat requests to the owning server, and uses the normal Local smoke test. FreeToken <code class="language-plaintext highlighter-rouge">0.1.2</code> currently requires a Linux x86_64 host with an NVIDIA GPU, driver r580 or newer, and CUDA 13; a Mac can use a supported fleet machine. Installation remains a manual, user-owned step because the current native CUDA/Python dependency chain is not locked tightly enough for HivemindOS to run it automatically. After installing the reviewed <code class="language-plaintext highlighter-rouge">0.1.2</code> release, start it with <code class="language-plaintext highlighter-rouge">ft serve --model &lt;path-or-hf-id&gt;</code> and refresh Local models.</li>
-  <li><strong>HivemindOS Local Model Advisor</strong> appears inside the same LM Studio panel. It reads the machine’s CPU, GPU, and memory locally, evaluates a complete pinned 9,810-model snapshot, and ranks Good and Perfect llama.cpp fits across all 7,738 GGUF candidates. It hands an exact Hugging Face GGUF repository to the existing <code class="language-plaintext highlighter-rouge">lms get</code> flow for the 1,564 entries with a catalogued or direct route; for other ranked candidates, it asks LM Studio to search the model name at the selected quantization with its GGUF filter. The completed model therefore appears in the normal LM Studio inventory and uses the existing load, unload, test, OpenAI-compatible server, and LM Link controls; the advisor does not create a second model store or server.</li>
-  <li><strong>SIE</strong> is the shared-GPU path. Point the SIE provider at its gateway (default <code class="language-plaintext highlighter-rouge">http://127.0.0.1:8080</code>) and HivemindOS shows every configured generation, embedding, reranking, extraction, vision, and audio model; lifecycle state; load failures; worker health; queue depth; GPU count; loaded models; and per-worker VRAM usage. Generation models can be selected for chat. Generation and embedding models can be warmed from the panel.</li>
-</ul>
-
-<p>There is no separate advisor download or installation. HivemindOS includes an attributed MIT-licensed port of the memory-fit formulas and a byte-verified complete Hugging Face catalog; the complete attribution ships with the app’s third-party notices. Recommendation work stays local and receives no provider keys or shared credentials. Only the model selected by the user is downloaded through LM Studio’s existing Hugging Face flow. The built-in snapshot preserves all 9,810 source entries; the current recommendation surface ranks its 7,738 GGUF entries because HivemindOS’s existing LM Studio lifecycle is explicitly GGUF-backed. MLX, safetensors, AWQ, GPTQ, AutoRound, and text-to-speech rows remain in the full source data rather than being misrepresented as llama.cpp downloads. Exact source mappings are preferred, and LM Studio’s own search resolves the remaining selected GGUF candidates instead of HivemindOS inventing a repository mapping. The donor project’s TUI, installer, auto-updater, model store, server, benchmarks, and background services are not bundled or run.</p>
-
-<p>SIE owns residency: the first compatible inference request loads a model, and SIE later keeps or evicts it according to GPU demand. Its current public gateway does not expose arbitrary load, unload, or pin mutations, so HivemindOS does not present controls that would imply otherwise. Task-specific reranking and extraction models load on their first task request. Remote Fleet agents expose the same inventory, telemetry, and warm actions through their collector. See the <a href="https://github.com/superlinked/sie">SIE project</a> for server and model configuration.</p>
-
-<h3 id="automatic-thread-titles">Automatic Thread Titles</h3>
-
-<p>Open the thread-title settings from the Chat sidebar to keep first-message previews or choose Local or Cloud captioning.</p>
-
-<ul>
-  <li>A title is requested as soon as the first substantive user message is sent. It runs alongside the assistant request rather than waiting for the reply.</li>
-  <li>Generic openers such as “hello” or “can you help?” wait for the next substantive user turn.</li>
-  <li>Local captioning offers a lightweight Qwen3.5 0.8B model and a larger 4B option through the same in-app LM Studio install, download, load, and test flow used by other local models.</li>
-  <li>Cloud captioning scans callable models from configured runtimes and providers. The searchable picker puts the best lightweight title models first, then shows the rest, with separate OAuth and API badges when both routes exist.</li>
-  <li>Only the first and latest substantive user turns are used, capped at 600 characters each. System prompts, tool output, attachments, and process events are excluded. Cloud-bound text passes through secret redaction before it leaves the machine.</li>
-  <li>A generated title is stored once and is not silently replaced by later messages.</li>
-</ul>
-
-<h3 id="chat-swarm-commands">Chat Swarm Commands</h3>
-
-<p>Dashboard chat owns HivemindOS swarm commands before the message reaches the selected runtime:</p>
-
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">/swarm [number] &lt;task&gt;</code> selects a team of configured chat-capable agents from the current Fleet roster, skips agents with known setup issues, matches the task against existing bee worker classes, asks each selected agent for a role-specific pass, and returns one combined swarm packet in the active chat. Omit the number for automatic sizing, or lead with a number such as <code class="language-plaintext highlighter-rouge">/swarm 2 verify this patch</code> to cap the pass count.</li>
-  <li><code class="language-plaintext highlighter-rouge">/swarm-goal &lt;build request&gt;</code> rewrites a loose build request into a fuller build prompt, appends explicit instructions for the coordinator to create a goal and spawn parallel agents with dedicated <code class="language-plaintext highlighter-rouge">/goal</code> scopes, then submits the expanded request to Queen Bee through <code class="language-plaintext highlighter-rouge">/api/queen-bee</code>. This creates a Work Board task and can trigger autonomous pickup when a matching chat-capable worker is available.</li>
-  <li><code class="language-plaintext highlighter-rouge">/swarm-sim &lt;scenario&gt;</code> sends the scenario to the MiroShark swarm route and returns the queued simulation status so the run can be followed from chat or the Swarm view.</li>
-</ul>
-
-<p>The composer swarm button prepares <code class="language-plaintext highlighter-rouge">/swarm </code> in the input. It does not run anything until the user sends the message. The command path records the user command, shows a pending assistant reply, and replaces it with either the swarm packet, the Queen Bee submission receipt, the queued MiroShark run, or an actionable setup/error message.</p>
-
-<p>Test the command path with <code class="language-plaintext highlighter-rouge">node scripts/e2e-dashboard-swarm-command.mjs</code> for deterministic browser regression coverage, or <code class="language-plaintext highlighter-rouge">node scripts/e2e-dashboard-swarm-command.mjs --real</code> to discover real local Fleet agents and run the actual <code class="language-plaintext highlighter-rouge">/api/chat/agent-runtime</code> path without interception. Add <code class="language-plaintext highlighter-rouge">--require-completion</code> when the test should fail unless at least one real runtime returns assistant text.</p>
-
-<h3 id="collector-and-link-urls">Collector And Link URLs</h3>
-
-<p>Hermes agents discovered through Fleet usually store a collector URL in <code class="language-plaintext highlighter-rouge">agent.telemetryUrl</code>. In system Tailnet mode, that may be a direct remote collector such as <code class="language-plaintext highlighter-rouge">http://100.x.y.z:8787</code>. In Hivemind Link mode, remote agents use the local Link sidecar proxy:</p>
-
-<div class="language-text highlighter-rouge"><div class="highlight"><pre class="highlight"><code>http://127.0.0.1:8788/peer/100.x.y.z%3A8787
-</code></pre></div></div>
-
-<p>That URL is still remote. Preserve the <code class="language-plaintext highlighter-rouge">/peer/...</code> prefix and port <code class="language-plaintext highlighter-rouge">8788</code> when sending chat, reading sessions, browsing files, or checking capabilities. Only plain local collector URLs such as <code class="language-plaintext highlighter-rouge">http://127.0.0.1:8787</code> should be normalized to the active local collector port from <code class="language-plaintext highlighter-rouge">~/.hivemindos/collector.env</code>.</p>
-
-<p>If a remote Hermes agent fails immediately with “does not have the Hermes chat bridge” or a fast <code class="language-plaintext highlighter-rouge">404</code>, check whether a Link <code class="language-plaintext highlighter-rouge">/peer/...</code> URL was accidentally rewritten to the collector port. The healthy path keeps <code class="language-plaintext highlighter-rouge">/peer/...</code> on <code class="language-plaintext highlighter-rouge">127.0.0.1:8788</code> and appends collector endpoints under that prefix.</p>
-
-<h2 id="adaptive-agents">Adaptive Agents</h2>
-
-<p>The first-class Adaptive provider routes each message across OpenRouter and configured Models.dev OpenAI-compatible providers instead of pinning one model. The older OpenRouter <code class="language-plaintext highlighter-rouge">adaptive</code> model remains supported for profiles that only need OpenRouter.</p>
-
-<p>How a message picks its model:</p>
-
-<ul>
-  <li>OpenRouter inventory is filtered for request modalities and free pricing. Configured Models.dev routes must be OpenAI-compatible and have a usable provider key.</li>
-  <li>Every eligible candidate receives a normalized score from availability, endpoint and learned health, cost, latency, task fit, stability, privacy, context length, and accepted-outcome evidence. Unknown measurements stay visibly neutral instead of being invented. Balanced, Fast, Quality, Cheapest, Reliable, and Private first objectives change the factor weights.</li>
-  <li><strong>Best free</strong> excludes every paid candidate. <strong>Free then fallback</strong> still ranks and exhausts eligible free routes first, then tries only the fallback model explicitly entered in Agent Settings. HivemindOS no longer adds a default paid model.</li>
-  <li>Optional cost and latency caps fail closed: a paid route with unknown pricing is excluded under a cost cap, and a route with unknown latency is excluded under a latency cap. Exploration is deterministic, restricted to under-tested candidates in the same free/paid tier, and capped at 20 percent.</li>
-  <li>Each run records a receipt containing the selected route, top alternatives, all factor values and whether they were observed, constraint exclusions, and whether exploration actually ran.</li>
-  <li>Failures classify from error text and HTTP status: capacity (429/rate limit/quota/overloaded) cools the route for 5 minutes doubling per consecutive hit (capped at 6 hours), unsupported models cool for 24 hours, and other transport failures for 15 minutes. Reliability is learned separately at model, provider, and provider-connection scope so a broken connection can protect sibling models without treating one unsupported model as a provider-wide failure.</li>
-</ul>
-
-<p>Long-running tasks:</p>
-
-<ul>
-  <li>The 45-second attempt timer only covers time to the first stream byte. Once the stream is flowing, silence means the Hermes CLI is still working, and the idle window is 15 minutes (the collector’s CLI chat cap is 20 minutes).</li>
-  <li>The route emits a bare SSE comment every 25 seconds so the browser’s stall timer survives silent tool work.</li>
-  <li>When an attempt fails after the Hermes CLI session was created, the next candidate resumes that same session (<code class="language-plaintext highlighter-rouge">--resume</code>) instead of restarting the task from scratch.</li>
-</ul>
-
-<p>Quality gates (“completed but useless” still demotes):</p>
-
-<ul>
-  <li>Every completed response is graded for dead-end refusals with no pivot into an alternative, an unrequested prompt echo, and repetition loops. Advanced settings can also require a minimum length, require literal text, or forbid literal text. These declarative checks do not evaluate regular expressions or code.</li>
-  <li>A failed gate records a <code class="language-plaintext highlighter-rouge">low-quality</code> outcome and a <code class="language-plaintext highlighter-rouge">Hermes Adaptive quality flag</code> session event. The response still reaches the user — grading only changes future routing.</li>
-  <li>One bad answer is forgiven; the second consecutive one benches the model for 10 minutes, doubling per repeat. Models under a 50% pass ratio across 3+ graded responses rank below models never tried. A single clean success redeems the model.</li>
-  <li>Ordinary Adaptive chat now writes provider, concrete model, use case, acceptance, quality, measured latency, available cost, and privacy class into the existing outcome-routing store. Runtime heuristics carry less ranking weight than operator or evaluator evidence, and concurrent completions are serialized so one result cannot overwrite another.</li>
-</ul>
-
-<p>Direct and Hermes Adaptive routes share the same machinery:</p>
-
-<ul>
-  <li>The direct-API loop uses the scored candidate order and records every attempted route.</li>
-  <li>When the plan selects Hermes, the same scored plan crosses the bridge intact and reuses Hermes failover, session resume, keepalives, and quality gates.</li>
-  <li>The scoring and declarative-validation primitives are adapted from the MIT-licensed <a href="https://github.com/diegosouzapw/OmniRoute">OmniRoute project</a>, pinned at commit <code class="language-plaintext highlighter-rouge">50cb1875117bca9f053874ced924e54e40c43f69</code>. HivemindOS does not install or execute OmniRoute; its complete license ships in the app’s third-party notices.</li>
-</ul>
-
-<p>Fleet-wide sharing:</p>
-
-<ul>
-  <li>The fleet shares one OpenRouter API key, so a rate limit observed on one machine applies everywhere. Collectors gossip the reliability store over the tailnet every 10 minutes (<code class="language-plaintext highlighter-rouge">startReliabilitySync</code> in <code class="language-plaintext highlighter-rouge">scripts/agent-telemetry-collector.mjs</code>), merging newest-wins per model id from each peer’s <code class="language-plaintext highlighter-rouge">GET /reliability/openrouter</code>. <code class="language-plaintext highlighter-rouge">POST /reliability/sync</code> triggers a pass manually.</li>
-  <li>Peers are discovered from <code class="language-plaintext highlighter-rouge">tailscale status --json</code>, probed with a 4-second timeout, and deduplicated by <code class="language-plaintext highlighter-rouge">machineId</code> so each machine’s two tailnet nodes count once. Payloads carry model ids and counters only — no secrets, and no tailnet IPs are persisted.</li>
-  <li>Tune or disable with <code class="language-plaintext highlighter-rouge">AGENT_TELEMETRY_RELIABILITY_SYNC_INTERVAL_MS</code> (<code class="language-plaintext highlighter-rouge">0</code> disables). The app re-reads the store file on a 5-second TTL, so gossiped records apply without a restart.</li>
-</ul>
-
-<h2 id="hive-fusion-compound-model">Hive Fusion (Compound Model)</h2>
-
-<p>Hive Fusion is a native compound model: instead of asking one model, a prompt is fanned out to a <strong>panel</strong> of configured models in parallel, a <strong>judge</strong> model extracts the structure of their answers, and a <strong>synthesizer</strong> writes the final answer grounded in that analysis. It is HivemindOS’s own implementation of the panel → judge → synthesize pattern, provider-agnostic over the gateways you already have configured.</p>
-
-<p>Selecting it: the model picker exposes a <code class="language-plaintext highlighter-rouge">Hive Fusion</code> provider whose model, <code class="language-plaintext highlighter-rouge">hive-fusion-native</code>, runs the local panel across your configured providers. OpenRouter’s <em>hosted</em> compound model is a plain OpenRouter slug, so it is offered separately as <code class="language-plaintext highlighter-rouge">openrouter/fusion</code> under the <strong>OpenRouter</strong> provider tile — a <code class="language-plaintext highlighter-rouge">MODEL_PROVIDER_GATEWAYS</code> entry keyed off <code class="language-plaintext highlighter-rouge">OPENROUTER_API_KEY</code> in the shared hive env, so it appears on every runtime (its model dropdown also offers Adaptive free-routing). It is served by the normal OpenRouter path — no Fusion orchestration runs locally for it. (Programmatically, <code class="language-plaintext highlighter-rouge">agent.fusion.mode: "openrouter"</code> also routes the native <code class="language-plaintext highlighter-rouge">hive-fusion</code> provider to the hosted model with optional custom-panel <code class="language-plaintext highlighter-rouge">plugins</code>.)</p>
-
-<p>Any agent on any runtime can select <code class="language-plaintext highlighter-rouge">Hive Fusion</code>; the chat send path is unchanged (it still POSTs to <code class="language-plaintext highlighter-rouge">/api/chat/agent-runtime</code>). The route detects <code class="language-plaintext highlighter-rouge">provider: "hive-fusion"</code> and delegates to the Fusion orchestrator before the single-model preflight (<code class="language-plaintext highlighter-rouge">isFusionProfile</code> / <code class="language-plaintext highlighter-rouge">streamFusionResponse</code> in <code class="language-plaintext highlighter-rouge">src/lib/services/fusion/route-stream.ts</code>); selecting it never writes a Hermes/OpenClaw gateway model.</p>
-
-<p>How a native run works (<code class="language-plaintext highlighter-rouge">src/lib/services/fusion/orchestrator.ts</code>):</p>
-
-<ol>
-  <li><strong>Resolve the panel</strong> (<code class="language-plaintext highlighter-rouge">catalog.ts</code>). The default panel mirrors the budget-panel idea: when <code class="language-plaintext highlighter-rouge">OPENROUTER_API_KEY</code> is set, it fills with diverse budget models from OpenRouter’s live free inventory (reusing the Adaptive resolver, falling back to a static list if the inventory is unreachable), then tops up from any other configured provider. Providers are resolved from the shared hive env (<code class="language-plaintext highlighter-rouge">OPENROUTER_API_KEY</code>, <code class="language-plaintext highlighter-rouge">VENICE_API_KEY</code>, <code class="language-plaintext highlighter-rouge">OPENAI_API_KEY</code>, <code class="language-plaintext highlighter-rouge">GROQ_API_KEY</code>, <code class="language-plaintext highlighter-rouge">BANKR_LLM_KEY</code>, or a local OpenAI-compatible base URL). With only one provider configured it degrades to a low-diversity single-member panel (the judge + synthesizer still add structure) and surfaces a note rather than failing.</li>
-  <li><strong>Fan out</strong> to every panel member in parallel via OpenAI-compatible <code class="language-plaintext highlighter-rouge">/chat/completions</code> (<code class="language-plaintext highlighter-rouge">client.ts</code>). A member that fails or times out is dropped; the run continues as long as at least one succeeds.</li>
-  <li><strong>Judge</strong> (only when ≥2 members succeed): a judge model returns JSON capturing consensus, contradictions, partial coverage, unique insights, blind spots, and a recommended focus (<code class="language-plaintext highlighter-rouge">prompts.ts</code>). Malformed judge output falls back gracefully and never aborts the run.</li>
-  <li><strong>Synthesize</strong>: a synthesizer model streams the final answer grounded in the analysis and the panel’s source answers. If synthesis itself fails, Fusion returns the strongest panel answer rather than erroring.</li>
-</ol>
-
-<p>Blind compare: the Fusion service layer can now prepare anonymized answer slots
-through <code class="language-plaintext highlighter-rouge">/api/fusion/blind-compare</code>. The route hides model labels until the
-operator records a slot choice, then reveals the slot-to-model map so votes can
-feed future reliability and routing work without biasing the initial judgement.
-Fusion’s judge and synthesizer prompts also wrap panel/source answers as
-untrusted source data before using them for analysis.</p>
-
-<table>
-  <tbody>
-    <tr>
-      <td>Customising the panel: set <code class="language-plaintext highlighter-rouge">agent.fusion</code> (<code class="language-plaintext highlighter-rouge">FusionAgentConfig</code>) to override <code class="language-plaintext highlighter-rouge">participants</code>, <code class="language-plaintext highlighter-rouge">judge</code>, <code class="language-plaintext highlighter-rouge">synthesizer</code> (each a <code class="language-plaintext highlighter-rouge">{ provider, model }</code> from the Fusion catalog), <code class="language-plaintext highlighter-rouge">maxParticipants</code> (default 3), or <code class="language-plaintext highlighter-rouge">mode</code> (<code class="language-plaintext highlighter-rouge">"native"</code></td>
-      <td><code class="language-plaintext highlighter-rouge">"openrouter"</code>) — mirroring OpenRouter’s custom-panel option.</td>
-    </tr>
-  </tbody>
-</table>
-
-<p>Streaming: the synthesizer answer streams as the assistant message, while each panel member and the judge surface as tool/reasoning process events (the panel plan and judge analysis appear as reasoning chips). The orchestrator is dependency-injectable and covered by <code class="language-plaintext highlighter-rouge">scripts/test-fusion.mjs</code> (<code class="language-plaintext highlighter-rouge">pnpm test:fusion</code>).</p>
-
-<h2 id="hive-compute-marketplace-gpu-inference">Hive Compute (Marketplace GPU Inference)</h2>
-
-<p>Hive Compute supplies GPU-first routes inside the <strong>HivemindOS</strong> model provider’s
-unified <strong>All models</strong> catalog. Auto, Fast, and Deep appear before the other
-OpenRouter-backed HivemindOS models with <strong>SALE</strong> badges, try eligible
-marketplace workers first, and fall back to the matching hosted model tier when
-marketplace capacity is unavailable.</p>
-
-<p>The dashboard also has a <strong>Hive Compute</strong> setup view for operators who want to
-earn on spare GPU capacity. It installs a small worker module under
-<code class="language-plaintext highlighter-rouge">~/.hivemindos/modules/hive-compute-worker</code>; the worker connects to a compatible
-gateway, advertises Ollama or LM Studio/OpenAI-compatible model routes, accepts
-assigned jobs, streams tokens, and reports completion. Official matching,
-payout, receipt, quota, and fraud-control authority still belongs in hosted
-HivemindOS infrastructure or a self-hosted operator’s own gateway, not in the
-downloadable app.</p>
-
-<p>For private marketplace jobs, Hive Compute supports encrypted prompt delivery
-to verified workers and opt-in output E2E encryption for clients that can
-decrypt response envelopes locally. Hardware-only routing is stricter than dev
-verified-only routing: it must be backed by gateway-verified hardware
-attestation and fails closed when only local test evidence is available.</p>
-
-<h2 id="complete-capability-reference">Complete Capability Reference</h2>
-
-<ul>
-  <li>Runtime/provider/model selection where supported.</li>
-  <li>Adaptive OpenRouter free-model routing with learned reliability, capacity failover, and quality grading.</li>
-  <li>HivemindOS Models GPU-first routing through Hive Compute, with hosted
-OpenRouter fallback when marketplace capacity is unavailable.</li>
-  <li>Streaming runtime responses where available.</li>
-  <li><code class="language-plaintext highlighter-rouge">/swarm [number]</code> role-specific parallel passes across the best-suited configured chat-capable agents.</li>
-  <li><code class="language-plaintext highlighter-rouge">/swarm-goal &lt;build request&gt;</code> prompt expansion plus Queen Bee Work Board delegation for parallel build tasks.</li>
-  <li>Session resume and session search.</li>
-  <li>Attachments and linked directories for task context.</li>
-  <li>Send-to-Kanban from chat messages.</li>
-  <li>Agent prompts for clarification, approval, secrets, or sudo-style decisions.</li>
-  <li>Agent role, worker class, preferred skills, and per-agent env values.</li>
-  <li>Dashboard agent calls that start through <code class="language-plaintext highlighter-rouge">/api/phone</code> using the gateway’s in-app voice path instead of ringing the phone.</li>
-  <li>Scheduled/ring-agent calls that can ring the paired mobile device when explicitly triggered.</li>
-  <li>AEON call briefings with repository, branch, workspace, Strategy/Soul, memory, the current skill catalog, chains/reactive work, and recent MiroShark deliverable context.</li>
-</ul>
-
-<p>Chat document attachments use the bundled reader. See <a href="local-document-reader.html">Documents And Brain Drop</a> for supported formats, local-versus-cloud privacy behavior, extraction limits, and format-specific caveats.</p>
-
-<p>For the full product split between free BYOK calls and paid Cloud/LiveKit rooms, see <a href="calling.html">Calling</a>.</p>
-
-<h2 id="phone-and-voice-bridge">Phone And Voice Bridge</h2>
-
-<p>Phone support is split between a settings surface and action routes:</p>
-
-<ul>
-  <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/views/PhonePanel.tsx</code> manages saved prompts, scheduled call rows, device status, and ring actions.</li>
-  <li><code class="language-plaintext highlighter-rouge">src/features/dashboard/views/chat/AgentCallsSettingsPanel.tsx</code> exposes pairing and test-call controls in agent settings.</li>
-  <li><code class="language-plaintext highlighter-rouge">/api/phone</code> reads gateway voice config/device status, starts <code class="language-plaintext highlighter-rouge">ring-agent</code> calls, starts <code class="language-plaintext highlighter-rouge">dashboard-agent-call</code> calls, rings stored prompts, and checks mobile push readiness.</li>
-  <li><code class="language-plaintext highlighter-rouge">src/lib/services/phone/call-gateway.ts</code> builds private call briefings, including AEON-specific identity and recent artifact context.</li>
-</ul>
-
-<h2 id="queen-bee-voice-chat">Queen Bee Voice Chat</h2>
-
-<p>The desktop app ships a hands-free voice channel into the Queen Bee control plane:</p>
-
-<ul>
-  <li>The HivemindOS menu bar (tray) icon menu leads with <code class="language-plaintext highlighter-rouge">Voice Chat with Queen Bee</code>; the app menu also exposes <code class="language-plaintext highlighter-rouge">Navigation &gt; Voice Chat with Queen Bee</code> (<code class="language-plaintext highlighter-rouge">Cmd+Shift+V</code>). Both emit <code class="language-plaintext highlighter-rouge">hivemindos:queen-bee-voice</code> to the dashboard webview.</li>
-  <li>While active, the dashboard shows an Apple Intelligence-style animated glow around the window perimeter (<code class="language-plaintext highlighter-rouge">src/features/queen-voice/QueenVoiceGlow.tsx</code>, ported from <code class="language-plaintext highlighter-rouge">jacobamobin/AppleIntelligenceGlowEffect</code>) plus live on-screen transcription of both the user’s utterances and Queen Bee’s replies.</li>
-  <li>Each utterance is detected with an energy-based VAD, recorded, and sent to <code class="language-plaintext highlighter-rouge">/api/queen-bee/voice</code>, which transcribes it with the shared Whisper STT helpers (<code class="language-plaintext highlighter-rouge">src/lib/services/phone/transcription.ts</code>), submits the transcript to the Queen Bee control plane, and returns the spoken-ready receipt summary.</li>
-  <li>Replies are voiced through OpenAI TTS when an OpenAI voice key is configured in the shared env, with on-device speech synthesis as the fallback.</li>
+  <li><a href="local-document-reader.html">Documents And Brain Drop</a></li>
+  <li><a href="work-and-scheduler.html">Work and automations</a></li>
+  <li><a href="../slash-commands.html">Slash commands</a></li>
+  <li><a href="calling.html">Calling</a></li>
 </ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
