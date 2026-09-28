@@ -973,6 +973,11 @@
       <td>Three fresh hosted accounts; median trial p50 was 0.53s lexical, 4.89s semantic, and 5.93s answer</td>
     </tr>
     <tr>
+      <td>Hosted memory search on LongMemEval_S</td>
+      <td style="text-align: right"><strong>97.68% recall@5, 99.4% hit@5</strong> with <code class="language-plaintext highlighter-rouge">rerank: true</code> (was 90.69 / 95.8); <strong>93.71%</strong> recall@5 without it</td>
+      <td>SuperAgent API <code class="language-plaintext highlighter-rouge">memory.recall</code>, all 500 questions, sibyl.ist’s metric code; better on 71 questions, worse on 1</td>
+    </tr>
+    <tr>
       <td>Hosted memory on LongMemEval_S</td>
       <td style="text-align: right"><strong>81.9% of answers correct</strong> (was 16.7%)</td>
       <td>150 questions through the hosted routes, graded by a smaller judge than LongMemEval’s own; the evidence reached the answer model for 85.1% of all 470 answerable questions in keyword order (was 9.6%)</td>
@@ -1265,7 +1270,50 @@
   <li><strong>sibyl.ist:</strong> it reported recall@5 96.97 and nDCG@5 94.63 on the same scorer and withdrew that number on September 25, 2026 (“the pre-1.0 headline run was withdrawn”); it publishes none now, so there is no current number to compare with.</li>
 </ul>
 
-<p>What this does not show: it is search, not answers (the reading model still has to use what was found); it is one public dataset of synthetic chats; and it measures the desktop brain. The hosted memory behind the SuperAgent API does not have meaning search fusion or the reranker yet.</p>
+<p>What this does not show: it is search, not answers (the reading model still has to use what was found), and it is one public dataset of synthetic chats. The hosted memory behind the SuperAgent API got the same two changes the same day; its own result is below.</p>
+
+<h3 id="hosted-memory-search-accuracy">Hosted memory search accuracy</h3>
+
+<p>The same 500 questions through the SuperAgent API’s hosted memory (<code class="language-plaintext highlighter-rouge">memory.recall</code> with meaning search, on a paid plan), scored with the same metric code. Each question’s conversations were written to a fresh hosted account through the real memory routes and embedded by the production embedding model; <code class="language-plaintext highlighter-rouge">workers/paid-agent-gateway/scripts/benchmark-cloud-memory-search.ts</code> in the hosted-services repository.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th> </th>
+      <th style="text-align: right">hit@5</th>
+      <th style="text-align: right">recall@5</th>
+      <th style="text-align: right">nDCG@5</th>
+      <th>Better / worse than before</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Before</td>
+      <td style="text-align: right">95.80</td>
+      <td style="text-align: right">90.69</td>
+      <td style="text-align: right">88.13</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>Meaning similarity fused by position (no model calls)</td>
+      <td style="text-align: right">97.40</td>
+      <td style="text-align: right">93.71</td>
+      <td style="text-align: right">90.46</td>
+      <td>39 / 5</td>
+    </tr>
+    <tr>
+      <td><strong>+ second read (<code class="language-plaintext highlighter-rouge">rerank: true</code>)</strong></td>
+      <td style="text-align: right"><strong>99.40</strong></td>
+      <td style="text-align: right"><strong>97.68</strong></td>
+      <td style="text-align: right"><strong>96.18</strong></td>
+      <td><strong>71 / 1 (p &lt; 0.001)</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Recall@5 by question type, before to after: counting across chats (133) 86.75 to 97.31; dates and time (133) 85.03 to 95.11; preferences (30) 86.67 to 96.67; updated facts (78) 97.44 to 99.36; user facts (70) 95.71 to 100; what the assistant said (56) 100 before and after.</p>
+
+<p>Memory Answer uses the second read under Turbo. The share of the 470 answerable questions where every labelled piece of evidence reached the answer model went from 91.91% to 94.47% with fusion and 96.17% with the second read (8 questions better, none worse). The second read adds about 1.2 s (median) and costs about $0.001, inside the existing prices. In this run 37 of 961 second reads failed after retries and kept recall’s order, which is also what production does.</p>
 
 <h3 id="on-real-prompts">On real prompts</h3>
 
@@ -1858,7 +1906,7 @@
   <li>Quote the Sibyl-Memory comparisons with their setup: LongMemEval Oracle (or LongMemEval_S), all 500 questions, the same reading model on both sides, the official <code class="language-plaintext highlighter-rouge">gpt-4o-2024-08-06</code> judge for both, and Sibyl-Memory’s own published answers (or, for S, its published architecture run by us with its public runner).</li>
   <li>Say HivemindOS scored higher. Don’t say the difference is statistically significant: it isn’t (p = 0.33 with Opus 4.6 on Oracle, p = 0.16 on S).</li>
   <li>The LongMemEval_S result is not a comparison with Sibyl-Memory’s plugin product.</li>
-  <li>Quote LongMemEval_S search accuracy as search, not answers: “the right conversation in the top 5”, with the metric named (recall@5) and “scored with sibyl.ist’s open metric code”. Don’t compare it with sibyl.ist’s withdrawn number, and don’t attribute it to the hosted API memory.</li>
+  <li>Quote LongMemEval_S search accuracy as search, not answers: “the right conversation in the top 5”, with the metric named (recall@5) and “scored with sibyl.ist’s open metric code”. Don’t compare it with sibyl.ist’s withdrawn number. Quote the desktop brain’s 98.36% and the hosted API memory’s 97.68% as separate results.</li>
   <li>Don’t turn these results into an unmeasured competitor comparison, a hosted speed guarantee, a universal token-savings promise, or a claim that pattern proposals are production-perfect.</li>
 </ul>
 

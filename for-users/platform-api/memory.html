@@ -924,7 +924,7 @@
     <tr>
       <td>Semantic recall</td>
       <td><code class="language-plaintext highlighter-rouge">memory.recall</code></td>
-      <td>Hybrid meaning and keyword matches, with the evidence used for ranking.</td>
+      <td>Hybrid meaning and keyword matches, with the evidence used for ranking. Add <code class="language-plaintext highlighter-rouge">rerank: true</code> to have the best 20 read again against the question.</td>
       <td style="text-align: right">1 credit</td>
     </tr>
     <tr>
@@ -1006,6 +1006,10 @@
   <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">aurora-memory-recall-001</span><span class="dl">"</span> <span class="p">},</span>
 <span class="p">);</span>
 </code></pre></div></div>
+
+<p>Add <code class="language-plaintext highlighter-rouge">rerank: true</code> when the order matters, for example when an agent will read only the first few results. The best 20 matches are read again against the question and the most relevant are put first. It takes about a second longer and costs the same 1 credit, and the response says <code class="language-plaintext highlighter-rouge">reranked: true</code>. Only memories saved in the standard tier are read again; private and confidential ones keep their place. If the second read cannot run, you get the usual order and <code class="language-plaintext highlighter-rouge">reranked: false</code>.</p>
+
+<p>On LongMemEval_S (500 questions, each answer among about 50 past conversations), recall puts the conversations that hold the answer in its top 5 97.7% of the time with <code class="language-plaintext highlighter-rouge">rerank: true</code>, and 93.7% without it. Both were 90.7% before September 28, 2026. <a href="../features/shared-brain-benchmarks.html#hosted-memory-search-accuracy">How it was measured</a>.</p>
 
 <p>Memory Answer returns a finished, grounded response:</p>
 
@@ -1121,7 +1125,7 @@
   </tbody>
 </table>
 
-<p>Memory Answer reads the same exchanges plus the best part of every other supporting memory, and knows today’s date, so “how long ago” and “which came first” questions work. If the conversations fit, it reads them whole. If not, the Turbo decision model orders the exchanges by how likely each is to hold the answer, and the answer reads excerpts from the best 12,000 characters. The decision model is not private, so it is used only when every exchange was written in the standard tier, and never for a private answer. Pass <code class="language-plaintext highlighter-rouge">turbo: false</code> to keep keyword order. The response’s <code class="language-plaintext highlighter-rouge">evidenceOrder</code> says which order was used (<code class="language-plaintext highlighter-rouge">keyword</code> when conversations were read whole). Neither choice changes the price.</p>
+<p>Memory Answer reads the same exchanges plus the best part of every other supporting memory, and knows today’s date, so “how long ago” and “which came first” questions work. If the conversations fit, it reads them whole. If not, the Turbo decision model orders the exchanges by how likely each is to hold the answer, and the answer reads excerpts from the best 12,000 characters. The decision model is not private, so it is used only when every exchange was written in the standard tier, and never for a private answer. Turbo also reads the best 20 candidate memories again against the question before choosing which conversations to read, the same second read as <code class="language-plaintext highlighter-rouge">rerank: true</code> in recall. Pass <code class="language-plaintext highlighter-rouge">turbo: false</code> to keep keyword order. The response’s <code class="language-plaintext highlighter-rouge">evidenceOrder</code> says which order was used (<code class="language-plaintext highlighter-rouge">keyword</code> when conversations were read whole). Neither choice changes the price.</p>
 
 <h2 id="ask-for-only-as-much-as-you-need">Ask for only as much as you need</h2>
 

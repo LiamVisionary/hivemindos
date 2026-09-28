@@ -298,6 +298,18 @@
   </thead>
   <tbody>
     <tr>
+      <td>Search: the chats that hold the answer are in <code class="language-plaintext highlighter-rouge">memory.recall</code>’s top 5 (recall@5), LongMemEval_S, <code class="language-plaintext highlighter-rouge">rerank: true</code></td>
+      <td style="text-align: right"><strong>97.68%</strong> (hit@5 99.4%)</td>
+    </tr>
+    <tr>
+      <td>The same without <code class="language-plaintext highlighter-rouge">rerank: true</code> (meaning search on)</td>
+      <td style="text-align: right"><strong>93.71%</strong></td>
+    </tr>
+    <tr>
+      <td>Evidence reaches the reading model, LongMemEval_S, <code class="language-plaintext highlighter-rouge">memory.answer</code> with meaning search and Turbo</td>
+      <td style="text-align: right"><strong>96.17%</strong></td>
+    </tr>
+    <tr>
       <td>Evidence reaches the reading model, LongMemEval_S (each answer among ~50 past chats)</td>
       <td style="text-align: right"><strong>90.6%</strong></td>
     </tr>
@@ -312,7 +324,7 @@
   </tbody>
 </table>
 
-<p>Evidence: all 500 questions (470 answerable), <code class="language-plaintext highlighter-rouge">memory.answer</code> in keyword order, no model calls. Answers: the shipped reader, graded by LongMemEval’s own judge prompts with <code class="language-plaintext highlighter-rouge">gpt-4o-mini</code>, measured on 2026-09-23 and not yet re-run on the current evidence layout.</p>
+<p>Search (measured 2026-09-28): all 500 questions through the real memory routes with the production embedding model, scored with sibyl.ist’s open LongMemEval_S metric code; before these changes recall@5 was 90.69% and the Turbo answer’s evidence 91.91%. <a href="https://hivemindos.app/docs/for-users/features/shared-brain-benchmarks.html#hosted-memory-search-accuracy">Method and per-type results</a>. Earlier evidence rows: all 500 questions (470 answerable), <code class="language-plaintext highlighter-rouge">memory.answer</code> in keyword order, no model calls. Answers: the shipped reader, graded by LongMemEval’s own judge prompts with <code class="language-plaintext highlighter-rouge">gpt-4o-mini</code>, measured on 2026-09-23 and not yet re-run on the current evidence layout.</p>
 
 <h3 id="choosing-a-reader">Choosing a reader</h3>
 
