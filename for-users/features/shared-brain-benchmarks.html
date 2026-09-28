@@ -899,7 +899,7 @@
         </div>
         <h1 id="shared-brain-memory-benchmarks">Shared Brain Memory Benchmarks</h1>
 
-<p>These benchmarks measure how well HivemindOS’s shared brain recalls the right memory, how fast it does it, and how much less text it sends to models. Latest results: September 25, 2026.</p>
+<p>These benchmarks measure how well HivemindOS’s shared brain recalls the right memory, how fast it does it, and how much less text it sends to models. Latest results: September 28, 2026.</p>
 
 <h2 id="results-at-a-glance">Results at a glance</h2>
 
@@ -921,6 +921,16 @@
       <td>LongMemEval_S against Sibyl-Memory’s architecture</td>
       <td style="text-align: right"><strong>94.3%</strong> vs 92.1%, Claude Opus 4.6 on both sides, reading about a ninth of the text</td>
       <td>All 500 questions with each answer buried among ~50 conversations; Sibyl-Memory’s own published runner, run by us, pre-registered; p = 0.16</td>
+    </tr>
+    <tr>
+      <td>LongMemEval_S search accuracy</td>
+      <td style="text-align: right"><strong>98.36% recall@5, 99.6% hit@5, 96.51% nDCG@5</strong> with the reranker (was 92.14 / 96.8 / 89.76); <strong>95.13%</strong> recall@5 with meaning search alone, no model calls</td>
+      <td>All 500 questions, each answer among ~50 conversations; scored with sibyl.ist’s open metric code; the same result in three repeat runs; better on 59 questions, worse on 3 (p &lt; 0.001)</td>
+    </tr>
+    <tr>
+      <td>Notes attached to real prompts</td>
+      <td style="text-align: right"><strong>33% fewer off-topic notes</strong> (381 to 255) and <strong>28% more useful ones</strong> (92 to 118)</td>
+      <td>100 real Claude Code prompts through the real prompt hook, a frozen copy of a live vault, 3 runs an arm, blind labels checked against human ones (95.6% agreement)</td>
     </tr>
     <tr>
       <td>LoCoMo held-out test</td>
@@ -1198,6 +1208,68 @@
 </table>
 
 <p>HivemindOS answered 26 questions Sibyl-Memory missed, and Sibyl-Memory 16 that HivemindOS missed (p = 0.16): higher, not established beyond chance, while giving the model about a ninth of the text. Deviations are disclosed with the <a href="https://github.com/LiamVisionary/hivemindos-memory-benchmarks/tree/main/longmemeval-s-sibyl-native-2026-09-25">receipt</a>: two copies of the run overlapped and answered 200 questions twice (the first answer counts), and requests refused for lack of API credit were re-sent.</p>
+
+<h2 id="longmemeval_s-search-accuracy">LongMemEval_S search accuracy</h2>
+
+<p>Answer accuracy depends on the model that reads. This measures the memory alone: for each of the 500 LongMemEval_S questions, does the brain’s recall put the conversations that hold the answer in its first five results? Each question’s ~50 conversations go into a fresh, empty brain through the same archive the app writes chats to, and the question is asked through the brain’s own full-vault recall.</p>
+
+<ul>
+  <li><strong>Metric:</strong> sibyl.ist’s open-source LongMemEval_S scorer (hyperb1iss/sibyl, <code class="language-plaintext highlighter-rouge">sibyl_core/evals/longmemeval.py</code>), ported line for line: <strong>hit@5</strong> (at least one answer conversation in the top 5), strict <strong>recall@5</strong> (the share of a question’s answer conversations in the top 5; a question with two scores 0.5 when only one is found) and <strong>nDCG@5</strong> (how high they rank). All 500 questions, abstention questions included.</li>
+  <li><strong>Before:</strong> keyword search with the brain’s weighted score, as shipped until September 28.</li>
+  <li><strong>Meaning search:</strong> every note and conversation has an embedding; recall now also ranks every conversation by meaning similarity and fuses that ranking with its own by position (reciprocal rank fusion, k = 60). Conversations are embedded when a chat goes quiet. No model calls at search time.</li>
+  <li><strong>Reranker:</strong> the top 20 are read again, question and note together, by a reranking model, and its order is used. It sends the question and note text to an outside service, so it runs only when asked (<code class="language-plaintext highlighter-rouge">hive-brain recall --rerank</code>, and the phone’s memory search through a linked desktop) and only under the same rule as the brain’s other outside calls. If it does not answer, the decision model orders the top 20 instead; if neither does, recall’s own order stands.</li>
+</ul>
+
+<table>
+  <thead>
+    <tr>
+      <th> </th>
+      <th style="text-align: right">hit@5</th>
+      <th style="text-align: right">recall@5</th>
+      <th style="text-align: right">nDCG@5</th>
+      <th>Better / worse than before</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Before</td>
+      <td style="text-align: right">96.80</td>
+      <td style="text-align: right">92.14</td>
+      <td style="text-align: right">89.76</td>
+      <td> </td>
+    </tr>
+    <tr>
+      <td>Meaning search (no model calls)</td>
+      <td style="text-align: right">98.80</td>
+      <td style="text-align: right">95.13</td>
+      <td style="text-align: right">92.44</td>
+      <td>35 / 5</td>
+    </tr>
+    <tr>
+      <td><strong>Meaning search + reranker</strong></td>
+      <td style="text-align: right"><strong>99.60</strong></td>
+      <td style="text-align: right"><strong>98.36</strong></td>
+      <td style="text-align: right"><strong>96.51</strong></td>
+      <td><strong>59 / 3 (p &lt; 0.001)</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Recall@5 by question type, before to after: counting across chats (133) 87.64 to 97.93; dates and time (133) 88.06 to 96.65; preferences (30) 83.33 to 96.67; updated facts (78) 97.44 to 100; user facts (70) and what the assistant said (56) 100 before and after.</p>
+
+<ul>
+  <li><strong>Repeats:</strong> three full runs gave the same result to the hundredth for every row above (the reranker’s scores do not vary between calls). A fourth, through the shipped code and <code class="language-plaintext highlighter-rouge">scripts/benchmark-longmemeval-s-search.mjs</code>, gave 99.60 / 98.36 / 96.52.</li>
+  <li><strong>Halves:</strong> split in two by question, the reranker scored 98.07 and 98.63 recall@5. Using its order alone, rather than fused with the decision model’s, was decided after seeing all 500, so treat that difference as a tie; both are well above before.</li>
+  <li><strong>What was tried and not shipped:</strong> the reranker’s order fused with recall’s and the decision model’s scored 97.98 (three runs; not different from the reranker alone, p 0.33 to 0.61, for a second call); recall’s order fused with the reranker’s only, 97.32; with the decision model’s only, 95.99; a larger reranker from the same family scored the same as the small one (98.15 vs 98.09, both fused with the decision model) at 2.5 times the price and was rate-limited on 157 of 500 questions.</li>
+  <li><strong>Speed and cost:</strong> recall itself took 58 ms median (170 ms p95) here, four questions at a time; the reranker adds 1.1 s median (2.0 s p95) and about $0.001 a search ($0.47 for all 500).</li>
+  <li><strong>sibyl.ist:</strong> it reported recall@5 96.97 and nDCG@5 94.63 on the same scorer and withdrew that number on September 25, 2026 (“the pre-1.0 headline run was withdrawn”); it publishes none now, so there is no current number to compare with.</li>
+</ul>
+
+<p>What this does not show: it is search, not answers (the reading model still has to use what was found); it is one public dataset of synthetic chats; and it measures the desktop brain. The hosted memory behind the SuperAgent API does not have meaning search fusion or the reranker yet.</p>
+
+<h3 id="on-real-prompts">On real prompts</h3>
+
+<p>LongMemEval is a clean test. The same week’s changes were also measured on 100 real prompts from Claude Code sessions, run through the real prompt hook against a frozen copy of a live vault, three runs an arm, each attached note labelled useful or not by a judge that agreed with human labels on 95.6% of 551 notes. Before: 92 useful and 381 off-topic notes across the 100 prompts. After (the relevance check running for Claude Code and Codex and with the app closed, follow-ups searched together with the previous reply, one note per program-written series): 118 useful (better on 30 prompts, worse on 12, p = 0.008) and 255 off-topic (fewer on 67, more on 19, p &lt; 0.001). Meaning search fusion was neutral on these prompts (120 to 117 useful, 256 to 249 off-topic); the reranker was not run on them.</p>
 
 <h2 id="locomo-held-out-test">LoCoMo held-out test</h2>
 
@@ -1786,6 +1858,7 @@
   <li>Quote the Sibyl-Memory comparisons with their setup: LongMemEval Oracle (or LongMemEval_S), all 500 questions, the same reading model on both sides, the official <code class="language-plaintext highlighter-rouge">gpt-4o-2024-08-06</code> judge for both, and Sibyl-Memory’s own published answers (or, for S, its published architecture run by us with its public runner).</li>
   <li>Say HivemindOS scored higher. Don’t say the difference is statistically significant: it isn’t (p = 0.33 with Opus 4.6 on Oracle, p = 0.16 on S).</li>
   <li>The LongMemEval_S result is not a comparison with Sibyl-Memory’s plugin product.</li>
+  <li>Quote LongMemEval_S search accuracy as search, not answers: “the right conversation in the top 5”, with the metric named (recall@5) and “scored with sibyl.ist’s open metric code”. Don’t compare it with sibyl.ist’s withdrawn number, and don’t attribute it to the hosted API memory.</li>
   <li>Don’t turn these results into an unmeasured competitor comparison, a hosted speed guarantee, a universal token-savings promise, or a claim that pattern proposals are production-perfect.</li>
 </ul>
 
@@ -1808,6 +1881,12 @@ pnpm benchmark:context-savings
 <div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">OPENROUTER_API_KEY</span><span class="o">=</span>&lt;key&gt; node scripts/benchmark-longmemeval-arms.mjs retrieve <span class="nt">--dataset</span> &lt;longmemeval_oracle.json&gt; <span class="nt">--out</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span> <span class="nt">--arms</span> product-answer-jev
 <span class="nv">OPENROUTER_API_KEY</span><span class="o">=</span>&lt;key&gt; node scripts/benchmark-longmemeval-arms.mjs answer <span class="nt">--out</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span> <span class="nt">--arms</span> product-answer-jev <span class="nt">--reader</span> anthropic/claude-sonnet-4.5 <span class="nt">--judge</span> openai/gpt-4o-2024-08-06 <span class="nt">--reader-max-tokens</span> 1500 <span class="nt">--budget-usd</span> 25
 node scripts/benchmark-longmemeval-arms.mjs summarize <span class="nt">--out</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span>
+</code></pre></div></div>
+
+<p>LongMemEval_S search accuracy uses <code class="language-plaintext highlighter-rouge">longmemeval_s_cleaned.json</code> from the same dataset. Embeddings cost about $0.10 for all 500 questions (cached after the first run); <code class="language-plaintext highlighter-rouge">--rerank</code> adds about $0.50. The command’s header lists the embedding settings it needs:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">OPENROUTER_API_KEY</span><span class="o">=</span>&lt;key&gt; node scripts/benchmark-longmemeval-s-search.mjs <span class="nt">--dataset</span> &lt;longmemeval_s_cleaned.json&gt; <span class="nt">--out</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span> <span class="nt">--rerank</span>
+node scripts/benchmark-longmemeval-s-search.mjs <span class="nt">--summarize</span> &lt;<span class="nb">dir</span><span class="o">&gt;</span>
 </code></pre></div></div>
 
 <p>The published answers and a script that recomputes the scores are in <a href="https://github.com/LiamVisionary/hivemindos-memory-benchmarks">hivemindos-memory-benchmarks</a>.</p>
