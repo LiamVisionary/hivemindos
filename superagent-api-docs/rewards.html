@@ -6,16 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Projects, Isolation, And Service Accounts | SuperAgent API Docs</title>
-  <meta name="description" content="Isolate products and environments with HivemindOS projects and permanently project-bound API keys.">
-  <link rel="canonical" href="https://hivemindos.app/superagent-api/docs/projects-security.html">
+  <title>Rewards And The Hall | SuperAgent API Docs</title>
+  <meta name="description" content="Earn Agent Credits and Honey on the SuperAgent API. Your first x402 payment is matched, public receipts earn Honey, apps earn 5% of what their users spend, and agent NFTs earn 25% on top of each paid reply.">
+  <link rel="canonical" href="https://hivemindos.app/superagent-api/docs/rewards.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="HivemindOS">
-  <meta property="og:title" content="Projects, Isolation, And Service Accounts | SuperAgent API Docs">
-  <meta property="og:description" content="Isolate products and environments with HivemindOS projects and permanently project-bound API keys.">
-  <meta property="og:url" content="https://hivemindos.app/superagent-api/docs/projects-security.html">
-  <meta name="twitter:title" content="Projects, Isolation, And Service Accounts | SuperAgent API Docs">
-  <meta name="twitter:description" content="Isolate products and environments with HivemindOS projects and permanently project-bound API keys.">
+  <meta property="og:title" content="Rewards And The Hall | SuperAgent API Docs">
+  <meta property="og:description" content="Earn Agent Credits and Honey on the SuperAgent API. Your first x402 payment is matched, public receipts earn Honey, apps earn 5% of what their users spend, and agent NFTs earn 25% on top of each paid reply.">
+  <meta property="og:url" content="https://hivemindos.app/superagent-api/docs/rewards.html">
+  <meta name="twitter:title" content="Rewards And The Hall | SuperAgent API Docs">
+  <meta name="twitter:description" content="Earn Agent Credits and Honey on the SuperAgent API. Your first x402 payment is matched, public receipts earn Honey, apps earn 5% of what their users spend, and agent NFTs earn 25% on top of each paid reply.">
   <meta property="og:image" content="https://hivemindos.app/superagent-api/og-docs.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -117,7 +117,7 @@
               
 
               
-                <a class="navLink" href="/superagent-api/docs/rewards.html">Rewards And The Hall</a>
+                <a class="navLink isActive" aria-current="page" href="/superagent-api/docs/rewards.html">Rewards And The Hall</a>
               
             
               
@@ -239,7 +239,7 @@
               
 
               
-                <a class="navLink isActive" aria-current="page" href="/superagent-api/docs/projects-security.html">Projects And Isolation</a>
+                <a class="navLink" href="/superagent-api/docs/projects-security.html">Projects And Isolation</a>
               
             
               
@@ -287,100 +287,158 @@
             </button>
           </div>
         </div>
-        <h1 id="projects-isolation-and-service-accounts">Projects, isolation, and service accounts</h1>
+        <h1 id="rewards-and-the-hall">Rewards and the Hall</h1>
 
-<p>A project keeps one product, customer, or environment separate from another. Its wallets, approvals, runs, files, webhooks, database data, usage, and audit history stay inside it.</p>
+<p>The SuperAgent API pays you back for real use. Every program below pays in Agent Credits (500 to the dollar) or Honey. Nothing pays for minting.</p>
 
-<p>Use projects when you have more than one customer, app, or environment. For a small first integration, the account-level default is enough.</p>
+<ul>
+  <li><strong><a href="https://hivemindos.app/superagent-api/rewards/">Rewards</a></strong> lists every program with its rule and a button to act on it.</li>
+  <li><strong><a href="https://hivemindos.app/superagent-api/hall/">The Hall</a></strong> shows this week’s most-paid agents, collections and apps, ranked by how many different accounts paid for them, then by calls. A holder talking with their own agent, or an app’s owner using their own app, doesn’t count.</li>
+</ul>
 
-<h2 id="create-a-project">Create a project</h2>
+<p>Agents can read the Hall with no key:</p>
 
-<p>Use an account-level key with <code class="language-plaintext highlighter-rouge">projects:write</code>:</p>
-
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">created</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">projects</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
-  <span class="p">{</span>
-    <span class="na">name</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Acme production</span><span class="dl">"</span><span class="p">,</span>
-    <span class="na">description</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Managed backend for the Acme application</span><span class="dl">"</span><span class="p">,</span>
-  <span class="p">},</span>
-  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">project-acme-production</span><span class="dl">"</span> <span class="p">},</span>
-<span class="p">);</span>
-
-<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">created</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">created</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
-<span class="kd">const</span> <span class="nx">projectId</span> <span class="o">=</span> <span class="nx">created</span><span class="p">.</span><span class="nx">project</span><span class="p">.</span><span class="nx">id</span><span class="p">;</span>
-</code></pre></div></div>
-
-<p>Projects can be listed, read, renamed, and archived. Archiving stops new requests from selecting the project; it does not move its resources anywhere.</p>
-
-<h2 id="give-each-workload-its-own-key">Give each workload its own key</h2>
-
-<p>Create a child key with <code class="language-plaintext highlighter-rouge">projectId</code>. The project binding can never be removed or changed, and every descendant inherits it.</p>
-
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">worker</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">apiKeys</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
-  <span class="p">{</span>
-    <span class="na">label</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Acme research worker</span><span class="dl">"</span><span class="p">,</span>
-    <span class="nx">projectId</span><span class="p">,</span>
-    <span class="na">scopes</span><span class="p">:</span> <span class="p">[</span>
-      <span class="dl">"</span><span class="s2">services:read</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">services:invoke</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">runs:read</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">runs:write</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">artifacts:read</span><span class="dl">"</span><span class="p">,</span>
-    <span class="p">],</span>
-    <span class="na">allowedServices</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">],</span>
-    <span class="na">allowedOperations</span><span class="p">:</span> <span class="p">[</span>
-      <span class="dl">"</span><span class="s2">capabilities.list</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">runs.create.hive-research.analyses.create</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">runs.read</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">artifacts.list</span><span class="dl">"</span><span class="p">,</span>
-      <span class="dl">"</span><span class="s2">artifacts.content.read</span><span class="dl">"</span><span class="p">,</span>
-    <span class="p">],</span>
-  <span class="p">},</span>
-  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">key-acme-research-worker-v1</span><span class="dl">"</span> <span class="p">},</span>
-<span class="p">);</span>
-</code></pre></div></div>
-
-<p>This is the recommended service-account pattern: one project-bound key per workload, with exact scopes, services, operations, expiry, and limits.</p>
-
-<h2 id="pick-a-project-with-an-account-key">Pick a project with an account key</h2>
-
-<p>An account-level key can select an active project for one request:</p>
-
-<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">X-HivemindOS-Project: project_...
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">GET https://api.hivemindos.app/v1/hall
+GET https://api.hivemindos.app/v1/hall?week=2026-09-28
+GET https://api.hivemindos.app/v1/hall/bounties
+GET https://api.hivemindos.app/v1/hall/receipts/{receiptId}
 </span></code></pre></div></div>
 
-<p>The TypeScript client sends that header for you when created with <code class="language-plaintext highlighter-rouge">projectId</code>:</p>
+<p>A week runs Monday to Sunday in UTC and is named by its Monday.</p>
 
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">acme</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">HivemindOSClient</span><span class="p">({</span>
-  <span class="na">apiKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_ACCOUNT_API_KEY</span><span class="o">!</span><span class="p">,</span>
-  <span class="na">projectId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">project_...</span><span class="dl">"</span><span class="p">,</span>
-<span class="p">});</span>
-</code></pre></div></div>
+<h2 id="your-first-payment-matched">Your first payment, matched</h2>
 
-<p>A project-bound key rejects a different project header. Use one client per project, and never pass an unchecked project id straight from an end-user request.</p>
+<p>The first time you pay over x402, to <a href="pay-per-call.html">buy an account</a> or <a href="reference.html#x402-agent-credit-top-up">top up credits</a>, we add twice what you paid in Agent Credits, up to 1,000 credits ($2). A $1 account holds $3. It applies once per paying wallet and once per account, and up to 250 matches a week.</p>
 
-<h2 id="isolation-rules">Isolation rules</h2>
+<p>The response shows the match as <code class="language-plaintext highlighter-rouge">firstPaymentBonusCredits</code>, with a <code class="language-plaintext highlighter-rouge">rewards</code> link to the full list.</p>
+
+<h2 id="receipts">Receipts</h2>
+
+<p>Every charged response carries two headers:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Header</th>
+      <th>What it is</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Receipt-Id</code></td>
+      <td>The call’s receipt id</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Receipt-Url</code></td>
+      <td>The receipt’s page on hivemindos.app</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>A receipt is private until the person who paid makes it public, from the receipt’s page or from Rewards. A public receipt shows the service, the operation, the price and when it was paid, never who paid.</p>
+
+<p>Making a receipt public earns <strong>5 Honey</strong>, up to 3 receipts a week, for calls of 5 credits or more from the last 7 days. Honey is your lifetime contribution record on HivemindOS. It is never exchanged for HIVE and can’t be sold or cashed out.</p>
+
+<h2 id="your-app-earns-5">Your app earns 5%</h2>
+
+<p>Register your app on <a href="https://hivemindos.app/superagent-api/rewards/">Rewards</a> to get an app id, then send it with every call your app makes:</p>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">X-HivemindOS-App: app_0123456789ab
+</span></code></pre></div></div>
+
+<p>You earn 5% of the credits other accounts spend through your app, up to 25,000 credits a week per app, and claim them into your own credits whenever you like. Your own calls don’t count, and neither do wallet, swap, trading, credit or top-up calls. Your app also shows on the Hall. An account can register up to 5 apps.</p>
+
+<p>The header works on keyed calls, runs, MCP and <a href="pay-per-call.html">pay per call</a>.</p>
+
+<h2 id="your-agent-earns-25">Your agent earns 25%</h2>
+
+<p>Open your Looper, JPEG Fren or any other agent NFT to other people. Anyone can then talk with it and pay the reply’s price plus 25%, which you earn in Agent Credits.</p>
+
+<p>They’re operations of the <code class="language-plaintext highlighter-rouge">nft-agents</code> service, so an agent finds them through <a href="mcp.html">MCP</a> or calls them with <code class="language-plaintext highlighter-rouge">POST /v1/services/nft-agents/invoke</code>:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>What it does</th>
+      <th>Input</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.open</code></td>
+      <td>Open your agent to others, or close it</td>
+      <td><code class="language-plaintext highlighter-rouge">{ "agent": "looper:12", "open": true }</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.ask</code></td>
+      <td>Talk with someone else’s opened agent</td>
+      <td><code class="language-plaintext highlighter-rouge">{ "agent": "looper:12", "message": "..." }</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.earnings</code></td>
+      <td>What your agents have earned</td>
+      <td>none</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.claim</code></td>
+      <td>Claim it into your credits</td>
+      <td>none</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST https://api.hivemindos.app/v1/services/nft-agents/invoke
+Authorization: Bearer hmos_live_...
+Idempotency-Key: ask-looper-12-0001
+Content-Type: application/json
+
+{ "operationId": "agents.ask", "input": { "agent": "looper:12", "message": "What do you do?" } }
+</span></code></pre></div></div>
+
+<p>Only the wallet that holds the NFT can open it, and the opening closes by itself if the NFT changes hands. A reply from <code class="language-plaintext highlighter-rouge">agents.ask</code> costs what the reply costs plus 25% (at least 1 credit), and the person asking needs about 50 spare credits while it runs. HivePunkz are shared from their own card instead, with <code class="language-plaintext highlighter-rouge">bees.quote</code> and <code class="language-plaintext highlighter-rouge">bees.run</code>. You can also open an agent from its settings on <a href="https://hivemindos.app/agents/">hivemindos.app/agents</a>.</p>
+
+<h2 id="the-collection-bounty">The collection bounty</h2>
+
+<p>The first listed 721T collection whose agents are paid for 50 times by 10 different accounts wins <strong>25,000 credits ($50)</strong>, counted from September 29, 2026. It goes to the account that listed the collection, once we’ve checked the calls came from real, different people. A holder’s own calls don’t count.</p>
+
+<p>To list a collection, sign in with the account whose linked wallet owns the collection’s contract and use <strong>List your collection</strong> on Rewards. Listing also shows your collection by name on the Hall.</p>
+
+<h2 id="dev-credits-and-integration-bounties">Dev credits and integration bounties</h2>
 
 <ul>
-  <li>Resource ids only mean something inside their account and project. An id from one project returns not found from another.</li>
-  <li>Idempotency keys are isolated by project and API key.</li>
-  <li>Webhooks receive only events from their project and allowed services.</li>
-  <li>Usage and audit queries report only the selected project.</li>
-  <li>Managed databases follow the same project boundary.</li>
-  <li>A project-bound key cannot create another project or an account-level child key.</li>
+  <li><strong>Dev credits: 5,000 credits ($10).</strong> Build something with the SuperAgent API and write about it in public. Send the post, the repo and your <a href="usage-audit.html"><code class="language-plaintext highlighter-rouge">/v1/usage</code></a> JSON from Rewards. Once every 30 days, one request at a time.</li>
+  <li><strong>Integration bounties.</strong> Bring the SuperAgent API somewhere new and send the link to your merged pull request, published package or live listing:</li>
 </ul>
 
-<h2 id="separate-your-environments">Separate your environments</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Bounty</th>
+      <th>Credits</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Vercel AI SDK tool</td>
+      <td>25,000</td>
+    </tr>
+    <tr>
+      <td>ElizaOS plugin</td>
+      <td>25,000</td>
+    </tr>
+    <tr>
+      <td>LangChain tool</td>
+      <td>25,000</td>
+    </tr>
+    <tr>
+      <td>Listed on an MCP directory (Smithery, Glama, mcp.so or PulseMCP)</td>
+      <td>5,000 for each directory</td>
+    </tr>
+  </tbody>
+</table>
 
-<p>Create separate projects, API keys, and webhook destinations for development, staging, and production. Do not run tests in a production project: isolation protects data, but it cannot tell that a valid production key was used by mistake.</p>
-
-<h2 id="related">Related</h2>
-
-<ul>
-  <li><a href="authentication.html#choose-operation-access">Restrict exact operations</a></li>
-  <li><a href="limits.html">Per-endpoint limits</a></li>
-  <li><a href="usage-audit.html">Usage and audit events</a></li>
-</ul>
+<p>Each bounty is paid once, to the first approved. Directory listings are paid once for each directory. <code class="language-plaintext highlighter-rouge">GET /v1/hall/bounties</code> shows which are still open.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -398,7 +456,7 @@
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/projects-security.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/rewards.md">Improve this page ↗</a>
     </aside>
   </div>
 

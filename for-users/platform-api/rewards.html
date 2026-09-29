@@ -6,16 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>HivemindOS SuperAgent API | HivemindOS Docs</title>
-  <meta name="description" content="Use HivemindOS managed agents, apps, data, wallets, trading, and workflows as the backend for another product.">
-  <link rel="canonical" href="https://hivemindos.app/docs/for-users/platform-api.html">
+  <title>Rewards And The Hall | HivemindOS Docs</title>
+  <meta name="description" content="Earn Agent Credits and Honey on the SuperAgent API. Your first x402 payment is matched, public receipts earn Honey, apps earn 5% of what their users spend, and agent NFTs earn 25% on top of each paid reply.">
+  <link rel="canonical" href="https://hivemindos.app/docs/for-users/platform-api/rewards.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="HivemindOS">
-  <meta property="og:title" content="HivemindOS SuperAgent API | HivemindOS Docs">
-  <meta property="og:description" content="Use HivemindOS managed agents, apps, data, wallets, trading, and workflows as the backend for another product.">
-  <meta property="og:url" content="https://hivemindos.app/docs/for-users/platform-api.html">
-  <meta name="twitter:title" content="HivemindOS SuperAgent API | HivemindOS Docs">
-  <meta name="twitter:description" content="Use HivemindOS managed agents, apps, data, wallets, trading, and workflows as the backend for another product.">
+  <meta property="og:title" content="Rewards And The Hall | HivemindOS Docs">
+  <meta property="og:description" content="Earn Agent Credits and Honey on the SuperAgent API. Your first x402 payment is matched, public receipts earn Honey, apps earn 5% of what their users spend, and agent NFTs earn 25% on top of each paid reply.">
+  <meta property="og:url" content="https://hivemindos.app/docs/for-users/platform-api/rewards.html">
+  <meta name="twitter:title" content="Rewards And The Hall | HivemindOS Docs">
+  <meta name="twitter:description" content="Earn Agent Credits and Honey on the SuperAgent API. Your first x402 payment is matched, public receipts earn Honey, apps earn 5% of what their users spend, and agent NFTs earn 25% on top of each paid reply.">
   <meta property="og:image" content="https://hivemindos.app/superagent-api/og-docs.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -49,7 +49,7 @@
         
           <a href="/docs/for-users/">User Guide</a>
         
-          <a aria-current="page" href="/docs/for-users/platform-api.html">API</a>
+          <a href="/docs/for-users/platform-api.html">API</a>
         
           <a href="/docs/for-users/troubleshooting-cookbook.html">Help</a>
         
@@ -688,14 +688,14 @@
                   <summary>SuperAgent API</summary>
                   <div class="navChildren">
                     
-                      <a class="navLink isActive" aria-current="page" href="/docs/for-users/platform-api.html">Overview</a>
+                      <a class="navLink" href="/docs/for-users/platform-api.html">Overview</a>
                     
                     
                       <a class="navLink" href="/docs/for-users/platform-api/agent-setup.html">Agent Setup</a>
                     
                       <a class="navLink" href="/docs/for-users/platform-api/pay-per-call.html">Pay Per Call With x402</a>
                     
-                      <a class="navLink" href="/docs/for-users/platform-api/rewards.html">Rewards And The Hall</a>
+                      <a class="navLink isActive" aria-current="page" href="/docs/for-users/platform-api/rewards.html">Rewards And The Hall</a>
                     
                       <a class="navLink" href="/docs/for-users/platform-api/mcp.html">Connect With MCP</a>
                     
@@ -899,222 +899,158 @@
             </button>
           </div>
         </div>
-        <div class="heroPanel">
-  <div>
-    <p class="eyebrow">SuperAgent API</p>
+        <h1 id="rewards-and-the-hall">Rewards and the Hall</h1>
 
-    <h1 id="build-with-the-hivemindos-backend">Build with the HivemindOS backend</h1>
+<p>The SuperAgent API pays you back for real use. Every program below pays in Agent Credits (500 to the dollar) or Honey. Nothing pays for minting.</p>
 
-    <p class="lede">Add agents, memory, data, wallets, trading, media, and workflows to your own product.</p>
+<ul>
+  <li><strong><a href="https://hivemindos.app/superagent-api/rewards/">Rewards</a></strong> lists every program with its rule and a button to act on it.</li>
+  <li><strong><a href="https://hivemindos.app/superagent-api/hall/">The Hall</a></strong> shows this week’s most-paid agents, collections and apps, ranked by how many different accounts paid for them, then by calls. A holder talking with their own agent, or an app’s owner using their own app, doesn’t count.</li>
+</ul>
 
-    <div class="actionRow">
-  <a href="#quickstart">Make your first call</a>
-  <a href="platform-api/explorer.html">Open the API reference</a>
-</div>
-  </div>
-</div>
+<p>Agents can read the Hall with no key:</p>
 
-<p>The HivemindOS SuperAgent API lets your server use managed HivemindOS services. Your app sends a request, HivemindOS does the work, and your app gets the result. Paid work uses the same Agent Credit balance as the rest of HivemindOS.</p>
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">GET https://api.hivemindos.app/v1/hall
+GET https://api.hivemindos.app/v1/hall?week=2026-09-28
+GET https://api.hivemindos.app/v1/hall/bounties
+GET https://api.hivemindos.app/v1/hall/receipts/{receiptId}
+</span></code></pre></div></div>
 
-<p>It does <strong>not</strong> control a user’s computer or open a desktop session.</p>
+<p>A week runs Monday to Sunday in UTC and is named by its Monday.</p>
 
-<!-- hivemindos-docs-only -->
-<div class="plainAnswer">
-  <strong>Its own docs site</strong>
-  <p>These pages are also published as a standalone developer site at <a href="https://hivemindos.app/superagent-api/docs/">hivemindos.app/superagent-api/docs</a>, with an interactive reference built from the live OpenAPI document.</p>
-</div>
-<!-- /hivemindos-docs-only -->
+<h2 id="your-first-payment-matched">Your first payment, matched</h2>
+
+<p>The first time you pay over x402, to <a href="pay-per-call.html">buy an account</a> or <a href="reference.html#x402-agent-credit-top-up">top up credits</a>, we add twice what you paid in Agent Credits, up to 1,000 credits ($2). A $1 account holds $3. It applies once per paying wallet and once per account, and up to 250 matches a week.</p>
+
+<p>The response shows the match as <code class="language-plaintext highlighter-rouge">firstPaymentBonusCredits</code>, with a <code class="language-plaintext highlighter-rouge">rewards</code> link to the full list.</p>
+
+<h2 id="receipts">Receipts</h2>
+
+<p>Every charged response carries two headers:</p>
 
 <table>
   <thead>
     <tr>
-      <th>Resource</th>
-      <th>Address</th>
+      <th>Header</th>
+      <th>What it is</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>API base</td>
-      <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1</code></td>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Receipt-Id</code></td>
+      <td>The call’s receipt id</td>
     </tr>
     <tr>
-      <td>Private and confidential bases</td>
-      <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/private</code> and <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/v1/confidential</code> (<a href="platform-api/privacy.html">what they include</a>)</td>
-    </tr>
-    <tr>
-      <td>Remote MCP</td>
-      <td><a href="https://api.hivemindos.app/mcp"><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/mcp</code></a></td>
-    </tr>
-    <tr>
-      <td>OpenAPI 3.1 contract</td>
-      <td><a href="https://api.hivemindos.app/openapi.json"><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/openapi.json</code></a></td>
-    </tr>
-    <tr>
-      <td>TypeScript package</td>
-      <td><code class="language-plaintext highlighter-rouge">@hivemindos/sdk</code></td>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Receipt-Url</code></td>
+      <td>The receipt’s page on hivemindos.app</td>
     </tr>
   </tbody>
 </table>
 
-<h2 id="quickstart">Quickstart</h2>
+<p>A receipt is private until the person who paid makes it public, from the receipt’s page or from Rewards. A public receipt shows the service, the operation, the price and when it was paid, never who paid.</p>
 
-<h3 id="1-get-an-api-key">1. Get an API key</h3>
+<p>Making a receipt public earns <strong>5 Honey</strong>, up to 3 receipts a week, for calls of 5 credits or more from the last 7 days. Honey is your lifetime contribution record on HivemindOS. It is never exchanged for HIVE and can’t be sold or cashed out.</p>
 
-<p>Pick the path that fits you:</p>
+<h2 id="your-app-earns-5">Your app earns 5%</h2>
 
-<ul>
-  <li><strong>Let your coding agent do it.</strong> On <a href="https://hivemindos.app/superagent-api/#setup">hivemindos.app/superagent-api</a>, press <strong>Copy</strong> under “Set it up with your agent” and send it to the agent working on your project. You open one link to sign in, add credits and approve. The agent saves the key in your project’s env file and checks it works. See <a href="platform-api/agent-setup.html">agent setup</a>.</li>
-  <li><strong>Make one yourself</strong> in the <a href="https://hivemindos.app/superagent-api/console/#keys">console</a>.</li>
-  <li><strong>Create one in code</strong> with an existing HivemindOS credit token (shown below).</li>
-  <li><strong>Skip the account.</strong> An agent with an x402 wallet can <a href="platform-api/pay-per-call.html">pay for a single call</a> and is charged only if the call succeeds.</li>
-  <li><strong>Earn while you build.</strong> Your first x402 payment is matched, your app earns 5% of what its users spend, and your agent NFTs earn 25% on top of each reply people pay for. See <a href="platform-api/rewards.html">rewards and the Hall</a>.</li>
-</ul>
+<p>Register your app on <a href="https://hivemindos.app/superagent-api/rewards/">Rewards</a> to get an app id, then send it with every call your app makes:</p>
 
-<p>Keys begin with <code class="language-plaintext highlighter-rouge">hmos_live_</code>. Keep them on your server: never put one in a browser bundle, mobile app, public repository, log, or analytics event.</p>
-
-<p>To create a key in code, install the SDK:</p>
-
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>npm <span class="nb">install </span>https://github.com/LiamVisionary/hivemindos-sdk/releases/download/v1.5.0/hivemindos-sdk-1.5.0.tgz
-</code></pre></div></div>
-
-<p>This installs the built SDK from its GitHub release. It works with npm, pnpm and yarn, and is imported as <code class="language-plaintext highlighter-rouge">@hivemindos/sdk</code>. The API also works with any HTTPS client.</p>
-
-<p>This key can list services and run research, and nothing else:</p>
-
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">createHivemindOSApiKey</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@hivemindos/sdk</span><span class="dl">"</span><span class="p">;</span>
-
-<span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">createHivemindOSApiKey</span><span class="p">({</span>
-  <span class="na">creditToken</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_CREDIT_TOKEN</span><span class="o">!</span><span class="p">,</span>
-  <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">my-backend-key-v1</span><span class="dl">"</span><span class="p">,</span>
-  <span class="na">label</span><span class="p">:</span> <span class="dl">"</span><span class="s2">My backend</span><span class="dl">"</span><span class="p">,</span>
-  <span class="na">scopes</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">services:read</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">services:invoke</span><span class="dl">"</span><span class="p">],</span>
-  <span class="na">allowedServices</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">],</span>
-  <span class="na">allowedOperations</span><span class="p">:</span> <span class="p">[</span>
-    <span class="dl">"</span><span class="s2">services.list</span><span class="dl">"</span><span class="p">,</span>
-    <span class="dl">"</span><span class="s2">capabilities.list</span><span class="dl">"</span><span class="p">,</span>
-    <span class="dl">"</span><span class="s2">actions.list</span><span class="dl">"</span><span class="p">,</span>
-    <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">,</span>
-  <span class="p">],</span>
-  <span class="na">limits</span><span class="p">:</span> <span class="p">{</span>
-    <span class="dl">"</span><span class="s2">services.invoke.hive-research.analyses.create</span><span class="dl">"</span><span class="p">:</span> <span class="p">{</span>
-      <span class="na">requestsPerMinute</span><span class="p">:</span> <span class="mi">60</span><span class="p">,</span>
-      <span class="na">maxConcurrent</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
-    <span class="p">},</span>
-  <span class="p">},</span>
-<span class="p">});</span>
-
-<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">result</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
-
-<span class="c1">// The full secret is returned only now. Save it in your secret manager.</span>
-<span class="kd">const</span> <span class="nx">apiKey</span> <span class="o">=</span> <span class="nx">result</span><span class="p">.</span><span class="nx">secret</span><span class="p">;</span>
-</code></pre></div></div>
-
-<p><code class="language-plaintext highlighter-rouge">allowedServices</code> and <code class="language-plaintext highlighter-rouge">allowedOperations</code> limit what the key can reach. See <a href="platform-api/authentication.html">authentication and API keys</a> for every option.</p>
-
-<h3 id="2-make-your-first-call">2. Make your first call</h3>
-
-<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">HivemindOSClient</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@hivemindos/sdk</span><span class="dl">"</span><span class="p">;</span>
-
-<span class="kd">const</span> <span class="nx">hive</span> <span class="o">=</span> <span class="k">new</span> <span class="nx">HivemindOSClient</span><span class="p">({</span>
-  <span class="na">apiKey</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_API_KEY</span><span class="o">!</span><span class="p">,</span>
-  <span class="na">projectId</span><span class="p">:</span> <span class="nx">process</span><span class="p">.</span><span class="nx">env</span><span class="p">.</span><span class="nx">HIVEMINDOS_PROJECT_ID</span><span class="p">,</span> <span class="c1">// optional</span>
-<span class="p">});</span>
-
-<span class="kd">const</span> <span class="nx">catalog</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">list</span><span class="p">();</span>
-<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">catalog</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">catalog</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
-
-<span class="kd">const</span> <span class="nx">research</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
-  <span class="dl">"</span><span class="s2">hive-research</span><span class="dl">"</span><span class="p">,</span>
-  <span class="dl">"</span><span class="s2">analyses.create</span><span class="dl">"</span><span class="p">,</span>
-  <span class="p">{</span> <span class="na">question</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Summarize the strongest evidence for this thesis.</span><span class="dl">"</span> <span class="p">},</span>
-  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">research-thesis-001</span><span class="dl">"</span> <span class="p">},</span>
-<span class="p">);</span>
-
-<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">research</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">research</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
-</code></pre></div></div>
-
-<p>Over plain HTTPS, send the key as a bearer token:</p>
-
-<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">Authorization: Bearer hmos_live_...
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">X-HivemindOS-App: app_0123456789ab
 </span></code></pre></div></div>
 
-<p>Every mutation and spending action also needs a unique <code class="language-plaintext highlighter-rouge">Idempotency-Key</code> header. A retry with the same key and input returns the first result instead of repeating the work.</p>
+<p>You earn 5% of the credits other accounts spend through your app, up to 25,000 credits a week per app, and claim them into your own credits whenever you like. Your own calls don’t count, and neither do wallet, swap, trading, credit or top-up calls. Your app also shows on the Hall. An account can register up to 5 apps.</p>
 
-<h3 id="3-read-the-result">3. Read the result</h3>
+<p>The header works on keyed calls, runs, MCP and <a href="pay-per-call.html">pay per call</a>.</p>
 
-<p>Every JSON response has the same shape. Check <code class="language-plaintext highlighter-rouge">ok</code> first:</p>
+<h2 id="your-agent-earns-25">Your agent earns 25%</h2>
 
-<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w"> </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nl">"services"</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="w"> </span><span class="p">}</span><span class="w">
+<p>Open your Looper, JPEG Fren or any other agent NFT to other people. Anyone can then talk with it and pay the reply’s price plus 25%, which you earn in Agent Credits.</p>
+
+<p>They’re operations of the <code class="language-plaintext highlighter-rouge">nft-agents</code> service, so an agent finds them through <a href="mcp.html">MCP</a> or calls them with <code class="language-plaintext highlighter-rouge">POST /v1/services/nft-agents/invoke</code>:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Operation</th>
+      <th>What it does</th>
+      <th>Input</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.open</code></td>
+      <td>Open your agent to others, or close it</td>
+      <td><code class="language-plaintext highlighter-rouge">{ "agent": "looper:12", "open": true }</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.ask</code></td>
+      <td>Talk with someone else’s opened agent</td>
+      <td><code class="language-plaintext highlighter-rouge">{ "agent": "looper:12", "message": "..." }</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.earnings</code></td>
+      <td>What your agents have earned</td>
+      <td>none</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.claim</code></td>
+      <td>Claim it into your credits</td>
+      <td>none</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">POST https://api.hivemindos.app/v1/services/nft-agents/invoke
+Authorization: Bearer hmos_live_...
+Idempotency-Key: ask-looper-12-0001
+Content-Type: application/json
+
+{ "operationId": "agents.ask", "input": { "agent": "looper:12", "message": "What do you do?" } }
 </span></code></pre></div></div>
 
-<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w"> </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="nl">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"This API key does not have access to that managed service."</span><span class="w"> </span><span class="p">}</span><span class="w">
-</span></code></pre></div></div>
+<p>Only the wallet that holds the NFT can open it, and the opening closes by itself if the NFT changes hands. A reply from <code class="language-plaintext highlighter-rouge">agents.ask</code> costs what the reply costs plus 25% (at least 1 credit), and the person asking needs about 50 spare credits while it runs. HivePunkz are shared from their own card instead, with <code class="language-plaintext highlighter-rouge">bees.quote</code> and <code class="language-plaintext highlighter-rouge">bees.run</code>. You can also open an agent from its settings on <a href="https://hivemindos.app/agents/">hivemindos.app/agents</a>.</p>
 
-<p>A failure may also include <code class="language-plaintext highlighter-rouge">code</code>, <code class="language-plaintext highlighter-rouge">operationId</code>, <code class="language-plaintext highlighter-rouge">metric</code>, and <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code> so your app can decide what to do next. See <a href="platform-api/runs-webhooks.html#error-envelope">errors</a>.</p>
+<h2 id="the-collection-bounty">The collection bounty</h2>
 
-<h3 id="or-connect-an-agent-with-mcp">Or connect an agent with MCP</h3>
+<p>The first listed 721T collection whose agents are paid for 50 times by 10 different accounts wins <strong>25,000 credits ($50)</strong>, counted from September 29, 2026. It goes to the account that listed the collection, once we’ve checked the calls came from real, different people. A holder’s own calls don’t count.</p>
 
-<p>Add <code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/mcp</code> as a remote Streamable HTTP server and send the key in a protected <code class="language-plaintext highlighter-rouge">Authorization</code> header. The agent gets four tools: list services, search allowed actions, read, and act. See <a href="platform-api/mcp.html">Connect an agent with MCP</a>.</p>
+<p>To list a collection, sign in with the account whose linked wallet owns the collection’s contract and use <strong>List your collection</strong> on Rewards. Listing also shows your collection by name on the Hall.</p>
 
-<p>If your agent supports reusable skills, download <a href="https://hivemindos.app/superagent-api/SKILL.md">the SuperAgent API <code class="language-plaintext highlighter-rouge">SKILL.md</code></a> so it can keep managing keys, limits, funding, and tests.</p>
-
-<h2 id="how-payment-works">How payment works</h2>
+<h2 id="dev-credits-and-integration-bounties">Dev credits and integration bounties</h2>
 
 <ul>
-  <li>Every key belongs to one HivemindOS account, and paid work uses that account’s Agent Credits. A request cannot charge another account or set its own price.</li>
-  <li>Wallet assets are separate: Agent Credits pay for managed work, while wallet assets pay transfer amounts, network fees, and trades.</li>
-  <li>Managed database capacity follows the account’s eligible plan.</li>
-  <li>Read the current price with <code class="language-plaintext highlighter-rouge">GET /pricing</code> and the balance with <code class="language-plaintext highlighter-rouge">GET /credits/balance</code>. Show the returned final or maximum price before paid work starts.</li>
-  <li>A key with <code class="language-plaintext highlighter-rouge">credits:write</code> can buy more Agent Credits with x402 through <code class="language-plaintext highlighter-rouge">POST /credits/x402/top-up</code>. HivemindOS fixes the recipient, network, asset, price, and credited account on the server. See the <a href="platform-api/reference.html#x402-agent-credit-top-up">reference</a>.</li>
+  <li><strong>Dev credits: 5,000 credits ($10).</strong> Build something with the SuperAgent API and write about it in public. Send the post, the repo and your <a href="usage-audit.html"><code class="language-plaintext highlighter-rouge">/v1/usage</code></a> JSON from Rewards. Once every 30 days, one request at a time.</li>
+  <li><strong>Integration bounties.</strong> Bring the SuperAgent API somewhere new and send the link to your merged pull request, published package or live listing:</li>
 </ul>
 
-<h2 id="choose-what-to-build">Choose what to build</h2>
+<table>
+  <thead>
+    <tr>
+      <th>Bounty</th>
+      <th>Credits</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Vercel AI SDK tool</td>
+      <td>25,000</td>
+    </tr>
+    <tr>
+      <td>ElizaOS plugin</td>
+      <td>25,000</td>
+    </tr>
+    <tr>
+      <td>LangChain tool</td>
+      <td>25,000</td>
+    </tr>
+    <tr>
+      <td>Listed on an MCP directory (Smithery, Glama, mcp.so or PulseMCP)</td>
+      <td>5,000 for each directory</td>
+    </tr>
+  </tbody>
+</table>
 
-<div class="docGrid">
-  <div class="docCard">
-    <h3>Give your app an agent</h3>
-    <p>Run research, swarms, mini apps, media work, publishing, analytics, and scheduled workflows.</p>
-    <a href="platform-api/services.html">Browse managed services</a>
-  </div>
-  <div class="docCard">
-    <h3>Add long-term memory</h3>
-    <p>Save facts and decisions, find them later, and answer from them.</p>
-    <a href="platform-api/memory.html">Use managed memory</a>
-  </div>
-  <div class="docCard">
-    <h3>Store application data</h3>
-    <p>Provision a managed database, then read and change records.</p>
-    <a href="platform-api/databases.html">Use managed databases</a>
-  </div>
-  <div class="docCard">
-    <h3>Build safer money flows</h3>
-    <p>Create managed wallets, ask for approvals, and run bounded transfers, signatures, trades, and any-token swaps.</p>
-    <a href="platform-api/wallets-trading.html">Use wallets and trading</a>
-  </div>
-  <div class="docCard">
-    <h3>Run work in the background</h3>
-    <p>Track long jobs, save their results, and get signed webhooks.</p>
-    <a href="platform-api/runs-webhooks.html">Use runs and webhooks</a>
-  </div>
-  <div class="docCard">
-    <h3>Control what a key can do</h3>
-    <p>Allow only selected services and actions, then set request and spending limits.</p>
-    <a href="platform-api/authentication.html">Create a restricted key</a>
-  </div>
-</div>
-
-<p>The catalog spans 33 stable service ids. The authenticated service catalog and capability registry are the source of truth: each capability has a stable operation id, access selector, method, path, approval mode, and run support.</p>
-
-<h2 id="all-guides">All guides</h2>
-
-<ul>
-  <li>Start: <a href="platform-api/agent-setup.html">agent setup</a>, <a href="platform-api/authentication.html">authentication and API keys</a>, <a href="platform-api/pay-per-call.html">pay per call with x402</a>, <a href="platform-api/rewards.html">rewards and the Hall</a>, <a href="platform-api/mcp.html">MCP</a>, <a href="platform-api/limits.html">per-endpoint limits</a></li>
-  <li>Build: <a href="platform-api/services.html">services</a>, <a href="platform-api/answer-engine.html">AI web search</a>, <a href="platform-api/memory.html">memory</a>, <a href="platform-api/benchmarks.html">memory benchmarks</a>, <a href="platform-api/capabilities-agents.html">capabilities and agents</a>, <a href="platform-api/compute-faucet.html">Hive Compute and testnet assets</a>, <a href="platform-api/files-connections.html">files and connections</a>, <a href="platform-api/databases.html">databases</a>, <a href="platform-api/wallets-trading.html">wallets and trading</a>, <a href="platform-api/runs-webhooks.html">runs and webhooks</a></li>
-  <li>Operate: <a href="platform-api/privacy.html">privacy tiers</a>, <a href="platform-api/projects-security.html">projects and isolation</a>, <a href="platform-api/usage-audit.html">usage and audit</a></li>
-  <li>Reference: <a href="platform-api/reference.html">endpoints and scopes</a></li>
-</ul>
-
-<p>The <a href="https://api.hivemindos.app/openapi.json">OpenAPI contract</a> is authoritative for request and response schemas.</p>
+<p>Each bounty is paid once, to the first approved. Directory listings are paid once for each directory. <code class="language-plaintext highlighter-rouge">GET /v1/hall/bounties</code> shows which are still open.</p>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
           <a class="pageNavCard pageNavPrev" data-page-prev href="#">
@@ -1132,7 +1068,7 @@
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/platform-api/rewards.md">Improve this page ↗</a>
     </aside>
   </div>
 
