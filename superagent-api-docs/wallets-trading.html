@@ -297,7 +297,7 @@
 
 <h2 id="before-you-start">Before you start</h2>
 
-<p>Use separate keys for proposing and approving, so a key that can execute an action cannot also approve it:</p>
+<p>Use separate keys for proposing and approving, so a key that can execute an action cannot also approve it. An approval must come from the account owner or from a key outside the requesting key’s family: never the key that asked, a key it created, the key that created it, or a sibling (<code class="language-plaintext highlighter-rouge">403</code> with <code class="language-plaintext highlighter-rouge">approval_requires_another_principal</code>). Keep the reviewer key under its own root key:</p>
 
 <table>
   <thead>

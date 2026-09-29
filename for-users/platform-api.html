@@ -967,14 +967,14 @@
   <li><strong>Make one yourself</strong> in the <a href="https://hivemindos.app/superagent-api/console/#keys">console</a>.</li>
   <li><strong>Create one in code</strong> with an existing HivemindOS credit token (shown below).</li>
   <li><strong>Skip the account.</strong> An agent with an x402 wallet can <a href="platform-api/pay-per-call.html">pay for a single call</a> and is charged only if the call succeeds.</li>
-  <li><strong>Earn while you build.</strong> Your first x402 payment is matched, your app earns 5% of what its users spend, and your agent NFTs earn 25% on top of each reply people pay for. See <a href="platform-api/rewards.html">rewards and the Hall</a>.</li>
+  <li><strong>Earn while you build.</strong> Your first x402 payment is matched, your app earns 5% of what its users spend, and your agent NFTs can earn a fee you set on each reply people get from them (free to chat unless you set one). See <a href="platform-api/rewards.html">rewards and the Hall</a>.</li>
 </ul>
 
 <p>Keys begin with <code class="language-plaintext highlighter-rouge">hmos_live_</code>. Keep them on your server: never put one in a browser bundle, mobile app, public repository, log, or analytics event.</p>
 
 <p>To create a key in code, install the SDK:</p>
 
-<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>npm <span class="nb">install </span>https://github.com/LiamVisionary/hivemindos-sdk/releases/download/v1.5.0/hivemindos-sdk-1.5.0.tgz
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>npm <span class="nb">install </span>https://github.com/LiamVisionary/hivemindos-sdk/releases/download/v1.6.0/hivemindos-sdk-1.6.0.tgz
 </code></pre></div></div>
 
 <p>This installs the built SDK from its GitHub release. It works with npm, pnpm and yarn, and is imported as <code class="language-plaintext highlighter-rouge">@hivemindos/sdk</code>. The API also works with any HTTPS client.</p>

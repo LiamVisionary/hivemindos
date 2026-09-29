@@ -3,7 +3,7 @@ format_version: 1
 content_format: Markdown with embedded HTML
 scope: Every public Markdown page under docs/for-investors
 document_count: 11
-generated_at: 2026-09-29T07:48:10+00:00
+generated_at: 2026-09-29T18:21:01+00:00
 usage: Treat each BEGIN/END DOCUMENT block as one source document. Preserve source_path attribution when citing or summarizing claims.
 
 
@@ -331,7 +331,7 @@ Exact service prices, cost floors, eligible products, and tier-level discount ca
 
 ## Revenue Policy Is Separate From Staking
 
-HivemindOS allocates 15% of each service's server-owned allocation basis (realized margin for most managed services, recognized platform revenue for others) to HIVE buybacks. A separate exact 15% goes to the company treasury. The treasury does not fund buybacks, and staked principal funds neither. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). HivemindOS does not burn HIVE.
+HivemindOS allocates 15% of each service's server-owned allocation basis (realized margin for most managed services, recognized platform revenue for others) to HIVE buybacks. A separate exact 15% goes to the company treasury. The treasury does not fund buybacks, and staked principal funds neither. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). Since 2026-09-30, the HIVE each purchase buys is burned in a separate transaction on the same ledger.
 
 Buybacks and treasury allocations give holders and stakers no payout, ownership, governance right, price promise, or claim. See [Revenue Allocations And Treasury Boundaries](treasury-reserve-and-seasonal-programs.html).
 
@@ -419,7 +419,7 @@ The addresses, balances, exclusions, and method are in the machine-readable mani
 
 The [HIVE staking contract](https://basescan.org/address/0x26c7121e41e779327adbd5682646dc5deb764539#code) held 2.213947706948184371 billion actively staked HIVE at the snapshot block and was not paused. Staking is non-custodial and pays no yield. It supplies community status, access signals, member usage pricing on participating apps, and Honey multipliers.
 
-The [HIVE Buyback Ledger](https://hivemindos.app/buybacks/) publishes confirmed HIVE purchases. These purchases use the separate 15% buyback allocation rather than the company treasury. HivemindOS does not destroy purchased HIVE. A buyback creates no holder return, staking payout, company ownership, price floor, or claim on revenue.
+The [HIVE Buyback Ledger](https://hivemindos.app/buybacks/) publishes confirmed HIVE purchases. These purchases use the separate 15% buyback allocation rather than the company treasury. Since 2026-09-30, the HIVE each purchase buys is burned in a separate transaction published on the same ledger; purchases made before that date were not. A buyback creates no holder return, staking payout, company ownership, price floor, or claim on revenue.
 
 ## Verification boundary
 
@@ -498,7 +498,8 @@ server-owned per-service allocation basis
 - A separate exact 15% of the same server-owned allocation basis goes to the company treasury.
 - The treasury does not fund HIVE buybacks. Each rail has its own accounting and receipts.
 - No user wallet, staked principal, local setting, or client revenue claim can choose either amount or recipient.
-- Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). Pending or failed purchases do not count. HivemindOS does not burn HIVE.
+- Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). Pending or failed purchases do not count.
+- Since 2026-09-30, the HIVE each confirmed purchase buys is burned: the exact amount is sent to `0x000000000000000000000000000000000000dEaD` in a separate transaction, published on the same ledger. Purchases made before that date were not burned.
 - Hive Research's first paid production run produced one confirmed HIVE purchase on Base under its earlier app-specific policy. That receipt stays public; new Hive Research revenue follows the platform-wide 15% buyback allocation.
 
 The treasury allocation remains company property. It creates no holder or staker ownership, redemption right, revenue share, governance right, or claim on treasury assets. Buybacks do not promise a token price, liquidity, profit, or return. More detail: [Revenue Allocations And Treasury Boundaries](treasury-reserve-and-seasonal-programs.html).
@@ -615,7 +616,7 @@ Operating revenue is subscriptions, hosted products, managed-execution gross pro
 
 HivemindOS allocates 15% to HIVE buybacks and a separate 15% to the company treasury. Both are computed on a server-owned per-service allocation basis published in the official commercial catalog: realized margin for most managed services, recognized platform revenue for others. The treasury does not fund buybacks, and the tokenomics policy assigns no fixed use to the remainder.
 
-The live [HIVE Buyback Ledger](https://hivemindos.app/buybacks/) is the source of truth for completed purchases. HivemindOS does not burn HIVE. Buybacks create no staking payout, ownership right, treasury claim, or price promise. Details: [Revenue Allocations And Treasury Boundaries](treasury-reserve-and-seasonal-programs.html).
+The live [HIVE Buyback Ledger](https://hivemindos.app/buybacks/) is the source of truth for completed purchases and burns. Since 2026-09-30, the HIVE each buyback purchase buys is burned: it is sent to the burn address in a separate transaction, published on the same ledger. Purchases made before that date were not burned. Buybacks and burns create no staking payout, ownership right, treasury claim, or price promise. Details: [Revenue Allocations And Treasury Boundaries](treasury-reserve-and-seasonal-programs.html).
 
 ## Honey and HIVE
 
@@ -893,7 +894,7 @@ Users can read how these work in the [Trading guide](../../for-users/trading/) a
 | Agent/workflow marketplace | Defer until recurring buyer demand exists |
 | Compute marketplace expansion | Defer supply growth until providers can receive realistic utilization |
 | Stake-tier member usage pricing | Server-enforced consumption pricing on participating hive products; never a payout |
-| HIVE buyback allocation | 15% of each service's server-owned allocation basis funds a separate HIVE purchase rail; purchases are publicly receipted and HIVE is not burned |
+| HIVE buyback allocation | 15% of each service's server-owned allocation basis funds a separate HIVE purchase rail; purchases are publicly receipted and, since 2026-09-30, the HIVE bought is burned |
 | Company treasury allocation | A separate exact 15% of the same basis; the treasury does not fund buybacks and creates no holder claim |
 | Outside tokenomics allocation | The remainder has no fixed use assigned by the tokenomics policy |
 
@@ -953,7 +954,7 @@ HivemindOS's hosted infrastructure calculates and records both allocations. The 
 
 The buyback rail buys HIVE with its own 15% allocation. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). Pending allocations, failed batches, and unconfirmed transactions do not count.
 
-HivemindOS does not burn HIVE. A buyback is not a distribution, staking payment, price floor, liquidity guarantee, or promise of appreciation.
+Since 2026-09-30, HIVE bought by buybacks is burned: the exact amount each purchase buys is sent to the burn address `0x000000000000000000000000000000000000dEaD` in its own transaction, published on the HIVE Buyback Ledger. Purchases made before that date were not burned. A buyback or burn is not a distribution, staking payment, price floor, liquidity guarantee, or promise of appreciation.
 
 ## Company treasury
 

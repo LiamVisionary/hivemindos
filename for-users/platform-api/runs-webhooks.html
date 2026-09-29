@@ -1121,12 +1121,117 @@ Content-Type: application/json
       <td>Wait for <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code> and respect <code class="language-plaintext highlighter-rouge">Retry-After</code>. See <a href="limits.html#handle-http-429">limits</a>.</td>
     </tr>
     <tr>
-      <td style="text-align: right">500–503</td>
-      <td>The managed operation is temporarily unavailable.</td>
+      <td style="text-align: right">500</td>
+      <td>Something failed inside HivemindOS.</td>
       <td>Keep the same idempotency key and retry with bounded backoff when the action is safe to repeat.</td>
+    </tr>
+    <tr>
+      <td style="text-align: right">502, 503, 504</td>
+      <td>A managed service failed, was unavailable, or did not answer in time. See <a href="#managed-service-calls">managed service calls</a>.</td>
+      <td>Retry with the same idempotency key, after <code class="language-plaintext highlighter-rouge">Retry-After</code> when present.</td>
     </tr>
   </tbody>
 </table>
+
+<p>A few <code class="language-plaintext highlighter-rouge">code</code> values worth handling on their own:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th><code class="language-plaintext highlighter-rouge">code</code></th>
+      <th style="text-align: right">HTTP</th>
+      <th>Meaning</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">scope_not_supported</code></td>
+      <td style="text-align: right">403</td>
+      <td>The service cannot keep a project or end user apart, so it refuses a project-bound key or a project or end-user request. See <a href="projects-security.html#which-services-keep-a-project-or-user-apart">projects and isolation</a>.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">approval_requires_another_principal</code></td>
+      <td style="text-align: right">403</td>
+      <td>The approval came from the key that asked for it or from a key in its family.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">approval_consumed</code></td>
+      <td style="text-align: right">409</td>
+      <td>The approval was already used, or is being used by a request still in flight. Ask for a new approval for a new action.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3 id="managed-service-calls">Managed service calls</h3>
+
+<p>A call through <code class="language-plaintext highlighter-rouge">POST /services/{serviceId}/invoke</code> reports the service’s own answer in a stable envelope:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"serviceId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"hive-research"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"operationId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"analyses.create"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"status"</span><span class="p">:</span><span class="w"> </span><span class="mi">503</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"upstreamStatus"</span><span class="p">:</span><span class="w"> </span><span class="mi">503</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"upstream_unavailable"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"The service is busy. Try again shortly."</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"retryAfterSeconds"</span><span class="p">:</span><span class="w"> </span><span class="mi">30</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"chargedCredits"</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"result"</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">status</code> is the HTTP status of this response; <code class="language-plaintext highlighter-rouge">upstreamStatus</code> is the status the service itself returned.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th style="text-align: right">HTTP</th>
+      <th><code class="language-plaintext highlighter-rouge">code</code></th>
+      <th>Meaning</th>
+      <th>What to do</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td style="text-align: right">200</td>
+      <td>none</td>
+      <td>The service succeeded.</td>
+      <td>Use <code class="language-plaintext highlighter-rouge">result</code>.</td>
+    </tr>
+    <tr>
+      <td style="text-align: right">4xx</td>
+      <td><code class="language-plaintext highlighter-rouge">upstream_rejected</code>, <code class="language-plaintext highlighter-rouge">payment_required</code> (402), <code class="language-plaintext highlighter-rouge">rate_limited</code> (429)</td>
+      <td>The service refused this input. Its status is passed through.</td>
+      <td>Fix the request; do not repeat it unchanged.</td>
+    </tr>
+    <tr>
+      <td style="text-align: right">502</td>
+      <td><code class="language-plaintext highlighter-rouge">upstream_error</code></td>
+      <td>The service failed or answered in a way HivemindOS could not use.</td>
+      <td>Retry with the same idempotency key and bounded backoff.</td>
+    </tr>
+    <tr>
+      <td style="text-align: right">503</td>
+      <td><code class="language-plaintext highlighter-rouge">upstream_unavailable</code></td>
+      <td>The service is temporarily unavailable.</td>
+      <td>Retry after <code class="language-plaintext highlighter-rouge">Retry-After</code>.</td>
+    </tr>
+    <tr>
+      <td style="text-align: right">504</td>
+      <td><code class="language-plaintext highlighter-rouge">upstream_timeout</code></td>
+      <td>The service did not answer in time: 60 seconds for most operations, 120 seconds for compute, media, research, and swarm work, 45 seconds for a Memory Answer, and 5 minutes for a streamed reply.</td>
+      <td>Retry with the same idempotency key.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>When the service says how long to wait, the response carries <code class="language-plaintext highlighter-rouge">Retry-After</code> and <code class="language-plaintext highlighter-rouge">retryAfterSeconds</code>. Retrying with the same idempotency key and input is safe: a failed call is not stored, so the retry runs again, and the service is handed the same idempotency key as the first time, so work it already started is not started twice. A retry sent while the first call is still running gets <code class="language-plaintext highlighter-rouge">409</code>. For a timed-out action that moves money or sends something, you can also read the resource or run first, since the service may have finished after HivemindOS stopped waiting.</p>
+
+<h3 id="approvals">Approvals</h3>
+
+<p>An approval for a managed action must come from the account owner or from a key outside the requesting key’s family: not the requesting key, a key it created, the key that created it, or a sibling. Keep your reviewer key under a separate root key.</p>
+
+<p>Each approval is spent once. The first call that presents it claims it; a second call gets <code class="language-plaintext highlighter-rouge">409</code> with <code class="language-plaintext highlighter-rouge">approval_consumed</code>. If the service refuses the input (a 4xx), the approval is given back and can be used again with corrected input.</p>
 
 <h2 id="related">Related</h2>
 

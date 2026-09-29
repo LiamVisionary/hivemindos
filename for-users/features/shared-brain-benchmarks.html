@@ -972,7 +972,7 @@
     <tr>
       <td>Hosted SuperAgent API memory</td>
       <td style="text-align: right"><strong>8/8 lexical, 6/6 semantic, 3/3 grounded answers</strong></td>
-      <td>Three fresh hosted accounts; median trial p50 was 0.53s lexical, 4.89s semantic, and 5.93s answer</td>
+      <td>Three fresh hosted accounts on August 27, 2026, before the second read; median trial p50 was 0.53s lexical, 4.89s semantic, and 5.93s answer. Current timings are <a href="#hosted-superagent-api-memory">below</a></td>
     </tr>
     <tr>
       <td>Hosted memory search on LongMemEval_S</td>
@@ -1673,6 +1673,8 @@
 <p>A separate test added 48 misleading archive memories that reused the same terms (57 hosted memories, 55 local; the hosted test carried two extra knowledge nodes for answer grading). Every case stayed correct. The single hosted run measured 431.67ms lexical p50, 1,674.67ms semantic p50, and 2,594.36ms answer p50; the matching local lexical run measured 14.48ms p50. This shows the distractors didn’t push out the right memories; it is not a full scale or speed comparison.</p>
 
 <p>These cases don’t use a private vault and don’t prove equal recall on any data. Hosted timings include internet transit, account isolation, metering, storage, and any paid semantic or answer work.</p>
+
+<p>The timings above predate the second read (<code class="language-plaintext highlighter-rouge">rerank: true</code> and Turbo) and the current recall. Measured again on September 29, 2026: keyword search takes about 24 ms of server time, semantic recall about 0.9 s end to end, and a Memory Answer typically 5–11 s end to end, almost all of it the answering model. Answer time is being optimized.</p>
 
 <h4 id="past-conversations-on-longmemeval_s">Past conversations on LongMemEval_S</h4>
 

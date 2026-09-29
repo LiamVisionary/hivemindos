@@ -336,7 +336,7 @@
 
 <h3 id="choosing-a-reader">Choosing a reader</h3>
 
-<p>In a second run, other models read the same 150 questions with the same evidence; the default reader scored 80.7% in that run. Share answered correctly, and the reader’s median time:</p>
+<p>In a second run, other models read the same 150 questions with the same evidence; the default reader scored 80.7% in that run. Share answered correctly, and the reader’s median time (the model’s own time, not the whole request):</p>
 
 <table>
   <thead>
@@ -396,7 +396,9 @@
 
 <p>The August 27, 2026 authenticated API benchmark used three fresh isolated hosted accounts. Every account passed all eight lexical behavior cases, all six semantic Top-1 cases, and all three grounded-answer cases, including aliases, current and historical evolution, usage ranking, operational isolation, paraphrases, and unsupported-question abstention. The equivalent local typed-memory cases also passed in every fresh run.</p>
 
-<p>Hosted recall is slower than the local vault path. Across the three hosted trials, the median trial p50 was about 0.53 seconds for lexical search, 4.89 seconds for semantic recall, and 5.93 seconds for grounded answers. The local lexical/API behavior trials had a median p50 of 7.85 milliseconds. A separate 48-distractor diagnostic kept every quality check passing and measured 0.43 seconds lexical p50, 1.67 seconds semantic p50, and 2.59 seconds answer p50, so hosted latency varies with request and service state.</p>
+<p>Hosted recall is slower than the local vault path. Measured on September 29, 2026, keyword search (<code class="language-plaintext highlighter-rouge">memory.search</code>) takes about 24 ms of server time, semantic recall (<code class="language-plaintext highlighter-rouge">memory.recall</code>) about 0.9 s end to end, and a Memory Answer typically 5–11 s end to end, almost all of it the answering model. Answer time is being optimized. The local lexical/API behavior trials had a median p50 of 7.85 milliseconds.</p>
+
+<p>The August 27 trials above were timed before the second read (<code class="language-plaintext highlighter-rouge">rerank: true</code> and Turbo) and the current recall, so their times no longer describe the service; they are kept with the quality results on the <a href="https://hivemindos.app/docs/for-users/features/shared-brain-benchmarks.html#hosted-superagent-api-memory">benchmarks page</a>.</p>
 
 <p>These results support quality parity on the published cases, not universal parity with every private vault.</p>
 

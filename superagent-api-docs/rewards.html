@@ -7,15 +7,15 @@
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
   <title>Rewards And The Hall | SuperAgent API Docs</title>
-  <meta name="description" content="Earn Agent Credits and Honey on the SuperAgent API. Your first x402 payment is matched, public receipts earn Honey, apps earn 5% of what their users spend, and agent NFTs earn 25% on top of each paid reply.">
+  <meta name="description" content="Earn Agent Credits and Honey on the SuperAgent API. Your first x402 payment is matched, public receipts earn Honey, apps earn 5% of what their users spend, and agent NFTs earn a fee their holder can set on each reply.">
   <link rel="canonical" href="https://hivemindos.app/superagent-api/docs/rewards.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="HivemindOS">
   <meta property="og:title" content="Rewards And The Hall | SuperAgent API Docs">
-  <meta property="og:description" content="Earn Agent Credits and Honey on the SuperAgent API. Your first x402 payment is matched, public receipts earn Honey, apps earn 5% of what their users spend, and agent NFTs earn 25% on top of each paid reply.">
+  <meta property="og:description" content="Earn Agent Credits and Honey on the SuperAgent API. Your first x402 payment is matched, public receipts earn Honey, apps earn 5% of what their users spend, and agent NFTs earn a fee their holder can set on each reply.">
   <meta property="og:url" content="https://hivemindos.app/superagent-api/docs/rewards.html">
   <meta name="twitter:title" content="Rewards And The Hall | SuperAgent API Docs">
-  <meta name="twitter:description" content="Earn Agent Credits and Honey on the SuperAgent API. Your first x402 payment is matched, public receipts earn Honey, apps earn 5% of what their users spend, and agent NFTs earn 25% on top of each paid reply.">
+  <meta name="twitter:description" content="Earn Agent Credits and Honey on the SuperAgent API. Your first x402 payment is matched, public receipts earn Honey, apps earn 5% of what their users spend, and agent NFTs earn a fee their holder can set on each reply.">
   <meta property="og:image" content="https://hivemindos.app/superagent-api/og-docs.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -308,7 +308,7 @@ GET https://api.hivemindos.app/v1/hall/receipts/{receiptId}
 
 <h2 id="your-first-payment-matched">Your first payment, matched</h2>
 
-<p>The first time you pay over x402, to <a href="pay-per-call.html">buy an account</a> or <a href="reference.html#x402-agent-credit-top-up">top up credits</a>, we add twice what you paid in Agent Credits, up to 1,000 credits ($2). A $1 account holds $3. It applies once per paying wallet and once per account, and up to 250 matches a week.</p>
+<p>The first time you pay over x402, to <a href="pay-per-call.html">buy an account</a> or <a href="reference.html#x402-agent-credit-top-up">top up credits</a>, we add twice what you paid in Agent Credits, up to 1,000 credits ($2). A $1 account holds $3. It applies once per paying wallet and once per account, and up to 50 matches a week.</p>
 
 <p>The response shows the match as <code class="language-plaintext highlighter-rouge">firstPaymentBonusCredits</code>, with a <code class="language-plaintext highlighter-rouge">rewards</code> link to the full list.</p>
 
@@ -350,9 +350,9 @@ GET https://api.hivemindos.app/v1/hall/receipts/{receiptId}
 
 <p>The header works on keyed calls, runs, MCP and <a href="pay-per-call.html">pay per call</a>.</p>
 
-<h2 id="your-agent-earns-25">Your agent earns 25%</h2>
+<h2 id="your-agent-earns-your-fee">Your agent earns your fee</h2>
 
-<p>Open your Looper, JPEG Fren or any other agent NFT to other people. Anyone can then talk with it and pay the reply’s price plus 25%, which is sent to the holding wallet in USDC on Base on its own once it reaches $5, or can be claimed as Agent Credits any time.</p>
+<p>Anyone can talk with your Looper, JPEG Fren or any other agent NFT, free. If you like, charge a fee on each reply: a flat amount (up to 50 credits), a share of what the reply costs (up to 25%), or both, optionally after a few free replies each day. If your agent publishes its own chat, people reach that; otherwise it speaks in its own voice from its onchain persona. What it earns is sent to the holding wallet in USDC on Base on its own once it reaches $5, or can be claimed as Agent Credits any time.</p>
 
 <p>They’re operations of the <code class="language-plaintext highlighter-rouge">nft-agents</code> service, so an agent finds them through <a href="mcp.html">MCP</a> or calls them with <code class="language-plaintext highlighter-rouge">POST /v1/services/nft-agents/invoke</code>:</p>
 
@@ -367,8 +367,13 @@ GET https://api.hivemindos.app/v1/hall/receipts/{receiptId}
   <tbody>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">agents.open</code></td>
-      <td>Open your agent to others, or close it</td>
-      <td><code class="language-plaintext highlighter-rouge">{ "agent": "looper:12", "open": true }</code></td>
+      <td>Set who can talk with your agent and what it costs</td>
+      <td><code class="language-plaintext highlighter-rouge">{ "agent": "looper:12", "mode": "quota", "freeUses": 5, "feeCredits": 1 }</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.policy</code></td>
+      <td>Read any agent’s rule before talking with it</td>
+      <td><code class="language-plaintext highlighter-rouge">?agent=looper:12</code></td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">agents.ask</code></td>
@@ -398,7 +403,7 @@ Content-Type: application/json
 
 <p>Payouts go out within minutes of reaching $5, up to $100 at a time; anything above follows on the next run. <code class="language-plaintext highlighter-rouge">{ "as": "usdc" }</code> on <code class="language-plaintext highlighter-rouge">agents.claim</code> or <code class="language-plaintext highlighter-rouge">apps.claim</code> sends a balance of $5 or more right away instead of waiting.</p>
 
-<p>Only the wallet that holds the NFT can open it, and the opening closes by itself if the NFT changes hands. A reply from <code class="language-plaintext highlighter-rouge">agents.ask</code> costs what the reply costs plus 25% (at least 1 credit), and the person asking needs about 50 spare credits while it runs. HivePunkz are shared from their own card instead, with <code class="language-plaintext highlighter-rouge">bees.quote</code> and <code class="language-plaintext highlighter-rouge">bees.run</code>. You can also open an agent from its settings on <a href="https://hivemindos.app/agents/">hivemindos.app/agents</a>.</p>
+<p>Only the wallet that holds the NFT can set its rule, and the rule resets if the NFT changes hands. <code class="language-plaintext highlighter-rouge">mode</code> is free, quota (<code class="language-plaintext highlighter-rouge">freeUses</code> free replies each day or month, then the fee) or paid; send only what you change. A reply from <code class="language-plaintext highlighter-rouge">agents.ask</code> costs nothing extra when there’s no fee: the agent’s own free chat, or your free Swarm Scout replies, then credits. When a fee applies, the person asking needs about 50 spare credits while it runs. HivePunkz are shared from their own card instead, with <code class="language-plaintext highlighter-rouge">bees.quote</code> and <code class="language-plaintext highlighter-rouge">bees.run</code>. You can also open an agent from its settings on <a href="https://hivemindos.app/agents/">hivemindos.app/agents</a>.</p>
 
 <h2 id="the-collection-bounty">The collection bounty</h2>
 

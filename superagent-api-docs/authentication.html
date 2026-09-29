@@ -334,6 +334,38 @@
 
 <p>The response includes <code class="language-plaintext highlighter-rouge">secret</code>, an <code class="language-plaintext highlighter-rouge">hmos_live_...</code> value returned only this once. Save it in your secret manager right away. Later listings show only a prefix and metadata.</p>
 
+<h2 id="key-expiry">Key expiry</h2>
+
+<p>Keys expire by default. Leave out <code class="language-plaintext highlighter-rouge">expiresAt</code> and a key lasts 30 days:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>How the key was made</th>
+      <th>Without <code class="language-plaintext highlighter-rouge">expiresAt</code></th>
+      <th>With <code class="language-plaintext highlighter-rouge">expiresAt</code></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>From a credit token</td>
+      <td>30 days, renewed by use: each authenticated request moves the expiry to 30 days from then. Repeating the same create request (same idempotency key and input) also renews it, even after it expired.</td>
+      <td>Fixed at that time.</td>
+    </tr>
+    <tr>
+      <td>From another key</td>
+      <td>30 days, fixed, and never later than its parent.</td>
+      <td>Fixed at that time, and never later than its parent.</td>
+    </tr>
+  </tbody>
+</table>
+
+<ul>
+  <li>A chosen <code class="language-plaintext highlighter-rouge">expiresAt</code> is never moved, and it can be at most 365 days away.</li>
+  <li>A key that can move funds or approve (<code class="language-plaintext highlighter-rouge">wallets:sign</code>, <code class="language-plaintext highlighter-rouge">wallets:transact</code>, <code class="language-plaintext highlighter-rouge">approvals:write</code>, or <code class="language-plaintext highlighter-rouge">trading:execute</code>) can be given at most 90 days.</li>
+  <li>Each key reports <code class="language-plaintext highlighter-rouge">expiresAt</code>. An expired key answers <code class="language-plaintext highlighter-rouge">401</code>; so do all its descendants, since a child never outlives its parent. Rotate before the date (see <a href="#rotate-or-revoke-a-key">below</a>), or keep using a renewing key.</li>
+</ul>
+
 <h2 id="what-decides-a-keys-access">What decides a key’s access</h2>
 
 <p>A request must pass all four checks:</p>
@@ -460,6 +492,7 @@
   <li>A project-bound key cannot change projects or create an account-level child.</li>
   <li>Its expiry cannot be later than the earliest ancestor expiry.</li>
   <li>It keeps its ancestors’ privacy tier and cannot loosen it. See <a href="privacy.html">privacy tiers</a>.</li>
+  <li>It keeps its ancestors’ end user, if one is bound, and cannot name another. See <a href="projects-security.html#act-for-one-of-your-apps-users">act for one of your app’s users</a>.</li>
   <li>Its limits cannot exceed an ancestor’s covering limit, and every ancestor limit still applies.</li>
   <li>Delegation is limited to eight levels.</li>
 </ul>

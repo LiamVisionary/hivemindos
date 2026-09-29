@@ -1033,11 +1033,15 @@ Authentication: Authorization: Bearer hmos_live_...
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">agents.open</code></td>
-      <td>Open one of the person’s Loopers, JPEG Frens or other agent NFTs to others, or close it. They earn 25% on top of each reply others pay for.</td>
+      <td>Set who can talk with one of the person’s Loopers, JPEG Frens or other agent NFTs and what it costs. Free until they set a fee (<code class="language-plaintext highlighter-rouge">mode</code>, <code class="language-plaintext highlighter-rouge">freeUses</code>, <code class="language-plaintext highlighter-rouge">feeCredits</code> up to 50, <code class="language-plaintext highlighter-rouge">feePercent</code> up to 25%).</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">agents.policy</code></td>
+      <td>Read an agent’s rule before talking with it.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">agents.ask</code></td>
-      <td>Talk with someone else’s opened agent. Costs the reply plus 25% for its holder.</td>
+      <td>Talk with someone else’s agent: its own free chat if it has one, otherwise in its voice on the person’s free replies, then credits, plus its holder’s fee only if one is set.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">agents.earnings</code>, <code class="language-plaintext highlighter-rouge">agents.claim</code></td>

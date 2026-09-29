@@ -901,7 +901,7 @@
         </div>
         <h1 id="projects-isolation-and-service-accounts">Projects, isolation, and service accounts</h1>
 
-<p>A project keeps one product, customer, or environment separate from another. Its wallets, approvals, runs, files, webhooks, database data, usage, and audit history stay inside it.</p>
+<p>A project keeps one product, customer, or environment separate from another. Its wallets, approvals, runs, files, webhooks, database data, usage, and audit history stay inside it. Inside an account or a project, an end user id keeps each of your app’s own users apart as well.</p>
 
 <p>Use projects when you have more than one customer, app, or environment. For a small first integration, the account-level default is enough.</p>
 
@@ -971,6 +971,81 @@
 
 <p>A project-bound key rejects a different project header. Use one client per project, and never pass an unchecked project id straight from an end-user request.</p>
 
+<h2 id="act-for-one-of-your-apps-users">Act for one of your app’s users</h2>
+
+<p>When your app serves its own users, name the user a request is for, so what a service stores for one of them never reaches another. An account-level or project key sends the id on each request:</p>
+
+<div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">X-HivemindOS-End-User: user_8f2c41
+</span></code></pre></div></div>
+
+<p>Or bind a key to one end user when you create it, with <code class="language-plaintext highlighter-rouge">endUserId</code>:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">userKey</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">apiKeys</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>
+  <span class="p">{</span>
+    <span class="na">label</span><span class="p">:</span> <span class="dl">"</span><span class="s2">Memory for user_8f2c41</span><span class="dl">"</span><span class="p">,</span>
+    <span class="nx">projectId</span><span class="p">,</span>
+    <span class="na">endUserId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">user_8f2c41</span><span class="dl">"</span><span class="p">,</span>
+    <span class="na">scopes</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">services:read</span><span class="dl">"</span><span class="p">,</span> <span class="dl">"</span><span class="s2">services:invoke</span><span class="dl">"</span><span class="p">],</span>
+    <span class="na">allowedServices</span><span class="p">:</span> <span class="p">[</span><span class="dl">"</span><span class="s2">cloud-superbrain</span><span class="dl">"</span><span class="p">],</span>
+  <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">key-user_8f2c41-memory-v1</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<ul>
+  <li>An end user id is 1–128 characters: letters, digits, and <code class="language-plaintext highlighter-rouge">.</code> <code class="language-plaintext highlighter-rouge">_</code> <code class="language-plaintext highlighter-rouge">:</code> <code class="language-plaintext highlighter-rouge">@</code> <code class="language-plaintext highlighter-rouge">-</code>, starting with a letter or digit. Use your own stable, opaque user id, and set it in your backend from the signed-in user, never from a value the user can edit.</li>
+  <li>The binding is permanent. Every child key inherits it, a bound key cannot name a different end user (<code class="language-plaintext highlighter-rouge">403</code>), and a request’s <code class="language-plaintext highlighter-rouge">X-HivemindOS-End-User</code> must match the key’s binding.</li>
+  <li>Runs remember the end user they were created for.</li>
+  <li>Keys report the binding in <code class="language-plaintext highlighter-rouge">endUserId</code>.</li>
+</ul>
+
+<h2 id="which-services-keep-a-project-or-user-apart">Which services keep a project or user apart</h2>
+
+<p>A project-bound key, an <code class="language-plaintext highlighter-rouge">X-HivemindOS-Project</code> header, or an <code class="language-plaintext highlighter-rouge">X-HivemindOS-End-User</code> header promises that one project’s or one user’s data stays apart. The services below keep that promise: a project or end user sees and changes only what it created, never the account’s own data or another user’s. Plans, allowances, limits and charges stay the account’s, so every project and end user draws on the same balance and counts toward the same plan limits.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Keeps apart</th>
+      <th>Services</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Each project and each end user</td>
+      <td><code class="language-plaintext highlighter-rouge">cloud-superbrain</code>, <code class="language-plaintext highlighter-rouge">hive-research</code>, <code class="language-plaintext highlighter-rouge">swarm</code>, <code class="language-plaintext highlighter-rouge">x-studio</code>, <code class="language-plaintext highlighter-rouge">x-transcript</code>, <code class="language-plaintext highlighter-rouge">reddit-voc</code>, <code class="language-plaintext highlighter-rouge">media-studio</code>, <code class="language-plaintext highlighter-rouge">token-autopsy</code>, <code class="language-plaintext highlighter-rouge">wallet-risk</code>, <code class="language-plaintext highlighter-rouge">outbound-email</code>, <code class="language-plaintext highlighter-rouge">hivemind-finance</code>, <code class="language-plaintext highlighter-rouge">managed-bookings</code>, <code class="language-plaintext highlighter-rouge">managed-socials</code>, <code class="language-plaintext highlighter-rouge">hivemind-analytics</code>, <code class="language-plaintext highlighter-rouge">svg-studio</code>, <code class="language-plaintext highlighter-rouge">photo-keyworder</code>, <code class="language-plaintext highlighter-rouge">distill</code>, <code class="language-plaintext highlighter-rouge">gpu-rentals</code>, <code class="language-plaintext highlighter-rouge">integration-broker</code>, <code class="language-plaintext highlighter-rouge">managed-agents</code>, <code class="language-plaintext highlighter-rouge">managed-workflows</code>, <code class="language-plaintext highlighter-rouge">copy-trading</code>, <code class="language-plaintext highlighter-rouge">managed-media</code>, <code class="language-plaintext highlighter-rouge">miroshark</code>, <code class="language-plaintext highlighter-rouge">hiveverse</code>, <code class="language-plaintext highlighter-rouge">hive-compute</code>, <code class="language-plaintext highlighter-rouge">x-api</code></td>
+    </tr>
+    <tr>
+      <td>Each project (no end user yet)</td>
+      <td><code class="language-plaintext highlighter-rouge">hivemind-database</code>, <code class="language-plaintext highlighter-rouge">managed-wallets</code>, <code class="language-plaintext highlighter-rouge">managed-trading</code>, <code class="language-plaintext highlighter-rouge">universal-swaps</code></td>
+    </tr>
+    <tr>
+      <td>Nothing to keep apart: it stores nothing a later call can read back, so any key may use it</td>
+      <td><code class="language-plaintext highlighter-rouge">answer-engine</code>, <code class="language-plaintext highlighter-rouge">managed-models</code>, <code class="language-plaintext highlighter-rouge">leadgen-data</code>, <code class="language-plaintext highlighter-rouge">onchain-intelligence</code>, <code class="language-plaintext highlighter-rouge">hive-bridge</code>, <code class="language-plaintext highlighter-rouge">testnet-faucet</code>, <code class="language-plaintext highlighter-rouge">hall</code></td>
+    </tr>
+    <tr>
+      <td>The whole account only</td>
+      <td><code class="language-plaintext highlighter-rouge">app-hosting</code>, <code class="language-plaintext highlighter-rouge">nft-agents</code> (except <code class="language-plaintext highlighter-rouge">agents.get</code> and <code class="language-plaintext highlighter-rouge">agents.policy</code>), <code class="language-plaintext highlighter-rouge">agent-service-access</code> (except <code class="language-plaintext highlighter-rouge">plans.list</code>), and the Copy wallet routes of <code class="language-plaintext highlighter-rouge">copy-trading</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The last row belongs to the account as a whole: an account’s hosted sites, its wallet’s NFT agents and their earnings, its prepaid service access, and money held in its Copy wallet. A project or end-user request to one of them is refused before anything runs or is charged, for managed-service calls and runs alike:</p>
+
+<div class="language-json highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="p">{</span><span class="w">
+  </span><span class="nl">"ok"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"scope_not_supported"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"serviceId"</span><span class="p">:</span><span class="w"> </span><span class="s2">"app-hosting"</span><span class="p">,</span><span class="w">
+  </span><span class="nl">"error"</span><span class="p">:</span><span class="w"> </span><span class="s2">"This managed service does not keep one project's data apart from the rest of the account yet, so a project-bound key cannot use it. Use an account-level key."</span><span class="w">
+</span><span class="p">}</span><span class="w">
+</span></code></pre></div></div>
+
+<p>Call these with an account-level key and no end user, and keep your own users’ data apart in your backend.</p>
+
+<p>On <code class="language-plaintext highlighter-rouge">managed-bookings</code>, each plan allows one booking profile per account, whichever project or end user sets it up first.</p>
+
+<p><strong>Memory.</strong> In Cloud Superbrain, each project, each end user, and each end user within a project gets a brain of its own. It starts empty, never includes the account’s own memories (or a desktop brain synced to them), and uses the account’s plan: every brain in the account shares the one plan’s storage and allowance. Plans are bought, and a desktop brain synced, with an account-level request. See <a href="memory.html">managed memory</a>.</p>
+
 <h2 id="isolation-rules">Isolation rules</h2>
 
 <ul>
@@ -980,6 +1055,7 @@
   <li>Usage and audit queries report only the selected project.</li>
   <li>Managed databases follow the same project boundary.</li>
   <li>A project-bound key cannot create another project or an account-level child key.</li>
+  <li>A managed service that cannot keep a project or end user apart refuses the request with <code class="language-plaintext highlighter-rouge">scope_not_supported</code> instead of serving account-wide data. See <a href="#which-services-keep-a-project-or-user-apart">which services keep a project or user apart</a>.</li>
 </ul>
 
 <h2 id="separate-your-environments">Separate your environments</h2>

@@ -291,7 +291,7 @@
 
 <p>Cloud Superbrain (<code class="language-plaintext highlighter-rouge">cloud-superbrain</code>) lets a hosted app remember useful context between calls. It saves facts and decisions, finds them by words or meaning, answers from them with citations, and keeps earlier versions when something changes.</p>
 
-<p>Each HivemindOS account gets an isolated memory store; no desktop session or Obsidian vault is needed. Use the local <a href="https://hivemindos.app/docs/for-users/whole-brain/brain-services.html">Hive Superbrain</a> instead when a user’s Obsidian vault should stay the editable source of truth.</p>
+<p>Each HivemindOS account gets an isolated memory store; no desktop session or Obsidian vault is needed. A project-bound key, or a request for one of your app’s end users, gets a brain of its own inside the account, sharing the account’s plan and allowance. See <a href="#one-brain-per-project-or-user">one brain per project or user</a>. Use the local <a href="https://hivemindos.app/docs/for-users/whole-brain/brain-services.html">Hive Superbrain</a> instead when a user’s Obsidian vault should stay the editable source of truth.</p>
 
 <h2 id="costs">Costs</h2>
 
@@ -397,7 +397,9 @@
 <span class="p">);</span>
 </code></pre></div></div>
 
-<p>Add <code class="language-plaintext highlighter-rouge">rerank: true</code> when the order matters, for example when an agent will read only the first few results. The best 20 matches are read again against the question and the most relevant are put first. It takes about a second longer and costs the same 1 credit, and the response says <code class="language-plaintext highlighter-rouge">reranked: true</code>. Only memories saved in the standard tier are read again; private and confidential ones keep their place. If the second read cannot run, you get the usual order and <code class="language-plaintext highlighter-rouge">reranked: false</code>.</p>
+<p>Add <code class="language-plaintext highlighter-rouge">rerank: true</code> when the order matters, for example when an agent will read only the first few results. The best 20 matches are read again against the question and the most relevant are put first. It takes about a second longer and costs the same 1 credit, and the response says <code class="language-plaintext highlighter-rouge">reranked: true</code>. Only memories saved in the standard tier are read again; private and confidential ones keep their place. If the second read cannot run, you get the usual order and <code class="language-plaintext highlighter-rouge">reranked: false</code>. Rerank runs only in the standard tier: under the private or confidential base it is refused (409 <code class="language-plaintext highlighter-rouge">STANDARD_TIER_REQUIRED</code>), or, with <code class="language-plaintext highlighter-rouge">keywordFallback: true</code>, skipped with <code class="language-plaintext highlighter-rouge">rerankSkipped: "privacy-tier"</code>.</p>
+
+<p><strong>Where the second read runs.</strong> The second read is made by a reranking model at a third-party model provider (OpenRouter), not by HivemindOS. With <code class="language-plaintext highlighter-rouge">rerank: true</code>, the question and the text of up to 20 standard-tier memories (up to 12,000 characters of each) are sent to that provider, under its own terms. Memories saved in the private or confidential tier are never sent. Leave <code class="language-plaintext highlighter-rouge">rerank</code> off if your standard-tier memories must not leave HivemindOS.</p>
 
 <p>On LongMemEval_S (500 questions, each answer among about 50 past conversations), recall puts the conversations that hold the answer in its top 5 97.7% of the time with <code class="language-plaintext highlighter-rouge">rerank: true</code>, and 93.7% without it. Both were 90.7% before September 28, 2026. <a href="https://hivemindos.app/docs/for-users/features/shared-brain-benchmarks.html#hosted-memory-search-accuracy">How it was measured</a>.</p>
 
@@ -515,7 +517,20 @@
   </tbody>
 </table>
 
-<p>Memory Answer reads the same exchanges plus the best part of every other supporting memory, and knows today’s date, so “how long ago” and “which came first” questions work. If the conversations fit, it reads them whole. If not, the Turbo decision model orders the exchanges by how likely each is to hold the answer, and the answer reads excerpts from the best 12,000 characters. The decision model is not private, so it is used only when every exchange was written in the standard tier, and never for a private answer. Turbo also reads the best 20 candidate memories again against the question before choosing which conversations to read, the same second read as <code class="language-plaintext highlighter-rouge">rerank: true</code> in recall. Pass <code class="language-plaintext highlighter-rouge">turbo: false</code> to keep keyword order. The response’s <code class="language-plaintext highlighter-rouge">evidenceOrder</code> says which order was used (<code class="language-plaintext highlighter-rouge">keyword</code> when conversations were read whole). Neither choice changes the price.</p>
+<p>Memory Answer reads the same exchanges plus the best part of every other supporting memory, and knows today’s date, so “how long ago” and “which came first” questions work. If the conversations fit, it reads them whole. If not, and you pass <code class="language-plaintext highlighter-rouge">turbo: true</code>, the Turbo decision model orders the exchanges by how likely each is to hold the answer, and the answer reads excerpts from the best 12,000 characters. The decision model is not private, so it is used only when every exchange was written in the standard tier, and never for a private answer. Turbo also reads the best 20 candidate memories again against the question before choosing which conversations to read, the same second read as <code class="language-plaintext highlighter-rouge">rerank: true</code> in recall. Both run at a third-party model provider (OpenRouter): the question, the exchanges, and the candidate memories’ text are sent to it under its own terms. Turbo is off unless you pass <code class="language-plaintext highlighter-rouge">turbo: true</code> (since 2026-09-29); without it the answer keeps keyword order and sends nothing to that provider. The response’s <code class="language-plaintext highlighter-rouge">turbo</code> says whether it ran. The response’s <code class="language-plaintext highlighter-rouge">evidenceOrder</code> says which order was used (<code class="language-plaintext highlighter-rouge">keyword</code> when conversations were read whole). Neither choice changes the price.</p>
+
+<h2 id="one-brain-per-project-or-user">One brain per project or user</h2>
+
+<p>When a request is made with a project-bound key, with <code class="language-plaintext highlighter-rouge">X-HivemindOS-Project</code>, or for one of your app’s end users (<code class="language-plaintext highlighter-rouge">X-HivemindOS-End-User</code>, or a key bound with <code class="language-plaintext highlighter-rouge">endUserId</code>), Cloud Superbrain reads and writes a separate brain for that project, that end user, or that end user within that project:</p>
+
+<ul>
+  <li>It starts empty and never sees the account’s own memories, or a desktop brain synced to them. The account’s own requests never see it.</li>
+  <li>Ids, memory keys, history, and search stay inside it. An id from another brain is not found.</li>
+  <li>It uses the account’s plan. Every brain in the account shares the plan’s one allowance.</li>
+  <li>Buying a plan and syncing a desktop brain need an account-level request; a scoped request is refused.</li>
+</ul>
+
+<p>See <a href="projects-security.html#act-for-one-of-your-apps-users">projects and isolation</a> for how to name an end user.</p>
 
 <h2 id="ask-for-only-as-much-as-you-need">Ask for only as much as you need</h2>
 

@@ -1152,6 +1152,10 @@ runs.create.&lt;serviceId&gt;.&lt;operationId&gt;
       <td>Select an active project with an account-level key.</td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-End-User</code></td>
+      <td>Act for one of your app’s end users. See <a href="projects-security.html#act-for-one-of-your-apps-users">projects and isolation</a>.</td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">X-File-Name</code></td>
       <td>Required customer-visible file name for a file upload.</td>
     </tr>
@@ -1198,7 +1202,15 @@ runs.create.&lt;serviceId&gt;.&lt;operationId&gt;
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">Retry-After</code></td>
-      <td>Seconds before the exhausted API-key window or capacity may be available.</td>
+      <td>Seconds before the exhausted API-key window or capacity may be available, or, on a managed-service <code class="language-plaintext highlighter-rouge">503</code> or <code class="language-plaintext highlighter-rouge">429</code>, how long the service asked you to wait.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Deprecation</code></td>
+      <td>This operation is deprecated. See the <a href="#deprecation-policy">deprecation policy</a>.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">Sunset</code></td>
+      <td>When a deprecated operation stops working.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Limit-Operation</code></td>
@@ -1270,6 +1282,18 @@ runs.create.&lt;serviceId&gt;.&lt;operationId&gt;
 </code></pre></div></div>
 
 <p>The SDK returns the same <code class="language-plaintext highlighter-rouge">{ ok: true, ... }</code> or <code class="language-plaintext highlighter-rouge">{ ok: false, error, ... }</code> envelopes as the HTTPS API. It does not throw on an ordinary API failure, so check <code class="language-plaintext highlighter-rouge">ok</code> before using the result.</p>
+
+<h2 id="deprecation-policy">Deprecation policy</h2>
+
+<p>New operations and response fields can be added at any time, so ignore fields you do not know. Before an operation is removed or changed incompatibly:</p>
+
+<ul>
+  <li>It is marked deprecated in the public changelog, with what to use instead, at least 30 days before it stops working.</li>
+  <li>Responses from it carry a <code class="language-plaintext highlighter-rouge">Deprecation</code> header, and a <code class="language-plaintext highlighter-rouge">Sunset</code> header with the date it stops working, for that whole period.</li>
+  <li>It keeps working until the <code class="language-plaintext highlighter-rouge">Sunset</code> date.</li>
+</ul>
+
+<p>Watch for the <code class="language-plaintext highlighter-rouge">Deprecation</code> header in your logs, so a removal never comes as a surprise.</p>
 
 <h2 id="related">Related</h2>
 
