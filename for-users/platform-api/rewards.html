@@ -901,7 +901,7 @@
         </div>
         <h1 id="rewards-and-the-hall">Rewards and the Hall</h1>
 
-<p>The SuperAgent API pays you back for real use. What your apps and agents earn can be claimed as Agent Credits (500 to the dollar) or, from $5, as USDC on Base. Bonuses and bounties pay in Agent Credits, and receipts earn Honey. Nothing pays for minting.</p>
+<p>The SuperAgent API pays you back for real use. What your apps and agents earn is sent to your wallet in USDC on Base on its own once it reaches $5, paid from the revenue those calls brought in; you can claim it as Agent Credits (500 to the dollar) any time instead. Bonuses and bounties pay in Agent Credits, and receipts earn Honey. Nothing pays for minting.</p>
 
 <ul>
   <li><strong><a href="https://hivemindos.app/superagent-api/rewards/">Rewards</a></strong> lists every program with its rule and a button to act on it.</li>
@@ -958,13 +958,13 @@ GET https://api.hivemindos.app/v1/hall/receipts/{receiptId}
 <div class="language-http highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="err">X-HivemindOS-App: app_0123456789ab
 </span></code></pre></div></div>
 
-<p>You earn 5% of the credits other accounts spend through your app, up to 25,000 credits a week per app, and claim them whenever you like, as Agent Credits or, from $5, as USDC on Base to your linked wallet. Your own calls don’t count, and neither do wallet, swap, trading, credit or top-up calls. Your app also shows on the Hall. An account can register up to 5 apps.</p>
+<p>You earn 5% of the credits other accounts spend through your app, up to 25,000 credits a week per app, sent to your linked wallet in USDC on Base on their own once they reach $5, or claimed as Agent Credits any time. Your own calls don’t count, and neither do wallet, swap, trading, credit or top-up calls. Your app also shows on the Hall. An account can register up to 5 apps.</p>
 
 <p>The header works on keyed calls, runs, MCP and <a href="pay-per-call.html">pay per call</a>.</p>
 
 <h2 id="your-agent-earns-25">Your agent earns 25%</h2>
 
-<p>Open your Looper, JPEG Fren or any other agent NFT to other people. Anyone can then talk with it and pay the reply’s price plus 25%, which you earn and can claim as Agent Credits or, from $5, as USDC on Base.</p>
+<p>Open your Looper, JPEG Fren or any other agent NFT to other people. Anyone can then talk with it and pay the reply’s price plus 25%, which is sent to the holding wallet in USDC on Base on its own once it reaches $5, or can be claimed as Agent Credits any time.</p>
 
 <p>They’re operations of the <code class="language-plaintext highlighter-rouge">nft-agents</code> service, so an agent finds them through <a href="mcp.html">MCP</a> or calls them with <code class="language-plaintext highlighter-rouge">POST /v1/services/nft-agents/invoke</code>:</p>
 
@@ -1008,7 +1008,7 @@ Content-Type: application/json
 { "operationId": "agents.ask", "input": { "agent": "looper:12", "message": "What do you do?" } }
 </span></code></pre></div></div>
 
-<p>A USDC claim pays from $5 up to $100 at a time, to the wallet linked to your account; anything above $100 stays to claim next time. <code class="language-plaintext highlighter-rouge">apps.claim</code> takes the same <code class="language-plaintext highlighter-rouge">{ "as": "usdc" }</code>.</p>
+<p>Payouts go out within minutes of reaching $5, up to $100 at a time; anything above follows on the next run. <code class="language-plaintext highlighter-rouge">{ "as": "usdc" }</code> on <code class="language-plaintext highlighter-rouge">agents.claim</code> or <code class="language-plaintext highlighter-rouge">apps.claim</code> sends a balance of $5 or more right away instead of waiting.</p>
 
 <p>Only the wallet that holds the NFT can open it, and the opening closes by itself if the NFT changes hands. A reply from <code class="language-plaintext highlighter-rouge">agents.ask</code> costs what the reply costs plus 25% (at least 1 credit), and the person asking needs about 50 spare credits while it runs. HivePunkz are shared from their own card instead, with <code class="language-plaintext highlighter-rouge">bees.quote</code> and <code class="language-plaintext highlighter-rouge">bees.run</code>. You can also open an agent from its settings on <a href="https://hivemindos.app/agents/">hivemindos.app/agents</a>.</p>
 
