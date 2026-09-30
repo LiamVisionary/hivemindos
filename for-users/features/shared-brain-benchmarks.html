@@ -1674,7 +1674,7 @@
 
 <p>These cases don’t use a private vault and don’t prove equal recall on any data. Hosted timings include internet transit, account isolation, metering, storage, and any paid semantic or answer work.</p>
 
-<p>The timings above predate the second read (<code class="language-plaintext highlighter-rouge">rerank: true</code> and Turbo) and the current recall. Measured again on September 29, 2026: keyword search takes about 24 ms of server time, semantic recall about 0.9 s end to end, and a Memory Answer typically 5–11 s end to end, almost all of it the answering model. Answer time is being optimized.</p>
+<p>The timings above predate the second read (<code class="language-plaintext highlighter-rouge">rerank: true</code> and Turbo) and the current recall. Measured again on September 30, 2026 as server time (<code class="language-plaintext highlighter-rouge">Server-Timing</code>), on a brain of 20 short memories: keyword search (<code class="language-plaintext highlighter-rouge">memory.search</code>) takes about 24 ms; semantic recall (<code class="language-plaintext highlighter-rouge">memory.recall</code>) 333 ms median (416 ms p90), most of it the meaning index (about 200 ms) and embedding the question (about 90 ms); a Memory Answer with the default reader 665 ms median, of which the answer model is about 360 ms. <code class="language-plaintext highlighter-rouge">rerank: true</code> adds about 1 s. Answers that read long conversation histories take longer, almost all of it the answering model. Network time comes on top: from the Philippines, a semantic recall took about 480 ms end to end.</p>
 
 <h4 id="past-conversations-on-longmemeval_s">Past conversations on LongMemEval_S</h4>
 

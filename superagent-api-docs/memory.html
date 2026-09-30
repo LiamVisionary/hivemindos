@@ -326,7 +326,7 @@
   </tbody>
 </table>
 
-<p>Semantic Recall and Memory Answer need a paid Cloud Superbrain plan. Lexical search, storage within the plan, history, graph reads, capsules, and health checks use no agent credits. Call <code class="language-plaintext highlighter-rouge">catalog.get</code> when onboarding an account to show its plan, storage limits, and availability.</p>
+<p>Semantic Recall and Memory Answer are paid per use from the account’s credits; no plan is needed. Lexical search, storage within the plan, history, graph reads, capsules, and health checks use no agent credits. Call <code class="language-plaintext highlighter-rouge">catalog.get</code> when onboarding an account to show its plan, storage limits, and availability.</p>
 
 <p>Indexing runs when memory changes, so there is no idle charge. A new memory is searchable by keyword at once and joins Semantic Recall when its index status is ready; <code class="language-plaintext highlighter-rouge">memory.health</code> reports that state.</p>
 
@@ -419,16 +419,17 @@
 <span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">answered</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">citedMemoryIds</span><span class="p">);</span>
 </code></pre></div></div>
 
-<p>If no memory supports an answer, the request returns not found and releases the credit reservation, so you are not charged. For a question of four or more words, a memory counts as support when it matches at least two of the question’s words, the exact phrase, or its meaning; one shared word is not enough.</p>
+<p>If no memory supports an answer, the request returns not found and releases the credit reservation, so you are not charged. For a question of four or more words, a memory counts as support when it matches at least two of the question’s words, the exact phrase, or its meaning; one shared word is not enough. When the only candidates are weak meaning matches (see below), the answer model reads the best three; if its answer cites none of them, you get the same not-found reply and are not charged.</p>
 
 <p>About results:</p>
 
 <ul>
   <li>Every hit includes its memory fields, an excerpt (the part holding the most question words), a total score, matched signals, and score details.</li>
+  <li>A hit matched only as <code class="language-plaintext highlighter-rouge">semantic-weak</code> is close in meaning but not close enough to count as a strong match. Weak matches rank below every strong or worded match, so a short fact phrased differently from the question (“what pet do I have” against “I adopted a grey cat”) is still found. Check the score before relying on one.</li>
   <li>Search matches word forms (<code class="language-plaintext highlighter-rouge">weddings</code> finds <code class="language-plaintext highlighter-rouge">wedding</code>), and rare words count for more than common ones.</li>
   <li>Operational memories such as action and handoff receipts are left out of default recall. Ask for a specific operational <code class="language-plaintext highlighter-rouge">memoryType</code> or set <code class="language-plaintext highlighter-rouge">includeOperational: true</code> when you want them.</li>
   <li>Set <code class="language-plaintext highlighter-rouge">trackUsage: false</code> for diagnostic lookups that should not affect usage ranking. <code class="language-plaintext highlighter-rouge">memory.usage</code> records retrieved or final-answer use for known memory ids.</li>
-  <li><code class="language-plaintext highlighter-rouge">memory.search</code> responses include <code class="language-plaintext highlighter-rouge">Server-Timing: memory;dur=&lt;ms&gt;</code>, the search’s own time without network.</li>
+  <li><code class="language-plaintext highlighter-rouge">memory.search</code> responses include <code class="language-plaintext highlighter-rouge">Server-Timing: memory;dur=&lt;ms&gt;</code>, the search’s own time without network. <code class="language-plaintext highlighter-rouge">memory.recall</code> and <code class="language-plaintext highlighter-rouge">memory.answer</code> include a breakdown: <code class="language-plaintext highlighter-rouge">owner</code>, <code class="language-plaintext highlighter-rouge">embed</code>, <code class="language-plaintext highlighter-rouge">vector</code>, <code class="language-plaintext highlighter-rouge">lexical</code>, <code class="language-plaintext highlighter-rouge">rows</code>, <code class="language-plaintext highlighter-rouge">rerank</code>, <code class="language-plaintext highlighter-rouge">reader</code>, <code class="language-plaintext highlighter-rouge">meter</code> and <code class="language-plaintext highlighter-rouge">total</code>, in milliseconds.</li>
 </ul>
 
 <p>To limit an answer-only worker, allow just <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.answer</code> and set a request limit on that exact selector.</p>
