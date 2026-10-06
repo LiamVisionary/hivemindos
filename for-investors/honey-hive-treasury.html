@@ -937,14 +937,20 @@
 
 <h2 id="honey">Honey</h2>
 
-<p>Honey records useful, verified participation, such as reviewed agent work, accepted open-source contributions, testing, documentation, or completed bounties. Raw model tokens, self-reported activity, or unobserved output do not earn Honey.</p>
+<p>Honey records useful, verified participation, such as reviewed agent work, accepted open-source contributions, testing, documentation, or completed bounties. Self-reported activity and unobserved output do not earn Honey. Model usage earns Honey only through a legacy pool: it still records 1 Honey per 1,000,000 model tokens, capped at 50,000 tokens a day, until that pool is used up.</p>
 
 <p>How Honey is earned:</p>
 
 <ul>
   <li><strong>Community Hive Brain:</strong> 0.1 Honey for each distinct copy-trading outcome that passes hosted verification. Unverified, duplicate, and retried submissions earn nothing. The contributing wallet must link to a HivemindOS workspace; until it does, the reward waits as pending.</li>
   <li><strong>Telegram recognition:</strong> members with a signature-verified identity can give a fixed, scarce Honey recognition for a named contribution. Daily, pair, recipient, cooldown, and global budget limits apply.</li>
+  <li><strong>Published API receipts:</strong> 5 Honey for each published receipt, up to 3 a week.</li>
+  <li><strong>Feedback:</strong> 2, 5, or 10 Honey depending on what was built from it, and never more than 25 for one piece of feedback.</li>
+  <li><strong>X engagement:</strong> 1 Honey a day per account, up to 3 a week.</li>
+  <li><strong>HiveVerse finds:</strong> 1 Honey for each find.</li>
+  <li><strong>HivePunkz share to X:</strong> 10 Honey.</li>
   <li><strong>Historical HIVE tips:</strong> past tip-receiver rank may be recorded at 1 Honey per 1,000,000 HIVE received.</li>
+  <li><strong>Legacy model-usage pool:</strong> 1 Honey per 1,000,000 model tokens, capped at 50,000 tokens a day, until the pool is used up.</li>
 </ul>
 
 <p>Source labels (mission, verified work, peer recognition, learning, historical seed) show where Honey came from. They do not create different kinds of Honey.</p>
@@ -952,8 +958,8 @@
 <p>What Honey does:</p>
 
 <ul>
-  <li><strong>More free-agent usage.</strong> Lifetime Honey raises a workspace’s daily free-agent request and token allowance, from 1.10× at 10 Honey to a capped 2.00× at 5,000. This allowance and a HIVE staking allowance do not stack; the higher one applies. It is revocable service access, not stored value or a withdrawal right.</li>
-  <li><strong>Staking multiplies Honey.</strong> An active HIVE staking tier multiplies qualifying Honey earned: 1.00×, 1.10×, 1.25×, 1.45×, 1.70×, and 2.00× from Honeybee through Queen Bee.</li>
+  <li><strong>More free-agent usage.</strong> Lifetime Honey raises a workspace’s daily free-agent request and token allowance, from 1.10× at 5 Honey up to a capped 2.00× at 200: 5, 10, 25, 50, 100, and 200 Honey give 1.10×, 1.20×, 1.35×, 1.50×, 1.75×, and 2.00×. This allowance and a HIVE staking allowance do not stack; the higher one applies. It is revocable service access, not stored value or a withdrawal right.</li>
+  <li><strong>Staking multiplies Honey.</strong> An active HIVE staking tier multiplies qualifying Honey earned: 1.00×, 1.10×, 1.25×, 1.45×, 1.70×, and 2.00× from Honeybee through Queen Bee. A Founding Bee adds +0.5× on top of the tier, capped at 2.5×.</li>
 </ul>
 
 <p>HivemindOS-controlled infrastructure calculates Honey totals and tiers from verified records. Local state cannot grant Honey, a tier, or contribution evidence.</p>
@@ -972,6 +978,10 @@
 
 <p>You do not need HIVE to run HivemindOS locally, buy Hivemind Cloud services, join a paid workspace, use enterprise features, or bring a provider key. HIVE is not company ownership. See <a href="hive-staking-and-community-tiers.html">HIVE Staking And Community Tiers</a> for tier details.</p>
 
+<h3 id="paying-with-hive">Paying with HIVE</h3>
+
+<p>Pay with $HIVE takes 10% off a credit top-up. The HIVE you pay goes to the company treasury as it is: it is not sold, and it is not burned. Credits bought with HIVE create no buyback or treasury allocation when they are spent. Paying with another token carries a 5% fee.</p>
+
 <h2 id="revenue-allocation">Revenue allocation</h2>
 
 <p>Customer collections are not automatically platform revenue. Recognized platform revenue excludes pass-through costs, refunds, and reversals. Marketplace gross merchandise value is not platform revenue; only HivemindOS’s earned fee counts. Purchased credits are recognized only when consumed.</p>
@@ -987,14 +997,71 @@
 <ul>
   <li>HivemindOS allocates 15% of each service’s server-owned allocation basis to HIVE buybacks.</li>
   <li>A separate exact 15% of the same server-owned allocation basis goes to the company treasury.</li>
+  <li>Two exceptions apply. Credits bought with HIVE create no buyback or treasury allocation when they are spent. HiveVerse home upgrades split 40% to HIVE buyback and burn, 40% to the HivePunks reward pot, and 20% to the company treasury.</li>
   <li>The treasury does not fund HIVE buybacks. Each rail has its own accounting and receipts.</li>
   <li>No user wallet, staked principal, local setting, or client revenue claim can choose either amount or recipient.</li>
   <li>Confirmed purchases are published in the <a href="https://hivemindos.app/buybacks/">HIVE Buyback Ledger</a>. Pending or failed purchases do not count.</li>
-  <li>Since 2026-09-30, the HIVE each confirmed purchase buys is burned: the exact amount is sent to <code class="language-plaintext highlighter-rouge">0x000000000000000000000000000000000000dEaD</code> in a separate transaction, published on the same ledger. Purchases made before that date were not burned.</li>
+  <li>Since 2026-09-30, the HIVE each confirmed purchase buys is burned: the exact amount is sent to <code class="language-plaintext highlighter-rouge">0x000000000000000000000000000000000000dEaD</code> in a separate transaction, published on the same ledger. Purchases made before that date were not burned. That HIVE, about 9.98M, is held.</li>
   <li>Hive Research’s first paid production run produced one confirmed HIVE purchase on Base under its earlier app-specific policy. That receipt stays public; new Hive Research revenue follows the platform-wide 15% buyback allocation.</li>
 </ul>
 
 <p>The treasury allocation remains company property. It creates no holder or staker ownership, redemption right, revenue share, governance right, or claim on treasury assets. Buybacks do not promise a token price, liquidity, profit, or return. More detail: <a href="treasury-reserve-and-seasonal-programs.html">Revenue Allocations And Treasury Boundaries</a>.</p>
+
+<h2 id="where-hive-is-burned">Where HIVE is burned</h2>
+
+<p>Every burn sends HIVE to <code class="language-plaintext highlighter-rouge">0x000000000000000000000000000000000000dEaD</code>.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Source</th>
+      <th>What is burned</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Platform buybacks</td>
+      <td>All HIVE bought since 2026-09-30. Earlier purchases, about 9.98M HIVE, are held and were not burned; the first burn happens with the first purchase after that date</td>
+      <td>Live</td>
+    </tr>
+    <tr>
+      <td>HiveVerse home upgrades</td>
+      <td>The HIVE bought with their 40% buyback share</td>
+      <td>Live</td>
+    </tr>
+    <tr>
+      <td>HivePunks clock-in</td>
+      <td>90% of the 5M HIVE paid per bee; the other 10% goes to the HivePunks treasury</td>
+      <td>Live</td>
+    </tr>
+    <tr>
+      <td>HivePunks devolve fee</td>
+      <td>Half of the 3% fee on HIVE withdrawn from a bee within 90 days; the other half goes to the HivePunks reward pot and is held in HIVE until a swap route exists</td>
+      <td>Live</td>
+    </tr>
+    <tr>
+      <td>HivePunks weekly-draw boosts</td>
+      <td>90% of the 1M HIVE paid per boost level; the other 10% goes to the HivePunks treasury</td>
+      <td>Live</td>
+    </tr>
+    <tr>
+      <td>Agent coins</td>
+      <td>The HIVE bought with 15% of each coin’s 2% trading fee</td>
+      <td>Live; no agent coin has launched yet</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>A burn is a recorded on-chain transfer. It is not a promise about price, value, or return.</p>
+
+<h3 id="hivepunks">HivePunks</h3>
+
+<p>HivePunks are 1,111 NFTs on Base, and the collection sold out. Each mint cost 10 USDC: 70% feeds the HivePunks reward pot over 8 weeks, and 30% goes to the HivePunks treasury. The pot is converted to tokenized NVDA and paid weekly to bees that are clocked in. The 7.5% royalty goes entirely to the pot. HivemindOS also pays 25% of HIVE creator fees on daily HIVE trading volume above $20,000 into the pot, capped at $15,000 a quarter for 8 quarters. What the pot pays depends on what it receives; no amount is promised.</p>
+
+<h3 id="agent-coins">Agent coins</h3>
+
+<p>Agent coins carry a 2% trading fee. The first $20 of fees goes to the agent’s thinking budget. After that, each fee splits 60% to the agent’s thinking, 15% to whoever holds the agent’s NFT, 15% to buy HIVE that is burned, and 10% to the HivemindOS treasury. Coin holders receive none of the fee.</p>
 
 <h2 id="tokenomics-policy-changes">Tokenomics Policy Changes</h2>
 

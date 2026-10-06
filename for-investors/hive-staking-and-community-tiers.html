@@ -943,6 +943,8 @@
       <th style="text-align: right">Active stake</th>
       <th style="text-align: right">Honey earning</th>
       <th style="text-align: right">Free-agent usage</th>
+      <th style="text-align: right">Member pricing, at most</th>
+      <th style="text-align: right">Copy-trading profit share</th>
     </tr>
   </thead>
   <tbody>
@@ -951,45 +953,59 @@
       <td style="text-align: right">1m HIVE</td>
       <td style="text-align: right">1.00×</td>
       <td style="text-align: right">1.10×</td>
+      <td style="text-align: right">0%</td>
+      <td style="text-align: right">−1 point</td>
     </tr>
     <tr>
       <td>Bumblebee</td>
       <td style="text-align: right">10m HIVE</td>
       <td style="text-align: right">1.10×</td>
       <td style="text-align: right">1.20×</td>
+      <td style="text-align: right">10% off</td>
+      <td style="text-align: right">−2 points</td>
     </tr>
     <tr>
       <td>Mason Bee</td>
       <td style="text-align: right">50m HIVE</td>
       <td style="text-align: right">1.25×</td>
       <td style="text-align: right">1.35×</td>
+      <td style="text-align: right">20% off</td>
+      <td style="text-align: right">−3 points</td>
     </tr>
     <tr>
       <td>Orchid Bee</td>
       <td style="text-align: right">100m HIVE</td>
       <td style="text-align: right">1.45×</td>
       <td style="text-align: right">1.50×</td>
+      <td style="text-align: right">30% off</td>
+      <td style="text-align: right">−3 points</td>
     </tr>
     <tr>
       <td>Carpenter Bee</td>
       <td style="text-align: right">250m HIVE</td>
       <td style="text-align: right">1.70×</td>
       <td style="text-align: right">1.75×</td>
+      <td style="text-align: right">51% off</td>
+      <td style="text-align: right">−3 points</td>
     </tr>
     <tr>
       <td>Queen Bee</td>
       <td style="text-align: right">1b HIVE</td>
       <td style="text-align: right">2.00×</td>
       <td style="text-align: right">2.00×</td>
+      <td style="text-align: right">61% off</td>
+      <td style="text-align: right">−3 points</td>
     </tr>
   </tbody>
 </table>
+
+<p>Member pricing is the most a tier can take off a participating service. The copy-trading column is the points taken off the profit share on copied trades, which never goes below 5%.</p>
 
 <p>These are membership tiers, not investment-return tiers. Tier names and thresholds do not promise future value.</p>
 
 <h2 id="honey-earning-multipliers">Honey earning multipliers</h2>
 
-<p>Your tier multiplies Honey only when you earn it from accepted contribution evidence. Holding HIVE alone creates no Honey. Honey stays one non-transferable, non-spendable record; a multiplier changes how much an accepted contribution records, but it does not make Honey cash or convert it to HIVE. See <a href="honey-hive-treasury.html#honey">Honey, HIVE, And Treasury</a>.</p>
+<p>Your tier multiplies Honey only when you earn it from accepted contribution evidence. Holding HIVE alone creates no Honey. Honey stays one non-transferable, non-spendable record; a multiplier changes how much an accepted contribution records, but it does not make Honey cash or convert it to HIVE. A Founding Bee adds +0.5× on top of the tier multiplier, capped at 2.5× in total. See <a href="honey-hive-treasury.html#honey">Honey, HIVE, And Treasury</a>.</p>
 
 <h2 id="free-agent-usage-multipliers">Free-Agent Usage Multipliers</h2>
 
@@ -1001,6 +1017,7 @@
   <li>IP and platform-wide safety limits remain unchanged.</li>
   <li>If the tier check fails for any reason, you get the ordinary unstaked allowance.</li>
   <li>If your lifetime Honey qualifies you for a higher multiplier, the higher one applies. They do not stack.</li>
+  <li>Holding a HivePunk adds to the allowance on top of that, capped at 2.5× overall.</li>
 </ul>
 
 <p>The quota schedule may change or pause going forward for capacity, abuse, legal, security, or operational reasons.</p>
@@ -1013,7 +1030,7 @@
 
 <h2 id="revenue-policy-is-separate-from-staking">Revenue Policy Is Separate From Staking</h2>
 
-<p>HivemindOS allocates 15% of each service’s server-owned allocation basis (realized margin for most managed services, recognized platform revenue for others) to HIVE buybacks. A separate exact 15% goes to the company treasury. The treasury does not fund buybacks, and staked principal funds neither. Confirmed purchases are published in the <a href="https://hivemindos.app/buybacks/">HIVE Buyback Ledger</a>. Since 2026-09-30, the HIVE each purchase buys is burned in a separate transaction on the same ledger.</p>
+<p>HivemindOS allocates 15% of each service’s server-owned allocation basis (realized margin for most managed services, recognized platform revenue for others) to HIVE buybacks. A separate exact 15% goes to the company treasury. Two exceptions apply: credits bought with HIVE create no buyback or treasury allocation when they are spent, and HiveVerse home upgrades split 40% to HIVE buyback and burn, 40% to the HivePunks reward pot, and 20% to the treasury. The treasury does not fund buybacks, and staked principal funds neither. Confirmed purchases are published in the <a href="https://hivemindos.app/buybacks/">HIVE Buyback Ledger</a>. Since 2026-09-30, the HIVE each purchase buys is burned in a separate transaction on the same ledger.</p>
 
 <p>Buybacks and treasury allocations give holders and stakers no payout, ownership, governance right, price promise, or claim. See <a href="treasury-reserve-and-seasonal-programs.html">Revenue Allocations And Treasury Boundaries</a>.</p>
 

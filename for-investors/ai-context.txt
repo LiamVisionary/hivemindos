@@ -3,7 +3,7 @@ format_version: 1
 content_format: Markdown with embedded HTML
 scope: Every public Markdown page under docs/for-investors
 document_count: 11
-generated_at: 2026-09-30T06:07:57+00:00
+generated_at: 2026-10-06T14:15:00+00:00
 usage: Treat each BEGIN/END DOCUMENT block as one source document. Preserve source_path attribution when citing or summarizing claims.
 
 
@@ -55,11 +55,11 @@ As agents get budgets and do more economic work, HivemindOS earns disclosed fees
 | DEX swap | 0.20% platform fee |
 | Supported live stock or tokenized stock execution | 0.10% execution fee |
 | Paid x402 or Veil private-payment execution | 0.50% platform fee |
-| Bankr-managed Base copy trade | 0.50% post-verification fee, $0.02–$0.50 |
+| Bankr-managed Base copy trade | $1 monitoring minimum every 30 days, plus 5% to 10% of each new realized profit on verified live copies |
 | Eligible Hyperliquid perp fill | 0.005% builder fee |
 | Qualifying Base x402 transaction | Builder Code attribution; rewards are contingent rather than guaranteed |
 
-This engine should grow only while execution stays competitive, fees stay visible, and settlement success stays high. Ordinary wallet transfers and revenue earned outside HivemindOS stay free. Other Bankr actions (swaps, cross-chain actions, token launches, prediction markets, NFTs, automations) carry no HivemindOS fee; only hosted copy trading does, after each copied swap is verified.
+This engine should grow only while execution stays competitive, fees stay visible, and settlement success stays high. Ordinary wallet transfers and revenue earned outside HivemindOS stay free. Other Bankr actions (swaps, cross-chain actions, token launches, prediction markets, NFTs, automations) carry no HivemindOS fee; only hosted copy trading does. It charges no fee on trade size: after each copied swap is verified, a share is taken only from new realized profit.
 
 The full rail list, with Robinhood Chain and minimums, is on the [investor overview](index.html#transaction-fees).
 
@@ -296,20 +296,22 @@ You can always withdraw your principal after the cooldown. Staked HIVE is not co
 
 ## The six tiers
 
-| Public tier | Active stake | Honey earning | Free-agent usage |
-| --- | ---: | ---: | ---: |
-| Honeybee | 1m HIVE | 1.00× | 1.10× |
-| Bumblebee | 10m HIVE | 1.10× | 1.20× |
-| Mason Bee | 50m HIVE | 1.25× | 1.35× |
-| Orchid Bee | 100m HIVE | 1.45× | 1.50× |
-| Carpenter Bee | 250m HIVE | 1.70× | 1.75× |
-| Queen Bee | 1b HIVE | 2.00× | 2.00× |
+| Public tier | Active stake | Honey earning | Free-agent usage | Member pricing, at most | Copy-trading profit share |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Honeybee | 1m HIVE | 1.00× | 1.10× | 0% | −1 point |
+| Bumblebee | 10m HIVE | 1.10× | 1.20× | 10% off | −2 points |
+| Mason Bee | 50m HIVE | 1.25× | 1.35× | 20% off | −3 points |
+| Orchid Bee | 100m HIVE | 1.45× | 1.50× | 30% off | −3 points |
+| Carpenter Bee | 250m HIVE | 1.70× | 1.75× | 51% off | −3 points |
+| Queen Bee | 1b HIVE | 2.00× | 2.00× | 61% off | −3 points |
+
+Member pricing is the most a tier can take off a participating service. The copy-trading column is the points taken off the profit share on copied trades, which never goes below 5%.
 
 These are membership tiers, not investment-return tiers. Tier names and thresholds do not promise future value.
 
 ## Honey earning multipliers
 
-Your tier multiplies Honey only when you earn it from accepted contribution evidence. Holding HIVE alone creates no Honey. Honey stays one non-transferable, non-spendable record; a multiplier changes how much an accepted contribution records, but it does not make Honey cash or convert it to HIVE. See [Honey, HIVE, And Treasury](honey-hive-treasury.html#honey).
+Your tier multiplies Honey only when you earn it from accepted contribution evidence. Holding HIVE alone creates no Honey. Honey stays one non-transferable, non-spendable record; a multiplier changes how much an accepted contribution records, but it does not make Honey cash or convert it to HIVE. A Founding Bee adds +0.5× on top of the tier multiplier, capped at 2.5× in total. See [Honey, HIVE, And Treasury](honey-hive-treasury.html#honey).
 
 ## Free-Agent Usage Multipliers
 
@@ -320,6 +322,7 @@ Everyone gets the ordinary free-agent allowance, powered by Swarm Sovereign mode
 - IP and platform-wide safety limits remain unchanged.
 - If the tier check fails for any reason, you get the ordinary unstaked allowance.
 - If your lifetime Honey qualifies you for a higher multiplier, the higher one applies. They do not stack.
+- Holding a HivePunk adds to the allowance on top of that, capped at 2.5× overall.
 
 The quota schedule may change or pause going forward for capacity, abuse, legal, security, or operational reasons.
 
@@ -331,7 +334,7 @@ Exact service prices, cost floors, eligible products, and tier-level discount ca
 
 ## Revenue Policy Is Separate From Staking
 
-HivemindOS allocates 15% of each service's server-owned allocation basis (realized margin for most managed services, recognized platform revenue for others) to HIVE buybacks. A separate exact 15% goes to the company treasury. The treasury does not fund buybacks, and staked principal funds neither. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). Since 2026-09-30, the HIVE each purchase buys is burned in a separate transaction on the same ledger.
+HivemindOS allocates 15% of each service's server-owned allocation basis (realized margin for most managed services, recognized platform revenue for others) to HIVE buybacks. A separate exact 15% goes to the company treasury. Two exceptions apply: credits bought with HIVE create no buyback or treasury allocation when they are spent, and HiveVerse home upgrades split 40% to HIVE buyback and burn, 40% to the HivePunks reward pot, and 20% to the treasury. The treasury does not fund buybacks, and staked principal funds neither. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). Since 2026-09-30, the HIVE each purchase buys is burned in a separate transaction on the same ledger.
 
 Buybacks and treasury allocations give holders and stakers no payout, ownership, governance right, price promise, or claim. See [Revenue Allocations And Treasury Boundaries](treasury-reserve-and-seasonal-programs.html).
 
@@ -380,6 +383,8 @@ The zero-premint receipt covers the launch only. It does not claim that the foun
 
 The public [Bankr launch record](https://api.bankr.bot/token-launches/0xA382c83e2a3B79368f372c2EB9b6925ffAf45bA3) ties the contract to the same launch transaction and Uniswap V4 pool. It names [`0x8a25202e830f024aa5e1bdd01a8e997534655c51`](https://basescan.org/address/0x8a25202e830f024aa5e1bdd01a8e997534655c51) as both deployer and fee recipient. The same wallet receives 95% of the Bankr/Doppler trading-fee allocation, with 5% assigned to Doppler. That centralized fee right is disclosed separately from token supply, liquidity, staking principal, and user wallets. It is a launch receipt, not an attestation of that wallet's full history or every related wallet.
 
+One commitment is paid from that 95% fee allocation: 25% of HIVE creator fees on daily HIVE trading volume above $20,000 goes to the HivePunks reward pot, capped at $15,000 a quarter for 8 quarters. No buyback or treasury allocation draws on these fees.
+
 ## Permanent liquidity
 
 HIVE uses Doppler multicurve liquidity on Uniswap V4. There is no creator-held LP token; permanence comes from the token's immutable configuration:
@@ -419,7 +424,7 @@ The addresses, balances, exclusions, and method are in the machine-readable mani
 
 The [HIVE staking contract](https://basescan.org/address/0x26c7121e41e779327adbd5682646dc5deb764539#code) held 2.213947706948184371 billion actively staked HIVE at the snapshot block and was not paused. Staking is non-custodial and pays no yield. It supplies community status, access signals, member usage pricing on participating apps, and Honey multipliers.
 
-The [HIVE Buyback Ledger](https://hivemindos.app/buybacks/) publishes confirmed HIVE purchases. These purchases use the separate 15% buyback allocation rather than the company treasury. Since 2026-09-30, the HIVE each purchase buys is burned in a separate transaction published on the same ledger; purchases made before that date were not. A buyback creates no holder return, staking payout, company ownership, price floor, or claim on revenue.
+The [HIVE Buyback Ledger](https://hivemindos.app/buybacks/) publishes confirmed HIVE purchases. These purchases use the separate 15% buyback allocation rather than the company treasury. Since 2026-09-30, the HIVE each purchase buys is burned in a separate transaction published on the same ledger; purchases made before that date were not. Those earlier purchases, about 9.98M HIVE, are held. A buyback creates no holder return, staking payout, company ownership, price floor, or claim on revenue.
 
 ## Verification boundary
 
@@ -450,20 +455,26 @@ HivemindOS has three separate things that are never one balance: Honey, Hivemind
 
 ## Honey
 
-Honey records useful, verified participation, such as reviewed agent work, accepted open-source contributions, testing, documentation, or completed bounties. Raw model tokens, self-reported activity, or unobserved output do not earn Honey.
+Honey records useful, verified participation, such as reviewed agent work, accepted open-source contributions, testing, documentation, or completed bounties. Self-reported activity and unobserved output do not earn Honey. Model usage earns Honey only through a legacy pool: it still records 1 Honey per 1,000,000 model tokens, capped at 50,000 tokens a day, until that pool is used up.
 
 How Honey is earned:
 
 - **Community Hive Brain:** 0.1 Honey for each distinct copy-trading outcome that passes hosted verification. Unverified, duplicate, and retried submissions earn nothing. The contributing wallet must link to a HivemindOS workspace; until it does, the reward waits as pending.
 - **Telegram recognition:** members with a signature-verified identity can give a fixed, scarce Honey recognition for a named contribution. Daily, pair, recipient, cooldown, and global budget limits apply.
+- **Published API receipts:** 5 Honey for each published receipt, up to 3 a week.
+- **Feedback:** 2, 5, or 10 Honey depending on what was built from it, and never more than 25 for one piece of feedback.
+- **X engagement:** 1 Honey a day per account, up to 3 a week.
+- **HiveVerse finds:** 1 Honey for each find.
+- **HivePunkz share to X:** 10 Honey.
 - **Historical HIVE tips:** past tip-receiver rank may be recorded at 1 Honey per 1,000,000 HIVE received.
+- **Legacy model-usage pool:** 1 Honey per 1,000,000 model tokens, capped at 50,000 tokens a day, until the pool is used up.
 
 Source labels (mission, verified work, peer recognition, learning, historical seed) show where Honey came from. They do not create different kinds of Honey.
 
 What Honey does:
 
-- **More free-agent usage.** Lifetime Honey raises a workspace's daily free-agent request and token allowance, from 1.10× at 10 Honey to a capped 2.00× at 5,000. This allowance and a HIVE staking allowance do not stack; the higher one applies. It is revocable service access, not stored value or a withdrawal right.
-- **Staking multiplies Honey.** An active HIVE staking tier multiplies qualifying Honey earned: 1.00×, 1.10×, 1.25×, 1.45×, 1.70×, and 2.00× from Honeybee through Queen Bee.
+- **More free-agent usage.** Lifetime Honey raises a workspace's daily free-agent request and token allowance, from 1.10× at 5 Honey up to a capped 2.00× at 200: 5, 10, 25, 50, 100, and 200 Honey give 1.10×, 1.20×, 1.35×, 1.50×, 1.75×, and 2.00×. This allowance and a HIVE staking allowance do not stack; the higher one applies. It is revocable service access, not stored value or a withdrawal right.
+- **Staking multiplies Honey.** An active HIVE staking tier multiplies qualifying Honey earned: 1.00×, 1.10×, 1.25×, 1.45×, 1.70×, and 2.00× from Honeybee through Queen Bee. A Founding Bee adds +0.5× on top of the tier, capped at 2.5×.
 
 HivemindOS-controlled infrastructure calculates Honey totals and tiers from verified records. Local state cannot grant Honey, a tier, or contribution evidence.
 
@@ -481,6 +492,10 @@ HIVE may support optional community identity, payments, staking-based Honey earn
 
 You do not need HIVE to run HivemindOS locally, buy Hivemind Cloud services, join a paid workspace, use enterprise features, or bring a provider key. HIVE is not company ownership. See [HIVE Staking And Community Tiers](hive-staking-and-community-tiers.html) for tier details.
 
+### Paying with HIVE
+
+Pay with $HIVE takes 10% off a credit top-up. The HIVE you pay goes to the company treasury as it is: it is not sold, and it is not burned. Credits bought with HIVE create no buyback or treasury allocation when they are spent. Paying with another token carries a 5% fee.
+
 ## Revenue allocation
 
 Customer collections are not automatically platform revenue. Recognized platform revenue excludes pass-through costs, refunds, and reversals. Marketplace gross merchandise value is not platform revenue; only HivemindOS's earned fee counts. Purchased credits are recognized only when consumed.
@@ -496,13 +511,37 @@ server-owned per-service allocation basis
 
 - HivemindOS allocates 15% of each service's server-owned allocation basis to HIVE buybacks.
 - A separate exact 15% of the same server-owned allocation basis goes to the company treasury.
+- Two exceptions apply. Credits bought with HIVE create no buyback or treasury allocation when they are spent. HiveVerse home upgrades split 40% to HIVE buyback and burn, 40% to the HivePunks reward pot, and 20% to the company treasury.
 - The treasury does not fund HIVE buybacks. Each rail has its own accounting and receipts.
 - No user wallet, staked principal, local setting, or client revenue claim can choose either amount or recipient.
 - Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). Pending or failed purchases do not count.
-- Since 2026-09-30, the HIVE each confirmed purchase buys is burned: the exact amount is sent to `0x000000000000000000000000000000000000dEaD` in a separate transaction, published on the same ledger. Purchases made before that date were not burned.
+- Since 2026-09-30, the HIVE each confirmed purchase buys is burned: the exact amount is sent to `0x000000000000000000000000000000000000dEaD` in a separate transaction, published on the same ledger. Purchases made before that date were not burned. That HIVE, about 9.98M, is held.
 - Hive Research's first paid production run produced one confirmed HIVE purchase on Base under its earlier app-specific policy. That receipt stays public; new Hive Research revenue follows the platform-wide 15% buyback allocation.
 
 The treasury allocation remains company property. It creates no holder or staker ownership, redemption right, revenue share, governance right, or claim on treasury assets. Buybacks do not promise a token price, liquidity, profit, or return. More detail: [Revenue Allocations And Treasury Boundaries](treasury-reserve-and-seasonal-programs.html).
+
+## Where HIVE is burned
+
+Every burn sends HIVE to `0x000000000000000000000000000000000000dEaD`.
+
+| Source | What is burned | Status |
+| --- | --- | --- |
+| Platform buybacks | All HIVE bought since 2026-09-30. Earlier purchases, about 9.98M HIVE, are held and were not burned; the first burn happens with the first purchase after that date | Live |
+| HiveVerse home upgrades | The HIVE bought with their 40% buyback share | Live |
+| HivePunks clock-in | 90% of the 5M HIVE paid per bee; the other 10% goes to the HivePunks treasury | Live |
+| HivePunks devolve fee | Half of the 3% fee on HIVE withdrawn from a bee within 90 days; the other half goes to the HivePunks reward pot and is held in HIVE until a swap route exists | Live |
+| HivePunks weekly-draw boosts | 90% of the 1M HIVE paid per boost level; the other 10% goes to the HivePunks treasury | Live |
+| Agent coins | The HIVE bought with 15% of each coin's 2% trading fee | Live; no agent coin has launched yet |
+
+A burn is a recorded on-chain transfer. It is not a promise about price, value, or return.
+
+### HivePunks
+
+HivePunks are 1,111 NFTs on Base, and the collection sold out. Each mint cost 10 USDC: 70% feeds the HivePunks reward pot over 8 weeks, and 30% goes to the HivePunks treasury. The pot is converted to tokenized NVDA and paid weekly to bees that are clocked in. The 7.5% royalty goes entirely to the pot. HivemindOS also pays 25% of HIVE creator fees on daily HIVE trading volume above $20,000 into the pot, capped at $15,000 a quarter for 8 quarters. What the pot pays depends on what it receives; no amount is promised.
+
+### Agent coins
+
+Agent coins carry a 2% trading fee. The first $20 of fees goes to the agent's thinking budget. After that, each fee splits 60% to the agent's thinking, 15% to whoever holds the agent's NFT, 15% to buy HIVE that is burned, and 10% to the HivemindOS treasury. Coin holders receive none of the fee.
 
 ## Tokenomics Policy Changes
 
@@ -582,21 +621,22 @@ Selected transaction fees are live today:
 | DEX swaps | 0.20% | Live platform fee |
 | xStocks, Robinhood Chain Stock Tokens, live Alpaca, and Robinhood Agentic | 0.10% | Live execution fee |
 | Paid x402 and Veil private-payment execution | 0.50% | Live platform fee |
-| Bankr-managed Base copy trades | 0.50%, $0.02–$0.50 | Live post-verification fee |
+| Bankr-managed Base copy trades | $1 monitoring minimum every 30 days, plus 5% to 10% of each new realized profit | Live profit share on verified copies |
 | Eligible local Hyperliquid perp fills | 0.005% | Live builder fee after wallet approval |
 | Base Builder Code attribution on official Base x402 routes | No guaranteed fee | Live attribution with potential ecosystem rewards, analytics, and discovery upside |
 | Ordinary wallet transfers | 0% | Intentionally free |
 | Revenue recorded from outside HivemindOS | 0% | Intentionally free |
 
-- The 0.20%, 0.10%, and 0.50% platform fees have a $0.01 minimum and $10 maximum. Bankr copy trading uses a $0.02 minimum and $0.50 maximum.
+- The 0.20%, 0.10%, and 0.50% platform fees have a $0.01 minimum and $10 maximum.
+- Bankr copy trading charges no fee on trade size. Since 2026-10-04 it charges a $1 monitoring minimum every 30 days and a share of each new realized profit on verified live copies. The share is 10% under $1,000 of copied volume in the last 30 days, 8% from $1,000, and 6% from $10,000. HIVE staking takes 1 to 3 points off, and the share never goes below 5%. Copies started before 2026-10-04 keep the terms they started on.
 - Fees are shown before confirmation and collected only after the main action succeeds. Paper trades, rejected actions, research, and unpaid calls are free.
 - Robinhood Chain Stock Tokens are bought and sold with USDG, the chain's dollar stablecoin.
 - [Base Builder Codes](https://docs.base.org/apps/builder-codes/builder-codes) are attribution infrastructure, not a contractual fee. Rewards count only when actually earned.
-- Ordinary Bankr swaps, cross-chain actions, token launches, prediction markets, NFTs, and automations do not create a separate HivemindOS platform fee. Hosted Bankr copy trading is the exception, because each copied Base swap is verified before its capped fee is collected.
+- Ordinary Bankr swaps, cross-chain actions, token launches, prediction markets, NFTs, and automations do not create a separate HivemindOS platform fee. Hosted Bankr copy trading is the exception: each copied Base swap is verified, and a share is collected only from new realized profit.
 
 ### How large transaction revenue could get
 
-Transaction revenue is eligible volume times the realized take rate, plus partner rewards actually earned.
+Transaction revenue is eligible volume times the realized take rate, plus partner rewards actually earned. Copy-trading revenue depends on realized profit rather than volume, so it is not part of this table.
 
 Illustrative gross platform-fee sensitivity—not a forecast:
 
@@ -879,11 +919,11 @@ The features below are parts of one customer relationship, not separate business
 | DEX swaps | 0.20% | Live |
 | Supported live stock/tokenized-stock execution | 0.10% | Live |
 | Paid x402 and Veil private-payment execution | 0.50% | Live |
-| Bankr-managed Base copy trades | 0.50% ($0.02 minimum, $0.50 maximum) | Live after independent execution verification |
+| Bankr-managed Base copy trades | $1 monitoring minimum every 30 days, plus 5% to 10% of each new realized profit; no fee on trade size | Live after independent execution verification |
 | Eligible Hyperliquid perp fills | 0.005% | Live builder fee |
 | Base x402 Builder Code | Attribution and potential rewards | Live attribution; rewards not guaranteed |
 
-Users can read how these work in the [Trading guide](../../for-users/trading/) and [Wallets, Honey, And x402](../../for-users/features/wallets-honey-and-x402.html). Other Bankr actions carry no HivemindOS fee; hosted Bankr copy trading is the only exception.
+Users can read how these work in the [Trading guide](../../for-users/trading/) and [Wallets, Honey, And x402](../../for-users/features/wallets-honey-and-x402.html). Other Bankr actions carry no HivemindOS fee; hosted Bankr copy trading is the only exception. Its profit share is 10% under $1,000 of copied volume in the last 30 days, 8% from $1,000, and 6% from $10,000, less 1 to 3 points for HIVE staking, never below 5%. Copies started before 2026-10-04 keep the terms they started on.
 
 ## Status and allocation rules
 
@@ -895,7 +935,7 @@ Users can read how these work in the [Trading guide](../../for-users/trading/) a
 | Compute marketplace expansion | Defer supply growth until providers can receive realistic utilization |
 | Stake-tier member usage pricing | Server-enforced consumption pricing on participating hive products; never a payout |
 | HIVE buyback allocation | 15% of each service's server-owned allocation basis funds a separate HIVE purchase rail; purchases are publicly receipted and, since 2026-09-30, the HIVE bought is burned |
-| Company treasury allocation | A separate exact 15% of the same basis; the treasury does not fund buybacks and creates no holder claim |
+| Company treasury allocation | A separate exact 15% of the same basis; the treasury does not fund buybacks and creates no holder claim. Two exceptions: credits bought with HIVE create no buyback or treasury allocation when spent, and HiveVerse home upgrades split 40% to HIVE buyback and burn, 40% to the HivePunks reward pot, and 20% to the treasury |
 | Outside tokenomics allocation | The remainder has no fixed use assigned by the tokenomics policy |
 
 The allocation basis is explained in [Revenue Allocations And Treasury Boundaries](../treasury-reserve-and-seasonal-programs.html).
@@ -926,7 +966,7 @@ description: "The separate 15% HIVE buyback and 15% company treasury allocations
 content:
 # Revenue Allocations And Treasury Boundaries
 
-This is the canonical page for where HivemindOS revenue goes. There are two fixed allocations, one for HIVE buybacks and one for the company treasury. Neither is a staking-income program.
+This is the canonical page for where HivemindOS revenue goes. There are two fixed allocations, one for HIVE buybacks and one for the company treasury, with two exceptions described below. Neither is a staking-income program.
 
 ## The allocation
 
@@ -937,6 +977,11 @@ This is the canonical page for where HivemindOS revenue goes. There are two fixe
 | Outside tokenomics allocation | Remainder of the per-service allocation basis | This policy assigns no fixed use |
 
 The two 15% allocations are exact and separate. They are not one shared bucket, and the treasury is not the source of HIVE purchases.
+
+Two exceptions apply:
+
+- Credits bought with HIVE create no buyback or treasury allocation when they are spent. The HIVE paid for them goes to the company treasury as it is, without being sold.
+- HiveVerse home upgrades split 40% to HIVE buyback and burn, 40% to the HivePunks reward pot, and 20% to the company treasury.
 
 ## What the allocation is based on
 
@@ -953,6 +998,13 @@ HivemindOS's hosted infrastructure calculates and records both allocations. The 
 ## HIVE buybacks
 
 The buyback rail buys HIVE with its own 15% allocation. Confirmed purchases are published in the [HIVE Buyback Ledger](https://hivemindos.app/buybacks/). Pending allocations, failed batches, and unconfirmed transactions do not count.
+
+### How a buyback runs
+
+1. Each charge waits 7 days before its revenue counts as matured.
+2. Every Sunday at 08:00 UTC, matured revenue is bought in batches of $5 to $1,000.
+3. A batch runs only after the revenue it covers has been reconciled.
+4. The HIVE each purchase buys is then burned in its own transaction, shown on the ledger.
 
 Since 2026-09-30, HIVE bought by buybacks is burned: the exact amount each purchase buys is sent to the burn address `0x000000000000000000000000000000000000dEaD` in its own transaction, published on the HIVE Buyback Ledger. Purchases made before that date were not burned. A buyback or burn is not a distribution, staking payment, price floor, liquidity guarantee, or promise of appreciation.
 

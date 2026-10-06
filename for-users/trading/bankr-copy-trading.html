@@ -913,12 +913,15 @@
 
 <ul>
   <li>Bankr pays a <strong>$1 Base USDC monitoring minimum</strong> when a monitor activates and every 30 days while it stays active.</li>
-  <li>The $1 pays for monitoring. It is not fee credit, and it is not deducted from trade fees.</li>
-  <li>Each successful copied trade costs an <strong>uncapped 0.5% of its actual verified copied notional</strong>, which Bankr sends in full.</li>
+  <li>The $1 pays for monitoring. It is not fee credit.</li>
+  <li>There is <strong>no fee on trades</strong>. When a Live sale locks in profit, the copy shares <strong>up to 10% of the new profit</strong>, only above its best result so far. The share starts at 10% and you save as you grow: <strong>+2%</strong> once your copies trade $1,000 in 30 days and <strong>+4%</strong> from $10,000. Staking HIVE adds staker savings: <strong>+1%</strong> at Honeybee, <strong>+2%</strong> at Bumblebee and <strong>+3%</strong> from Mason Bee. The lowest rate is 5%. A losing sale pays nothing, and a copy that dips and recovers pays nothing until it beats its earlier high.</li>
+  <li>A copy started before October 4, 2026 keeps the terms it started on: 0.5% of each verified copied trade instead of the profit share.</li>
   <li>The minimum executed copy is <strong>$5</strong>. Skipped and failed trades cost $0.</li>
 </ul>
 
-<p>For example, a verified $1,000 copy has a $5 fee, and a $100 copy has a $0.50 fee. A monitor with no trades still costs the $1 monitoring minimum for that period.</p>
+<p>For example, a Live sale that locks in $50 of new profit shares $5 at the 10% rate, or $2.50 at the 5% rate. A monitor with no trades still costs the $1 monitoring minimum for that period.</p>
+
+<p>Under the terms for copies started before October 4, 2026, a verified $1,000 copy paid a $5 fee and a $100 copy paid $0.50.</p>
 
 <p>The live price from the hosted service is shown again before you agree. Monitors that accepted older terms keep them.</p>
 
@@ -947,7 +950,7 @@
   <li>The first scan sets a starting point, so older transactions are never copied.</li>
   <li>For each new eligible swap, the service applies your scale and limits, gets a Bankr quote, checks slippage and the dollar cap, then submits the copy.</li>
   <li>A transaction hash alone isn’t success. HivemindOS verifies the matching Base swap before recording it as executed.</li>
-  <li>Only then is the 0.5% fee calculated, and Bankr sends it in Base USDC. HivemindOS verifies that payment independently.</li>
+  <li>Only then is any profit share worked out, and Bankr sends it in Base USDC. HivemindOS verifies that payment independently.</li>
 </ul>
 
 <p>One Bankr wallet can run up to three active target monitors. Monitors following the same target share one watcher but keep separate keys, limits, and results.</p>

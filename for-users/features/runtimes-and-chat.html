@@ -949,6 +949,20 @@
 
 <p>Switching modes keeps the conversation and attachments. No mode grants extra permission to act or spend. Chat mode blocks changes; to act, switch to Do or Create yourself. If an agent can’t guarantee Chat’s no-changes rule, that mode is unavailable for it.</p>
 
+<h3 id="permission-requests-in-the-chat">Permission requests in the chat</h3>
+
+<p>When an agent needs something it isn’t allowed yet, such as running a program on your computer or reading your finances, the chat shows a card with the choices right there:</p>
+
+<ul>
+  <li><strong>Just this time</strong> allows this one request.</li>
+  <li><strong>For today</strong> allows it until midnight.</li>
+  <li><strong>Always</strong> allows it from now on.</li>
+  <li><strong>Not now</strong> declines this time; the agent may ask again later.</li>
+  <li><strong>Never</strong> declines and stops the agent from asking again.</li>
+</ul>
+
+<p>Your choice applies to that agent only. Choosing <strong>Always</strong> later undoes a <strong>Never</strong>. For finances, you can review or change every agent’s access in <strong>Finances → ⋯ → Agent access</strong>. Sending money, trading, and other payments always ask you each time, with no <strong>Always</strong> option.</p>
+
 <p>Use <a href="work-and-scheduler.html">Work</a> instead when a request should be assigned, tracked, reviewed, or kept with formal deliverables.</p>
 
 <h2 id="choose-the-right-agent">Choose the right agent</h2>
@@ -981,6 +995,18 @@
 <p>Your first assistant, and any assistant left on the default model, uses a model running on this computer when one is loaded in LM Studio, Ollama, or another local model app. Otherwise it uses the free online model. Choosing a specific model turns this off.</p>
 
 <p>If the online model can’t be reached or today’s free allowance is used up, a model loaded on this computer answers instead, if there is one. A reply that needs payment still asks first. The line under each reply names the local model that answered and why. Incognito conversations always stay on the private online model.</p>
+
+<p>While Incognito is on, a switch above the message box chooses what the chat keeps afterwards:</p>
+
+<ul>
+  <li><strong>Don’t save</strong> (the default): the conversation is not added to your chat history or your brain and is not synced. It disappears when you leave the chat.</li>
+  <li><strong>Save on this computer</strong>: kept in your chat history on this computer only. It is not synced to your other devices, not uploaded, and not turned into memories.</li>
+  <li><strong>Save to my account</strong>: saved like any other chat.</li>
+</ul>
+
+<p>A chat never becomes less private than the choice it started with. Turning Incognito off later leaves a chat saved on this computer where it is.</p>
+
+<p>When a reply fails, <strong>Retry</strong> replaces the failed reply with a new attempt in the same place, so the conversation shows one answer, or one error if the new attempt fails too.</p>
 
 <p>A local model answers only when the whole conversation fits in its context, so your assistant’s instructions are never cut off. Many local apps start at 4,096 tokens, which is too small. Load the model with a context of 16,384 or more. In Ollama, set <code class="language-plaintext highlighter-rouge">OLLAMA_CONTEXT_LENGTH=16384</code> before starting it.</p>
 
@@ -1023,6 +1049,8 @@
 <h2 id="voice-and-calls">Voice and calls</h2>
 
 <ul>
+  <li><strong>Talk with Scout.</strong> In a chat with Scout, the waveform takes Send’s place while the message box is empty. Select it to open a voice chat over the whole window: say what you want, and Scout answers out loud while what you both said shows in small bubbles. Talk over him to stop him. Mute or end the chat at the bottom, and use the gear to pick how you talk, including live voices that answer in their own voice. What you say is sent as your message in that chat, so the conversation is all there afterwards. The first time, the app asks before anything is sent.</li>
+  <li><strong>Hear Scout’s replies.</strong> Turn on <strong>Speak replies</strong> in <strong>Settings &gt; Voice</strong> to have Scout read his replies aloud as they arrive, in the voice you pick. Each voice has a free sample. Spoken replies and voice chats use your HivemindOS credits.</li>
   <li><strong>Voice chat with Queen Bee.</strong> Choose <strong>Voice Chat with Queen Bee</strong> from the menu bar icon or <strong>Navigation</strong> menu (<code class="language-plaintext highlighter-rouge">Cmd+Shift+V</code>). The window shows a glow and a live transcript while you talk. Replies use OpenAI speech when an OpenAI voice key is set up, or your computer’s built-in voice otherwise.</li>
   <li><strong>Voice in a conversation.</strong> Select the voice icon in Chat to talk with your agent. You can type during the call or use the camera button to share what you see.</li>
   <li><strong>Agent calls.</strong> Start an in-app voice call with an agent, or have a scheduled call ring your paired phone. See <a href="calling.html">Calling</a> for free and paid options.</li>

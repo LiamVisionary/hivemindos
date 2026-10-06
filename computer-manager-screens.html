@@ -6,16 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
   <meta name="theme-color" content="#0c0d11">
-  <title>Finances | HivemindOS Docs</title>
-  <meta name="description" content="See accounts, activity, investments, debts, budgets, goals, alerts, and trusted agent access in one private financial workspace.">
-  <link rel="canonical" href="https://hivemindos.app/docs/for-users/features/finances.html">
+  <title>Managing a computer from the phone or the web: the screens | HivemindOS Docs</title>
+  <meta name="description" content="Local-first agent fleet control room documentation.">
+  <link rel="canonical" href="https://hivemindos.app/docs/computer-manager-screens.html">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="HivemindOS">
-  <meta property="og:title" content="Finances | HivemindOS Docs">
-  <meta property="og:description" content="See accounts, activity, investments, debts, budgets, goals, alerts, and trusted agent access in one private financial workspace.">
-  <meta property="og:url" content="https://hivemindos.app/docs/for-users/features/finances.html">
-  <meta name="twitter:title" content="Finances | HivemindOS Docs">
-  <meta name="twitter:description" content="See accounts, activity, investments, debts, budgets, goals, alerts, and trusted agent access in one private financial workspace.">
+  <meta property="og:title" content="Managing a computer from the phone or the web: the screens | HivemindOS Docs">
+  <meta property="og:description" content="Local-first agent fleet control room documentation.">
+  <meta property="og:url" content="https://hivemindos.app/docs/computer-manager-screens.html">
+  <meta name="twitter:title" content="Managing a computer from the phone or the web: the screens | HivemindOS Docs">
+  <meta name="twitter:description" content="Local-first agent fleet control room documentation.">
   <meta property="og:image" content="https://hivemindos.app/og.png">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
@@ -453,14 +453,14 @@
               
 
               
-                <details class="navGroup" open>
+                <details class="navGroup">
                   <summary>Wallets And Spending</summary>
                   <div class="navChildren">
                     
                       <a class="navLink" href="/docs/for-users/features/wallets-honey-and-x402.html">Overview</a>
                     
                     
-                      <a class="navLink isActive" aria-current="page" href="/docs/for-users/features/finances.html">Finances</a>
+                      <a class="navLink" href="/docs/for-users/features/finances.html">Finances</a>
                     
                       <a class="navLink" href="/docs/for-users/x-engagement-honey.html">HONEY For X Posts</a>
                     
@@ -899,89 +899,299 @@
             </button>
           </div>
         </div>
-        <h1 id="finances">Finances</h1>
+        <h1 id="managing-a-computer-from-the-phone-or-the-web-the-screens">Managing a computer from the phone or the web: the screens</h1>
 
-<p>Finances shows what you own, what you owe, where your money goes, and what needs attention. Open <strong>More → Finances</strong> to see net worth, monthly cash flow, accounts, activity, budgets, goals, and alerts.</p>
+<p>For whoever builds this on the phone (React Native) and on hivemindos.app/chat (React, glass). Both draw
+from the same view models in <code class="language-plaintext highlighter-rouge">core/computer-manager.ts</code> (desktop canonical <code class="language-plaintext highlighter-rouge">src/shared/hive/core</code>, phone
+<code class="language-plaintext highlighter-rouge">shared/hive/core</code>, website <code class="language-plaintext highlighter-rouge">src/shared/hive/core</code>). If both builders follow this page, a person moving between
+their phone and their browser meets the same sections, the same rows, the same buttons and the same words.</p>
 
-<p>It starts empty. Add only the accounts you want HivemindOS to track.</p>
-
-<h2 id="add-your-accounts">Add your accounts</h2>
-
-<p>Choose <strong>Add account</strong>, then pick one:</p>
-
-<ul>
-  <li><strong>Connect a bank or card</strong> keeps supported bank, card, loan, and investment accounts up to date after a secure sign-in.</li>
-  <li><strong>Add a balance yourself</strong> tracks cash, property, loans, offline investments, or anything else with a balance.</li>
-  <li><strong>Import a statement</strong> adds history from a CSV, OFX, or QFX file. Re-importing the same rows doesn’t create duplicates. If a card statement lists purchases as positive numbers, open <strong>Advanced</strong> in the import window and turn on the option to flip money in and out; re-importing with it on fixes those rows.</li>
-</ul>
-
-<p>Connecting or reconnecting a bank always asks you to confirm it’s you first, with Face ID, Touch ID, a passkey, or your dashboard device token, even if the dashboard is already unlocked.</p>
-
-<p>Your HivemindOS wallets and connected brokerage accounts are added when you refresh.</p>
-
-<p>Automatic updates are included with HivemindOS Plus, Pro, and Max. Without a plan, you can pick one during setup without losing your place, or keep using manual balances and statement imports. Self-hosted installations can use their own bank connection under <strong>Advanced</strong>.</p>
-
-<p>Connected accounts refresh when you open Finances if they are more than a few minutes old. Use the refresh button next to <strong>Add account</strong> for the latest balances now. A connection that needs attention shows on its account card and in the watchlist.</p>
-
-<h2 id="find-your-way-around">Find your way around</h2>
-
-<p>Finances has four sections: <strong>Overview</strong>, <strong>Activity</strong>, <strong>Accounts</strong>, and <strong>Plans</strong>. Importing, exporting, merchant rules, agent access, preferences, and your own bank connection are in the <strong>⋯</strong> menu next to <strong>Add account</strong>.</p>
-
-<ul>
-  <li><strong>Overview</strong> separates assets from debts, cash from investments and crypto, and settled income from settled spending. It shows your net worth over time, this month compared with the same point last month, and money in and out for recent months. Accounts in another currency stay visible but are not converted or added to your total.</li>
-  <li><strong>Transfers.</strong> When money leaves one of your connected accounts and the same amount arrives in another within a few days, it’s a transfer between your own accounts and doesn’t count as income or spending. Other transfers do count, because they’re usually payments to people or apps. If one is really your own account that isn’t connected, choose <strong>My account</strong> under <strong>Transfers to check</strong> and it’s left out from then on.</li>
-  <li><strong>Repeat charges</strong> lists subscriptions, bills, and usage-billed services found in your activity, with what each costs per month. The watchlist tells you when a fixed-price charge goes up or a new one starts.</li>
-  <li>The <strong>watchlist</strong> flags connection problems, low balances, unusually large purchases, budgets near or over their limit, and upcoming debt payments.</li>
-  <li><strong>Activity</strong> lets you search transactions and fix categories. Your category choice stays when the account refreshes. After changing one, choose <strong>Apply to all</strong> to do the same for every charge from that merchant, now and later. Select a transaction to add a private note, mark it as business, or exclude it from income and spending, for example a refund. <strong>Filters</strong> narrows to one account or category.</li>
-  <li><strong>Merchant rules</strong> in the <strong>⋯</strong> menu lists every “all charges from this merchant” choice you’ve made. Deleting a rule returns those charges to your bank’s category. A category you set on a single transaction always wins over a rule.</li>
-  <li><strong>Business and personal.</strong> Mark an account as a business account, or mark single transactions or merchants as business. Once anything is marked, the Overview can show all, personal, or business spending.</li>
-  <li><strong>Accounts</strong> groups everything by type. Accounts with a zero balance wait behind a <strong>Show empty accounts</strong> row. Select an account to see holdings, or a debt’s rate, minimum payment, and due date, and to rename it, hide it, or leave it out of net worth. <strong>All holdings</strong> lists every position.</li>
-  <li><strong>Plans</strong> holds monthly category budgets (with suggested limits based on your last three months that you can add in one step), savings and debt-payoff goals (with an optional target date showing the monthly pace), and suggestions from agents. Goals can follow an account balance or be updated by hand.</li>
-</ul>
-
-<p>Removing a manual account removes its imported history. Removing a connected institution removes all its accounts. HivemindOS asks first.</p>
-
-<p>Use <strong>Export data</strong> in the <strong>⋯</strong> menu for a portable copy of your records. If your plan ends, you can still view, export, and remove connections; automatic refresh resumes when the plan is active again.</p>
-
-<h2 id="ask-about-your-money">Ask about your money</h2>
-
-<p>Type a question such as “Why did I spend more this month?” or “What are my biggest subscriptions?” in <strong>Ask about your money</strong> on the Overview. The answer uses a summary of your accounts, months, categories, merchants, and repeat charges. Account numbers are never included.</p>
-
-<p>Questions are answered only by a private model that keeps nothing, and agents never see them. Answers stay on screen until you leave Finances and aren’t saved.</p>
-
-<h2 id="give-an-agent-access">Give an agent access</h2>
-
-<p>Agents have no access to Finances by default. When an agent in chat needs your finances, the chat asks you right there: <strong>Just this time</strong>, <strong>For today</strong>, <strong>Always</strong>, <strong>Not now</strong>, or <strong>Never</strong>. Its answers use the model that agent runs on.</p>
-
-<p>To set access ahead of time:</p>
+<h2 id="0-rules-for-both-builders">0. Rules for both builders</h2>
 
 <ol>
-  <li>Open <strong>Agent access</strong> from the <strong>⋯</strong> menu.</li>
-  <li>Choose one agent.</li>
-  <li>Grant only the abilities and accounts it needs.</li>
+  <li><strong>No wording in app code.</strong> Every title, row line, status, button label, confirm question, notice and
+error comes from the view models or <code class="language-plaintext highlighter-rouge">MANAGE_COPY</code>. The only words an app may add are plain chrome:
+“Manage”, “Refresh”, “Cancel”, “Done”, “Back”, “Send”, “Try again”, “Ask again”, “Sign in”. If a screen needs a
+new sentence, add it to <code class="language-plaintext highlighter-rouge">computer-manager.ts</code> (and its test), then sync.</li>
+  <li><strong>One loop per call.</strong> Collect what <code class="language-plaintext highlighter-rouge">callDevice</code> yields, catch what it throws, then:
+    <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">table</span> <span class="o">=</span> <span class="p">{</span> <span class="na">scopes</span><span class="p">:</span> <span class="nx">DEVICE_ACCESS_SCOPES</span><span class="p">,</span> <span class="na">actions</span><span class="p">:</span> <span class="nx">DEVICE_ACTIONS</span><span class="p">,</span> <span class="na">messages</span><span class="p">:</span> <span class="nx">DEVICE_CALL_MESSAGES</span> <span class="p">};</span>
+<span class="kd">let</span> <span class="nx">access</span> <span class="o">=</span> <span class="nx">computerAccess</span><span class="p">(</span><span class="nx">grant</span><span class="p">.</span><span class="nx">scopes</span><span class="p">,</span> <span class="nx">table</span><span class="p">,</span> <span class="nx">grant</span><span class="p">.</span><span class="nx">desktop</span><span class="p">.</span><span class="nx">name</span><span class="p">);</span>   <span class="c1">// once per grant</span>
+<span class="kd">const</span> <span class="nx">outcome</span> <span class="o">=</span> <span class="nx">readManageAnswer</span><span class="p">(</span><span class="nx">access</span><span class="p">,</span> <span class="nx">chunks</span><span class="p">,</span> <span class="nx">error</span><span class="p">);</span>                 <span class="c1">// every call</span>
+<span class="nx">access</span> <span class="o">=</span> <span class="nx">narrowAccess</span><span class="p">(</span><span class="nx">access</span><span class="p">,</span> <span class="nx">outcome</span><span class="p">,</span> <span class="nx">action</span><span class="p">);</span>                          <span class="c1">// every call</span>
+<span class="kd">const</span> <span class="nx">view</span> <span class="o">=</span> <span class="nx">automationsView</span><span class="p">(</span><span class="nx">access</span><span class="p">,</span> <span class="nx">outcome</span><span class="p">,</span> <span class="nx">clock</span><span class="p">);</span>                    <span class="c1">// per section</span>
+</code></pre></div>    </div>
+    <p><code class="language-plaintext highlighter-rouge">narrowAccess</code> matters: a “not allowed” lowers that one scope (its buttons turn off with the computer’s
+reason); a removal or ending locks everything and shows the lost state.</p>
+  </li>
+  <li><strong>Loading.</strong> Load a section when it first comes on screen, never all eight at once: at most
+<code class="language-plaintext highlighter-rouge">MANAGE_PARALLEL_LOADS</code> (3) calls in flight per computer. The computer refuses a device’s fifth call at once
+as busy. Keep the last good view while refreshing. Show a placeholder only when there is no view yet
+(<code class="language-plaintext highlighter-rouge">view.loading</code>).</li>
+  <li><strong>Refresh.</strong> While a section is on screen and the app is in front, ask again every
+<code class="language-plaintext highlighter-rouge">MANAGE_REFRESH_MS[id]</code> (null: only on open and pull). Phone: pull to refresh. Web: a Refresh button in the
+section header. Stop timers when the screen is hidden.</li>
+  <li><strong>Buttons</strong> are <code class="language-plaintext highlighter-rouge">ManageButton</code>s. Draw every button the view gives, in its order.
+    <ul>
+      <li><code class="language-plaintext highlighter-rouge">enabled: false</code> with a <code class="language-plaintext highlighter-rouge">reason</code>: draw it visibly off. Phone: a tap shows the reason in a short line
+under the row (or a small toast). Web: the reason is the tooltip and, on click, a line under the row.</li>
+      <li><code class="language-plaintext highlighter-rouge">enabled: false</code> with no reason: it is held while another call on that row runs. Draw it off.</li>
+      <li><code class="language-plaintext highlighter-rouge">busy</code>: keep the label, add a small spinner, block taps.</li>
+      <li><code class="language-plaintext highlighter-rouge">confirm</code>: ask first (section 4), call only after the confirm button.</li>
+      <li>After a row action answers, show the matching done notice (<code class="language-plaintext highlighter-rouge">automationDoneText</code>, <code class="language-plaintext highlighter-rouge">serviceDoneText</code>)
+for about 3 s under the row, then reload that section.</li>
+    </ul>
+  </li>
+  <li><strong>Notices</strong> (<code class="language-plaintext highlighter-rouge">ManageNotice</code>) sit inline at the top of the section they belong to, never as a toast. One
+button, from <code class="language-plaintext highlighter-rouge">next</code>: <code class="language-plaintext highlighter-rouge">retry</code> “Try again”, <code class="language-plaintext highlighter-rouge">open-computer</code> “Try again”, <code class="language-plaintext highlighter-rouge">sign-in</code> “Sign in”, <code class="language-plaintext highlighter-rouge">relink</code> “Ask
+again” (starts <code class="language-plaintext highlighter-rouge">requestDeviceAccess</code> again), <code class="language-plaintext highlighter-rouge">wait</code> (no button; try again after 30 s), <code class="language-plaintext highlighter-rouge">settings</code>,
+<code class="language-plaintext highlighter-rouge">check-wallet</code> and <code class="language-plaintext highlighter-rouge">none</code> (no button; the words already say what to do).</li>
+  <li><strong>Tones.</strong> <code class="language-plaintext highlighter-rouge">info</code> muted text, <code class="language-plaintext highlighter-rouge">good</code> success color, <code class="language-plaintext highlighter-rouge">warn</code> honey, <code class="language-plaintext highlighter-rouge">error</code> danger. A small dot or icon
+before the text is fine. Never a left accent bar, never sparkles or emoji.</li>
+  <li><strong>Time.</strong> Pass <code class="language-plaintext highlighter-rouge">{ now: Date.now(), hour12 }</code>, where <code class="language-plaintext highlighter-rouge">hour12</code> follows the device’s own 12/24-hour setting.
+Leave <code class="language-plaintext highlighter-rouge">utcOffsetMinutes</code> out (the device’s own zone).</li>
+  <li><strong>Never show</strong> model servers, app plumbing or ids: <code class="language-plaintext highlighter-rouge">host</code>, <code class="language-plaintext highlighter-rouge">providerLabel</code>, <code class="language-plaintext highlighter-rouge">sourceId</code>, <code class="language-plaintext highlighter-rouge">selection</code>,
+<code class="language-plaintext highlighter-rouge">confirmationId</code>, <code class="language-plaintext highlighter-rouge">uploadId</code>, <code class="language-plaintext highlighter-rouge">runId</code> and keys are for calls, not for people.</li>
 </ol>
 
-<p>Abilities cover the overview, accounts, transactions, categories, holdings, budgets, goals, alerts, and suggestions. Leaving every account unchecked grants access to all current and future accounts; checking accounts limits access to those.</p>
-
-<p>An agent can also be allowed to suggest a transfer, trade, or payment, with an optional dollar ceiling. A suggestion is a plan for you to review, not a money movement. Approving it saves your decision; any real transfer or trade still goes through its own wallet or trading confirmation and limits.</p>
-
-<p>You can remove an agent’s access at any time without changing its other permissions. Agent access also shows access that ends later today and agents you blocked with <strong>Never</strong>. Edit a blocked agent to allow it, or remove it to be asked again.</p>
-
-<h2 id="privacy">Privacy</h2>
+<h2 id="1-where-it-lives">1. Where it lives</h2>
 
 <ul>
-  <li>Financial data stored on your computer is encrypted and private to the current workspace.</li>
-  <li>Bank passwords stay in the secure connection window and never reach HivemindOS or its agents.</li>
-  <li>Statement files are not shown to agents. Agents see only what their permissions allow.</li>
+  <li><strong>Phone:</strong> from a computer’s own screen (the place its apps are listed today), a “Manage” row opens the
+manager: one stack screen (the overview) and one screen per section. Sheets for forms and confirms.</li>
+  <li><strong>Web:</strong> hivemindos.app/chat, from the account menu: “Your computers”, then a computer, then the manager.
+At 900 px and wider: the sections list on the left (260 px), the open section on the right. Narrower: the
+same stack as the phone.</li>
+  <li>Only computers with a grant on this device appear. One computer at a time.</li>
 </ul>
 
-<p>Finances helps you organize and oversee money. It doesn’t replace your institution’s statements and isn’t tax, legal, or investment advice.</p>
-
-<h2 id="related">Related</h2>
+<h2 id="2-the-overview">2. The overview</h2>
 
 <ul>
-  <li><a href="wallets-honey-and-x402.html">Wallets And Spending Controls</a></li>
-  <li><a href="../trading/">Trading</a></li>
+  <li><strong>Header:</strong> <code class="language-plaintext highlighter-rouge">access.desktopName</code> as the title. Under it, whether that computer is online (from
+<code class="language-plaintext highlighter-rouge">listDesktops</code>): <code class="language-plaintext highlighter-rouge">MANAGE_COPY.online</code> with a success dot, or the <code class="language-plaintext highlighter-rouge">no-device</code> message from <code class="language-plaintext highlighter-rouge">DEVICE_CALL_MESSAGES</code>.</li>
+  <li><strong>Lost access</strong> (<code class="language-plaintext highlighter-rouge">access.lost</code> set): the whole screen is one empty state: <code class="language-plaintext highlighter-rouge">MANAGE_COPY.lostTitle</code>, then
+<code class="language-plaintext highlighter-rouge">access.lost.text</code>, then one button for <code class="language-plaintext highlighter-rouge">access.lost.next</code> (“Ask again”). No sections.</li>
+  <li><strong>Sections</strong> (<code class="language-plaintext highlighter-rouge">access.sections</code>, in that order): one row each.
+    <ul>
+      <li>Title: <code class="language-plaintext highlighter-rouge">section.title</code>.</li>
+      <li>Second line: the section view’s <code class="language-plaintext highlighter-rouge">summary</code> once loaded, else <code class="language-plaintext highlighter-rouge">section.line</code>.</li>
+      <li>When <code class="language-plaintext highlighter-rouge">section.canChange</code> is false: a small muted pill with <code class="language-plaintext highlighter-rouge">section.levelLabel</code> (“See”).</li>
+      <li>A warn dot when the section’s view has a <code class="language-plaintext highlighter-rouge">notice</code> with tone warn or error, or Copy trading has
+<code class="language-plaintext highlighter-rouge">attention</code> items.</li>
+    </ul>
+  </li>
+  <li><strong>Locked line:</strong> <code class="language-plaintext highlighter-rouge">access.lockedLine</code> under the list, small and muted, no icon. Omit when empty.</li>
+  <li>Phone: inset grouped list on <code class="language-plaintext highlighter-rouge">surface</code>, hairline dividers, 14 pt row padding, 44 pt touch targets.
+Web: the same rows in the left column; the selected row gets a <code class="language-plaintext highlighter-rouge">surfaceAlt</code> fill, no border.</li>
+</ul>
+
+<h2 id="3-the-sections">3. The sections</h2>
+
+<p>Every section screen: title (<code class="language-plaintext highlighter-rouge">section.title</code>), <code class="language-plaintext highlighter-rouge">section.line</code> muted under it, then the <code class="language-plaintext highlighter-rouge">notice</code> if any,
+then the content below, then <code class="language-plaintext highlighter-rouge">view.empty</code> as a centered muted line when the list is empty.</p>
+
+<h3 id="31-ai-models-modelslist-also-medialist-when-pictures-and-video-is-allowed">3.1 AI models (<code class="language-plaintext highlighter-rouge">models.list</code>; also <code class="language-plaintext highlighter-rouge">media.list</code> when Pictures and video is allowed)</h3>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">modelsView(access, { text, media })</code>. Pass <code class="language-plaintext highlighter-rouge">media</code> only when <code class="language-plaintext highlighter-rouge">manageMay(access, 'media.list')</code>.</li>
+  <li>One group per <code class="language-plaintext highlighter-rouge">view.groups</code> item, headed by <code class="language-plaintext highlighter-rouge">group.title</code> (“Chat models”, “Picture models”, “Video
+models”). Each row: <code class="language-plaintext highlighter-rouge">name</code> (primary), <code class="language-plaintext highlighter-rouge">where</code> and <code class="language-plaintext highlighter-rouge">note</code> (muted, under it), <code class="language-plaintext highlighter-rouge">stateText</code> on the right with
+a dot (success for running and ready, muted for idle, honey for not ready, none for off).</li>
+  <li>Chat models have <code class="language-plaintext highlighter-rouge">row.chat</code>: a compact “Chat” button. It opens the app’s own chat with that model; the
+turn goes through <code class="language-plaintext highlighter-rouge">models.chat</code> with <code class="language-plaintext highlighter-rouge">modelChatArgs(...)</code>, and the reply streams through
+<code class="language-plaintext highlighter-rouge">modelChatStep</code>. When <code class="language-plaintext highlighter-rouge">modelChatArgs</code> reports <code class="language-plaintext highlighter-rouge">dropped &gt; 0</code>, show <code class="language-plaintext highlighter-rouge">MANAGE_COPY.modelChatDropped</code> once,
+muted, above the reply. When the call’s loop ends, every time, pass the state (and the error it threw, if
+any) through <code class="language-plaintext highlighter-rouge">manageStreamEnded(access, state, error)</code>: a reply cut off part way keeps what arrived and ends
+in plain words instead of sitting at “answering”.</li>
+</ul>
+
+<h3 id="32-pictures-and-video-medialist-mediagenerate-mediastatus">3.2 Pictures and video (<code class="language-plaintext highlighter-rouge">media.list</code>, <code class="language-plaintext highlighter-rouge">media.generate</code>, <code class="language-plaintext highlighter-rouge">media.status</code>)</h3>
+
+<ul>
+  <li><strong>Form</strong> (<code class="language-plaintext highlighter-rouge">mediaForm(access, outcome)</code>): a segmented control from <code class="language-plaintext highlighter-rouge">form.kinds</code> (Picture | Video). Under a
+kind that is not <code class="language-plaintext highlighter-rouge">ready</code>, show its <code class="language-plaintext highlighter-rouge">note</code> and disable Make.
+    <ul>
+      <li>Model picker (a row that opens a list): <code class="language-plaintext highlighter-rouge">form.models[kind]</code>; Automatic first. Each choice: <code class="language-plaintext highlighter-rouge">label</code>,
+<code class="language-plaintext highlighter-rouge">where</code> muted, <code class="language-plaintext highlighter-rouge">note</code> when not ready (drawn off).</li>
+      <li>Prompt: multiline field, placeholder <code class="language-plaintext highlighter-rouge">MANAGE_COPY.mediaPrompt[kind]</code> (the same words
+<code class="language-plaintext highlighter-rouge">checkMediaRequest</code> uses when it is empty).</li>
+      <li>Start pictures: an <code class="language-plaintext highlighter-rouge">MANAGE_COPY.addPicture</code> control only when <code class="language-plaintext highlighter-rouge">form.maxPictures[kind] &gt; 0</code>, up to that many,
+PNG, JPEG or WebP, sent as data URLs. One sealed call carries under 96 KB in all, so every picture is
+scaled down before it is added: <code class="language-plaintext highlighter-rouge">mediaPictureRoom(form, request, count)</code> is the longest data URL each
+of <code class="language-plaintext highlighter-rouge">count</code> pictures may be. Re-encode as JPEG (quality 0.7) at 768 px on the long side, then 512, 384,
+256, until the data URL fits. With four pictures for a video expect about 256 px each. If even 256 px
+does not fit, show <code class="language-plaintext highlighter-rouge">MANAGE_COPY.pictureTooBig</code> and do not add it.</li>
+      <li>Make button: <code class="language-plaintext highlighter-rouge">form.make</code>. On tap: <code class="language-plaintext highlighter-rouge">checkMediaRequest(form, { kind, prompt, modelKey, pictures, runId })</code>
+with <code class="language-plaintext highlighter-rouge">runId = manageId(random, 'run_')</code>. A <code class="language-plaintext highlighter-rouge">{ ok: false, field, message }</code> puts the message under that
+field. Otherwise save a <code class="language-plaintext highlighter-rouge">MediaRun</code> locally, then call <code class="language-plaintext highlighter-rouge">media.generate</code> with <code class="language-plaintext highlighter-rouge">args</code>.</li>
+    </ul>
+  </li>
+  <li><strong>Runs</strong> (<code class="language-plaintext highlighter-rouge">mediaRecentView(access, runs, clock)</code>), newest first, under the form. The device keeps its own
+runs (the computer does not list past ones to other devices): phone in its app storage, web in
+<code class="language-plaintext highlighter-rouge">host.store</code>. Each row: <code class="language-plaintext highlighter-rouge">title</code>, <code class="language-plaintext highlighter-rouge">when</code> muted, <code class="language-plaintext highlighter-rouge">line</code>, and while <code class="language-plaintext highlighter-rouge">pollMs</code> is set call <code class="language-plaintext highlighter-rouge">media.status
+{ runId }</code> after that long and store the outcome on the run.</li>
+  <li><strong>Ready results:</strong> each <code class="language-plaintext highlighter-rouge">result</code> is a thumbnail placeholder until fetched: call <code class="language-plaintext highlighter-rouge">media.status</code> with
+<code class="language-plaintext highlighter-rouge">result.fetchArgs</code>, feed every chunk to <code class="language-plaintext highlighter-rouge">mediaFileStep</code>, show <code class="language-plaintext highlighter-rouge">mediaFileLine(progress)</code> over the
+placeholder (and end the loop with <code class="language-plaintext highlighter-rouge">manageStreamEnded(access, progress, error)</code>, as for a model reply), and
+when <code class="language-plaintext highlighter-rouge">progress.done</code>, build the file from <code class="language-plaintext highlighter-rouge">progress.parts.join('')</code> (base64) and
+<code class="language-plaintext highlighter-rouge">progress.mimeType</code>. Phone: write it to the cache and offer Save to Photos and Share. Web: a blob URL with
+Download.</li>
+</ul>
+
+<h3 id="33-chats-chatslist-chatsread-chatscontinue">3.3 Chats (<code class="language-plaintext highlighter-rouge">chats.list</code>, <code class="language-plaintext highlighter-rouge">chats.read</code>, <code class="language-plaintext highlighter-rouge">chats.continue</code>)</h3>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">chatsView(access, outcome, clock)</code>. Rows like a messages list: <code class="language-plaintext highlighter-rouge">title</code> (one line), <code class="language-plaintext highlighter-rouge">agent</code> and <code class="language-plaintext highlighter-rouge">when</code> on
+the second line, <code class="language-plaintext highlighter-rouge">preview</code> muted (two lines at most). When <code class="language-plaintext highlighter-rouge">running</code>, a small “Working…” (<code class="language-plaintext highlighter-rouge">stateText</code>)
+instead of <code class="language-plaintext highlighter-rouge">when</code>.</li>
+  <li>Tap a row (<code class="language-plaintext highlighter-rouge">row.open</code>): the chat screen. <code class="language-plaintext highlighter-rouge">chats.read { sessionId }</code> first, then <code class="language-plaintext highlighter-rouge">{ sessionId, sinceSeq:
+page.maxSeq }</code> every 3 s while <code class="language-plaintext highlighter-rouge">page.running</code>, else every 20 s; feed each answer to
+<code class="language-plaintext highlighter-rouge">chatPageStep(access, page, outcome)</code>. Draw <code class="language-plaintext highlighter-rouge">items</code> in order: user messages right, assistant messages as
+plain text, tool steps as one muted line (<code class="language-plaintext highlighter-rouge">step</code>, then <code class="language-plaintext highlighter-rouge">text</code>) with a dot for <code class="language-plaintext highlighter-rouge">stepState</code>. When
+<code class="language-plaintext highlighter-rouge">page.waiting</code> has lines, show each as an info line above the composer: this device cannot answer those;
+the person answers on the computer.</li>
+  <li><strong>Reply</strong> (<code class="language-plaintext highlighter-rouge">row.reply</code>): a composer at the bottom, only when enabled; otherwise its reason sits there
+instead, muted. A mode choice beside Send, from <code class="language-plaintext highlighter-rouge">CHAT_MODES</code> (<code class="language-plaintext highlighter-rouge">label</code>, with <code class="language-plaintext highlighter-rouge">line</code> under each choice),
+“Ask first” by default. Send calls <code class="language-plaintext highlighter-rouge">chats.continue</code> with <code class="language-plaintext highlighter-rouge">chatContinueArgs(...)</code>; then read again at once.</li>
+  <li><strong>Who started it.</strong> Every listed row carries <code class="language-plaintext highlighter-rouge">origin</code> (<code class="language-plaintext highlighter-rouge">"person"</code>, <code class="language-plaintext highlighter-rouge">"phone"</code> or <code class="language-plaintext highlighter-rouge">"automation"</code>), plus
+<code class="language-plaintext highlighter-rouge">originKind</code> (<code class="language-plaintext highlighter-rouge">queen-bee</code>, <code class="language-plaintext highlighter-rouge">work-board</code>, <code class="language-plaintext highlighter-rouge">company</code>, <code class="language-plaintext highlighter-rouge">swarm</code>, <code class="language-plaintext highlighter-rouge">capability</code>, <code class="language-plaintext highlighter-rouge">script</code>, <code class="language-plaintext highlighter-rouge">subagent</code>, <code class="language-plaintext highlighter-rouge">cron</code>,
+<code class="language-plaintext highlighter-rouge">import</code>) and <code class="language-plaintext highlighter-rouge">groupId</code> (one fan-out of the same prompt to several agents) when known. <code class="language-plaintext highlighter-rouge">chats.list
+{ origin: ["person", "phone"] }</code> leaves automations out on the computer; without <code class="language-plaintext highlighter-rouge">origin</code> every chat is
+listed, as before. A desktop from before this sends no <code class="language-plaintext highlighter-rouge">origin</code>: treat a missing one as a person’s.</li>
+  <li><strong>The computer’s app chats</strong> (Claude Code, Codex, Hermes), read only: <code class="language-plaintext highlighter-rouge">chats.list { source: "apps",
+runtime?, limit?, cursor?, origin? }</code> and <code class="language-plaintext highlighter-rouge">chats.read { source: "apps", runtime, sessionId, sinceSeq?,
+before?, limit? }</code>. The answer carries <code class="language-plaintext highlighter-rouge">source: "apps"</code>; one without it came from a desktop that predates
+this and listed its own chats instead. Rows carry <code class="language-plaintext highlighter-rouge">origin</code> (<code class="language-plaintext highlighter-rouge">"person"</code> or <code class="language-plaintext highlighter-rouge">"automation"</code>) and <code class="language-plaintext highlighter-rouge">originKind</code>.
+A refusal with code <code class="language-plaintext highlighter-rouge">chat-history-not-shared:ask</code> or <code class="language-plaintext highlighter-rouge">chat-history-not-shared:deny</code> is the computer’s chat
+history setting. Continuing an app chat this way answers <code class="language-plaintext highlighter-rouge">not-available</code> for now.</li>
+</ul>
+
+<h3 id="34-files-hivedrop-to-the-computer-filessend">3.4 Files (HiveDrop to the computer: <code class="language-plaintext highlighter-rouge">files.send</code>)</h3>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">hiveDropView(access, sends)</code>. A drop area (web: drag and drop plus a picker; phone: Photos, Files and
+paste) labelled <code class="language-plaintext highlighter-rouge">MANAGE_COPY.fileDrop</code> (phone: a “Send files” button, <code class="language-plaintext highlighter-rouge">view.send.label</code>), with
+<code class="language-plaintext highlighter-rouge">view.destination</code> under it (“Downloads on Studio Mac”). <code class="language-plaintext highlighter-rouge">view.send</code> gates it.</li>
+  <li>Per file: <code class="language-plaintext highlighter-rouge">hiveDropStart(file, manageId(random, 'upload_'))</code>. A failure shows its message in the queue
+without sending. Send one file at a time and one piece at a time: <code class="language-plaintext highlighter-rouge">hiveDropNext(send)</code> says which bytes to
+read, base64 them, call <code class="language-plaintext highlighter-rouge">files.send</code> with <code class="language-plaintext highlighter-rouge">hiveDropArgs(send, data)</code>, then <code class="language-plaintext highlighter-rouge">hiveDropStep(send, outcome)</code>;
+repeat until <code class="language-plaintext highlighter-rouge">hiveDropNext</code> returns null. The step retries a lost answer and resumes where the computer
+says, so the loop needs no logic of its own.</li>
+  <li>Rows: <code class="language-plaintext highlighter-rouge">name</code>, <code class="language-plaintext highlighter-rouge">size</code> muted, a thin progress bar from <code class="language-plaintext highlighter-rouge">percent</code>, <code class="language-plaintext highlighter-rouge">line</code> under it (success when done, danger
+when failed). Summary line above the queue: <code class="language-plaintext highlighter-rouge">view.line</code>.</li>
+</ul>
+
+<h3 id="35-automations-automationslist-run-pause-resume-delete">3.5 Automations (<code class="language-plaintext highlighter-rouge">automations.list</code>, <code class="language-plaintext highlighter-rouge">.run</code>, <code class="language-plaintext highlighter-rouge">.pause</code>, <code class="language-plaintext highlighter-rouge">.resume</code>, <code class="language-plaintext highlighter-rouge">.delete</code>)</h3>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">automationsView(access, outcome, clock, pending)</code>, where <code class="language-plaintext highlighter-rouge">pending</code> maps a row id to the action whose
+call is running.</li>
+  <li>Row: <code class="language-plaintext highlighter-rouge">name</code> (primary); second line <code class="language-plaintext highlighter-rouge">next</code> (with <code class="language-plaintext highlighter-rouge">stateText</code> when it is not “On” and differs from
+<code class="language-plaintext highlighter-rouge">next</code>); third line, muted: <code class="language-plaintext highlighter-rouge">last</code>, and <code class="language-plaintext highlighter-rouge">agent</code> and <code class="language-plaintext highlighter-rouge">where</code> when present. A <code class="language-plaintext highlighter-rouge">failed</code> row gets the warn
+dot. The buttons sit in a row under it on the phone (compact, secondary style), and on the right on the
+web.</li>
+  <li>Tap the row: a detail sheet from <code class="language-plaintext highlighter-rouge">automations.list { id }</code> through <code class="language-plaintext highlighter-rouge">automationDetailView</code>: <code class="language-plaintext highlighter-rouge">schedule</code>,
+<code class="language-plaintext highlighter-rouge">next</code>, the <code class="language-plaintext highlighter-rouge">prompt</code> as plain text, and the recent <code class="language-plaintext highlighter-rouge">runs</code> (<code class="language-plaintext highlighter-rouge">line</code>, <code class="language-plaintext highlighter-rouge">summary</code> muted).</li>
+  <li>Remove asks first (section 4), with the row’s own <code class="language-plaintext highlighter-rouge">confirm.body</code>: for a job an agent runs on its own timer
+and that cannot be paused from here, it says removing may not stop it. After any action:
+<code class="language-plaintext highlighter-rouge">automationDoneText(...)</code>, then reload.</li>
+  <li>Making a new automation is not offered from other devices yet (see section 6).</li>
+</ul>
+
+<h3 id="36-copy-trading-copytraderstatus-pause-resume">3.6 Copy trading (<code class="language-plaintext highlighter-rouge">copytrader.status</code>, <code class="language-plaintext highlighter-rouge">.pause</code>, <code class="language-plaintext highlighter-rouge">.resume</code>)</h3>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">copytraderView(access, outcome, clock, pending)</code>.</li>
+  <li>When <code class="language-plaintext highlighter-rouge">view.elsewhere</code>: one info notice with it at the top; every button is off with that reason.</li>
+  <li>Top: <code class="language-plaintext highlighter-rouge">view.headline</code> as a short line. Then, when <code class="language-plaintext highlighter-rouge">view.attention</code> is not empty, a group headed
+<code class="language-plaintext highlighter-rouge">MANAGE_COPY.copyAttentionTitle</code>: each item <code class="language-plaintext highlighter-rouge">label</code> and <code class="language-plaintext highlighter-rouge">text</code>.</li>
+  <li>Rows (already sorted, attention first): <code class="language-plaintext highlighter-rouge">label</code> (primary) and a mode pill <code class="language-plaintext highlighter-rouge">modeText</code> (Live: neutral fill;
+Paper: outline) with <code class="language-plaintext highlighter-rouge">modeLine</code> as its accessible description; second line <code class="language-plaintext highlighter-rouge">stateText</code> · <code class="language-plaintext highlighter-rouge">network</code> ·
+<code class="language-plaintext highlighter-rouge">target</code>; third line <code class="language-plaintext highlighter-rouge">results</code> in <code class="language-plaintext highlighter-rouge">resultsTone</code> color and <code class="language-plaintext highlighter-rouge">activity</code> muted. When <code class="language-plaintext highlighter-rouge">attention</code>: show it
+under the row, then <code class="language-plaintext highlighter-rouge">detail</code> muted and smaller (the computer’s own words).</li>
+  <li>One button per row: Pause or Resume. Resuming a Live copy asks first (section 4).</li>
+</ul>
+
+<h3 id="37-background-apps-serviceslist-start-stop-restart">3.7 Background apps (<code class="language-plaintext highlighter-rouge">services.list</code>, <code class="language-plaintext highlighter-rouge">.start</code>, <code class="language-plaintext highlighter-rouge">.stop</code>, <code class="language-plaintext highlighter-rouge">.restart</code>)</h3>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">servicesView(access, outcome, pending)</code>. Rows: <code class="language-plaintext highlighter-rouge">name</code> and <code class="language-plaintext highlighter-rouge">version</code> muted; <code class="language-plaintext highlighter-rouge">stateText</code> on the right with
+a dot (success when running); buttons Restart and Stop when running, Start when stopped. <code class="language-plaintext highlighter-rouge">note</code> (the
+computer’s own detail) only in an expanded row (tap to expand), muted.</li>
+  <li><code class="language-plaintext highlighter-rouge">view.more</code> as a muted line under the list. Installing is done on the computer.</li>
+  <li>After an action answers: <code class="language-plaintext highlighter-rouge">servicesAfter(list, outcome)</code> to update the row at once, then
+<code class="language-plaintext highlighter-rouge">serviceDoneText(...)</code>.</li>
+</ul>
+
+<h3 id="38-wallets-walletsbalances-walletssend">3.8 Wallets (<code class="language-plaintext highlighter-rouge">wallets.balances</code>, <code class="language-plaintext highlighter-rouge">wallets.send</code>)</h3>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">walletsView(access, outcome)</code>. Top: <code class="language-plaintext highlighter-rouge">view.totalLine</code> large. Rows: <code class="language-plaintext highlighter-rouge">name</code>, <code class="language-plaintext highlighter-rouge">network</code> pill, <code class="language-plaintext highlighter-rouge">shortAddress</code>
+muted (tap to copy the full <code class="language-plaintext highlighter-rouge">address</code>), <code class="language-plaintext highlighter-rouge">total</code> on the right, then up to five <code class="language-plaintext highlighter-rouge">assets</code> (<code class="language-plaintext highlighter-rouge">symbol</code>,
+<code class="language-plaintext highlighter-rouge">amount</code>, <code class="language-plaintext highlighter-rouge">value</code>). <code class="language-plaintext highlighter-rouge">note</code> muted when set. Each row has <code class="language-plaintext highlighter-rouge">row.send</code>.</li>
+  <li><strong>Send sheet</strong> (from <code class="language-plaintext highlighter-rouge">row.send</code>):
+    <ol>
+      <li>Form: From (the wallet, fixed), To (address field with paste), Amount with a “$ | asset” switch (the
+asset choices are the row’s <code class="language-plaintext highlighter-rouge">assets</code>; pass the chosen one’s <code class="language-plaintext highlighter-rouge">symbol</code> as <code class="language-plaintext highlighter-rouge">asset</code> and its <code class="language-plaintext highlighter-rouge">tokenAddress</code>,
+so two tokens with one symbol are never mixed up). Check with
+<code class="language-plaintext highlighter-rouge">checkWalletSend(access, balances, input)</code>; a failure puts its message under <code class="language-plaintext highlighter-rouge">field</code>. “$” and “,” are
+read only as dollar writing (“$1,000”); “1,5” is asked about, never guessed.</li>
+      <li>Review: <code class="language-plaintext highlighter-rouge">review.title</code> large, <code class="language-plaintext highlighter-rouge">review.lines</code> as label and value rows (the To line shows the whole
+address, never shortened), <code class="language-plaintext highlighter-rouge">review.footnote</code> muted. Primary button “Send” (chrome word), Cancel.</li>
+      <li>Status: <code class="language-plaintext highlighter-rouge">state = walletSendStart(Date.now())</code>, call <code class="language-plaintext highlighter-rouge">wallets.send</code> with <code class="language-plaintext highlighter-rouge">args</code>, then
+<code class="language-plaintext highlighter-rouge">walletSendAsked(state, outcome)</code>. While <code class="language-plaintext highlighter-rouge">walletSendView(...).pollMs</code> is set, call <code class="language-plaintext highlighter-rouge">wallets.send</code>
+with <code class="language-plaintext highlighter-rouge">walletSendCheckArgs(state)</code> after that long and apply <code class="language-plaintext highlighter-rouge">walletSendChecked(state, outcome,
+Date.now())</code>. Draw <code class="language-plaintext highlighter-rouge">title</code>, <code class="language-plaintext highlighter-rouge">line</code>, and <code class="language-plaintext highlighter-rouge">timeLeft</code> while waiting. The sheet cannot cancel a send: the
+line already says to tap No on the computer.</li>
+      <li>When <code class="language-plaintext highlighter-rouge">final</code>: one button. <code class="language-plaintext highlighter-rouge">next</code> “retry”: “Try again” (back to the form). <code class="language-plaintext highlighter-rouge">check-wallet</code> and <code class="language-plaintext highlighter-rouge">none</code>:
+“Done” (and reload balances). “unknown” means it may have gone out: never offer to send it again from
+here.</li>
+    </ol>
+  </li>
+  <li>Keep a waiting send alive while the sheet is closed (it lives with the section, not the sheet); reopening
+shows it.</li>
+</ul>
+
+<h2 id="4-confirm-sheets-and-dialogs">4. Confirm sheets and dialogs</h2>
+
+<p>A <code class="language-plaintext highlighter-rouge">ManageConfirm</code> is drawn the same everywhere: <code class="language-plaintext highlighter-rouge">title</code> as the heading, <code class="language-plaintext highlighter-rouge">body</code> under it, two buttons:
+Cancel (secondary) and <code class="language-plaintext highlighter-rouge">confirm</code> (primary; the danger color when <code class="language-plaintext highlighter-rouge">danger</code> is true). Phone: a bottom sheet
+sized to its content. Web: a centered dialog on <code class="language-plaintext highlighter-rouge">.glass</code> (<code class="language-plaintext highlighter-rouge">dom/tokens.module.css</code>), focus starts on Cancel,
+Escape cancels.</p>
+
+<h2 id="5-look-and-feel">5. Look and feel</h2>
+
+<ul>
+  <li>Phone: the app’s palette (<code class="language-plaintext highlighter-rouge">constants/palette.ts</code>), cards only where the design guidelines allow, hairline
+dividers, accent at most once per screen. Sheets via the app’s sheet presence hook.</li>
+  <li>Web: section content on the solid surface tokens (<code class="language-plaintext highlighter-rouge">--hive-surface</code>, <code class="language-plaintext highlighter-rouge">--hive-surface-2</code>). Floating things
+(dialogs, popovers, the send sheet, tooltips) use the liquid glass class. Light and dark from the host
+theme. Respect <code class="language-plaintext highlighter-rouge">reducedMotion</code>.</li>
+  <li>Numbers right-aligned with tabular figures. Money is already formatted; never format it again.</li>
+</ul>
+
+<h2 id="6-not-offered-from-other-devices-yet-draw-nothing-for-these">6. Not offered from other devices yet (draw nothing for these)</h2>
+
+<ul>
+  <li>Making an automation: the computer offers <code class="language-plaintext highlighter-rouge">automations.create</code>, but no device action lists the agents
+to pick from.</li>
+  <li>Swapping, installing an app, changing a copy’s settings, the terminal: the computer answers these as not
+available yet.</li>
+  <li>Answering a chat’s waiting question: only on the computer for now (<code class="language-plaintext highlighter-rouge">page.waiting</code> says so).</li>
+  <li>Brain search: it has its own sealed path, not this manager.</li>
+</ul>
+
+<h2 id="7-what-both-builders-check-before-calling-it-done">7. What both builders check before calling it done</h2>
+
+<ul>
+  <li>The same fixtures as <code class="language-plaintext highlighter-rouge">tests/computer-manager.test.ts</code> drawn on screen, light and dark, phone width and
+1280 px wide, with: everything allowed, “Standard” (buttons off with reasons), “Look only” (locked line),
+and a removed device (lost state).</li>
+  <li>A send walked through every phase, including “unknown” (the confirmation answered on the computer and then
+gone).</li>
+  <li>A 150 KB file sent with one answer lost on the way: it still arrives once. When the lost answer is the last
+piece’s, the row says to check Downloads (<code class="language-plaintext highlighter-rouge">MANAGE_COPY.fileUnconfirmed</code>) and nothing is sent again.</li>
+  <li>A busy computer: open the overview with all sections allowed and confirm no “busy” notice appears.</li>
 </ul>
 
         <nav class="pageNav" aria-label="Previous and next pages" hidden>
@@ -1000,7 +1210,7 @@
     <aside class="pageOutline" aria-label="On this page" hidden>
       <p>On this page</p>
       <nav data-page-outline></nav>
-      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/for-users/features/finances.md">Improve this page ↗</a>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/computer-manager-screens.md">Improve this page ↗</a>
     </aside>
   </div>
 

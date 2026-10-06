@@ -932,8 +932,14 @@
     <tr>
       <td>Memory Answer</td>
       <td><code class="language-plaintext highlighter-rouge">memory.answer</code></td>
-      <td>A concise answer grounded in returned memories, plus cited memory ids.</td>
+      <td>A concise answer grounded in returned memories, plus cited memory ids. Add <code class="language-plaintext highlighter-rouge">stream: true</code> to get it as it is written.</td>
       <td style="text-align: right">5 credits with the default reader</td>
+    </tr>
+    <tr>
+      <td>Erase an end user</td>
+      <td><code class="language-plaintext highlighter-rouge">memory.erase</code></td>
+      <td>Everything one of your app’s end users has in memory, gone in one call.</td>
+      <td style="text-align: right">0 credits</td>
     </tr>
   </tbody>
 </table>
@@ -971,6 +977,7 @@
   <li>Memory types: <code class="language-plaintext highlighter-rouge">instruction</code>, <code class="language-plaintext highlighter-rouge">fact</code>, <code class="language-plaintext highlighter-rouge">decision</code>, <code class="language-plaintext highlighter-rouge">goal</code>, <code class="language-plaintext highlighter-rouge">commitment</code>, <code class="language-plaintext highlighter-rouge">preference</code>, <code class="language-plaintext highlighter-rouge">relationship</code>, <code class="language-plaintext highlighter-rouge">context</code>, <code class="language-plaintext highlighter-rouge">event</code>, <code class="language-plaintext highlighter-rouge">learning</code>, <code class="language-plaintext highlighter-rouge">observation</code>, <code class="language-plaintext highlighter-rouge">artifact</code>, <code class="language-plaintext highlighter-rouge">error</code>, <code class="language-plaintext highlighter-rouge">action</code>, and <code class="language-plaintext highlighter-rouge">knowledge</code>.</li>
   <li>Optional fields: <code class="language-plaintext highlighter-rouge">path</code>, <code class="language-plaintext highlighter-rouge">kind</code>, <code class="language-plaintext highlighter-rouge">mimeType</code>, <code class="language-plaintext highlighter-rouge">mediaUrl</code>, <code class="language-plaintext highlighter-rouge">links</code>, <code class="language-plaintext highlighter-rouge">metaTags</code>, <code class="language-plaintext highlighter-rouge">aliases</code>, <code class="language-plaintext highlighter-rouge">sourceType</code>, <code class="language-plaintext highlighter-rouge">actorRole</code>, <code class="language-plaintext highlighter-rouge">memoryOrigin</code>, and <code class="language-plaintext highlighter-rouge">cognitiveStage</code>.</li>
   <li><code class="language-plaintext highlighter-rouge">memory.batch</code> saves up to 25 records; each returns its own id and generation receipt.</li>
+  <li><code class="language-plaintext highlighter-rouge">occurredAt</code> dates a memory written after the fact, such as one you import from another system: <code class="language-plaintext highlighter-rouge">"2026-09-25"</code> or a full ISO time like <code class="language-plaintext highlighter-rouge">"2026-09-25T14:30:00Z"</code>. Recall ranks the memory by it, and Memory Answer shows the reader that date instead of the day you saved it, so “my driving test is tomorrow”, said on the 25th and imported on the 30th, is not read as still to come. It cannot be in the future (a clock up to five minutes fast is allowed) or before 1900; either is refused with 400. Every memory returns <code class="language-plaintext highlighter-rouge">occurredAt</code>, or <code class="language-plaintext highlighter-rouge">null</code> when it is dated by when it was written. <code class="language-plaintext highlighter-rouge">memory.update</code> keeps it unless you send a new one (<code class="language-plaintext highlighter-rouge">null</code> clears it); <code class="language-plaintext highlighter-rouge">memory.evolve</code> dates the new version now unless you pass one; <code class="language-plaintext highlighter-rouge">capsules.import</code> keeps each memory’s original time.</li>
   <li>Content that looks like a credential, private key, bearer token, seed phrase, or mnemonic is rejected. Store the credential’s name and whether it is set, and keep the value in a secret manager.</li>
 </ul>
 
@@ -1045,6 +1052,53 @@
 </ul>
 
 <p>To limit an answer-only worker, allow just <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.answer</code> and set a request limit on that exact selector.</p>
+
+<h3 id="stream-the-answer">Stream the answer</h3>
+
+<p>Add <code class="language-plaintext highlighter-rouge">stream: true</code> to <code class="language-plaintext highlighter-rouge">memory.answer</code> to show the answer as it is written instead of after the whole of it. The response is server-sent events (<code class="language-plaintext highlighter-rouge">text/event-stream</code>) instead of the JSON envelope:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Event</th>
+      <th>Data</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">meta</code></td>
+      <td>Everything the buffered answer returns except <code class="language-plaintext highlighter-rouge">answer</code>: hits, <code class="language-plaintext highlighter-rouge">citedMemoryIds</code>, <code class="language-plaintext highlighter-rouge">reader</code>, <code class="language-plaintext highlighter-rouge">privacy</code>, the conversation evidence, and <code class="language-plaintext highlighter-rouge">chargedCredits</code>. Sent first.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">delta</code></td>
+      <td><code class="language-plaintext highlighter-rouge">{ "text": "..." }</code>: the next part of the answer.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">done</code></td>
+      <td><code class="language-plaintext highlighter-rouge">{ "answer": "...", "chargedCredits": 5 }</code>: the whole answer, once it is complete.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">error</code></td>
+      <td><code class="language-plaintext highlighter-rouge">{ "error": "...", "chargedCredits": 5 }</code>: the reader stopped after it started.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>It costs the same as a buffered answer, charged once. The charge is settled when the reader’s first words arrive, before the stream starts, and the response’s <code class="language-plaintext highlighter-rouge">X-HivemindOS-Credits-Charged</code> header says how much. So a reader that fails before writing anything is not charged, and you get the usual JSON error instead of a stream. An answer you stop reading halfway, or one cut off by an <code class="language-plaintext highlighter-rouge">error</code> event, was still charged once and is not charged again. A request that finds nothing returns the same not-found JSON as without <code class="language-plaintext highlighter-rouge">stream</code>, uncharged. When the only candidates are weak meaning matches, the answer is read whole first (it is charged only if it cites them) and arrives as one <code class="language-plaintext highlighter-rouge">delta</code>. A stream is not replayed for a repeated idempotency key; <code class="language-plaintext highlighter-rouge">mode: "evidence"</code> has no answer to stream and refuses <code class="language-plaintext highlighter-rouge">stream: true</code>.</p>
+
+<p>With the SDK:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">import</span> <span class="p">{</span> <span class="nx">collectMemoryAnswer</span> <span class="p">}</span> <span class="k">from</span> <span class="dl">"</span><span class="s2">@hivemindos/sdk</span><span class="dl">"</span><span class="p">;</span>
+
+<span class="kd">const</span> <span class="nx">started</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">memory</span><span class="p">.</span><span class="nx">answerStream</span><span class="p">({</span> <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">When is my driving test?</span><span class="dl">"</span> <span class="p">},</span> <span class="p">{</span> <span class="na">endUserId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">user-42</span><span class="dl">"</span> <span class="p">});</span>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">started</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">started</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+<span class="k">for</span> <span class="k">await</span> <span class="p">(</span><span class="kd">const</span> <span class="nx">event</span> <span class="k">of</span> <span class="nx">started</span><span class="p">.</span><span class="nx">events</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">if</span> <span class="p">(</span><span class="nx">event</span><span class="p">.</span><span class="kd">type</span> <span class="o">===</span> <span class="dl">"</span><span class="s2">delta</span><span class="dl">"</span><span class="p">)</span> <span class="nx">process</span><span class="p">.</span><span class="nx">stdout</span><span class="p">.</span><span class="nx">write</span><span class="p">(</span><span class="nx">event</span><span class="p">.</span><span class="nx">text</span><span class="p">);</span>
+<span class="p">}</span>
+<span class="c1">// Or read it whole: const { answer, complete } = await collectMemoryAnswer(started);</span>
+</code></pre></div></div>
+
+<p>Measured on 2026-10-06 through <code class="language-plaintext highlighter-rouge">/v1</code> with the SDK and the default reader (10 answers each, median): a paragraph-long answer’s first words arrived in 1.03 s against 1.89 s for the buffered answer; a one-sentence answer in 0.99 s against 1.21 s; a “when” question, which the reader reasons about before it writes, in 2.15 s against 2.35 s. The longer the answer, the more streaming saves.</p>
 
 <h2 id="choose-who-reads-the-answer">Choose who reads the answer</h2>
 
@@ -1144,6 +1198,23 @@
 </ul>
 
 <p>See <a href="projects-security.html#act-for-one-of-your-apps-users">projects and isolation</a> for how to name an end user.</p>
+
+<h3 id="erase-an-end-users-memory">Erase an end user’s memory</h3>
+
+<p>When one of your app’s users deletes their account, <code class="language-plaintext highlighter-rouge">memory.erase</code> removes everything they have in memory in one call: every memory, its past versions, its search indexes, and the brain’s history. It is free, needs no approval, and is safe to repeat.</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">erased</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">memory</span><span class="p">.</span><span class="nx">erase</span><span class="p">({</span> <span class="na">endUserId</span><span class="p">:</span> <span class="dl">"</span><span class="s2">user-42</span><span class="dl">"</span> <span class="p">});</span>
+<span class="c1">// Same as hive.services.invokeOperation("cloud-superbrain", "memory.erase", {}, { endUserId: "user-42" })</span>
+<span class="k">if</span> <span class="p">(</span><span class="o">!</span><span class="nx">erased</span><span class="p">.</span><span class="nx">ok</span><span class="p">)</span> <span class="k">throw</span> <span class="k">new</span> <span class="nb">Error</span><span class="p">(</span><span class="nx">erased</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+<span class="nx">console</span><span class="p">.</span><span class="nx">log</span><span class="p">(</span><span class="nx">erased</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">memoriesErased</span><span class="p">,</span> <span class="nx">erased</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">complete</span><span class="p">);</span>
+</code></pre></div></div>
+
+<ul>
+  <li><strong>Only one end user, only yours.</strong> It erases the brain of the end user the call names, inside the key’s own account and project, and nothing else: not another end user, not another project’s brain for the same end user id, not the account’s own memories. The end user comes from a key bound with <code class="language-plaintext highlighter-rouge">endUserId</code> (which erases only its own end user, and cannot name another) or from <code class="language-plaintext highlighter-rouge">X-HivemindOS-End-User</code> on an unbound key. A call that names no end user is refused with 400 <code class="language-plaintext highlighter-rouge">end_user_required</code>; an account’s or a project’s whole brain cannot be erased this way.</li>
+  <li><strong>Which keys can call it.</strong> Any key with the <code class="language-plaintext highlighter-rouge">services:invoke</code> scope whose operations include <code class="language-plaintext highlighter-rouge">services.invoke.cloud-superbrain.memory.erase</code> (a key with no operation list has every operation). To give an app server only this, allow just that selector. A key bound to an end user can erase only that end user, so a key you hand to a user’s device can erase that user and no one else.</li>
+  <li><strong>Repeating is safe.</strong> A second erase finds nothing and returns <code class="language-plaintext highlighter-rouge">memoriesErased: 0</code>. A very large brain (over 5,000 memories) returns <code class="language-plaintext highlighter-rouge">complete: false</code>; call again until <code class="language-plaintext highlighter-rouge">complete</code> is true.</li>
+  <li><strong>Audited.</strong> Each erase leaves a record of when it ran, for which account and project, and how many memories went. It holds no memory content and not the end user’s id. The call also appears in your <a href="usage-audit.html">usage and audit events</a>.</li>
+</ul>
 
 <h2 id="ask-for-only-as-much-as-you-need">Ask for only as much as you need</h2>
 
@@ -1262,6 +1333,11 @@
       <td>Permanently delete one memory after approval.</td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory.erase</code></td>
+      <td><code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td>Erase everything one end user has in memory, for account deletion. Free, no approval.</td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">memory.batch</code></td>
       <td><code class="language-plaintext highlighter-rouge">POST</code></td>
       <td>Create up to 25 memories.</td>
@@ -1284,7 +1360,7 @@
     <tr>
       <td><code class="language-plaintext highlighter-rouge">memory.answer</code></td>
       <td><code class="language-plaintext highlighter-rouge">POST</code></td>
-      <td>Return a paid grounded answer with citations.</td>
+      <td>Return a paid grounded answer with citations; <code class="language-plaintext highlighter-rouge">stream: true</code> sends it as it is written.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">memory.models</code></td>

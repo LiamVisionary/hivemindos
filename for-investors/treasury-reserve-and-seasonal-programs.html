@@ -906,7 +906,7 @@
         </div>
         <h1 id="revenue-allocations-and-treasury-boundaries">Revenue Allocations And Treasury Boundaries</h1>
 
-<p>This is the canonical page for where HivemindOS revenue goes. There are two fixed allocations, one for HIVE buybacks and one for the company treasury. Neither is a staking-income program.</p>
+<p>This is the canonical page for where HivemindOS revenue goes. There are two fixed allocations, one for HIVE buybacks and one for the company treasury, with two exceptions described below. Neither is a staking-income program.</p>
 
 <h2 id="the-allocation">The allocation</h2>
 
@@ -939,6 +939,13 @@
 
 <p>The two 15% allocations are exact and separate. They are not one shared bucket, and the treasury is not the source of HIVE purchases.</p>
 
+<p>Two exceptions apply:</p>
+
+<ul>
+  <li>Credits bought with HIVE create no buyback or treasury allocation when they are spent. The HIVE paid for them goes to the company treasury as it is, without being sold.</li>
+  <li>HiveVerse home upgrades split 40% to HIVE buyback and burn, 40% to the HivePunks reward pot, and 20% to the company treasury.</li>
+</ul>
+
 <h2 id="what-the-allocation-is-based-on">What the allocation is based on</h2>
 
 <p>Each service’s allocation basis is server-owned and published in the official commercial catalog: realized margin for most managed services, recognized platform revenue for others.</p>
@@ -956,6 +963,15 @@
 <h2 id="hive-buybacks">HIVE buybacks</h2>
 
 <p>The buyback rail buys HIVE with its own 15% allocation. Confirmed purchases are published in the <a href="https://hivemindos.app/buybacks/">HIVE Buyback Ledger</a>. Pending allocations, failed batches, and unconfirmed transactions do not count.</p>
+
+<h3 id="how-a-buyback-runs">How a buyback runs</h3>
+
+<ol>
+  <li>Each charge waits 7 days before its revenue counts as matured.</li>
+  <li>Every Sunday at 08:00 UTC, matured revenue is bought in batches of $5 to $1,000.</li>
+  <li>A batch runs only after the revenue it covers has been reconciled.</li>
+  <li>The HIVE each purchase buys is then burned in its own transaction, shown on the ledger.</li>
+</ol>
 
 <p>Since 2026-09-30, HIVE bought by buybacks is burned: the exact amount each purchase buys is sent to the burn address <code class="language-plaintext highlighter-rouge">0x000000000000000000000000000000000000dEaD</code> in its own transaction, published on the HIVE Buyback Ledger. Purchases made before that date were not burned. A buyback or burn is not a distribution, staking payment, price floor, liquidity guarantee, or promise of appreciation.</p>
 
