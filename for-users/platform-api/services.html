@@ -1176,6 +1176,26 @@
 
 <p>Each lookup holds its top price while it runs and settles at what it cost: the rest comes back at once, a lookup that fails is not charged, and one that finds nothing at no cost is free. A single lookup is at most $0.50, and an account is limited to $5 of lookups a day. <code class="language-plaintext highlighter-rouge">found: false</code> means the lookup ran and had no answer. Retry an uncertain call with the same idempotency key.</p>
 
+<p>For anything the named lookups do not cover (the ads a company is running, reviews on Trustpilot or an app store, an online shop’s products, and thousands more single-site lookups), search first, then run what you found by its id:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">found</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">web-data</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">catalog.search</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">query</span><span class="p">:</span> <span class="dl">"</span><span class="s2">trustpilot reviews</span><span class="dl">"</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">find-trustpilot-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+<span class="c1">// result.lookups: [{ id, title, about, fields, aboutPriceUsd, maxPriceUsd }, ...]</span>
+
+<span class="kd">const</span> <span class="nx">reviews</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">web-data</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">catalog.call</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">lookup</span><span class="p">:</span> <span class="nx">found</span><span class="p">.</span><span class="nx">result</span><span class="p">.</span><span class="nx">lookups</span><span class="p">[</span><span class="mi">0</span><span class="p">].</span><span class="nx">id</span><span class="p">,</span> <span class="na">input</span><span class="p">:</span> <span class="p">{</span> <span class="na">domain</span><span class="p">:</span> <span class="dl">"</span><span class="s2">www.notion.so</span><span class="dl">"</span><span class="p">,</span> <span class="na">limit</span><span class="p">:</span> <span class="mi">5</span> <span class="p">}</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">notion-trustpilot-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p><code class="language-plaintext highlighter-rouge">catalog.search</code> is free. <code class="language-plaintext highlighter-rouge">catalog.call</code> is charged like any other lookup: it holds a top price (a few times the lookup’s usual price, or <code class="language-plaintext highlighter-rouge">maxPriceUsd</code> when you send one, never above $0.50), settles at what it cost and returns the rest. Its answer is in the site’s own shape. Only lookups of public data that answer at once can be run this way.</p>
+
 <h3 id="other-services">Other services</h3>
 
 <ul>
