@@ -537,6 +537,33 @@
 
 <p>The registered operations are <code class="language-plaintext highlighter-rouge">catalog.get</code>, <code class="language-plaintext highlighter-rouge">leads.discover</code>, <code class="language-plaintext highlighter-rouge">leads.nearby</code>, and <code class="language-plaintext highlighter-rouge">leads.enrich</code>. Restrict production keys to the operations they need, set per-operation request and concurrency limits, and retry uncertain requests with the original idempotency key. The service enforces its own per-call and daily safety ceilings and refunds work that fails before producing usable results.</p>
 
+<h3 id="web-data">Web Data</h3>
+
+<p><code class="language-plaintext highlighter-rouge">web-data</code> is a live managed service for facts a page read cannot give you: how often a keyword is searched and who ranks for it, a site’s backlinks and authority, public TikTok, Instagram, LinkedIn, YouTube and Facebook profiles and posts, a person’s work email or phone number, a company’s profile, news and open jobs, and Amazon products. It needs no data-provider account. Every call uses the account’s HivemindOS balance.</p>
+
+<p>Read what is on offer first. <code class="language-plaintext highlighter-rouge">catalog.get</code> is free and lists every lookup with the fields it takes and the most it can cost:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">catalog</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">web-data</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">catalog.get</span><span class="dl">"</span><span class="p">,</span>
+  <span class="kc">undefined</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">web-data-catalog-2026-10-13</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+</code></pre></div></div>
+
+<p>Then run one lookup by its id:</p>
+
+<div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">result</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">services</span><span class="p">.</span><span class="nx">invokeOperation</span><span class="p">(</span>
+  <span class="dl">"</span><span class="s2">web-data</span><span class="dl">"</span><span class="p">,</span>
+  <span class="dl">"</span><span class="s2">sites.backlinks</span><span class="dl">"</span><span class="p">,</span>
+  <span class="p">{</span> <span class="na">site</span><span class="p">:</span> <span class="dl">"</span><span class="s2">example.com</span><span class="dl">"</span> <span class="p">},</span>
+  <span class="p">{</span> <span class="na">idempotencyKey</span><span class="p">:</span> <span class="dl">"</span><span class="s2">example-backlinks-001</span><span class="dl">"</span> <span class="p">},</span>
+<span class="p">);</span>
+<span class="c1">// { ok: true, operation: "sites.backlinks", found: true, result: { ... }, billing: { costUsd, refundUsd, ... } }</span>
+</code></pre></div></div>
+
+<p>Each lookup holds its top price while it runs and settles at what it cost: the rest comes back at once, a lookup that fails is not charged, and one that finds nothing at no cost is free. A single lookup is at most $0.50, and an account is limited to $5 of lookups a day. <code class="language-plaintext highlighter-rouge">found: false</code> means the lookup ran and had no answer. Retry an uncertain call with the same idempotency key.</p>
+
 <h3 id="other-services">Other services</h3>
 
 <ul>
@@ -628,6 +655,11 @@
       <td>Data</td>
       <td><code class="language-plaintext highlighter-rouge">leadgen-data</code></td>
       <td>Enrich and qualify business leads.</td>
+    </tr>
+    <tr>
+      <td>Data</td>
+      <td><code class="language-plaintext highlighter-rouge">web-data</code></td>
+      <td>Look up search rankings, backlinks, social profiles, people and companies.</td>
     </tr>
     <tr>
       <td>Finance</td>

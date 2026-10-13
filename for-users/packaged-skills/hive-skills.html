@@ -987,7 +987,7 @@
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">hive-brain-compiled-wiki</code></td>
-      <td>Writes durable findings as compiled wiki pages, lets agents search/query the compiled graph through MCP, and repairs wiki health.</td>
+      <td>Writes durable findings as compiled wiki pages (a page an agent writes waits for your review), lets agents search/query the compiled graph through MCP, and repairs wiki health.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">hive-skill-autoresearch</code></td>
@@ -1025,6 +1025,8 @@ hive-capability-search <span class="nt">--live</span> <span class="s2">"task or 
 </code></pre></div></div>
 
 <p>It searches a local index and works without the dashboard. <code class="language-plaintext highlighter-rouge">--live</code> asks the running dashboard first for fresher app details.</p>
+
+<p>When the app is running, a result can also show a <code class="language-plaintext highlighter-rouge">record</code> line: how often that tool worked when it was used on this computer in the last 30 days, how long it usually took, and when it last worked. A <code class="language-plaintext highlighter-rouge">reports</code> line counts the agents that reported a problem with it. Agents use these to choose between tools that fit, and the same skill tells them how to retry after a failure, when to say what something costs, and how to report a problem with a tool once and carry on.</p>
 
 <p>Agents without shell access, such as phone-hosted agents, don’t need the command. They use the capability context HivemindOS already gave them or an MCP tool instead.</p>
 

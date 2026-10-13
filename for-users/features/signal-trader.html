@@ -941,6 +941,22 @@
 
 <p>Whatever stops it, <strong>anything already open still sells on schedule</strong>.</p>
 
+<h2 id="keep-it-trading-with-hivemindos-closed">Keep it trading with HivemindOS closed</h2>
+
+<p>Signal Trader runs while HivemindOS is open. To keep it running after you close the app or restart your computer, install the optional background service from a HivemindOS source checkout:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./scripts/install-signal-trader-daemon.sh
+</code></pre></div></div>
+
+<p>The service and the app never trade at the same time: whichever is running has the books, and the other waits. Your switches, limits, and history are the same either way.</p>
+
+<p>To remove only this service:</p>
+
+<div class="language-bash highlighter-rouge"><div class="highlight"><pre class="highlight"><code>./scripts/install-signal-trader-daemon.sh uninstall
+</code></pre></div></div>
+
+<p>Your books and history stay on your computer after uninstall.</p>
+
 <h2 id="what-to-expect">What to expect</h2>
 
 <p>This is a small pattern with thin tokens and early evidence, and it might be nothing. Treat your first month as a test of whether the pattern is real, and use only money you can afford to lose.</p>
