@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://hivemindos.app/superagent-api/docs/agent-setup</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/answer-engine</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/authentication</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/benchmarks</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/capabilities-agents</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/compute-faucet</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/databases</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/explorer</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/files-connections</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/limits</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/mcp</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/memory</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/pay-per-call</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/privacy</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/projects-security</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/reference</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/rewards</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/runs-webhooks</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/services</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/usage-audit</loc></url>
+  <url><loc>https://hivemindos.app/superagent-api/docs/wallets-trading</loc></url>
+</urlset>
