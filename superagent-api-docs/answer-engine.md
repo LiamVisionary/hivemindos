@@ -1,8 +1,6 @@
-# AI Web Search
+# AI web search
 
 > https://hivemindos.app/superagent-api/docs/answer-engine · Markdown version: https://hivemindos.app/superagent-api/docs/answer-engine.md
-
-# AI web search
 
 The `answer-engine` service searches the web, reads the pages that matter, and writes an answer with numbered citations. You send a question and get back the answer plus the sources it was built from.
 

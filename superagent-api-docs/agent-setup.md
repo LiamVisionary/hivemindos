@@ -1,8 +1,6 @@
-# Set Up The SuperAgent API With Your Agent
+# Set up the SuperAgent API with your agent
 
 > https://hivemindos.app/superagent-api/docs/agent-setup · Markdown version: https://hivemindos.app/superagent-api/docs/agent-setup.md
-
-# Set up the SuperAgent API with your agent
 
 Your coding agent can set up the SuperAgent API in your project for you. You never copy a key: you open one link, sign in, add credits and approve, and the agent collects the key and saves it where your project keeps secrets.
 

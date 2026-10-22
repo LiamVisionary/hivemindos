@@ -1,8 +1,6 @@
-# Managed Memory And Knowledge
+# Managed memory and knowledge
 
 > https://hivemindos.app/superagent-api/docs/memory · Markdown version: https://hivemindos.app/superagent-api/docs/memory.md
-
-# Managed memory and knowledge
 
 Cloud Superbrain (`cloud-superbrain`) lets a hosted app remember useful context between calls. It saves facts and decisions, finds them by words or meaning, answers from them with citations, and keeps earlier versions when something changes.
 

@@ -1,8 +1,6 @@
-# Files, Connections, And Integrations
+# Files, connections, and integrations
 
 > https://hivemindos.app/superagent-api/docs/files-connections · Markdown version: https://hivemindos.app/superagent-api/docs/files-connections.md
-
-# Files, connections, and integrations
 
 Upload a **file** when a managed service needs source material. Create a **connection** when a service needs another account or tool, without exposing that credential to your app's workers.
 

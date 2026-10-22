@@ -1,8 +1,6 @@
-# Capabilities, Agents, Workflows, And Mini Apps
+# Capabilities, agents, workflows, and mini apps
 
 > https://hivemindos.app/superagent-api/docs/capabilities-agents · Markdown version: https://hivemindos.app/superagent-api/docs/capabilities-agents.md
-
-# Capabilities, agents, workflows, and mini apps
 
 A **service** is a managed product area, such as research or memory. A **capability** is one action inside it, such as creating an analysis or recalling a memory.
 

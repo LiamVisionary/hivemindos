@@ -1,8 +1,6 @@
-# SuperAgent API Reference
+# SuperAgent API reference
 
 > https://hivemindos.app/superagent-api/docs/reference · Markdown version: https://hivemindos.app/superagent-api/docs/reference.md
-
-# SuperAgent API reference
 
 The complete map of scopes, endpoints, headers, and limit selectors. For your first call, start with the [quickstart](./).
 

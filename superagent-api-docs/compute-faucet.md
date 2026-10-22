@@ -1,8 +1,6 @@
-# Hive Compute And Testnet Assets
+# Hive Compute and testnet assets
 
 > https://hivemindos.app/superagent-api/docs/compute-faucet · Markdown version: https://hivemindos.app/superagent-api/docs/compute-faucet.md
-
-# Hive Compute and testnet assets
 
 Use Hive Compute (`hive-compute`) when an agent needs hosted GPU work. Use the testnet faucet (`testnet-faucet`) when a developer needs test assets with no monetary value. Both use the account's Agent Credits and need no desktop session.
 

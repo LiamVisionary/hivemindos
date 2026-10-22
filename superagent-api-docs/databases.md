@@ -1,8 +1,6 @@
-# Managed Databases
+# Managed databases
 
 > https://hivemindos.app/superagent-api/docs/databases · Markdown version: https://hivemindos.app/superagent-api/docs/databases.md
-
-# Managed databases
 
 Managed databases give your app a private place for structured records, such as customers, tasks, inventory, or saved results. The data belongs to the authenticated account and project.
 

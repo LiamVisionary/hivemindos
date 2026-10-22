@@ -1,8 +1,6 @@
-# Connect An Agent With MCP
+# Connect an agent with MCP
 
 > https://hivemindos.app/superagent-api/docs/mcp · Markdown version: https://hivemindos.app/superagent-api/docs/mcp.md
-
-# Connect an agent with MCP
 
 MCP is the simplest way to let an agent use HivemindOS managed services. The agent searches the actions its key allows, reads data, and runs approved work, without you writing a wrapper for each endpoint.
 

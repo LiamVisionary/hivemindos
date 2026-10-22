@@ -1,8 +1,6 @@
-# Usage And Audit Events
+# Usage and audit events
 
 > https://hivemindos.app/superagent-api/docs/usage-audit · Markdown version: https://hivemindos.app/superagent-api/docs/usage-audit.md
-
-# Usage and audit events
 
 Use **usage** to answer "how much did this app use?" and **audit events** to answer "what happened on this exact request?"
 

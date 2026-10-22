@@ -1,8 +1,6 @@
-# Service Access And Catalog
+# Service access and catalog
 
 > https://hivemindos.app/superagent-api/docs/services · Markdown version: https://hivemindos.app/superagent-api/docs/services.md
-
-# Service access and catalog
 
 The service catalog tells you what your key can use and whether it is ready now. Read it before showing a feature or starting work.
 

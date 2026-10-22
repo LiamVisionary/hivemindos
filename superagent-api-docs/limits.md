@@ -1,8 +1,6 @@
-# Per-Endpoint Limits
+# Per-endpoint limits
 
 > https://hivemindos.app/superagent-api/docs/limits · Markdown version: https://hivemindos.app/superagent-api/docs/limits.md
-
-# Per-endpoint limits
 
 Limits stop one key or worker from using more than you intended. For each endpoint you can cap requests per minute, hour, or day, how many run at once, and, for selected money operations, Agent Credits spent per day.
 

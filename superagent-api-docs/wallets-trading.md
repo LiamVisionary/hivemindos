@@ -1,8 +1,6 @@
-# Wallets, Approvals, And Trading
+# Wallets, approvals, and trading
 
 > https://hivemindos.app/superagent-api/docs/wallets-trading · Markdown version: https://hivemindos.app/superagent-api/docs/wallets-trading.md
-
-# Wallets, approvals, and trading
 
 Managed wallets let your app use a wallet address without ever receiving its private key or recovery phrase. Before money moves, HivemindOS checks the wallet policy, a short-lived quote, the API key's permissions and limits, available Agent Credits, and any required approval.
 

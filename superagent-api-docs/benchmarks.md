@@ -1,8 +1,6 @@
-# Memory Benchmarks
+# Memory benchmarks
 
 > https://hivemindos.app/superagent-api/docs/benchmarks · Markdown version: https://hivemindos.app/superagent-api/docs/benchmarks.md
-
-# Memory benchmarks
 
 <p class="lede">What SuperAgent API memory is measured to do, on public benchmarks, with every answer published.</p>
 

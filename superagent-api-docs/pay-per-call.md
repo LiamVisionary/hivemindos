@@ -1,8 +1,6 @@
-# Pay Per Call With x402
+# Pay per call with x402
 
 > https://hivemindos.app/superagent-api/docs/pay-per-call · Markdown version: https://hivemindos.app/superagent-api/docs/pay-per-call.md
-
-# Pay per call with x402
 
 An agent with an x402 wallet on Base can use the SuperAgent API without an account or API key. It pays for one call at a time in USDC, and only when the call succeeds. It can also pay once for an account and get an API key holding the credits.
 

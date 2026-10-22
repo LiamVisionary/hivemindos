@@ -1,8 +1,6 @@
-# Projects, Isolation, And Service Accounts
+# Projects, isolation, and service accounts
 
 > https://hivemindos.app/superagent-api/docs/projects-security · Markdown version: https://hivemindos.app/superagent-api/docs/projects-security.md
-
-# Projects, isolation, and service accounts
 
 A project keeps one product, customer, or environment separate from another. Its wallets, approvals, runs, files, webhooks, database data, usage, and audit history stay inside it. Inside an account or a project, an end user id keeps each of your app's own users apart as well.
 

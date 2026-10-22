@@ -1,8 +1,6 @@
-# Runs, Artifacts, Webhooks, And Errors
+# Runs, artifacts, webhooks, and errors
 
 > https://hivemindos.app/superagent-api/docs/runs-webhooks · Markdown version: https://hivemindos.app/superagent-api/docs/runs-webhooks.md
-
-# Runs, artifacts, webhooks, and errors
 
 Use a **direct call** when your app can wait for the answer. Use a **run** when work may continue after the request ends; its result is saved as an **artifact**. Use a **webhook** when HivemindOS should tell your app that something changed.
 

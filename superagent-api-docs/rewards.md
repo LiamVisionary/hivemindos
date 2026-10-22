@@ -1,8 +1,6 @@
-# Rewards And The Hall
+# Rewards and the Hall
 
 > https://hivemindos.app/superagent-api/docs/rewards · Markdown version: https://hivemindos.app/superagent-api/docs/rewards.md
-
-# Rewards and the Hall
 
 The SuperAgent API pays you back for real use. What your apps and agents earn is sent to your wallet in USDC on Base on its own once it reaches $5, paid from the revenue those calls brought in; you can claim it as Agent Credits (500 to the dollar) any time instead. Bonuses and bounties pay in Agent Credits, and receipts earn Honey. Nothing pays for minting.
 

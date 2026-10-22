@@ -1,8 +1,6 @@
-# Authentication And API Keys
+# Authentication and API keys
 
 > https://hivemindos.app/superagent-api/docs/authentication · Markdown version: https://hivemindos.app/superagent-api/docs/authentication.md
-
-# Authentication and API keys
 
 An API key lets your backend call HivemindOS for one account. Keep it on your server, give it only the access its job needs, and replace it if it is ever exposed.
 

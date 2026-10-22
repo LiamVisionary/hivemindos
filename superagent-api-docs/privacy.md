@@ -1,8 +1,6 @@
-# Private And Confidential Access
+# Private and confidential access
 
 > https://hivemindos.app/superagent-api/docs/privacy · Markdown version: https://hivemindos.app/superagent-api/docs/privacy.md
-
-# Private and confidential access
 
 The SuperAgent API has three base URLs. They are the same API with the same paths; each offers only what meets its privacy level.
 
