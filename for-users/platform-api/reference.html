@@ -944,10 +944,49 @@ Content type: application/json
       <td><code class="language-plaintext highlighter-rouge">/pricing</code></td>
       <td>Server-owned price and availability catalog. Optional <code class="language-plaintext highlighter-rouge">service</code> query: <code class="language-plaintext highlighter-rouge">platform-api</code>, <code class="language-plaintext highlighter-rouge">managed-wallets</code>, <code class="language-plaintext highlighter-rouge">managed-trading</code>, <code class="language-plaintext highlighter-rouge">universal-swaps</code>, <code class="language-plaintext highlighter-rouge">managed-agents</code>, or <code class="language-plaintext highlighter-rouge">managed-workflows</code>.</td>
     </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td><code class="language-plaintext highlighter-rouge">/catalog?q=&lt;words&gt;</code></td>
+      <td>Search every operation by what it does. Each result has its inspect URL and invoke template.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET</code> or <code class="language-plaintext highlighter-rouge">POST</code></td>
+      <td><code class="language-plaintext highlighter-rouge">/inspect/{serviceId}/{operationId}</code></td>
+      <td>One operation’s contract, its price before you call it, how to buy it per call, and its health. <code class="language-plaintext highlighter-rouge">POST {"input": {...}}</code> prices that input. Runs and charges nothing.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td><code class="language-plaintext highlighter-rouge">/feed.xml</code></td>
+      <td>Atom feed of new services and pay-per-call offers.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/.well-known/api-catalog</code></td>
+      <td>RFC 9727 linkset: the API, its OpenAPI, docs, status and MCP.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET</code></td>
+      <td><code class="language-plaintext highlighter-rouge">https://api.hivemindos.app/.well-known/x402</code></td>
+      <td>Every operation sold per call over x402.</td>
+    </tr>
   </tbody>
 </table>
 
 <p>The health and OpenAPI documents are also available under <code class="language-plaintext highlighter-rouge">/v1</code>. Pricing is public and never accepts client-supplied prices.</p>
+
+<h3 id="what-a-call-costs-before-you-make-it">What a call costs before you make it</h3>
+
+<p><code class="language-plaintext highlighter-rouge">price.kind</code> from <code class="language-plaintext highlighter-rouge">/inspect</code> is one of:</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">free</code>: the service charges nothing for it.</li>
+  <li><code class="language-plaintext highlighter-rouge">maximum</code>: the most it can cost, in <code class="language-plaintext highlighter-rouge">credits</code> and <code class="language-plaintext highlighter-rouge">usd</code>, for the example or the input you sent. It may cost less.</li>
+  <li><code class="language-plaintext highlighter-rouge">quote</code>: the service prices it with a free quote first; <code class="language-plaintext highlighter-rouge">quoteOperation</code> names it.</li>
+  <li><code class="language-plaintext highlighter-rouge">metered</code>: the service charges what the work cost after it runs, so nothing can say beforehand.</li>
+  <li><code class="language-plaintext highlighter-rouge">unavailable</code>: the price could not be read just now.</li>
+</ul>
+
+<p>Send <code class="language-plaintext highlighter-rouge">maxCredits</code> in an invoke body (or the <code class="language-plaintext highlighter-rouge">X-HivemindOS-Max-Credits</code> header) to hold a call to a ceiling. It runs only when its price is known up front to fit; otherwise it is refused with HTTP 409 and nothing is charged: <code class="language-plaintext highlighter-rouge">price_above_maximum</code> (with <code class="language-plaintext highlighter-rouge">priceCredits</code>) or <code class="language-plaintext highlighter-rouge">price_not_known_up_front</code>. A key’s <code class="language-plaintext highlighter-rouge">creditsPerCall</code> limit does the same for every call it makes, and the lower of the two decides. See <a href="limits.html#most-one-call-may-cost">limits</a>.</p>
 
 <h2 id="scopes">Scopes</h2>
 
@@ -1109,6 +1148,18 @@ Content type: application/json
       <td><code class="language-plaintext highlighter-rouge">apiKeys.revoke</code></td>
     </tr>
     <tr>
+      <td><code class="language-plaintext highlighter-rouge">PATCH /api-keys/{id}</code></td>
+      <td><code class="language-plaintext highlighter-rouge">api_keys:manage</code>, or the console</td>
+      <td style="text-align: center">Yes</td>
+      <td><code class="language-plaintext highlighter-rouge">apiKeys.update</code></td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">GET /requests/outcome?idempotencyKey=</code></td>
+      <td>Any key, for its own requests</td>
+      <td style="text-align: center">No</td>
+      <td><code class="language-plaintext highlighter-rouge">requests.outcome.read</code></td>
+    </tr>
+    <tr>
       <td><code class="language-plaintext highlighter-rouge">GET /services</code></td>
       <td><code class="language-plaintext highlighter-rouge">services:read</code></td>
       <td style="text-align: center">No</td>
@@ -1154,6 +1205,39 @@ Content type: application/json
 </table>
 
 <p>A registered managed operation also applies <code class="language-plaintext highlighter-rouge">services.invoke.&lt;serviceId&gt;.&lt;operationId&gt;</code>. Successful invocation responses include <code class="language-plaintext highlighter-rouge">serviceId</code>, <code class="language-plaintext highlighter-rouge">operationId</code>, upstream <code class="language-plaintext highlighter-rouge">status</code>, <code class="language-plaintext highlighter-rouge">result</code>, and the exact <code class="language-plaintext highlighter-rouge">chargedCredits</code> reported by the owning service.</p>
+
+<p><code class="language-plaintext highlighter-rouge">PATCH /api-keys/{id}</code> pauses a key (<code class="language-plaintext highlighter-rouge">{"paused": true}</code>), resumes it (<code class="language-plaintext highlighter-rouge">{"paused": false}</code>), or changes its <code class="language-plaintext highlighter-rouge">limits</code> (a selector or field set to <code class="language-plaintext highlighter-rouge">null</code> is removed; the rest stays). A paused key, and every key made from it, is refused with HTTP 403 and <code class="language-plaintext highlighter-rouge">code: api_key_paused</code> until it is resumed. A key may pause itself or a key made from it; only a key above it, or the account in the console, may resume it or change its limits, and limits stay within every key above it. A revoked key cannot be changed.</p>
+
+<h3 id="when-an-answer-never-arrived">When an answer never arrived</h3>
+
+<p><code class="language-plaintext highlighter-rouge">GET /requests/outcome?idempotencyKey=&lt;the key you sent&gt;</code> reads what became of that request, without running or charging anything:</p>
+
+<table>
+  <thead>
+    <tr>
+      <th><code class="language-plaintext highlighter-rouge">state</code></th>
+      <th>What to do</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">none</code></td>
+      <td>Nothing is running or kept under that key. Send it again with the same <code class="language-plaintext highlighter-rouge">Idempotency-Key</code>: what a service already did under it is not done twice.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">in_progress</code></td>
+      <td>It is still running. Wait and check again; never resend it with a new key.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">completed</code></td>
+      <td>It finished. Send it again with the same key and body to get the stored answer, charged nothing. <code class="language-plaintext highlighter-rouge">chargedCredits</code> says what it cost.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">interrupted</code></td>
+      <td>It stopped before its result was recorded and may have been charged. Look for it in <code class="language-plaintext highlighter-rouge">GET /usage</code> before sending the work again with a new key.</td>
+    </tr>
+  </tbody>
+</table>
 
 <h3 id="projects-usage-files-and-connections">Projects, usage, files, and connections</h3>
 
@@ -1663,6 +1747,8 @@ connections.delete
 apiKeys.list
 apiKeys.create
 apiKeys.revoke
+apiKeys.update
+requests.outcome.read
 databases.account.read
 databases.account.provision
 databases.account.deprovision
@@ -1782,6 +1868,10 @@ runs.create.&lt;serviceId&gt;.&lt;operationId&gt;
     <tr>
       <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Credit-Token</code></td>
       <td>Only while bootstrapping the first API key.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">X-HivemindOS-Max-Credits</code></td>
+      <td>Optional on an invoke: the most this call may cost, in Agent Credits. Same as <code class="language-plaintext highlighter-rouge">maxCredits</code> in the body.</td>
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">Payment-Signature</code></td>

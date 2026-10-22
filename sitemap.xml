@@ -59,17 +59,17 @@
   <url><loc>https://hivemindos.app/docs/for-investors/honey-hive-treasury</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/trading/hyperliquid</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/features/inbox-triage</loc></url>
-  <url><loc>https://hivemindos.app/docs/for-investors/paid-features/</loc></url>
-  <url><loc>https://hivemindos.app/docs/for-investors/</loc></url>
+  <url><loc>https://hivemindos.app/docs/for-users/trading/</loc></url>
+  <url><loc>https://hivemindos.app/docs/for-users/architecture/</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/packaged-skills/</loc></url>
+  <url><loc>https://hivemindos.app/docs/for-users/whole-brain/</loc></url>
+  <url><loc>https://hivemindos.app/docs/for-users/runtimes/</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/integrations/miroshark/</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/integrations/</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/features/</loc></url>
-  <url><loc>https://hivemindos.app/docs/for-users/trading/</loc></url>
-  <url><loc>https://hivemindos.app/docs/for-users/whole-brain/</loc></url>
-  <url><loc>https://hivemindos.app/docs/for-users/architecture/</loc></url>
-  <url><loc>https://hivemindos.app/docs/for-users/runtimes/</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/</loc></url>
+  <url><loc>https://hivemindos.app/docs/for-investors/paid-features/</loc></url>
+  <url><loc>https://hivemindos.app/docs/for-investors/</loc></url>
   <url><loc>https://hivemindos.app/docs/</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/features/integrations-and-work-history</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/whole-brain/knowledge-intake</loc></url>
@@ -121,10 +121,11 @@
   <url><loc>https://hivemindos.app/docs/for-users/whole-brain/workspaces</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/features/x-command-bot</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/x-engagement-honey</loc></url>
-  <url><loc>https://hivemindos.app/docs/for-users/features/zero-human-companies</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/runtimes/aeon/zero-human-companies</loc></url>
+  <url><loc>https://hivemindos.app/docs/for-users/features/zero-human-companies</loc></url>
   <url><loc>https://hivemindos.app/docs/account-sync-protocol</loc></url>
   <url><loc>https://hivemindos.app/docs/computer-manager-screens</loc></url>
   <url><loc>https://hivemindos.app/docs/for-users/clawbank/clawbank-platform-reference</loc></url>
   <url><loc>https://hivemindos.app/docs/prediction-edge-research</loc></url>
+  <url><loc>https://hivemindos.app/docs/trade-edge</loc></url>
 </urlset>

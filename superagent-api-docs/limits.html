@@ -370,14 +370,19 @@
     </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">creditsPerDay</code></td>
-      <td>HivemindOS credits charged by one supported operation during a fixed UTC day.</td>
+      <td>Agent Credits the selector may spend during a fixed UTC day.</td>
+      <td style="text-align: right">1,000,000,000</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">creditsPerCall</code></td>
+      <td>The most one call may cost, in Agent Credits. See <a href="#most-one-call-may-cost">the most one call may cost</a>.</td>
       <td style="text-align: right">1,000,000,000</td>
     </tr>
   </tbody>
 </table>
 
 <ul>
-  <li>Request and concurrency values must be positive integers. <code class="language-plaintext highlighter-rouge">creditsPerDay</code> must be positive with at most three decimal places.</li>
+  <li>Request and concurrency values must be positive integers. <code class="language-plaintext highlighter-rouge">creditsPerDay</code> must be positive with at most three decimal places. <code class="language-plaintext highlighter-rouge">creditsPerCall</code> may be 0 (free calls only) or more, with at most three decimal places.</li>
   <li>A key may define at most 128 selectors.</li>
   <li>The maximums are validation ceilings, not default quotas. An omitted field adds no limit, but account balance, plan allowance, service availability, wallet policy, and ancestor-key limits still apply.</li>
   <li>Concurrent capacity stays in use until the response finishes, including a streamed one. Always consume or cancel response bodies.</li>
@@ -436,21 +441,32 @@
 
 <h2 id="daily-credit-limits">Daily credit limits</h2>
 
-<p><code class="language-plaintext highlighter-rouge">creditsPerDay</code> works only on operations whose maximum charge can be checked before work starts:</p>
+<p><code class="language-plaintext highlighter-rouge">creditsPerDay</code> can be set on <code class="language-plaintext highlighter-rouge">*</code> or on any operation. A new key gets 2,000 a day on <code class="language-plaintext highlighter-rouge">*</code> unless it names its own <code class="language-plaintext highlighter-rouge">*</code> limits.</p>
 
 <ul>
-  <li><code class="language-plaintext highlighter-rouge">wallets.create</code></li>
-  <li><code class="language-plaintext highlighter-rouge">wallets.transactions.create</code></li>
-  <li><code class="language-plaintext highlighter-rouge">wallets.signatures.create</code></li>
-  <li><code class="language-plaintext highlighter-rouge">trading.orders.create</code></li>
-  <li><code class="language-plaintext highlighter-rouge">swaps.execute</code></li>
+  <li>The operations the API bills itself hold their whole quoted charge against the limit before they start, and only the final charge counts: <code class="language-plaintext highlighter-rouge">wallets.create</code>, <code class="language-plaintext highlighter-rouge">wallets.transactions.create</code>, <code class="language-plaintext highlighter-rouge">wallets.signatures.create</code>, <code class="language-plaintext highlighter-rouge">trading.orders.create</code> and <code class="language-plaintext highlighter-rouge">swaps.execute</code>.</li>
+  <li>Every other call is checked before it runs against what the key has already spent today, and its charge is counted after it answers. The last call before the limit can therefore finish past it by at most its own charge.</li>
 </ul>
-
-<p>It cannot be set on <code class="language-plaintext highlighter-rouge">*</code>, a managed-service selector, a quote, a read, or any other operation. Before a paid action starts, the API checks that its maximum charge fits the remaining limit; only the final charge counts toward the daily total.</p>
 
 <p>A key’s credit limit does not add credits and does not replace wallet policy. A request must pass the key limit, have enough account credits, and satisfy the wallet’s own rules.</p>
 
 <p><code class="language-plaintext highlighter-rouge">credits.x402.topUp</code> accepts request and concurrency limits but not <code class="language-plaintext highlighter-rouge">creditsPerDay</code>, because it buys credits rather than spending them. The unsigned HTTP 402 challenge does not use up a request slot; the first signed payment attempt does, and an idempotent replay of a completed top-up does not.</p>
+
+<h2 id="most-one-call-may-cost">The most one call may cost</h2>
+
+<p><code class="language-plaintext highlighter-rouge">creditsPerCall</code> holds every call a key makes to a ceiling, and <code class="language-plaintext highlighter-rouge">maxCredits</code> in an invoke body (or the <code class="language-plaintext highlighter-rouge">X-HivemindOS-Max-Credits</code> header) does the same for one call. The lower of the two decides. A call runs only when its price is known before it starts and fits:</p>
+
+<ul>
+  <li>An operation with a published maximum (most operations sold per call, and those whose service lists one) runs if that maximum fits. Otherwise it is refused with HTTP 409, <code class="language-plaintext highlighter-rouge">code: price_above_maximum</code>, and its <code class="language-plaintext highlighter-rouge">priceCredits</code>.</li>
+  <li>A free operation always runs, even under 0.</li>
+  <li>An operation priced only after it runs (a model reply, a metered lookup) is refused with HTTP 409 and <code class="language-plaintext highlighter-rouge">code: price_not_known_up_front</code>. One priced by a free quote says which quote operation to ask first.</li>
+</ul>
+
+<p>Nothing is charged for a refused call, and it never reaches the service. <code class="language-plaintext highlighter-rouge">GET /inspect/{serviceId}/{operationId}</code> shows any operation’s price before you call it, keyless and free.</p>
+
+<h2 id="pause-a-key">Pause a key</h2>
+
+<p><code class="language-plaintext highlighter-rouge">PATCH /api-keys/{id}</code> with <code class="language-plaintext highlighter-rouge">{"paused": true}</code> stops a key, and every key made from it, without revoking it: each call is refused with HTTP 403 and <code class="language-plaintext highlighter-rouge">code: api_key_paused</code>, which names the paused key. <code class="language-plaintext highlighter-rouge">{"paused": false}</code> resumes it, with its limits, scopes and expiry as they were. A key may pause itself or a key made from it; only a key above it, or the account in the console on hivemindos.app, may resume it. The same route changes a key’s <code class="language-plaintext highlighter-rouge">limits</code> in place, merged into what it has, and never past a key above it.</p>
 
 <h2 id="child-keys-and-ancestor-limits">Child keys and ancestor limits</h2>
 
