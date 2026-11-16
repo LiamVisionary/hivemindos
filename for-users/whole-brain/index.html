@@ -1040,7 +1040,7 @@
   <ul>
     <li>Managed chats inject Shared Brain Memory before each supported runtime turn.</li>
     <li>Raw runtimes run <code class="language-plaintext highlighter-rouge">hive-brain</code>, which uses the local app when it is running and falls back to searching the vault directly.</li>
-    <li>Claude Code gets the <code class="language-plaintext highlighter-rouge">hive-brain-hook</code> prompt hook, which adds relevant vault context before Claude answers.</li>
+    <li>Claude Code, Codex, Gemini CLI, Antigravity, and Hermes get <code class="language-plaintext highlighter-rouge">hive-brain-hook</code>, which adds your standing rules when a session starts and relevant vault context before they answer or after a command fails.</li>
     <li>Durable memory is stored as typed Markdown notes. Search indexes are generated from them, versioned, and rebuildable.</li>
     <li>Shared Env values use their own store and sync path. The vault holds names and status only.</li>
   </ul>

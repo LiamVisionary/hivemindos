@@ -350,6 +350,39 @@
 
 <p>Supported networks: <code class="language-plaintext highlighter-rouge">base</code>, <code class="language-plaintext highlighter-rouge">base-sepolia</code>, <code class="language-plaintext highlighter-rouge">ethereum</code>, <code class="language-plaintext highlighter-rouge">ethereum-sepolia</code>, <code class="language-plaintext highlighter-rouge">solana</code>, and <code class="language-plaintext highlighter-rouge">solana-devnet</code>. Availability may vary, so check <code class="language-plaintext highlighter-rouge">GET /services</code> and current pricing before offering a network or paid action.</p>
 
+<h2 id="autonomy-limits-for-agentpad-agents">Autonomy limits for AgentPad agents</h2>
+
+<p>An agent that is a 721T NFT (a HivePunk, a converted NFT, or a new agent HivemindOS keeps) has its own wallet and works on its own. Your agent spends on its own up to its on-chain daily cap: 5 USDC unless you change it, 500 at most. Only the NFT’s holder can change it; agents can’t. It resets when the NFT is sold. Trades above an approval line you set wait for your signature.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Limit</th>
+      <th>Who sets it</th>
+      <th>What happens at it</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>On-chain daily cap (the agent’s 721T module, <code class="language-plaintext highlighter-rouge">0x28600B0e17cB51EcCDd77BE45723Db3Ca550212f</code> on Base)</td>
+      <td>The NFT’s holder: 5 USDC by default, 500 at most</td>
+      <td>Spending past it is refused by the contract until the next UTC day</td>
+    </tr>
+    <tr>
+      <td>API key daily cap (<code class="language-plaintext highlighter-rouge">dailyLimitCredits</code>)</td>
+      <td>Whoever makes the key</td>
+      <td>Calls past it are refused until the next day</td>
+    </tr>
+    <tr>
+      <td>Wallet policy (<code class="language-plaintext highlighter-rouge">maxDailyUsd</code>, <code class="language-plaintext highlighter-rouge">requireApprovalAboveUsd</code>)</td>
+      <td>The wallet’s owner</td>
+      <td>Above the approval amount, the action waits for an approval from another principal</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>The wallet policy and the approvals above apply to wallets you create through this API. An agent’s own spending is held by its on-chain cap.</p>
+
 <h2 id="create-a-managed-wallet">Create a managed wallet</h2>
 
 <div class="language-ts highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="kd">const</span> <span class="nx">created</span> <span class="o">=</span> <span class="k">await</span> <span class="nx">hive</span><span class="p">.</span><span class="nx">wallets</span><span class="p">.</span><span class="nx">create</span><span class="p">(</span>

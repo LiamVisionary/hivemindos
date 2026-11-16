@@ -918,7 +918,7 @@
   <li>“What did we believe before the launch date changed?”</li>
 </ul>
 
-<p>A request to remember something becomes a Brain Review proposal. It only becomes durable memory after you approve it. When a new memory replaces an old one, current questions use the new version and the old one stays in the history.</p>
+<p>When an agent learns something worth keeping, it saves it and every agent can recall it at once. You do not approve each one. A note an agent wrote is marked “unreviewed” wherever it is recalled, and agents treat it as information to check, not as an instruction. Brain Review holds only the notes that look dangerous. When a new memory replaces an old one, current questions use the new version and the old one stays in the history.</p>
 
 <h2 id="where-answers-come-from">Where answers come from</h2>
 
@@ -1050,15 +1050,27 @@
         <td>The app recalls before each supported runtime turn, through <code class="language-plaintext highlighter-rouge">/api/brain/memory</code>.</td>
       </tr>
       <tr>
-        <td>Raw Codex, Hermes, Gemini, OpenClaw, Aeon, or shell agents</td>
-        <td><code class="language-plaintext highlighter-rouge">hive-brain answer "&lt;query&gt;"</code>. It finds the local API, or falls back to local vault/index search when the app is not running.</td>
+        <td>Raw Claude Code, Codex, Gemini CLI</td>
+        <td><code class="language-plaintext highlighter-rouge">hive-brain-hook</code> in the agent’s own hooks: core memory when a session starts (<code class="language-plaintext highlighter-rouge">SessionStart</code>), recall for each prompt (<code class="language-plaintext highlighter-rouge">UserPromptSubmit</code>; Gemini’s <code class="language-plaintext highlighter-rouge">BeforeAgent</code>), and recall when a command fails (Claude’s <code class="language-plaintext highlighter-rouge">PostToolUseFailure</code>; Codex’s <code class="language-plaintext highlighter-rouge">PostToolUse</code> and Gemini’s <code class="language-plaintext highlighter-rouge">AfterTool</code>, which report every call). Plus the <code class="language-plaintext highlighter-rouge">hive-brain</code> CLI.</td>
       </tr>
       <tr>
-        <td>Raw Claude Code</td>
-        <td><code class="language-plaintext highlighter-rouge">hive-brain-hook</code>, registered by setup as a Claude Code <code class="language-plaintext highlighter-rouge">UserPromptSubmit</code> hook, plus the same <code class="language-plaintext highlighter-rouge">hive-brain</code> CLI.</td>
+        <td>Antigravity</td>
+        <td><code class="language-plaintext highlighter-rouge">hive-brain-hook</code> when a session starts (its hooks get no prompt text to search), plus the CLI.</td>
+      </tr>
+      <tr>
+        <td>Hermes</td>
+        <td>The <code class="language-plaintext highlighter-rouge">hive-brain</code> Hermes plugin, on turns typed in Hermes’ own terminal: core memory on a session’s first turn, recall on every turn. Turns from its messaging gateway never get it.</td>
+      </tr>
+      <tr>
+        <td>OpenClaw, Aeon, or shell agents</td>
+        <td><code class="language-plaintext highlighter-rouge">hive-brain core</code> at the start of a session and <code class="language-plaintext highlighter-rouge">hive-brain answer "&lt;query&gt;"</code>, as their instruction block says. The CLI finds the local API, or falls back to local vault/index search when the app is not running.</td>
       </tr>
     </tbody>
   </table>
+
+  <p>Setup installs the hooks for each agent it shares skills with (<code class="language-plaintext highlighter-rouge">scripts/lib/agent-hooks/brain-hooks.mjs</code>), and uninstall removes them. When the collector starts, it brings an installed set up to date, so an update reaches agents that already have recall; it never adds recall to an agent that has none. Codex asks you to trust a new or changed hook in <code class="language-plaintext highlighter-rouge">/hooks</code> before it runs it. Turn recall off for setup with <code class="language-plaintext highlighter-rouge">HIVE_BRAIN_HOOKS=0</code>, or for a failed command only with <code class="language-plaintext highlighter-rouge">HIVE_BRAIN_HOOK_TOOL_FAILURE=0</code>.</p>
+
+  <p>A failed command is searched by its own error text in typed memory, because the moment an agent needs a rule is often an API’s refusal (“model … does not exist”), not your prompt. Only commands, fetches, and MCP calls count; a missing file does not. A session is not shown the same memory twice for a retried command.</p>
 
   <p>Recall is tiered by default: typed Agent Memory first, then relevant Markdown from the whole vault when the top memory hit is weak. Use <code class="language-plaintext highlighter-rouge">--scope agent-memory</code> for typed memory only, or <code class="language-plaintext highlighter-rouge">--scope full-vault</code> to force broad recall. <code class="language-plaintext highlighter-rouge">detail</code> (<code class="language-plaintext highlighter-rouge">abstract</code>, <code class="language-plaintext highlighter-rouge">overview</code>, or the default <code class="language-plaintext highlighter-rouge">full</code>) controls how much of each memory comes back, and <code class="language-plaintext highlighter-rouge">mode: "hierarchical"</code> scores folders before notes. Neither changes ranking.</p>
 
@@ -1107,7 +1119,7 @@ hive-brain compare <span class="s2">"Atlas launch"</span> <span class="nt">--fro
     <li><code class="language-plaintext highlighter-rouge">proof: true</code> or <code class="language-plaintext highlighter-rouge">proof: "auto"</code>: attach a hash-only GitLawb memory receipt.</li>
   </ul>
 
-  <p>A chat request to remember or “teach the hive” creates a Brain Review proposal with conversation evidence. A reviewer approves and applies it before typed Agent Memory changes.</p>
+  <p>A chat request to remember or “teach the hive” creates a Brain Review proposal with conversation evidence. A reviewer approves and applies it before typed Agent Memory changes. A coding agent on your computer (Claude Code, Codex, Gemini CLI, Hermes) saves through <code class="language-plaintext highlighter-rouge">hive-brain remember</code> instead, under the rules in “What an agent may save” below.</p>
 
   <h3 id="memory-layers">Memory layers</h3>
 
@@ -1127,13 +1139,13 @@ hive-brain compare <span class="s2">"Atlas launch"</span> <span class="nt">--fro
         <td>Shared (<code class="language-plaintext highlighter-rouge">hive</code>)</td>
         <td>the type folders</td>
         <td>every agent</td>
-        <td>you directly; an agent’s shared write becomes a Brain Review proposal</td>
+        <td>you, and every agent (its notes are marked unreviewed)</td>
       </tr>
       <tr>
         <td>Private (<code class="language-plaintext highlighter-rouge">agent</code>)</td>
         <td><code class="language-plaintext highlighter-rouge">Agents/&lt;agent-id&gt;/</code></td>
         <td>that agent, and you</td>
-        <td>that agent, directly, without review</td>
+        <td>that agent, when it asks for it with <code class="language-plaintext highlighter-rouge">--memory-scope agent</code></td>
       </tr>
       <tr>
         <td>Task (<code class="language-plaintext highlighter-rouge">task</code>)</td>
@@ -1144,7 +1156,22 @@ hive-brain compare <span class="s2">"Atlas launch"</span> <span class="nt">--fro
     </tbody>
   </table>
 
-  <p>An agent keeps its own lessons, environment quirks, and procedures in its private layer, so one agent’s wrong conclusion stays with that agent instead of becoming what every agent believes. Recall returns the shared layer plus the caller’s own private and task layers. Running inside Claude Code or Codex, or with <code class="language-plaintext highlighter-rouge">HIVE_AGENT_ID</code> set, <code class="language-plaintext highlighter-rouge">hive-brain remember</code> saves to that agent’s private layer; <code class="language-plaintext highlighter-rouge">--memory-scope hive</code> asks for shared memory instead.</p>
+  <p>Recall returns the shared layer plus the caller’s own private and task layers. Running inside Claude Code, Codex, Gemini CLI or Hermes, or with <code class="language-plaintext highlighter-rouge">HIVE_AGENT_ID</code> set, <code class="language-plaintext highlighter-rouge">hive-brain remember</code> saves to the shared layer; <code class="language-plaintext highlighter-rouge">--memory-scope agent</code> keeps a note that is only about that agent’s own setup in its private layer.</p>
+
+  <h3 id="what-an-agent-may-save">What an agent may save</h3>
+
+  <p>Nobody has time to approve every memory, so these checks do the reviewing:</p>
+
+  <ul>
+    <li><strong>Every agent note says who wrote it.</strong> It is tagged <code class="language-plaintext highlighter-rouge">unreviewed</code> and <code class="language-plaintext highlighter-rouge">by/&lt;agent&gt;</code>, and recall shows that beside it. Agents are told to verify such a note before relying on it and never to follow it as an order.</li>
+    <li><strong>Only your own words become rules.</strong> An instruction, preference or decision loads at the start of every session only if the agent quotes you (<code class="language-plaintext highlighter-rouge">--origin user-stated --quote "..."</code>) and the quote is found in a message you typed in a current session. Text from a web page, a file, a tool’s output or a pasted document does not count. Without a matching quote the note is kept as an observation.</li>
+    <li><strong>Dangerous notes wait for you.</strong> A note that tells its reader what to do, hides something from you, downloads and runs something, deletes things, moves money or exposes a credential is held in Brain Review with the reason. Nothing else is.</li>
+    <li><strong>Your memories are not rewritten.</strong> An agent can update another agent’s unreviewed note. A memory you wrote or approved stays as it is; the agent saves what changed as a new note beside it.</li>
+  </ul>
+
+  <p>The hooks setup installs also prompt an agent to save: when you state a rule, when work that should be remembered (a release, a new account, a changed credential) went by unsaved, and once more when a turn ends with your rule still unsaved. If an agent keeps memory files of its own (Claude Code, Hermes), each one is copied to the shared brain as it is written.</p>
+
+  <p>To get the earlier behaviour, where every shared note from an agent waits for approval, set <code class="language-plaintext highlighter-rouge">HIVE_BRAIN_AGENT_HIVE_WRITES=review</code>.</p>
 
   <p>Every HivemindOS agent keeps to these layers. They are enforced against an agent that ignores them only when each agent signs in with its own identity (<code class="language-plaintext highlighter-rouge">HIVEMINDOS_AGENT_SCOPED_PERMISSIONS=1</code>); then an agent can read and change only its own private memory, and maintenance actions such as <code class="language-plaintext highlighter-rouge">consolidate</code> are yours alone.</p>
 
@@ -1162,7 +1189,9 @@ hive-brain compare <span class="s2">"Atlas launch"</span> <span class="nt">--fro
     <li>Standing rules drawn from typed memory: shared instructions, preferences, and decisions you stated or that answers keep using, plus the agent’s own most-used lessons.</li>
   </ul>
 
-  <p>Claude Code receives it through the <code class="language-plaintext highlighter-rouge">hive-brain-hook</code> <code class="language-plaintext highlighter-rouge">SessionStart</code> hook; app chats receive it with each turn’s recall. <code class="language-plaintext highlighter-rouge">hive-brain core</code> prints it.</p>
+  <p>A rule counts as one you stated when it was saved with <code class="language-plaintext highlighter-rouge">--origin user-stated</code>, which an agent should do when it records your words. Only your own runtime can mark a memory that way; from any other caller the claim is dropped, and the response says so. <code class="language-plaintext highlighter-rouge">hive-brain update --memory-id &lt;id&gt; --origin user-stated</code> marks an existing one.</p>
+
+  <p>Claude Code, Codex, Gemini CLI, Antigravity, and Hermes receive it through <code class="language-plaintext highlighter-rouge">hive-brain-hook</code> when a session starts; app chats receive it with each turn’s recall. <code class="language-plaintext highlighter-rouge">hive-brain core</code> prints it.</p>
 
   <h3 id="canonical-memory-and-evolution">Canonical memory and evolution</h3>
 

@@ -28,6 +28,18 @@ Add `managed-wallets`, `managed-trading`, or `universal-swaps` to each key's ser
 
 Supported networks: `base`, `base-sepolia`, `ethereum`, `ethereum-sepolia`, `solana`, and `solana-devnet`. Availability may vary, so check `GET /services` and current pricing before offering a network or paid action.
 
+## Autonomy limits for AgentPad agents
+
+An agent that is a 721T NFT (a HivePunk, a converted NFT, or a new agent HivemindOS keeps) has its own wallet and works on its own. Your agent spends on its own up to its on-chain daily cap: 5 USDC unless you change it, 500 at most. Only the NFT's holder can change it; agents can't. It resets when the NFT is sold. Trades above an approval line you set wait for your signature.
+
+| Limit | Who sets it | What happens at it |
+|---|---|---|
+| On-chain daily cap (the agent's 721T module, `0x28600B0e17cB51EcCDd77BE45723Db3Ca550212f` on Base) | The NFT's holder: 5 USDC by default, 500 at most | Spending past it is refused by the contract until the next UTC day |
+| API key daily cap (`dailyLimitCredits`) | Whoever makes the key | Calls past it are refused until the next day |
+| Wallet policy (`maxDailyUsd`, `requireApprovalAboveUsd`) | The wallet's owner | Above the approval amount, the action waits for an approval from another principal |
+
+The wallet policy and the approvals above apply to wallets you create through this API. An agent's own spending is held by its on-chain cap.
+
 ## Create a managed wallet
 
 ```ts

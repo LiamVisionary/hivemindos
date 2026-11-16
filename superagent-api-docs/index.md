@@ -132,7 +132,7 @@ A failure may also include `code`, `operationId`, `metric`, and `retryAfterSecon
 
 ### Or connect an agent with MCP
 
-Add `https://api.hivemindos.app/mcp` as a remote Streamable HTTP server and send the key in a protected `Authorization` header. The agent gets four tools: list services, search allowed actions, read, and act. See [Connect an agent with MCP](mcp.html).
+Add `https://api.hivemindos.app/mcp` as a remote Streamable HTTP server and send the key in a protected `Authorization` header. The agent gets eight tools: four for its memory (remember, recall, forget, list), then list services, search allowed actions, read, and act. See [Connect an agent with MCP](mcp.html).
 
 If your agent supports reusable skills, download [the SuperAgent API `SKILL.md`](https://hivemindos.app/superagent-api/SKILL.md) so it can keep managing keys, limits, funding, and tests.
 

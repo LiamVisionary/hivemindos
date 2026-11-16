@@ -959,7 +959,7 @@ Authentication: Authorization: Bearer hmos_live_...
 
 <h2 id="what-the-agent-gets">What the agent gets</h2>
 
-<p>Four stable tools:</p>
+<p>Eight stable tools: four for the account’s memory first, then four that search and run any action.</p>
 
 <table>
   <thead>
@@ -969,6 +969,22 @@ Authentication: Authorization: Bearer hmos_live_...
     </tr>
   </thead>
   <tbody>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory_remember</code></td>
+      <td>Save a fact, decision, preference, instruction or note that every agent on the account can recall.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory_recall</code></td>
+      <td>Find saved memories that match a question or topic, best first.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory_forget</code></td>
+      <td>Stop recalling a memory by its id. It is archived unless erasing it for good is confirmed.</td>
+    </tr>
+    <tr>
+      <td><code class="language-plaintext highlighter-rouge">memory_list</code></td>
+      <td>List saved memories, most recently changed first, with their ids.</td>
+    </tr>
     <tr>
       <td><code class="language-plaintext highlighter-rouge">hive_services_list</code></td>
       <td>List services the key may use and optionally check live availability.</td>

@@ -61,10 +61,14 @@ Make keys in the [console](https://hivemindos.app/superagent-api/console/#keys) 
 
 ## What the agent gets
 
-Four stable tools:
+Eight stable tools: four for the account's memory first, then four that search and run any action.
 
 | Tool | Purpose |
 |---|---|
+| `memory_remember` | Save a fact, decision, preference, instruction or note that every agent on the account can recall. |
+| `memory_recall` | Find saved memories that match a question or topic, best first. |
+| `memory_forget` | Stop recalling a memory by its id. It is archived unless erasing it for good is confirmed. |
+| `memory_list` | List saved memories, most recently changed first, with their ids. |
 | `hive_services_list` | List services the key may use and optionally check live availability. |
 | `hive_actions_search` | Find exact allowed actions and their input, approval, and execution details. |
 | `hive_read` | Run an action marked read-only. It refuses writes and execution. |
