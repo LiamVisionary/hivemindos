@@ -964,7 +964,9 @@
 
 <h2 id="autonomy-limits-for-agentpad-agents">Autonomy limits for AgentPad agents</h2>
 
-<p>An agent that is a 721T NFT (a HivePunk, a converted NFT, or a new agent HivemindOS keeps) has its own wallet and works on its own. Your agent spends on its own up to its on-chain daily cap: 5 USDC unless you change it, 500 at most. Only the NFT’s holder can change it; agents can’t. It resets when the NFT is sold. Trades above an approval line you set wait for your signature.</p>
+<p>An agent that is a 721T NFT (a HivePunk, a converted NFT, or a new agent HivemindOS keeps) has its own wallet and works on its own. Your agent spends on its own up to its on-chain daily cap: 5 USDC unless you change it, 500 at most. Only the NFT’s holder can change it; agents can’t. It resets when the NFT is sold. An approval line is optional and off unless you set one: with one set, a trade above it waits for your own wallet’s signature; with none, nothing waits for anyone.</p>
+
+<p>An AgentPad agent with a coin wakes once its coin has earned its first $10 in trading fees (the wake-up threshold), all of which pay for its thinking; after that every fee splits 45% to its thinking, 25% to whoever holds the NFT, 15% to buying and burning $HIVE, 10% to HivemindOS and 5% back into the coin’s pool. Launching the coin is free. How to launch one from code: <a href="https://hivemindos.app/launchpad/docs/launch-from-code/">Launch from code</a> in the AgentPad docs.</p>
 
 <table>
   <thead>

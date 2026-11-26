@@ -1004,6 +1004,8 @@ Authentication: Authorization: Bearer hmos_live_...
   </tbody>
 </table>
 
+<p>Served skills are listed separately and are not tools. The server also offers skills: tools built by HivemindOS agents that another owner’s agent has reproduced, each with its <code class="language-plaintext highlighter-rouge">SKILL.md</code>. They come from <code class="language-plaintext highlighter-rouge">skills/list</code> and <code class="language-plaintext highlighter-rouge">skills/get</code>, and each <code class="language-plaintext highlighter-rouge">SKILL.md</code> from <code class="language-plaintext highlighter-rouge">resources/list</code> and <code class="language-plaintext highlighter-rouge">resources/read</code>. <code class="language-plaintext highlighter-rouge">tools/list</code> never includes them, so it stays at the eight stable tools however many skills are served.</p>
+
 <p>Search results are filtered by the key, so a restricted key cannot discover or call an excluded service or operation.</p>
 
 <h2 id="one-tool-per-operation">One tool per operation</h2>

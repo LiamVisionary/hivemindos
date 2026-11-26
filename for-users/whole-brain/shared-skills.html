@@ -942,10 +942,11 @@ Skills/&lt;slug&gt;/SKILL.md
 
   <h2 id="runtime-projection">Runtime projection</h2>
 
-  <p>Setup copies the shared shelf into each supported runtime’s skill folder as HivemindOS-managed copies, so runtimes that only scan their own folder (such as Codex) still see shared skills.</p>
+  <p>Setup copies the shared shelf into each supported runtime’s skill folder as HivemindOS-managed copies, so runtimes that only scan their own folder (such as Codex) still see shared skills. HivemindOS keeps those copies current: it checks the shelf every 10 minutes and after every update. New shelf skills reach a runtime the next time you run setup, because each added skill makes that runtime’s skill list longer on every request.</p>
 
   <ul>
     <li>HivemindOS replaces a runtime skill folder only if it carries <code class="language-plaintext highlighter-rouge">.hivemind-skill-source.json</code> marking it as HivemindOS-managed.</li>
+    <li>If you edit a managed copy in a runtime’s folder, HivemindOS keeps your edit and stops updating that copy.</li>
     <li>A self-installed skill with the same name is kept and skipped. The shared version stays primary for HivemindOS routing; the local one stays available.</li>
     <li>Uninstall removes only HivemindOS-managed copies.</li>
   </ul>

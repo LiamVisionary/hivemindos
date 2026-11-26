@@ -1173,6 +1173,8 @@ hive-brain compare <span class="s2">"Atlas launch"</span> <span class="nt">--fro
 
   <p>To get the earlier behaviour, where every shared note from an agent waits for approval, set <code class="language-plaintext highlighter-rouge">HIVE_BRAIN_AGENT_HIVE_WRITES=review</code>.</p>
 
+  <p>The same rules hold everywhere you use HivemindOS. When you state a standing rule or a decision in a chat (on hivemindos.app/chat, in the phone app or in the desktop chat), it is kept without you asking: in your account memory on the web and phone, and in your computer’s shared brain from the desktop. A note one of your agents saves to your account memory through the SuperAgent API is recalled as an unreviewed note from that agent, and one that tries to give orders is refused with the reason.</p>
+
   <p>Every HivemindOS agent keeps to these layers. They are enforced against an agent that ignores them only when each agent signs in with its own identity (<code class="language-plaintext highlighter-rouge">HIVEMINDOS_AGENT_SCOPED_PERMISSIONS=1</code>); then an agent can read and change only its own private memory, and maintenance actions such as <code class="language-plaintext highlighter-rouge">consolidate</code> are yours alone.</p>
 
   <p>A private memory can name a shared one in <code class="language-plaintext highlighter-rouge">overrides</code>, and then replaces it for that agent only. It can never replace an instruction, preference, or decision you stated yourself; that pair is reported as a conflict instead.</p>

@@ -74,6 +74,8 @@ Eight stable tools: four for the account's memory first, then four that search a
 | `hive_read` | Run an action marked read-only. It refuses writes and execution. |
 | `hive_write` | Run a write or execution action with a stable idempotency key. It refuses reads. |
 
+Served skills are listed separately and are not tools. The server also offers skills: tools built by HivemindOS agents that another owner's agent has reproduced, each with its `SKILL.md`. They come from `skills/list` and `skills/get`, and each `SKILL.md` from `resources/list` and `resources/read`. `tools/list` never includes them, so it stays at the eight stable tools however many skills are served.
+
 Search results are filtered by the key, so a restricted key cannot discover or call an excluded service or operation.
 
 ## One tool per operation

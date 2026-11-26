@@ -915,7 +915,16 @@
   <li><strong>Import a statement</strong> adds history from a CSV, OFX, or QFX file. Re-importing the same rows doesn’t create duplicates. If a card statement lists purchases as positive numbers, open <strong>Advanced</strong> in the import window and turn on the option to flip money in and out; re-importing with it on fixes those rows.</li>
 </ul>
 
-<p>Connecting or reconnecting a bank always asks you to confirm it’s you first, with Face ID, Touch ID, a passkey, or your dashboard device token, even if the dashboard is already unlocked.</p>
+<p>Connecting or reconnecting a bank always asks you to confirm it’s you first, even if the dashboard is already unlocked. Your computer asks in its own window, and HivemindOS never sees what you enter:</p>
+
+<ul>
+  <li><strong>Mac:</strong> Touch ID. On a Mac where Touch ID can’t be used (no fingerprint reader, the lid is closed, or no fingerprint is saved), your Mac’s login password.</li>
+  <li><strong>Windows:</strong> Windows Hello, with your fingerprint, your face, or your Hello PIN. A PC with no Windows Hello set up can’t connect a bank.</li>
+  <li><strong>Linux:</strong> your account password, in your system’s own password window. This works when HivemindOS was installed from the .deb or .rpm package. The AppImage can’t connect a bank.</li>
+  <li><strong>In a browser:</strong> a passkey.</li>
+</ul>
+
+<p>On a computer that can’t confirm it’s you, adding a balance yourself and importing a statement still work, and accounts you already connected keep updating.</p>
 
 <p>Your HivemindOS wallets and connected brokerage accounts are added when you refresh.</p>
 
