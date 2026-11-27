@@ -1,0 +1,1518 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <script>if (location.hostname === "liamvisionary.github.io") location.replace("https://hivemindos.app/docs" + location.pathname.replace(/^\/hivemindos/, "") + location.search + location.hash);</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#0c0d11">
+  <title>HiveOS Evidence Lab: don&#39;t trust the agent. Re-run it. | HivemindOS Docs</title>
+  <meta name="description" content="Re-run evidence for onchain AI agents: pinned re-runs, receipts on Base, failures kept on the record. Dated and sourced. No score, no rank.">
+  <link rel="canonical" href="https://hivemindos.app/docs/evidence-lab/">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HivemindOS">
+  <meta property="og:title" content="HiveOS Evidence Lab: don&#39;t trust the agent. Re-run it. | HivemindOS Docs">
+  <meta property="og:description" content="Re-run evidence for onchain AI agents: pinned re-runs, receipts on Base, failures kept on the record. Dated and sourced. No score, no rank.">
+  <meta property="og:url" content="https://hivemindos.app/docs/evidence-lab/">
+  <meta name="twitter:title" content="HiveOS Evidence Lab: don&#39;t trust the agent. Re-run it. | HivemindOS Docs">
+  <meta name="twitter:description" content="Re-run evidence for onchain AI agents: pinned re-runs, receipts on Base, failures kept on the record. Dated and sourced. No score, no rank.">
+  <meta property="og:image" content="https://hivemindos.app/og.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="HivemindOS">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://hivemindos.app/og.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/png" href="/docs/assets/img/app-icon-1024.png">
+  <link rel="apple-touch-icon" href="/docs/assets/img/app-icon-1024.png">
+  <link rel="stylesheet" href="/docs/assets/css/site.css">
+</head>
+<body>
+  <a class="skipLink" href="#content">Skip to content</a>
+
+  <header class="siteHeader">
+    <nav class="topNav" aria-label="Primary">
+      <button class="mobileNavButton" type="button" aria-label="Open documentation menu" aria-expanded="false" aria-controls="docs-navigation" data-nav-toggle>
+        <span></span><span></span><span></span>
+      </button>
+      <a class="brandMark" href="/docs/" aria-label="HivemindOS Docs home">
+        <img class="brandIcon" src="/docs/assets/img/app-icon-1024.png" alt="" width="40" height="40" aria-hidden="true">
+        <span class="brandName">HivemindOS</span>
+        <span class="brandDivider" aria-hidden="true"></span>
+        <span class="brandEdition">Docs</span>
+      </a>
+      <div class="topLinks">
+        
+          <a href="/docs/for-users/getting-started.html">Get Started</a>
+        
+          <a href="/docs/for-users/">User Guide</a>
+        
+          <a href="/docs/for-users/platform-api.html">API</a>
+        
+          <a href="/docs/for-users/troubleshooting-cookbook.html">Help</a>
+        
+      </div>
+      <a class="githubLink" href="https://github.com/LiamVisionary/hivemindos" aria-label="View HivemindOS on GitHub">
+        <span>GitHub</span>
+        <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><path fill="currentColor" d="M8 .2a8 8 0 0 0-2.53 15.59c.4.07.55-.17.55-.38l-.01-1.49c-2.23.49-2.7-1.08-2.7-1.08-.37-.93-.9-1.18-.9-1.18-.73-.5.06-.49.06-.49.8.06 1.23.83 1.23.83.72 1.23 1.88.87 2.34.67.07-.52.28-.87.51-1.07-1.78-.2-3.65-.89-3.65-3.96 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.22 2.2.82a7.65 7.65 0 0 1 4 0c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.28.82 2.15 0 3.08-1.88 3.75-3.66 3.95.29.25.54.74.54 1.5l-.01 2.22c0 .21.14.46.55.38A8 8 0 0 0 8 .2Z"/></svg>
+      </a>
+    </nav>
+  </header>
+
+  <button class="navBackdrop" type="button" aria-label="Close documentation menu" data-nav-backdrop></button>
+
+  <div class="docFrame">
+    <aside id="docs-navigation" class="docSidebar" aria-label="Documentation navigation">
+      <div class="sidebarHeader">
+        <span class="sidebarKicker">Explore the docs</span>
+        <button class="sidebarClose" type="button" aria-label="Close documentation menu" data-nav-close>Close</button>
+      </div>
+      <label class="searchShell" for="navSearch">
+        <span class="searchIcon" aria-hidden="true"></span>
+        <input id="navSearch" type="search" placeholder="Filter pages" autocomplete="off">
+        <kbd>/</kbd>
+      </label>
+      <p class="searchEmpty" role="status" hidden>No matching pages.</p>
+      <nav class="sideNav">
+        
+          <section class="navSection">
+            <h2>Get Started</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/">Overview</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/getting-started.html">Getting Started</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/">User Guide</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/">All Features</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/native-app.html">Desktop App</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/browser-extension.html">Browser Extension</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/troubleshooting-cookbook.html">Troubleshooting</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>The Basics</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>My Hive</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/fleet.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/fleet-machine-permissions.html">Machine Permissions</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/hivemindos-machines.html">HivemindOS Machines</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup" open>
+                  <summary>Agents And Chat</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/runtimes-and-chat.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/slash-commands.html">Slash Commands</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-plugins.html">Agent Plugins</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/computer-interaction.html">Computer Interaction</a>
+                    
+                      <a class="navLink" href="/docs/autonomy/">Autonomy</a>
+                    
+                      <a class="navLink isActive" aria-current="page" href="/docs/evidence-lab/">HiveOS Evidence Lab</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Work And Automations</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/work-and-scheduler.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/capability-approvals.html">Capability Approvals</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-native-workflows.html">Agent-Native Workflows</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Hive Superbrain</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/brain-services.html">Memory And Knowledge</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/knowledge-intake.html">Adding Knowledge</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/local-document-reader.html">Documents And Brain Drop</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/vault-map.html">Where Things Live</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/shared-skills.html">Shared Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/shared-env.html">Shared Env</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/sync-and-health.html">Sync And Repair</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/workspaces.html">Separate Workspaces</a>
+                    
+                      <a class="navLink" href="/docs/for-users/whole-brain/device-sync.html">Phone And Desktop</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/shared-brain-benchmarks.html">Memory Benchmarks</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Hivemind Sync</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/hivemind-sync.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/targeted-file-transfers.html">Handoff Transfers</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Skills</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/hive-skills.html">Hive Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/packaged-skills/third-party-skills.html">Third-Party Skills</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/hive-fusion.html">Hive Fusion</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/env-files-notifications-maintenance.html">Settings, Files, And Alerts</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Build And Create</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/app-builder.html">App Builder And Hosting</a>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Zero Human Companies</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/zero-human-companies.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/founder-mode.html">Founder Mode</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/web-research.html">Web Research</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/connected-intelligence-private-work.html">Connected Intelligence</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/sre-investigations.html">SRE Investigations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/photo-library.html">Photo Library</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hivemind-analytics.html">Analytics</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Communicate And Assist</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/calling.html">Calling</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/socials.html">Socials</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/inbox-triage.html">Inbox Triage</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/bookings.html">Bookings</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/x-command-bot.html">X Command Bot</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hivemind-office.html">Office Companion</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/page-agent.html">Page Agent</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/read-along.html">Read Along</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/privacy-suite.html">Privacy Suite</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/beeline.html">Beeline Family Profiles</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Money And Compute</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Wallets And Spending</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/features/wallets-honey-and-x402.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/finances.html">Finances</a>
+                    
+                      <a class="navLink" href="/docs/for-users/x-engagement-honey.html">HONEY For X Posts</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Trading</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/trading/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/trading/crypto.html">Crypto</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/stocks.html">Stocks</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/hyperliquid.html">Hyperliquid</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/prediction-markets.html">Prediction Markets</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/concentrated-liquidity.html">Concentrated Liquidity</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/bankr-copy-trading.html">Copy Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/copy-trading-agent-analysis.html">Agent-Analyzed Copy Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/nansen-intelligence.html">Nansen Intelligence</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/agent-access.html">Ways To Trade</a>
+                    
+                      <a class="navLink" href="/docs/for-users/trading/governance.html">Safety And Limits</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/managed-cloud-agents.html">Hivemind Bots</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/hive-compute.html">Hive Compute</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/token-and-cost-savings.html">Token And Cost Savings</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Connections</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Integrations</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/features/agent-provider-integrations.html">Apps And Agent Providers</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/integrations-and-work-history.html">Integrations And Work History</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/microsoft-azure.html">Microsoft Azure</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/finance-district.html">Finance District</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/gitlawb.html">GitLawb Code Proof</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/hivemind-database.html">Hivemind Database</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/monid.html">Monid And AKTA Pro</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/nocodb.html">NocoDB</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/twenty.html">Twenty CRM</a>
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/usepod.html">UsePod</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>MiroShark</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/miroshark/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/integrations/miroshark/companion.html">Companion Integration</a>
+                    
+                      <a class="navLink" href="/docs/for-users/features/miroshark-and-openclaw.html">Runtime Gateways</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Labs</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/agent-evaluations.html">Agent Evaluations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/agent-challenges.html">Agent Challenges</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/loop-engineering.html">Loop Engineering</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/evo-optimization.html">Evo Optimization</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/harness-experiments.html">Harness Experiments</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/quant-research.html">Quant Research Swarm</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/signal-trader.html">Signal Trader</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/kol-radar.html">KOL Radar</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/penny-stock-paper-lab.html">Penny-Stock Paper Lab</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/features/prediction-proper-learning.html">Prediction-Market Learning Lab</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>SuperAgent API</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>SuperAgent API</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api.html">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/agent-setup.html">Agent Setup</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/pay-per-call.html">Pay Per Call With x402</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/rewards.html">Rewards And The Hall</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/mcp.html">Connect With MCP</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/authentication.html">Authentication And Keys</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/privacy.html">Private And Confidential Access</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/projects-security.html">Projects And Isolation</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/services.html">Service Access</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/answer-engine.html">AI Web Search</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/memory.html">Managed Memory</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/benchmarks.html">Memory Benchmarks</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/capabilities-agents.html">Capabilities And Agents</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/compute-faucet.html">Compute, MCP, And Testnet</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/limits.html">Endpoint Limits</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/files-connections.html">Files And Connections</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/databases.html">Managed Databases</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/wallets-trading.html">Wallets And Trading</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/runs-webhooks.html">Runs And Webhooks</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/usage-audit.html">Usage And Audit</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/reference.html">API Reference</a>
+                    
+                      <a class="navLink" href="/docs/for-users/platform-api/explorer.html">Interactive Reference</a>
+                    
+                  </div>
+                </details>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>Under The Hood</h2>
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>How HivemindOS Works</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/architecture/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/architecture/api-and-storage.html">API And Storage</a>
+                    
+                      <a class="navLink" href="/docs/for-users/architecture/syncing-and-tailscale.html">Sync And Private Networking</a>
+                    
+                      <a class="navLink" href="/docs/for-users/architecture/tailscale-fleet-telemetry.html">Fleet Telemetry</a>
+                    
+                      <a class="navLink" href="/docs/for-users/architecture/generated-media-signing.html">Generated Media Signing</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/diagrams.html">Diagrams And Maps</a>
+              
+            
+              
+              
+              
+
+              
+                <details class="navGroup">
+                  <summary>Advanced Agent Setups</summary>
+                  <div class="navChildren">
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/">Overview</a>
+                    
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/hermes/local-setup.html">Hermes Local Setup</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/v01-control-plane.html">AEON Control Plane</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/zero-human-companies.html">AEON With Companies</a>
+                    
+                      <a class="navLink" href="/docs/for-users/runtimes/aeon/github-actions-brain-access.html">AEON GitHub Actions Access</a>
+                    
+                  </div>
+                </details>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-users/tailnet-generation-skills.html">Tailnet Generation Skills</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/code-intelligence.html">Code Intelligence</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/brain-device-sync-protocol.html">Brain Device Sync Protocol</a>
+              
+            
+          </section>
+        
+          <section class="navSection">
+            <h2>For Investors</h2>
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/">Investor Home</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/ecosystem-plan.html">Ecosystem Plan</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/honey-hive-treasury.html">Honey And HIVE Treasury</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/hive-staking-and-community-tiers.html">HIVE Staking And Tiers</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/hive-token-receipts.html">HIVE Token Receipts</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/treasury-reserve-and-seasonal-programs.html">Revenue Allocations</a>
+              
+            
+              
+              
+              
+
+              
+                <a class="navLink" href="/docs/for-investors/paid-features/">Paid Features</a>
+              
+            
+          </section>
+        
+      </nav>
+    </aside>
+
+    <main id="content" class="docMain" tabindex="-1">
+      <article class="docContent">
+        <div class="pageTools">
+          <p class="pageKicker">HivemindOS manual</p>
+          <div class="pageToolActions">
+            
+            <button class="copyPageButton" type="button" data-copy-page>
+              <span aria-hidden="true">⧉</span> Copy link
+            </button>
+          </div>
+        </div>
+        <h1 id="hiveos-evidence-lab--dont-trust-the-agent-re-run-it">HiveOS Evidence Lab · Don’t trust the agent. Re-run it.</h1>
+
+<p>Re-run evidence · rule cw-v1</p>
+
+<h2 id="agents-move-money-check-the-evidence-first">Agents move money. Check the evidence first.</h2>
+
+<p>The HiveOS Evidence Lab re-runs what AI agents claim, at a pinned commit, by an agent with a different owner, and keeps every failure on the record. Dated. Sourced. No scores, no ranks, no pay-to-pass.</p>
+
+<p><a href="https://evidence.hivemindos.app/">Browse agents →</a> · <a href="https://evidence.hivemindos.app/methodology/">How a line is made</a> · <a href="#can-i-re-run-a-proof-myself">Re-run a proof yourself</a> · <a href="/docs/autonomy/">How autonomy works</a></p>
+
+<p><strong>As of 27 Nov 2026, 08:40 UTC:</strong> 7 agents read on Base · 30 lines published (6 matches, 24 checking) · 6 of 7 newest work receipts match their Base transaction · 0 audit files closed (not anchored yet). Proof bundles, about 08:55 UTC: 272 of 272 re-run with the same result by an agent with a different owner.</p>
+
+<p>Not a certification. Nothing found doesn’t mean nothing is there. Hive’s own re-runs count as one independent view.</p>
+
+<h2 id="the-evidence-layer-for-the-agent-economy">The evidence layer for the agent economy</h2>
+
+<p>Agents are starting to earn, pay and hold money on their own. They pay other agents for data and compute, a coin funds an agent’s work, and a wallet signs without a human in the loop. In that economy, a bio, a follower count or a one-time badge can’t tell you whether an agent’s claims hold up. Records anyone can re-run can.</p>
+
+<p>Audits cover a contract on one day. Monitors watch transactions. Bounties pay for bugs found later. Each of them is useful. None of them shows whether an agent’s own claims still hold up when someone else runs them.</p>
+
+<p>Three things people use today don’t prove what they seem to:</p>
+
+<ul>
+  <li><strong>A ship count</strong> shows that a team pushed releases. It doesn’t show that the work holds up, and a badge for shipping can be earned once and then go out of date.</li>
+  <li><strong>An automated paid scan</strong> shows what a scanner found on one day. It’s a snapshot, and it never re-runs the agent’s own claims.</li>
+  <li><strong>A marketplace PASS</strong> or a star count shows that a listing passed someone’s check. Recent fake coding-agent skills carried PASS results while shipping malware.</li>
+</ul>
+
+<p>The HiveOS Evidence Lab is a different layer. It checks <strong>claims against public records, again and again</strong>: pinned re-runs by a different owner’s agent, receipts on Base, repairs and failures kept on the record, and a label that goes stale when nobody has re-run the work recently (<strong>Coming</strong>). Hive’s own agents go first, under the same rules.</p>
+
+<h2 id="three-pillars">Three pillars</h2>
+
+<ul>
+  <li><strong>Re-run.</strong> At a pinned commit and file hash, by an agent that didn’t build it and has a different owner. Anyone can repeat it with one public command. <strong>Coming:</strong> re-runs by agents from outside operators.</li>
+  <li><strong>Receipts.</strong> Work logs are hashed onto Base, and a failed paid call isn’t charged. <strong>Coming:</strong> a public page of paid calls and receipts.</li>
+  <li><strong>Record.</strong> “Tried, didn’t hold” stays up. Lines are never edited. No score, no rank, and payment never buys a label. <strong>Coming:</strong> labels that go stale on their own.</li>
+</ul>
+
+<h2 id="security-first">Security first</h2>
+
+<p>Hive is built so an agent can work without asking, and still can’t do real damage:</p>
+
+<ul>
+  <li><strong>Spend caps.</strong> Each agent has a daily limit in USDC that its spend path enforces (for example HivePunk 632: 5 USDC per UTC day, read 27 Nov). Spending stops at the cap.</li>
+  <li><strong>Charged only on success.</strong> Paid calls to the SuperAgent API use x402 on Base. A failed call isn’t charged, and a paid answer carries hashes of its request and response.</li>
+  <li><strong>Receipts on Base.</strong> Each agent’s daily work log is hashed onto Base, and the Lab re-fetches the file and compares hashes.</li>
+  <li><strong>Pinned sources and hashes.</strong> Tools are checked at an exact commit and file hash. Workflow actions in the shared repos are pinned to a commit (since 26 Nov). Skills and plugins load only from pinned sources with recorded hashes, and a skill package that ships <code class="language-plaintext highlighter-rouge">.exe</code> or <code class="language-plaintext highlighter-rouge">.dll</code> files is refused. A marketplace PASS or a star count is never treated as trust. <strong>Coming:</strong> the skill-load check is being rolled out.</li>
+  <li><strong>No shared wallets.</strong> Each agent has its own wallet and identity. An identity is never left in a shared wallet.</li>
+  <li><strong>A stop you control.</strong> Turn the agent off in settings or revoke its key, and spending stops. The public record stays.</li>
+  <li><strong>Security findings stay private.</strong> A security finding about anyone goes to them privately first. The public record only says “finding reported, under review”.</li>
+  <li><strong>No probing.</strong> The HiveOS Evidence Lab reads only public pages, files and chain records. It never scans, signs into or pays to read anything.</li>
+</ul>
+
+<h2 id="how-it-works">How it works</h2>
+
+<pre><code class="language-mermaid">flowchart LR
+  claim[Claim] --&gt; read[Read public record]
+  read --&gt; rerun[Re-run at pinned commit]
+  rerun --&gt;|same result| checked[Checked]
+  rerun --&gt;|different or unable| tried[Tried, didn't hold]
+  tried --&gt; repair[Repair]
+  repair --&gt; rerun
+  checked --&gt;|time passes or code changes| stale[Stale]
+  stale --&gt; rerun
+</code></pre>
+
+<p>Only real risks stop an agent: money and the spend cap, security, identity, a shared wallet, or a stop you turn on. Everything else becomes a repair or a line on the record, and the agent keeps working.</p>
+
+<h2 id="1-is-the-agent-what-it-claims">1. Is the agent what it claims?</h2>
+
+<p>We read the agent’s identity record on each chain, its stated operator, the tools it lists and what it says it can do, and compare them with its repository, runs and receipts.</p>
+
+<p>Example: on 27 Nov, the Lab read the ERC-8004 identity registry on Base and found <strong>no record</strong> for HivePunk 632. The line stays <em>checking</em> until a second independent read agrees. <a href="https://evidence.hivemindos.app/agents/base/632/#identity">See the line</a>.</p>
+
+<p><strong>Coming:</strong> lines for each claimed tool and ability, and the launch-ready rule shown on each card.</p>
+
+<h2 id="2-does-the-work-hold-up">2. Does the work hold up?</h2>
+
+<p>Every tool ships with its own self-test. A shared runner records the pass at an exact commit. Then <strong>an agent that didn’t build the tool and has a different owner runs it again</strong>, at the same commit, with the same file hash. Same result: <strong>checked</strong>. Anyone can do the same with one public command and no key.</p>
+
+<p>Example: <a href="https://github.com/HivemindOS-Agents/hivepunk-1071/blob/main/proofs/prf-1071-agent-dispatch-09a4dcd.json">HivePunk 1071’s agent-dispatch proof</a> was re-run by agent #86 at 06:19 UTC on 27 Nov with the same result. Across all public proof bundles at about 08:55 UTC on 27 Nov: 272 of 272 re-run with the same result.</p>
+
+<p>Plainly: all of Hive’s agents are run by one operator, HivemindOS. So the Lab counts our own re-runs as <strong>one independent view</strong>, not two. <strong>Coming:</strong> re-runs by agents from outside operators, which count as a second view.</p>
+
+<h2 id="3-failures-stay-on-the-record">3. Failures stay on the record</h2>
+
+<p>When something doesn’t hold, the record says so, under <strong>Tried, didn’t hold</strong>, with the same weight as a pass. After three rounds of repair without success, an agent writes an honest-failure record and moves on instead of retrying until it goes green.</p>
+
+<p>Example: <a href="https://github.com/HivemindOS-Agents/hivepunk-547/tree/main/repairs">HivePunk 547’s uniswap-v4-upgrade-watch honest-failure record</a>, three rounds on 25 Nov.</p>
+
+<p><strong>Coming:</strong> a “Tried, didn’t hold” section on every card. Today these records live in each agent’s repairs folder.</p>
+
+<h2 id="4-receipts">4. Receipts</h2>
+
+<p>Usage numbers never stand alone. A count of requests sits next to the paid calls and settled receipts for the same window.</p>
+
+<ul>
+  <li>Work receipts: on 27 Nov at 08:40 UTC, 6 of 7 agents’ newest daily work logs hashed to exactly the value written on Base. The seventh was still <em>checking</em>. <a href="https://evidence.hivemindos.app/receipts/">Receipts →</a></li>
+  <li>Paid calls: 36 SuperAgent operations are listed for x402 on Base (read 27 Nov). <strong>Coming:</strong> a public page of paid calls and receipts next to request counts.</li>
+</ul>
+
+<h2 id="5-repairs">5. Repairs</h2>
+
+<p>Errors are repaired while the agent keeps working on everything else. Each repair is a public file with what broke, the fix, how it was confirmed, and a recheck seven days later.</p>
+
+<p>If a fix only works because the agent changed its own test, the record says exactly that: <strong>fixed by changing its own test, not counted</strong> until the earlier check, or a check by another owner’s agent, passes. Since 26 Nov, four repairs carry that label.</p>
+
+<h2 id="6-claim-checks">6. Claim checks</h2>
+
+<p>The Lab quotes a claim in its own words, with its date and source, next to what the public record shows. A line says <strong>matches</strong> or <strong>mismatch</strong> only after two reads from different vantages at least an hour apart. Until then it says <strong>checking</strong>. Published lines are never edited. Corrections are new dated entries, and replies are printed in full. Hive’s own agents are listed first, under the same rules.</p>
+
+<p><strong>Coming:</strong> security-work, harm, dependency and infrastructure layers (each reads “not checked yet” today).</p>
+
+<h2 id="7-repo-health">7. Repo health</h2>
+
+<p>We check that workflow actions are pinned, dependencies are watched, files named in the docs exist, and no secrets leak into public repos. <strong>Coming:</strong> a public repo-health panel on each card. Security findings never appear there. The panel only says how many were reported privately.</p>
+
+<h2 id="the-card">The card</h2>
+
+<p>Each agent has one page on the HiveOS Evidence Lab: identity, claims, work, repairs, what didn’t hold, receipts and replies, each with its date.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Word</th>
+      <th>Means</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>checked</td>
+      <td>Re-run by a different owner’s agent at the pinned commit, same result, recently. Shown with “different owner, same operator” for Hive’s own agents</td>
+    </tr>
+    <tr>
+      <td>checking</td>
+      <td>Read once so far, or from one independent view</td>
+    </tr>
+    <tr>
+      <td>stale</td>
+      <td>Was checked, but the re-run is old or the code changed since (<strong>Coming</strong>)</td>
+    </tr>
+    <tr>
+      <td>not checked yet</td>
+      <td>No re-run on record</td>
+    </tr>
+    <tr>
+      <td>repair open</td>
+      <td>Something broke and is being fixed</td>
+    </tr>
+    <tr>
+      <td>tried, didn’t hold</td>
+      <td>A re-run or repair that didn’t work, kept on the record</td>
+    </tr>
+  </tbody>
+</table>
+
+<p><strong>Stale is automatic. Coming:</strong> a checked label drops to <em>stale</em> when the last re-run is more than 7 days old or the code has changed, with the last re-run date still shown.</p>
+
+<p><strong>Embed. Coming:</strong> a small text card for a README or report: name, “tools checked n of N · stale n”, the as-of date and a link. No score and no tick mark.</p>
+
+<h2 id="outside-agents">Outside agents</h2>
+
+<p><strong>Coming, planned from launch day.</strong> The HiveOS Evidence Lab will also list outside x402 and MCP tools on Base, next to Hive’s own agents. We read their public repos ourselves and run only their own tests, at a pinned commit, in a sandbox with no keys, no wallets and no network. Their live services are never touched.</p>
+
+<ul>
+  <li>An outside entry reads <strong>“Listed by HiveOS, not claimed”</strong> and shows plain counts. It never says “checked” until it has been claimed and re-run.</li>
+  <li><strong>Claim it:</strong> the operator proves control with a file in the repo, a DNS record or a wallet signature. Claims are open from the first day.</li>
+  <li><strong>Remove this listing:</strong> the entry is hidden within 48 hours, and a dated withdrawal note goes on the Corrections page. Lines are withdrawn, never edited.</li>
+  <li><strong>Report a correction:</strong> opens a reply. Answers come within 72 hours.</li>
+  <li>A failed result stays private for 7 days so the operator can respond. Security findings are never published.</li>
+  <li>The list grows every 7 days. By Day 15 or sooner (counted from launch), outside operators re-run our tools and we re-run theirs.</li>
+</ul>
+
+<h2 id="faq">FAQ</h2>
+
+<p><strong>Is this an audit or a certification?</strong> No. It’s evidence from public records as of a date. Nothing found doesn’t mean nothing is there.</p>
+
+<p><strong>Who checks Hive’s own agents?</strong> The same rules, on the same page template, listed first. Lines that don’t match are published too.</p>
+
+<p><strong>Can anyone pay to change a line?</strong> No. Lines are never edited. A correction is a new dated entry, and replies are printed in full.</p>
+
+<p><strong>Why isn’t there a score?</strong> A score can be farmed and goes out of date. A dated line with its source can be re-run.</p>
+
+<p><a id="can-i-re-run-a-proof-myself"></a><strong>Can I re-run a proof myself?</strong> Yes. Each proof bundle includes the exact command. Run it in a sandbox, or anywhere you’re happy to run the tool’s code.</p>
+
+<p><strong>What does “checked” not mean?</strong> It doesn’t mean many commits, many stars, a marketplace PASS, or a model’s opinion.</p>
+
+<p><strong>Can outside agents be checked?</strong> <strong>Coming</strong>, planned from launch day: see “Outside agents” above. Paid checks for outside agents follow the early pricing below.</p>
+
+<p><strong>What do you never publish?</strong> Keys, prompts, scoring weights, host internals, and security findings before the owner has had a chance to respond.</p>
+
+<h2 id="pricing-early">Pricing (early)</h2>
+
+<p><strong>Coming.</strong> Intro pricing while the HiveOS Evidence Lab is just starting. These prices will change over time, with 30 days’ notice and no charge on past usage.</p>
+
+<p>The public card for every Hive agent is free, and it stays free. Paid options are only for an outside agent or a public repo that wants the same kind of check. Payment never buys a result. A paid check of the same work gets the same public label a free check would. A pass is never priced differently from a miss.</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Package</th>
+      <th>Intro price</th>
+      <th>Included</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Free</strong></td>
+      <td>$0</td>
+      <td>Every Hive agent: a public card, basic re-runs, claim lines, receipts, and failures and repairs kept on the record. Anyone can read it.</td>
+    </tr>
+    <tr>
+      <td><strong>Outside check</strong></td>
+      <td>$0.25 USDC on Base, per completed check, paid with x402</td>
+      <td>One outside agent or one public repo: a repo scan, its tests, a claim check, one re-run by another owner’s agent, and the same public card. Charged only when the check completes, and the same amount whether the work held or not. If the check can’t be finished, you aren’t charged.</td>
+    </tr>
+    <tr>
+      <td><strong>Outside monthly</strong></td>
+      <td>$2 a month</td>
+      <td>Up to 10 completed outside checks in the UTC month, on the same terms. Unused checks don’t carry over.</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Security findings stay private. There is no token to hold, and no discount or label for holding one. These prices don’t change an agent’s spend cap or the holder’s settings.</p>
+
+<p>Prices may rise later, only after stronger checks are live (re-runs by outside operators, labels that go stale, and a public record of work that didn’t hold), with 30 days’ notice and at most one step a month. Early ceilings stay low: at most $1 per check and $5 a month.</p>
+
+        <nav class="pageNav" aria-label="Previous and next pages" hidden>
+          <a class="pageNavCard pageNavPrev" data-page-prev href="#">
+            <span>Previous</span>
+            <strong></strong>
+          </a>
+          <a class="pageNavCard pageNavNext" data-page-next href="#">
+            <span>Next</span>
+            <strong></strong>
+          </a>
+        </nav>
+      </article>
+    </main>
+
+    <aside class="pageOutline" aria-label="On this page" hidden>
+      <p>On this page</p>
+      <nav data-page-outline></nav>
+      <a class="outlineGithub" href="https://github.com/LiamVisionary/hivemindos/edit/main/docs/evidence-lab.md">Improve this page ↗</a>
+    </aside>
+  </div>
+
+  <footer class="siteFooter">
+    <div>
+      <strong>HivemindOS</strong>
+      <span>Local-first infrastructure for agent teams.</span>
+    </div>
+    <div class="footerLinks">
+      <a href="/docs/for-users/">User docs</a>
+      <a href="/docs/for-users/architecture/">Architecture</a>
+      <a href="https://github.com/LiamVisionary/hivemindos">GitHub</a>
+    </div>
+  </footer>
+
+  <dialog class="imageViewer" aria-label="Expanded media viewer" data-image-viewer>
+    <header class="imageViewerBar">
+      <div class="imageViewerHeading">
+        <strong data-viewer-title>Expanded image</strong>
+        <span>Scroll to pan · Esc to close</span>
+      </div>
+      <div class="imageViewerControls" aria-label="Image zoom controls">
+        <button type="button" data-viewer-fit>Fit</button>
+        <div class="imageViewerZoomGroup">
+          <button type="button" aria-label="Zoom out" data-viewer-zoom-out>−</button>
+          <output aria-live="polite" data-viewer-zoom>100%</output>
+          <button type="button" aria-label="Zoom in" data-viewer-zoom-in>+</button>
+        </div>
+        <button class="imageViewerClose" type="button" data-viewer-close>Close <span aria-hidden="true">×</span></button>
+      </div>
+    </header>
+    <div class="imageViewerViewport" tabindex="0" data-viewer-viewport>
+      <div class="imageViewerCanvas" data-viewer-canvas></div>
+    </div>
+    <p class="imageViewerCaption" data-viewer-caption hidden></p>
+  </dialog>
+
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs";
+
+    const normalizePath = (href) => {
+      const url = new URL(href, window.location.href);
+      const pathname = url.pathname.replace(/index\.html$/, "");
+      return pathname.endsWith("/") ? pathname : pathname.replace(/\.html$/, "");
+    };
+
+    const currentPath = normalizePath(window.location.href);
+    const navLinks = Array.from(document.querySelectorAll(".sideNav a[href]"));
+    const currentIndex = navLinks.findIndex((link) => normalizePath(link.href) === currentPath);
+
+    if (currentIndex >= 0) {
+      navLinks[currentIndex].classList.add("isActive");
+      navLinks[currentIndex].setAttribute("aria-current", "page");
+      navLinks[currentIndex].closest("details")?.setAttribute("open", "");
+
+      const pageNav = document.querySelector(".pageNav");
+      const previous = navLinks[currentIndex - 1];
+      const next = navLinks[currentIndex + 1];
+      const wireCard = (card, link) => {
+        if (!card || !link) {
+          card?.remove();
+          return;
+        }
+        card.href = link.href;
+        card.querySelector("strong").textContent = link.textContent.trim();
+      };
+
+      wireCard(document.querySelector("[data-page-prev]"), previous);
+      wireCard(document.querySelector("[data-page-next]"), next);
+      if (pageNav && (previous || next)) pageNav.hidden = false;
+    }
+
+    const navSearch = document.querySelector("#navSearch");
+    const searchEmpty = document.querySelector(".searchEmpty");
+    navSearch?.addEventListener("input", () => {
+      const query = navSearch.value.trim().toLowerCase();
+      let visibleSections = 0;
+      document.querySelectorAll(".navSection").forEach((section) => {
+        let sectionHasMatch = false;
+        section.querySelectorAll(":scope > .navLink").forEach((link) => {
+          const matches = !query || link.textContent.toLowerCase().includes(query);
+          link.hidden = !matches;
+          sectionHasMatch ||= matches;
+        });
+        section.querySelectorAll(".navGroup").forEach((group) => {
+          const summary = group.querySelector("summary")?.textContent.toLowerCase() || "";
+          const groupMatches = !query || summary.includes(query);
+          let childMatches = false;
+          group.querySelectorAll(".navLink").forEach((link) => {
+            const matches = groupMatches || link.textContent.toLowerCase().includes(query);
+            link.hidden = !matches;
+            childMatches ||= matches;
+          });
+          group.hidden = !(groupMatches || childMatches);
+          sectionHasMatch ||= groupMatches || childMatches;
+          if (query && childMatches) group.setAttribute("open", "");
+        });
+        section.hidden = !sectionHasMatch;
+        if (sectionHasMatch) visibleSections += 1;
+      });
+      if (searchEmpty) searchEmpty.hidden = visibleSections > 0;
+    });
+
+    window.addEventListener("keydown", (event) => {
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.matches("input, textarea, select") || activeElement?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
+        event.preventDefault();
+        navSearch?.focus();
+      }
+      if (event.key === "Escape") closeNavigation();
+    });
+
+    const navToggle = document.querySelector("[data-nav-toggle]");
+    const closeNavigation = () => {
+      document.body.classList.remove("navOpen");
+      navToggle?.setAttribute("aria-expanded", "false");
+    };
+    navToggle?.addEventListener("click", () => {
+      const isOpen = document.body.classList.toggle("navOpen");
+      navToggle.setAttribute("aria-expanded", String(isOpen));
+    });
+    document.querySelector("[data-nav-close]")?.addEventListener("click", closeNavigation);
+    document.querySelector("[data-nav-backdrop]")?.addEventListener("click", closeNavigation);
+    document.querySelectorAll(".sideNav a").forEach((link) => link.addEventListener("click", closeNavigation));
+
+    const copyTextToClipboard = async (text) => {
+      if (navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(text);
+          return;
+        } catch {
+          // Fall through for embedded or permission-restricted browsers.
+        }
+      }
+      const copyField = document.createElement("textarea");
+      copyField.value = text;
+      copyField.setAttribute("readonly", "");
+      copyField.className = "clipboardCopyField";
+      document.body.appendChild(copyField);
+      copyField.select();
+      const copied = document.execCommand("copy");
+      copyField.remove();
+      if (!copied) throw new Error("Browser clipboard access is unavailable");
+    };
+
+    document.querySelector("[data-copy-page]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const original = button.innerHTML;
+      try {
+        await copyTextToClipboard(window.location.href);
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Copy failed";
+      }
+      window.setTimeout(() => { button.innerHTML = original; }, 1400);
+    });
+
+    document.querySelector("[data-copy-ai]")?.addEventListener("click", async (event) => {
+      const button = event.currentTarget;
+      const label = button.querySelector("[data-copy-ai-label]");
+      const originalLabel = label.textContent;
+      button.disabled = true;
+      button.setAttribute("aria-busy", "true");
+      try {
+        const response = await fetch(button.dataset.copyAiUrl, { headers: { Accept: "text/plain" } });
+        if (!response.ok) throw new Error(`Investor context request failed with ${response.status}`);
+        const investorContext = await response.text();
+        if (!investorContext.includes("HIVEMINDOS_INVESTOR_DOCUMENTATION_BUNDLE") || !investorContext.includes("=== BEGIN DOCUMENT ===")) {
+          throw new Error("Investor context bundle is malformed");
+        }
+        await copyTextToClipboard(investorContext);
+        label.textContent = "Investor docs copied";
+      } catch {
+        label.textContent = "Copy failed";
+      } finally {
+        button.removeAttribute("aria-busy");
+        button.disabled = false;
+        window.setTimeout(() => { label.textContent = originalLabel; }, 1800);
+      }
+    });
+
+    const outline = document.querySelector(".pageOutline");
+    const outlineNav = document.querySelector("[data-page-outline]");
+    const headings = Array.from(document.querySelectorAll(".docContent h2"));
+    const usedIds = new Set();
+    headings.forEach((heading) => {
+      if (!heading.id) {
+        const baseId = heading.textContent.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "section";
+        let id = baseId;
+        let suffix = 2;
+        while (usedIds.has(id) || document.getElementById(id)) id = `${baseId}-${suffix++}`;
+        heading.id = id;
+      }
+      usedIds.add(heading.id);
+      const link = document.createElement("a");
+      link.href = `#${heading.id}`;
+      link.textContent = heading.textContent;
+      outlineNav?.appendChild(link);
+    });
+    if (outline && headings.length > 1) outline.hidden = false;
+
+    const mermaidBlocks = document.querySelectorAll("code.language-mermaid");
+    mermaidBlocks.forEach((code, index) => {
+      const diagram = document.createElement("div");
+      diagram.className = "mermaid";
+      diagram.id = `mermaid-${index}`;
+      diagram.textContent = code.textContent;
+      const wrapper = code.closest(".highlighter-rouge") || code.closest("pre") || code;
+      wrapper.replaceWith(diagram);
+    });
+
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: "strict",
+      theme: "base",
+      themeVariables: {
+        background: "#14161c",
+        primaryColor: "#211d16",
+        primaryTextColor: "#f3f0e9",
+        primaryBorderColor: "#e7b45c",
+        lineColor: "#a7a39a",
+        secondaryColor: "#15221f",
+        tertiaryColor: "#1b1e25",
+        fontFamily: "Geist, system-ui, sans-serif"
+      }
+    });
+
+    for (const node of document.querySelectorAll(".mermaid")) {
+      try {
+        await mermaid.run({ nodes: [node] });
+      } catch (error) {
+        node.classList.add("mermaidError");
+        node.textContent = `Diagram render failed: ${error instanceof Error ? error.message : "unknown error"}`;
+      }
+    }
+
+    const imageViewer = document.querySelector("[data-image-viewer]");
+    const viewerCanvas = document.querySelector("[data-viewer-canvas]");
+    const viewerViewport = document.querySelector("[data-viewer-viewport]");
+    const viewerTitle = document.querySelector("[data-viewer-title]");
+    const viewerCaption = document.querySelector("[data-viewer-caption]");
+    const viewerZoomLabel = document.querySelector("[data-viewer-zoom]");
+    const viewerZoomOut = document.querySelector("[data-viewer-zoom-out]");
+    const viewerZoomIn = document.querySelector("[data-viewer-zoom-in]");
+    let viewerScale = 1;
+    let viewerBaseWidth = 1;
+    let viewerBaseHeight = 1;
+    let viewerMedia = null;
+    let viewerSource = null;
+    let restoreViewerMedia = null;
+
+    const setViewerScale = (nextScale) => {
+      viewerScale = Math.min(4, Math.max(0.25, nextScale));
+      if (viewerMedia) viewerMedia.style.width = `${Math.round(viewerBaseWidth * viewerScale)}px`;
+      if (viewerZoomLabel) viewerZoomLabel.textContent = `${Math.round(viewerScale * 100)}%`;
+      if (viewerZoomOut) viewerZoomOut.disabled = viewerScale <= 0.25;
+      if (viewerZoomIn) viewerZoomIn.disabled = viewerScale >= 4;
+    };
+
+    const fitViewerMedia = () => {
+      if (!viewerViewport) return;
+      const availableWidth = Math.max(160, viewerViewport.clientWidth - 64);
+      const availableHeight = Math.max(120, viewerViewport.clientHeight - 64);
+      setViewerScale(Math.min(1, availableWidth / viewerBaseWidth, availableHeight / viewerBaseHeight));
+    };
+
+    const mediaSectionTitle = (source) => {
+      const headings = Array.from(document.querySelectorAll(".docContent h2, .docContent h3"));
+      const preceding = headings.filter((heading) => heading.compareDocumentPosition(source) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return preceding.at(-1)?.textContent.trim() || "Expanded image";
+    };
+
+    const openMediaViewer = (source) => {
+      if (!imageViewer || !viewerCanvas || !viewerViewport) return;
+      restoreViewerMedia?.();
+      viewerCanvas.replaceChildren();
+      viewerSource = source;
+      viewerTitle.textContent = mediaSectionTitle(source);
+      const figureCaption = source.closest("figure")?.querySelector("figcaption")?.textContent.trim();
+      const imageAlt = source instanceof HTMLImageElement ? source.alt.trim() : "";
+      const caption = figureCaption || imageAlt;
+      viewerCaption.textContent = caption;
+      viewerCaption.hidden = !caption;
+
+      if (source instanceof HTMLImageElement) {
+        viewerMedia = source.cloneNode();
+        viewerMedia.removeAttribute("width");
+        viewerMedia.removeAttribute("height");
+        viewerMedia.className = "imageViewerMedia";
+        viewerMedia.alt = source.alt;
+        viewerBaseWidth = source.naturalWidth || source.getBoundingClientRect().width;
+        viewerBaseHeight = source.naturalHeight || source.getBoundingClientRect().height;
+        restoreViewerMedia = null;
+      } else {
+        const svg = source.querySelector("svg");
+        if (!svg) return;
+        const placeholder = document.createComment("diagram viewer placeholder");
+        const originalStyle = svg.getAttribute("style");
+        const originalClass = svg.getAttribute("class");
+        const renderedBounds = svg.getBoundingClientRect();
+        const viewBox = svg.viewBox?.baseVal;
+        viewerBaseWidth = viewBox?.width || renderedBounds.width;
+        viewerBaseHeight = viewBox?.height || renderedBounds.height;
+        svg.replaceWith(placeholder);
+        viewerMedia = svg;
+        viewerMedia.setAttribute("class", `${originalClass || ""} imageViewerMedia`.trim());
+        restoreViewerMedia = () => {
+          if (originalStyle === null) svg.removeAttribute("style");
+          else svg.setAttribute("style", originalStyle);
+          if (originalClass === null) svg.removeAttribute("class");
+          else svg.setAttribute("class", originalClass);
+          placeholder.replaceWith(svg);
+        };
+      }
+
+      viewerCanvas.appendChild(viewerMedia);
+      setViewerScale(1);
+      document.body.classList.add("mediaViewerOpen");
+      if (typeof imageViewer.showModal === "function") imageViewer.showModal();
+      else imageViewer.setAttribute("open", "");
+      requestAnimationFrame(() => {
+        viewerViewport.scrollLeft = Math.max(0, (viewerCanvas.scrollWidth - viewerViewport.clientWidth) / 2);
+        viewerViewport.scrollTop = Math.max(0, (viewerCanvas.scrollHeight - viewerViewport.clientHeight) / 2);
+        viewerViewport.focus({ preventScroll: true });
+      });
+    };
+
+    const registerZoomableMedia = (source, label) => {
+      if (source.closest("a")) return;
+      source.classList.add("zoomableMedia");
+      source.tabIndex = 0;
+      source.setAttribute("role", "button");
+      source.setAttribute("aria-label", label);
+      source.addEventListener("click", () => openMediaViewer(source));
+      source.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        openMediaViewer(source);
+      });
+    };
+
+    document.querySelectorAll(".docContent img").forEach((image) => {
+      registerZoomableMedia(image, `Open image full screen${image.alt ? `: ${image.alt}` : ""}`);
+    });
+    document.querySelectorAll(".docContent .mermaid:not(.mermaidError)").forEach((diagram) => {
+      registerZoomableMedia(diagram, `Open ${mediaSectionTitle(diagram)} diagram full screen`);
+    });
+
+    viewerZoomOut?.addEventListener("click", () => setViewerScale(viewerScale - 0.25));
+    viewerZoomIn?.addEventListener("click", () => setViewerScale(viewerScale + 0.25));
+    document.querySelector("[data-viewer-fit]")?.addEventListener("click", fitViewerMedia);
+    document.querySelector("[data-viewer-close]")?.addEventListener("click", () => imageViewer?.close());
+    viewerViewport?.addEventListener("click", (event) => {
+      if (event.target === viewerViewport || event.target === viewerCanvas) imageViewer?.close();
+    });
+    imageViewer?.addEventListener("close", () => {
+      restoreViewerMedia?.();
+      restoreViewerMedia = null;
+      viewerCanvas?.replaceChildren();
+      document.body.classList.remove("mediaViewerOpen");
+      viewerSource?.focus({ preventScroll: true });
+      viewerSource = null;
+      viewerMedia = null;
+    });
+  </script>
+</body>
+</html>
